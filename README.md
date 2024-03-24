@@ -39,6 +39,28 @@ You can also retrieve data like a client through API endpoints on the "hub" app.
 http://localhost:8000/hub/users/.
 You should see a list of users with URL, username, email, and groups that they belong to.
 
+### Endpoints to Test
+
+To test the current endpoints, go to the [admin page](http://localhost:8000/admin/) and add the following:
+* Church: create a church and give it a name
+* Fast: create two fasts with names and assign them to your church
+* Users: create two users (no special groups or permissions)
+* Profiles: create a profile for each user, assigning them to your church and adding the fasts that you want each 
+user to participate in
+* Days: create a day for each day in the duration of each of your fasts and assign them to the appropriate fasts
+
+We are currently testing four endpoints:
+
+1. `http://localhost:8000/hub/fast/today/`: returns the name of the fast your user is participating in
+today (or `"None"` if your user is not participating in a fast).
+2. `http://localhost:8000/hub/fast/today/participant_count/`: returns the number of
+people participating in your user's fast today 
+3. `http://localhost:8000/hub/fast/<yyyymmdd>/`: returns the name of the fast your user is participating in
+on the specified date `<yyyymmdd>` (e.g., the fast your user is participating in on March 29, 2024 would be found
+at `http://localhost:8000/hub/fast/20240329/`)
+4. `http://localhost:8000/hub/fast/<yyyymmdd>/participant_count/`: returns the number of people participating
+in your user's fast on the given date `<yyyymmdd>`
+
 ## Contact Us!
 
 Bahk is maintained by Dn. Andrew Ylitalo and Fr. Mesrop Ash of St. John Armenian Church in San Francisco, CA.
