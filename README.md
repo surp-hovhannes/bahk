@@ -14,6 +14,7 @@ After cloning this repo, first create a superuser for yourself. This account wil
 of the app.
 Navigate to the root directory (`bahk/`) and enter the following in the terminal:
 ```
+python manage.py migrate
 python manage.py createsuperuser
 ```
 Note the username, email, and password that you enter.
