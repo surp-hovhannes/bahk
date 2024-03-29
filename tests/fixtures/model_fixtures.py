@@ -1,9 +1,10 @@
 """Fixtures of models."""
+import datetime
 import pytest
 
 from django.contrib.auth.models import User
 
-from hub.models import Church, Fast, Profile
+from hub.models import Church, Day, Fast, Profile
 
 
 @pytest.fixture
@@ -39,3 +40,23 @@ def sample_profile_fixture(sample_user_fixture):
 @pytest.fixture
 def another_profile_fixture(another_user_fixture):
     return Profile.objects.create(user=another_user_fixture)
+
+
+@pytest.fixture
+def sample_day_fixture():
+    return Day.objects.create(date=datetime.date(2024, 3, 25))
+
+
+@pytest.fixture
+def today_fixture():
+    return Day.objects.create(date=datetime.date.today())
+
+# complete models
+
+@pytest.fixture
+def complete_fast_fixture(sample_profile_fixture, sample_church_fixture, sample_day_fixture, today_fixture):
+    fast = Fast.objects.create(name="Complete Fast", church=sample_church_fixture)
+    fast.profiles.set([sample_profile_fixture])
+    fast.days.set([sample_day_fixture, today_fixture])
+
+    return fast

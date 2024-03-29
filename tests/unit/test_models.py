@@ -44,7 +44,7 @@ def test_create_day():
     assert day.date == date
 
 
-### Create full models ###
+### Create complete models ###
     
 @pytest.mark.django_db
 def test_create_complete_user_profile(
