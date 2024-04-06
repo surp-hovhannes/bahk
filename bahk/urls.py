@@ -25,3 +25,8 @@ urlpatterns = [
     path('hub/', include('hub.urls')),
     path('', RedirectView.as_view(url='hub/')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+# add account authentication urls
+urlpatterns += [
+    path("accounts/", include("django.contrib.auth.urls")),
+]
