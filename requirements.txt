@@ -5,3 +5,5 @@ pytest-django==4.8.0
 whitenoise
 gunicorn
 django-heroku
+dj-database-url
+psycopg2-binary
