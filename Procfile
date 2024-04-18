@@ -1,1 +1,1 @@
-web: gunicorn yourproject.wsgi --log-file -
+web: gunicorn bahk.wsgi --log-file -
