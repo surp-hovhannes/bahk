@@ -1,0 +1,33 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: #fff;
+}
+
+.container {
+    width: 80%;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.church-image {
+    width: 100%;
+    height: auto;
+}
+
+.content {
+    margin-top: 50px;
+}
+
+.main-text {
+    color: #000;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.copyright {
+    color: #666;
+    font-size: 12px;
+    margin-top: 20px;
+}

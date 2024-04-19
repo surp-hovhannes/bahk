@@ -3,6 +3,7 @@ import datetime
 import logging
 
 from django.contrib.auth.models import Group, User
+from django.shortcuts import render
 from rest_framework import permissions, response, views, viewsets
 
 from hub.models import Fast
@@ -66,3 +67,17 @@ class FastOnDate(views.APIView):
         fast = _get_user_fast_on_date(user, date)
 
         return response.Response(serializers.FastSerializer(fast).data)
+
+
+def home(request):
+    """View function for home page of site."""
+    view = FastOnDate.as_view()
+    response = view(request).data
+
+    context = {
+        "church": request.user.profile.church.name,
+        "fast": response["name"],
+        "user": request.user,
+    }
+
+    return render(request, "home.html", context=context)

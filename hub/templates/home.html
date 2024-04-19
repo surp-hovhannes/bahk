@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>St. John Armenian Church</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+    <div class="container">
+        {% load static %}
+        <img src="{% static 'images/img.jpg' %}" alt="St. John Armenian Church" class="church-image">
+        <div class="content">
+            <p class="main-text">Hi {{ user }}!</p>
+        </div>
+        {% if fast %}
+            <div class="content">
+                <p class="main-text">Today in the {{ church }}, we are fasting: {{ fast }}.</p>
+            </div>
+        {% else %}
+            <div class="content">
+                <p class="main-text">Today in the {{ church }}, we are not fasting.</p>
+            </div>
+        {% endif %}
+    <p class="copyright">Copyright St. John Armenian Church 2024</p>
+    </div>
+</body>
+</html>
