@@ -78,10 +78,13 @@ user to participate in
 
 We are currently testing one endpoint:
 
-1. `http://localhost:8000/hub/fast/`: returns a dictionary with the name of fast plus the information for the church
-to which the fast belongs on a given date. The date is passed in as a query parameter, *e.g.*, to get the fast on
-March 29, 2024, append `?date=20240329` to the URL. If no date is passed, defaults to today. An invalid date string
-will return an empty fast.
+1. `http://localhost:8000/hub/fast/`: returns a dictionary with data for the logged-in user's fast on a given date.
+The date is passed in as a query parameter, *e.g.*, to get the fast on March 29, 2024, append `?date=20240329` to the 
+URL. If no date is passed, defaults to today. An invalid date string will return an empty fast. The dictionary should
+contain the following:
+    * the name of the fast
+    * the church to which the fast belongs
+    * the number of participants in the fast
 
 ## Contact Us!
 
