@@ -114,14 +114,14 @@ def register(request):
 @login_required
 def join_fasts(request):
     if request.method == 'POST':
-        form = JoinFastsForm(request.POST)
+        form = JoinFastsForm(request.POST, request=request)
         if form.is_valid():
             print("valid")
             new_fasts = set(form.cleaned_data["fasts"])
             request.user.profile.fasts.add(*new_fasts)
             print(request.user.profile.fasts)
     else:
-        form = JoinFastsForm()
+        form = JoinFastsForm(request=request)
 
     context = {"form": form}
 

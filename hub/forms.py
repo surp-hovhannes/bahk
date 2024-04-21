@@ -18,4 +18,11 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 class JoinFastsForm(forms.Form):
-    fasts = forms.ModelMultipleChoiceField(queryset=Fast.objects.all(), widget=forms.SelectMultiple)
+    fasts = forms.ModelMultipleChoiceField(queryset=None, widget=forms.SelectMultiple)
+    
+    def __init__(self, *args, **kwargs):
+        request = kwargs.pop("request", None)  # Extract the request object
+        super().__init__(*args, **kwargs)
+        if request is not None:
+            self.fields["fasts"].queryset = Fast.objects.filter(church=request.user.profile.church)
+
