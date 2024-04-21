@@ -63,36 +63,9 @@ and is participating in `Fast2`. User `user3` is part of `Church3` but is not pa
 These data will appear on the home page once you log in with one of the users. You
 should also see the number of participants in the fast (including the user).
 
-Try joining a fast! Log in as `user3` and select `Fast3` from the menu. The home page should change to indicate that
-today you are fasting `Fast3` as part of `Church3`.
-
-### Sample Endpoints
-
-Access the admin page at http://localhost:8000/admin/.
-Here, you can browse and modify the database using Django's admin interface. Go see your user under the "User"
-link on the side panel!
-
-You can also retrieve data like a client through API endpoints on the "hub" app. Try
-http://localhost:8000/hub/users/.
-If logged in as an admin user, you should see a list of users with URL, username, email, and groups that they belong to.
-
-To test the current endpoints, go to the [admin page](http://localhost:8000/admin/) and add the following:
-* Church: create a church and give it a name
-* Fast: create two fasts with names and assign them to your church
-* Users: create two users (no special groups or permissions)
-* Profiles: create a profile for each user, assigning them to your church and adding the fasts that you want each 
-user to participate in
-* Days: create a day for each day in the duration of each of your fasts and assign them to the appropriate fasts
-
-We are currently testing one endpoint:
-
-1. `http://localhost:8000/hub/fast/`: returns a dictionary with data for the logged-in user's fast on a given date.
-The date is passed in as a query parameter, *e.g.*, to get the fast on March 29, 2024, append `?date=20240329` to the 
-URL. If no date is passed, defaults to today. An invalid date string will return an empty fast. The dictionary should
-contain the following:
-    * the name of the fast
-    * the church to which the fast belongs
-    * the number of participants in the fast
+Try joining a fast! Log in as `user3` and select `Fast3` from the menu (it should be the only option). Then click
+[Home](http://localhost:8000/hub/?next=/hub/) on the sidebar to go back to the home page. It should now show that
+you are fasting `Fast3` with one faithful (you).
 
 ## Contact Us!
 
