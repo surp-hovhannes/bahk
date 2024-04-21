@@ -25,6 +25,11 @@ class ChurchSerializer(serializers.ModelSerializer):
 
 class FastSerializer(serializers.ModelSerializer):
     church = ChurchSerializer()
+    participant_count = serializers.SerializerMethodField()
+
+    def get_participant_count(self, obj):
+        return obj.profiles.count()
+
     class Meta:
         model = models.Fast
-        fields = ["name", "church"]
+        fields = ["name", "church", "participant_count"]

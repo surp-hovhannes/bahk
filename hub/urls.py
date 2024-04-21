@@ -12,6 +12,7 @@ router.register(r"groups", views.GroupViewSet)
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [
     path("", include(router.urls)),
+    path("home/", views.home, name="home"),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("fast/", views.FastOnDate.as_view(), name="fast_on_date"),
 ]

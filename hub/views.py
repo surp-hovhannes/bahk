@@ -1,12 +1,26 @@
 """Views to perform actions upon API requests."""
 import datetime
+import json
 import logging
 
 from django.contrib.auth.models import Group, User
+from django.shortcuts import render
 from rest_framework import permissions, response, views, viewsets
 
 from hub.models import Fast
 from hub import serializers
+
+
+def _get_fast_for_user_on_date(request):
+    user = request.user
+    date_str = request.query_params.get("date")
+    if date_str is None:
+        # get today by default
+        date = datetime.date.today()
+    else:
+        date = _parse_date_str(date_str)
+
+    return _get_user_fast_on_date(user, date)
 
 
 def _get_user_fast_on_date(user, date):
@@ -55,14 +69,20 @@ class FastOnDate(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        date_str = request.query_params.get("date")
-        if date_str is None:
-            # get today by default
-            date = datetime.date.today()
-        else:
-            date = _parse_date_str(date_str)
-
-        fast = _get_user_fast_on_date(user, date)
-
+        fast = _get_fast_for_user_on_date(request)
         return response.Response(serializers.FastSerializer(fast).data)
+
+
+def home(request):
+    """View function for home page of site."""
+    view = FastOnDate.as_view()
+    response = view(request).data
+
+    context = {
+        "church": request.user.profile.church.name,
+        "fast": response.get("name", ""),
+        "user": request.user,
+        "participant_count": response.get("participant_count", 1)
+    }
+
+    return render(request, "home.html", context=context)

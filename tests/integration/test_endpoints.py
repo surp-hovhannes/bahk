@@ -31,5 +31,6 @@ def test_fast_on_date_endpoint(query_params, complete_fast_fixture, request):
         "name": complete_fast_fixture.name, 
         "church": {
             "name": church.name
-        }
+        },
+        "participant_count": complete_fast_fixture.profiles.count(),
     }
