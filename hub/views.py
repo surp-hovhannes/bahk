@@ -80,8 +80,9 @@ def home(request):
 
     context = {
         "church": request.user.profile.church.name,
-        "fast": response["name"],
+        "fast": response.get("name", ""),
         "user": request.user,
+        "participant_count": response.get("participant_count", 1)
     }
 
     return render(request, "home.html", context=context)
