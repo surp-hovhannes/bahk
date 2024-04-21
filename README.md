@@ -64,7 +64,7 @@ link on the side panel!
 
 You can also retrieve data like a client through API endpoints on the "hub" app. Try
 http://localhost:8000/hub/users/.
-You should see a list of users with URL, username, email, and groups that they belong to.
+If logged in as an admin user, you should see a list of users with URL, username, email, and groups that they belong to.
 
 ### Endpoints to Test
 

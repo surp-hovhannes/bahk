@@ -2,7 +2,7 @@
 import datetime
 import logging
 
-from django.contrib.auth.decorators import login_required 
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group, User
 from django.contrib import messages
 from django.shortcuts import render
@@ -52,14 +52,14 @@ class UserViewSet(viewsets.ModelViewSet):
     """API endpoint that allows user to be viewed or edited."""
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = serializers.UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
 
 class GroupViewSet(viewsets.ModelViewSet):
     """API endpoint that allows groups to be viewed or edited."""
     queryset = Group.objects.all()
     serializer_class = serializers.GroupSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     
 
 class FastOnDate(views.APIView):
