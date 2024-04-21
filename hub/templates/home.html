@@ -1,30 +1,31 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>St. John Armenian Church</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-</head>
-<body>
+{% extends "base_generic.html" %}
+
+{% block content %}
+  <h1>Live and Pray</h1>
+  <body>
     <div class="container">
         {% load static %}
-        <img src="{% static 'images/img.jpg' %}" alt="St. John Armenian Church" class="church-image">
+        <img src="{% static 'images/img.jpg' %}" alt="St. John Armenian Church" width="500" height="400">
         <div class="content">
             <p class="main-text">Hi {{ user }}!</p>
         </div>
-        {% if fast %}
-            <div class="content">
-                <p class="main-text">Today in the {{ church }}, we are fasting: {{ fast }}.</p>
-                <p class="main-text">{{ participant_count }} faithful join you today!</p>
-            </div>
+        {% if church %}
+            {% if fast %}
+                <div class="content">
+                    <p class="main-text">Today in the {{ church }}, we are fasting: {{ fast }}.</p>
+                    <p class="main-text">{{ participant_count }} faithful join you today!</p>
+                </div>
+            {% else %}
+                <div class="content">
+                    <p class="main-text">Today in the {{ church }}, we are not fasting.</p>
+                </div>
+            {% endif %}
         {% else %}
             <div class="content">
-                <p class="main-text">Today in the {{ church }}, we are not fasting.</p>
+                <p class="main-text">Join a church to begin your fasting journey today!</p>
             </div>
         {% endif %}
     <p class="copyright">Copyright St. John Armenian Church 2024</p>
     </div>
 </body>
-</html>
+{% endblock %}
