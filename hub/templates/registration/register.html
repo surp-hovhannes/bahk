@@ -1,0 +1,63 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<!-- 
+<div class="register-page">
+
+  
+
+    <div class="form">
+      <form class="register-form" method="POST" action="">
+        {% csrf_token %}
+        <h2 class="register-title">REGISTER</h3>
+        <h4>{{form.username.label}}</h4>
+        {{form.username}}
+        <h4>{{form.email.label}}</h4>
+        {{form.email}}
+        <h4>{{form.password1.label}}</h4>
+        {{form.password1}}
+        <h4>{{form.password2.label}}</h4>
+        {{form.password2}}
+        <select name="church" class="selectpicker" data-title="Select Church" data-style="btn-default btn-block" data-menu-style="dropdown-blue">
+        {% for x,y in form.church.choices %}
+            <option value="{{ x }}"{% if form.church.value == x %} selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+        </select>
+        <button type="submit"> Create </button>
+        <p class="message">Already registered? <a href=#>Log In</a></p>
+        </form>
+        {{ form.errors }}
+    </div>
+
+  </div> -->
+
+
+
+
+  
+<div class = "login">  
+  
+    {% if messages %}  
+        <ul>   
+            {% for message in messages %}  
+                <li>{{ message }}</li>  
+                {% endfor %}  
+        </ul>   
+    {% endif %}  
+      
+    <h1>Register Here</h1>  
+  
+         <form method="post" action="{% url 'register' %}">  
+             {% csrf_token %}  
+             <table>  
+                {{ form.as_table }}  
+                 <tr>  
+                    <td></td>  
+                    <td><input type="submit" name="submit" value="Register" /></td>  
+                </tr>  
+             </table>  
+         </form>  
+     </div>
+     <p class="message">Already registered? <a href="{% url 'login' %}?next={{ request.path }}">Login</a></p>
+
+{% endblock content %}

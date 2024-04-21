@@ -19,14 +19,22 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
 
+import hub.views as views
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('hub/', include('hub.urls')),
-    path('', RedirectView.as_view(url='hub/')),
+    path('', RedirectView.as_view(url='hub/', permanent=True)),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # add account authentication urls
 urlpatterns += [
     path("accounts/", include("django.contrib.auth.urls")),
+]
+
+# add user creation
+urlpatterns += [
+    path("create_user/", views.register, name="register"),
+    path("join_fasts/", views.join_fasts, name="join_fasts"),
 ]

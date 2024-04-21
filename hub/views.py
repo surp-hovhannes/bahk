@@ -1,13 +1,15 @@
 """Views to perform actions upon API requests."""
 import datetime
-import json
 import logging
 
+from django.contrib.auth.decorators import login_required 
 from django.contrib.auth.models import Group, User
+from django.contrib import messages
 from django.shortcuts import render
 from rest_framework import permissions, response, views, viewsets
 
-from hub.models import Fast
+from hub.forms import CustomUserCreationForm, JoinFastsForm
+from hub.models import Church, Fast, Profile
 from hub import serializers
 
 
@@ -73,16 +75,54 @@ class FastOnDate(views.APIView):
         return response.Response(serializers.FastSerializer(fast).data)
 
 
+@login_required
 def home(request):
     """View function for home page of site."""
     view = FastOnDate.as_view()
     response = view(request).data
+    church = request.user.profile.church
+    church_name = church.name if church is not None else ""
 
     context = {
-        "church": request.user.profile.church.name,
+        "church": church_name,
         "fast": response.get("name", ""),
         "user": request.user,
         "participant_count": response.get("participant_count", 1)
     }
 
     return render(request, "home.html", context=context)
+
+
+def register(request):
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data["username"]
+            church_name = form.cleaned_data["church"]
+            form.save()
+            profile, success = Profile.objects.get_or_create(user=User.objects.get(username=username), 
+                                                             church=Church.objects.get(name=church_name))
+            messages.success(request, 'Account created successfully')
+    else:
+        form = CustomUserCreationForm()
+
+    context = {"form": form}
+
+    return render(request, 'registration/register.html', context)
+
+
+@login_required
+def join_fasts(request):
+    if request.method == 'POST':
+        form = JoinFastsForm(request.POST)
+        if form.is_valid():
+            print("valid")
+            new_fasts = set(form.cleaned_data["fasts"])
+            request.user.profile.fasts.add(*new_fasts)
+            print(request.user.profile.fasts)
+    else:
+        form = JoinFastsForm()
+
+    context = {"form": form}
+
+    return render(request, 'registration/join_fasts.html', context)
