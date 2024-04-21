@@ -36,11 +36,11 @@ pip install -r requirements.txt
 
 ### Setting Up the Database
 
-First create a superuser for yourself. This account will allow you to access all aspects
-of the app.
-Navigate to the root directory (`bahk/`) and enter the following in the terminal:
+To set up the database, migrate, populate with seed data, and create a superuser for yourself.
+To do this, navigate to the root directory (`bahk/`) and enter the following in the terminal:
 ```
 python manage.py migrate
+python manage.py seed
 python manage.py createsuperuser
 ```
 Note the username, email, and password that you enter.
@@ -53,8 +53,18 @@ This command runs `bahk` on your local server at port 8000 (you can specify your
 
 Access the app at http://localhost:8000
 
-To navigate through the app, click "Login" in the upper right and enter the credentials of the superuser account 
-you created.
+### Testing the Site
+
+By populating the database with the seed data, you can login with any of 4 accounts: usernames `user1`, `user2`,
+`user3`, or `user4`. The password is `default123` for each.
+
+Users `user1a` and `user1b` are part of `Church1` and are participating in `Fast1`. User `user2` is part of `Church2`
+and is participating in `Fast2`. User `user3` is part of `Church3` but is not participating in any fasts.
+These data will appear on the home page once you log in with one of the users. You
+should also see the number of participants in the fast (including the user).
+
+Try joining a fast! Log in as `user3` and select `Fast3` from the menu. The home page should change to indicate that
+today you are fasting `Fast3` as part of `Church3`.
 
 ### Sample Endpoints
 
@@ -65,8 +75,6 @@ link on the side panel!
 You can also retrieve data like a client through API endpoints on the "hub" app. Try
 http://localhost:8000/hub/users/.
 If logged in as an admin user, you should see a list of users with URL, username, email, and groups that they belong to.
-
-### Endpoints to Test
 
 To test the current endpoints, go to the [admin page](http://localhost:8000/admin/) and add the following:
 * Church: create a church and give it a name
