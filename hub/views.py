@@ -2,10 +2,13 @@
 import datetime
 import logging
 
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group, User
 from django.contrib import messages
+from django.http import HttpResponseRedirect
 from django.shortcuts import render
+from django.urls import reverse
 from rest_framework import permissions, response, views, viewsets
 
 from hub.forms import CustomUserCreationForm, JoinFastsForm
@@ -100,9 +103,18 @@ def register(request):
             username = form.cleaned_data["username"]
             church_name = form.cleaned_data["church"]
             form.save()
-            profile, success = Profile.objects.get_or_create(user=User.objects.get(username=username), 
-                                                             church=Church.objects.get(name=church_name))
-            messages.success(request, 'Account created successfully')
+            Profile.objects.get_or_create(user=User.objects.get(username=username), 
+                                          church=Church.objects.get(name=church_name))
+
+            password = form.cleaned_data["password1"]
+            user = authenticate(request, username=username, password=password)
+            if user is not None:
+                login(request, user)
+                
+            return HttpResponseRedirect(reverse("home"))
+        else:
+            messages.error(request, 'Account creation failed')
+
     else:
         form = CustomUserCreationForm()
 
@@ -118,6 +130,7 @@ def join_fasts(request):
         if form.is_valid():
             new_fasts = set(form.cleaned_data["fasts"])
             request.user.profile.fasts.add(*new_fasts)
+        return HttpResponseRedirect(reverse("home"))
     else:
         form = JoinFastsForm(request=request)
 
