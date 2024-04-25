@@ -29,7 +29,22 @@ cd bahk
 python -m venv venv
 ```
 
-To activate the virtual environment, run `source venv/bin/activate`. Now, you are ready to install the requirements:
+To activate the virtual environment, run `source venv/bin/activate`.
+
+The backend of this app runs on `PostgreSQL`. Python uses the PyPI package `psycopg2` to communicate with the database,
+which requires the following packages to be installed on your OS:
+```
+python<X>-dev  # where <X> is the python version (2 or 3), but you can specify minor version, too (e.g., 3.9)
+libpq-dev
+```
+
+For example, to install these on Ubuntu or another `apt-get`-based OS, run
+```
+sudo apt-get install python3-dev
+sudo apt-get install libpq-dev
+```
+
+ Now, you are ready to install the requirements:
 ```
 pip install -r requirements.txt
 ```
