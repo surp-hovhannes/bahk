@@ -55,7 +55,6 @@ To set up the database, migrate, populate with seed data, and create a superuser
 To do this, navigate to the root directory (`bahk/`) and enter the following in the terminal:
 ```
 python manage.py migrate
-python manage.py seed
 python manage.py createsuperuser
 ```
 Note the username, email, and password that you enter.
@@ -66,12 +65,18 @@ python manage.py runserver
 ```
 This command runs `bahk` on your local server at port 8000 (you can specify your own port with the `--port <port>` flag).
 
-Access the app at http://localhost:8000
+Access the admin page for the app at http://localhost:8000/admin. There, you can create a profile for your superuser
+so you can use it to access the home page (http://localhost:8000).
 
 ### Testing the Site
 
-By populating the database with the seed data, you can login with any of 4 accounts: usernames `user1`, `user2`,
-`user3`, or `user4`. The password is `default123` for each.
+First, populate the database with the seed data by running
+```
+python manage.py seed
+```
+
+This creates 4 accounts: usernames `user1`, `user2`, `user3`, or `user4`. The password is `default123` for each. You can
+now log into the home page with any of these accounts at http://localhost:8000.
 
 Users `user1a` and `user1b` are part of `Church1` and are participating in `Fast1`. User `user2` is part of `Church2`
 and is participating in `Fast2`. User `user3` is part of `Church3` but is not participating in any fasts.
