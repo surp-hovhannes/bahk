@@ -32,4 +32,4 @@ class FastSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Fast
-        fields = ["name", "church", "participant_count"]
+        fields = ["name", "church", "participant_count", "description"]
