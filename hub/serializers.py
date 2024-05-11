@@ -35,11 +35,15 @@ class FastSerializer(serializers.ModelSerializer):
     
     def get_countdown(self, obj):
         if obj.culmination_feast and obj.culmination_feast_date:
-            days_to_feast = max((obj.culmination_feast_date - datetime.date.today()).days, 0)  # ensure non-negative
+            days_to_feast = (obj.culmination_feast_date - datetime.date.today()).days
+            if days_to_feast < 0:
+                return "{obj.culmination_feast} has passed"
             return f"{days_to_feast} days until {obj.culmination_feast}"
         
         finish_date = max([day.date for day in obj.days.all()])
-        days_to_finish = max((finish_date - datetime.date.today()).days, 0)  # ensure non-negative
+        days_to_finish = (finish_date - datetime.date.today()).days
+        if days_to_finish < 0:
+            return f"{obj.name} has passed"
         return f"{days_to_finish} days until the end of {obj.name}"
 
     class Meta:
