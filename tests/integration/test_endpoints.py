@@ -26,7 +26,7 @@ def test_fast_on_date_endpoint(query_params, culmination_feast_name, complete_fa
     church = models.Church.objects.filter(fasts=complete_fast_fixture).first()
 
     # create expected countdown statement
-    countdown = f"0 days until the end of {complete_fast_fixture.name}"
+    countdown = f"1 day until the end of {complete_fast_fixture.name}"
     if culmination_feast_name is not None:
         days_until_feast = 2
         complete_fast_fixture.culmination_feast = culmination_feast_name

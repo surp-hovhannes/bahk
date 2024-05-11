@@ -38,13 +38,13 @@ class FastSerializer(serializers.ModelSerializer):
             days_to_feast = (obj.culmination_feast_date - datetime.date.today()).days
             if days_to_feast < 0:
                 return "{obj.culmination_feast} has passed"
-            return f"{days_to_feast} days until {obj.culmination_feast}"
+            return f"{days_to_feast} day{'' if days_to_feast == 1 else 's'} until {obj.culmination_feast}"
         
         finish_date = max([day.date for day in obj.days.all()])
         days_to_finish = (finish_date - datetime.date.today()).days + 1  # + 1 to get days until first day *after* fast
         if days_to_finish < 0:
             return f"{obj.name} has passed"
-        return f"{days_to_finish} days until the end of {obj.name}"
+        return f"{days_to_finish} day{'' if days_to_finish == 1 else 's'} until the end of {obj.name}"
 
     class Meta:
         model = models.Fast
