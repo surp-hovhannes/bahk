@@ -111,7 +111,7 @@ def register(request):
             if user is not None:
                 login(request, user)
                 
-            return HttpResponseRedirect(reverse("home"))
+            return HttpResponseRedirect(reverse("web_home"))
         else:
             messages.error(request, 'Account creation failed')
 
@@ -130,7 +130,7 @@ def join_fasts(request):
         if form.is_valid():
             new_fasts = set(form.cleaned_data["fasts"])
             request.user.profile.fasts.add(*new_fasts)
-        return HttpResponseRedirect(reverse("home"))
+        return HttpResponseRedirect(reverse("web_home"))
     else:
         form = JoinFastsForm(request=request)
 

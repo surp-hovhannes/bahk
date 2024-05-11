@@ -22,7 +22,7 @@
             <ul class="sidebar-nav">
               {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>
-                <li><a href="{% url 'home' %}?next={{ request.path }}">Home</a></li>
+                <li><a href="{% url 'web_home' %}?next={{ request.path }}">Home</a></li>
                 <li><a href="{% url 'logout' %}?next={{ request.path }}">Logout</a></li>
                 <li><a href="{% url 'join_fasts' %}?next={{ request.path }}">Join Fasts</a></li>
               {% else %}
