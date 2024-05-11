@@ -2,3 +2,8 @@ django==4.2.11
 djangorestframework==3.14.0
 pytest==8.1.1
 pytest-django==4.8.0
+whitenoise
+gunicorn
+django-heroku
+dj-database-url
+psycopg2-binary

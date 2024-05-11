@@ -24,12 +24,12 @@ def sample_church_fixture():
 
 @pytest.fixture
 def sample_fast_fixture(sample_church_fixture):
-    return Fast.objects.create(name="Sample Fast", church=sample_church_fixture)
+    return Fast.objects.create(name="Sample Fast", church=sample_church_fixture, description="A sample fast.")
 
 
 @pytest.fixture
 def another_fast_fixture(sample_church_fixture):
-    return Fast.objects.create(name="Another Fast", church=sample_church_fixture)
+    return Fast.objects.create(name="Another Fast", church=sample_church_fixture, description="Another sample fast.")
 
 
 @pytest.fixture
