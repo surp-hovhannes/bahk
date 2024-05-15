@@ -1,31 +1,28 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-  <h1>Live and Pray</h1>
-  <body>
     <div class="container">
         {% load static %}
-        <img src="{% static 'images/img.jpg' %}" alt="St. John Armenian Church" width="500" height="400">
-        <div class="content">
-            <p class="main-text">Hi {{ user }}!</p>
-        </div>
+            <div>{{ current_date|date:"l, F j, Y" }}</div>
         {% if church %}
             {% if fast %}
+                <h2 class=" fs-4 text-grey ">{{ fast }}</h2>
                 <div class="content">
-                    <p class="main-text">Today, you are participating in {{ church }}'s {{ fast }}.</p>
-                    <p class="main-text">{{ participant_count }} faithful are fasting today!</p>
+                    {% if is_participating %}
+                        <p class="main-text">Today, you are participating in {{ church }}'s {{ fast }}.</p>
+                        <p>{{ participant_count }} faithful are fasting with you today!</p>
+                        <!-- placeholder for a medium centered button that says learn more -->
+                        <a href="#" class="btn btn-primary">Learn More &hellip;</a>
+                    {% else %}
+                        <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with {{ participant_count }} others.</p>
+                        <a class="btn btn-primary" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>
+                    {% endif %}
                 </div>
             {% else %}
-                <div class="content">
-                    <p class="main-text">Today in the {{ church }}, we are not fasting.</p>
-                </div>
+                <h2 class=" fs-4 text-grey ">Today in the {{ church }}, we are not fasting.</p>
             {% endif %}
         {% else %}
-            <div class="content">
                 <p class="main-text">Join a church to begin your fasting journey today!</p>
-            </div>
         {% endif %}
-    <p class="copyright">Copyright St. John Armenian Church 2024</p>
     </div>
-</body>
 {% endblock %}

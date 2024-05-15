@@ -37,4 +37,5 @@ urlpatterns += [
 urlpatterns += [
     path("create_user/web/", views.register, name="register"),
     path("join_fasts/web/", views.join_fasts, name="join_fasts"),
+    path("edit_profile/web/", views.edit_profile, name="edit_profile"),
 ]

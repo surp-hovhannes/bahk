@@ -2,7 +2,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django import forms
 from django.contrib.auth.models import User
 
-from hub.models import Church, Fast
+from hub.models import Church, Fast, Profile
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -26,3 +26,12 @@ class JoinFastsForm(forms.Form):
         super().__init__(*args, **kwargs)
         if request is not None:
             self.fields["fasts"].queryset = Fast.objects.filter(church=request.user.profile.church)
+
+class ProfileForm(forms.ModelForm):
+    class Meta:
+        model = Profile
+        fields = ['church']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['church'].widget.attrs.update({'class': 'form-control'})

@@ -11,27 +11,30 @@
       <p>Your account doesn't have access to this page. To proceed,
       please login with an account that has access.</p>
     {% else %}
-      <p>Please login to see this page.</p>
     {% endif %}
   {% endif %}
 
   <form method="post" action="{% url 'login' %}">
     {% csrf_token %}
-    <table>
-      <tr>
-        <td>{{ form.username.label_tag }}</td>
-        <td>{{ form.username }}</td>
-      </tr>
-      <tr>
-        <td>{{ form.password.label_tag }}</td>
-        <td>{{ form.password }}</td>
-      </tr>
-    </table>
-    <input type="submit" value="login">
+    <div class="form-group row pb-3">
+      <div class="col-sm-10">
+        <input type="text" name="{{ form.username.name }}" id="{{ form.username.id_for_label }}" class="form-control" placeholder="{{ form.username.label }}" value="{{ form.username.value|default_if_none:'' }}">
+      </div>
+    </div>
+    <div class="form-group row pb-3 ">
+      <div class="col-sm-10">
+        <input type="password" name="{{ form.password.name }}" id="{{ form.password.id_for_label }}" class="form-control" placeholder="{{ form.password.label }}" value="{{ form.password.value|default_if_none:'' }}">
+      </div>
+    </div>
+    <div class="form-group row pb-3">
+      <div class="col-sm-10">
+        <input type="submit" value="login" class="btn btn-primary">
+      </div>
+    </div>
   </form>
 
   <!-- {# Assumes you set up the password_reset view in your URLconf #}
   <p><a href="{% url 'password_reset' %}">Lost password?</a></p> -->
 
-  <p><a href="{% url 'register' %}">Create user</a></p>
-{% endblock %}
+  <p>Don't have an account? <a href="{% url 'register' %}">Sign up</a></p>
+  {% endblock %}
