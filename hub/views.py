@@ -125,7 +125,8 @@ def home(request):
         "fast": current_fast_name,
         "user": request.user,
         "participant_count": response.get("participant_count", 1),
-        "is_participating": is_participating
+        "is_participating": is_participating,
+        "description": response.get("description", ""),
     }
 
     return render(request, "home.html", context=context)

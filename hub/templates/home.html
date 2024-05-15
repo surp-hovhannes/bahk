@@ -11,11 +11,13 @@
                     {% if is_participating %}
                         <p class="main-text">Today, you are participating in {{ church }}'s {{ fast }}.</p>
                         <p>{{ participant_count }} faithful are fasting with you today!</p>
+                        <p>{{ description }} </p>
                         <!-- placeholder for a medium centered button that says learn more -->
                         <a href="#" class="btn btn-primary">Learn More &hellip;</a>
                     {% else %}
                         <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with {{ participant_count }} others.</p>
-                        <a class="btn btn-primary" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>
+                        <a class="btn btn-primary mb-3" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>
+                        <p>{{ description }} </p>
                     {% endif %}
                 </div>
             {% else %}
