@@ -145,7 +145,7 @@ REST_FRAMEWORK = {
 }
 
 # Redirect to home URL after login (Default redirects to /accounts/profile/)
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/hub/web/'
 
 # temporary plug for email (not set up): logs emails to be sent to console for debugging
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
