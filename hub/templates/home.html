@@ -10,7 +10,7 @@
                 <div class="content">
                     {% if is_participating %}
                         <p class="main-text">Today, you are participating in {{ church }}'s {{ fast }}.</p>
-                        <p>{{ participant_count }} faithful are fasting with you today!</p>
+                        <p>{{ participant_count }} faithful {{ participant_count|pluralize:"is,are" }} fasting with you today!</p>
                         <p>{{ description }} </p>
                         <!-- placeholder for a medium centered button that says learn more -->
                         <a href="#" class="btn btn-primary">Learn More &hellip;</a>
