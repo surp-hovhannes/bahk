@@ -36,7 +36,7 @@ class Profile(models.Model):
 
 class Day(models.Model):
     """Model for a day in time."""
-    date = models.DateField()
+    date = models.DateField(unique=True)
     fasts = models.ManyToManyField(Fast, related_name="days")
 
     def __str__(self):
