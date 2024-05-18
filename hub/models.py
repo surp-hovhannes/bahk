@@ -16,6 +16,8 @@ class Fast(models.Model):
     name = models.CharField(max_length=128)
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="fasts")
     description = models.TextField(null=True, blank=True)
+    culmination_feast = models.CharField(max_length=128, null=True, blank=True)
+    culmination_feast_date = models.DateField(unique=True, null=True, blank=True)
 
     def __str__(self):
         return f"{self.name} of the {self.church.name}"
@@ -36,7 +38,7 @@ class Profile(models.Model):
 
 class Day(models.Model):
     """Model for a day in time."""
-    date = models.DateField()
+    date = models.DateField(unique=True)
     fasts = models.ManyToManyField(Fast, related_name="days")
 
     def __str__(self):

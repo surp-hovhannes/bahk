@@ -44,6 +44,18 @@ def test_create_day():
     assert day.date == date
 
 
+@pytest.mark.django_db
+def test_create_duplicate_days():
+    date = datetime.date.today()
+    day1 = Day.objects.create(date=date)
+    try:
+        day2 = Day.objects.create(date=date)
+        assert False
+    except:
+        # create a duplicate day (same date as existing) fails
+        assert True
+
+
 ### Create complete models ###
     
 @pytest.mark.django_db
