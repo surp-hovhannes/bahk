@@ -1,6 +1,7 @@
 """Tests models."""
 import datetime
 
+from django.db.utils import IntegrityError
 import pytest
 
 from hub.models import Church, Day, Fast, Profile
@@ -124,3 +125,13 @@ def test_create_complete_church(
     another_fast_fixture.church = church
     another_fast_fixture.save(update_fields=["church"])
     assert set(church.fasts.all()) == {sample_fast_fixture, another_fast_fixture}
+
+
+@pytest.mark.django_db
+def test_constraint_unique_fast_name_church():
+    """Tests that two fasts with the same name and church cannot be created."""
+    fast_name = "fast"
+    church = Church.objects.create(name="church")
+    fast = Fast.objects.create(name=fast_name, church=church)
+    with pytest.raises(IntegrityError):
+        duplicate_fast = Fast.objects.create(name=fast_name, church=church, description="now there's a description")
