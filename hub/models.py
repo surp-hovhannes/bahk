@@ -16,6 +16,7 @@ class Fast(models.Model):
     name = models.CharField(max_length=128)
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="fasts")
     description = models.TextField(null=True, blank=True)
+    image = models.ImageField(upload_to='fast_images/', null=True, blank=True) 
 
     def __str__(self):
         return f"{self.name} of the {self.church.name}"

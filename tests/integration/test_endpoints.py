@@ -27,10 +27,6 @@ def test_fast_on_date_endpoint(query_params, complete_fast_fixture, request):
     response = view(request)
 
     assert response.status_code == 200
-    assert response.data == {
-        "name": complete_fast_fixture.name, 
-        "church": {
-            "name": church.name
-        },
-        "participant_count": complete_fast_fixture.profiles.count(),
-    }
+    assert response.data["name"] == complete_fast_fixture.name
+    assert response.data["church"]["name"] == church.name
+    assert response.data["participant_count"] == complete_fast_fixture.profiles.count()

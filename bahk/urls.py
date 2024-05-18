@@ -39,3 +39,7 @@ urlpatterns += [
     path("join_fasts/web/", views.join_fasts, name="join_fasts"),
     path("edit_profile/web/", views.edit_profile, name="edit_profile"),
 ]
+
+# for serving media files during development
+if not settings.IS_PRODUCTION:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
