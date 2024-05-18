@@ -15,7 +15,7 @@ class ChurchAdmin(admin.ModelAdmin):
 
 @admin.register(Fast, site=admin.site)
 class FastAdmin(admin.ModelAdmin):
-    list_display = ("name", "church", "description")
+    list_display = ("name", "church", "description", "image")
     ordering = ("church", "name",)
 
 

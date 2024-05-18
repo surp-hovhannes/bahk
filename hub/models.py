@@ -18,6 +18,7 @@ class Fast(models.Model):
     description = models.TextField(null=True, blank=True)
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(unique=True, null=True, blank=True)
+    image = models.ImageField(upload_to='fast_images/', null=True, blank=True) 
 
     def __str__(self):
         return f"{self.name} of the {self.church.name}"

@@ -161,3 +161,12 @@ cython_debug/
 
 # personal notes
 notes.txt
+
+# node modules
+node_modules/
+
+#uplaoded files
+media/
+
+# static files
+staticfiles/
