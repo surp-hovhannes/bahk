@@ -38,7 +38,7 @@ def test_fast_image_upload():
     """Tests image upload for a Fast model object."""
     name = "Test Fast"
     church = Church.objects.create(name="Test Church")
-    image_path = os.path.join(settings.BASE_DIR, 'staticfiles', 'images', 'img.jpg')
+    image_path = os.path.join(settings.BASE_DIR, 'hub', 'static', 'images', 'img.jpg')
     image = SimpleUploadedFile(name='img.jpg', content=open(image_path, 'rb').read(), content_type='image/jpeg')
     fast = Fast.objects.create(name=name, church=church, image=image)
     assert fast
