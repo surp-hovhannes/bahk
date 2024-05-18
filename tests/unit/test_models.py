@@ -3,8 +3,14 @@ import datetime
 
 from django.db.utils import IntegrityError
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
+
 
 from hub.models import Church, Day, Fast, Profile
+import os
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+
 
 
 ### Create minimal models ###
@@ -25,6 +31,19 @@ def test_create_fast(sample_church_fixture):
     fast = Fast.objects.create(name=name, church=sample_church_fixture)
     assert fast
     assert fast.name == name
+
+
+@pytest.mark.django_db
+def test_fast_image_upload():
+    """Tests image upload for a Fast model object."""
+    name = "Test Fast"
+    church = Church.objects.create(name="Test Church")
+    image_path = os.path.join(settings.BASE_DIR, 'staticfiles', 'images', 'img.jpg')
+    image = SimpleUploadedFile(name='img.jpg', content=open(image_path, 'rb').read(), content_type='image/jpeg')
+    fast = Fast.objects.create(name=name, church=church, image=image)
+    assert fast
+    assert fast.name == name
+    assert fast.image
 
 
 @pytest.mark.django_db
