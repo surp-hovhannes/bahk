@@ -1,6 +1,8 @@
 """Models for bahk hub."""
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import constraints
 
 
 class Church(models.Model):
@@ -18,6 +20,11 @@ class Fast(models.Model):
     description = models.TextField(null=True, blank=True)
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(unique=True, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            constraints.UniqueConstraint(fields=["name", "church"], name="unique_name_church")
+        ]
 
     def __str__(self):
         return f"{self.name} of the {self.church.name}"
@@ -40,6 +47,11 @@ class Day(models.Model):
     """Model for a day in time."""
     date = models.DateField(unique=True)
     fasts = models.ManyToManyField(Fast, related_name="days")
+
+    # class Meta:
+    #     constraints = [
+    #         constraints.UniqueConstraint(fields=["fasts__church", "date"], name="unique_fast_on_date_for_church")
+    #     ]
 
     def __str__(self):
         return self.date.strftime("%B-%d-%Y")
