@@ -55,7 +55,7 @@ def today_fixture():
 
 @pytest.fixture
 def complete_fast_fixture(sample_profile_fixture, sample_church_fixture, sample_day_fixture, today_fixture):
-    fast = Fast.objects.create(name="Complete Fast", church=sample_church_fixture)
+    fast = Fast.objects.create(name="Complete Fast", church=sample_church_fixture, description="complete fast")
     fast.profiles.set([sample_profile_fixture])
     fast.days.set([sample_day_fixture, today_fixture])
 
