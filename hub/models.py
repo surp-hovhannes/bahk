@@ -1,6 +1,8 @@
 """Models for bahk hub."""
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import constraints
 
 
 class Church(models.Model):
@@ -19,6 +21,11 @@ class Fast(models.Model):
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(unique=True, null=True, blank=True)
     image = models.ImageField(upload_to='fast_images/', null=True, blank=True) 
+
+    class Meta:
+        constraints = [
+            constraints.UniqueConstraint(fields=["name", "church"], name="unique_name_church"),
+        ]
 
     def __str__(self):
         return f"{self.name} of the {self.church.name}"
@@ -42,5 +49,14 @@ class Day(models.Model):
     date = models.DateField(unique=True)
     fasts = models.ManyToManyField(Fast, related_name="days")
 
+    def validate_unique(self, *args, **kwargs):
+        super().validate_unique(*args, **kwargs)
+        # check for two fasts from the same church
+        church_names = [fast.church.name for fast in self.fasts.all()]
+        if len(set(church_names)) != len(church_names):  # duplicate church name
+            raise ValidationError(
+                message="Cannot have more than one fast per day for a given church.",
+                code="unique_together",
+            )
     def __str__(self):
         return self.date.strftime("%B-%d-%Y")
