@@ -1,5 +1,5 @@
 """Generates seed data for app with python manage.py seed."""
-from datetime import date
+from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
 
@@ -38,14 +38,27 @@ class Command(BaseCommand):
         models.Day.objects.all().delete()
 
     def populate_db(self):
+        date_tomorrow = date.today() + timedelta(days=1)
+        date_day_after_tomorrow = date.today() + timedelta(days=2)
         church1, _ = models.Church.objects.get_or_create(name="Church1")
         church2, _ = models.Church.objects.get_or_create(name="Church2")
         church3, _ = models.Church.objects.get_or_create(name="Church3")
 
-        fast1, _ = models.Fast.objects.get_or_create(name="Fast 1", church=church1)
-        fast2, _ = models.Fast.objects.get_or_create(name="Fast 2", church=church2)
-        fast3, _ = models.Fast.objects.get_or_create(name="Fast 3", church=church3)
-
+        fast1, _ = models.Fast.objects.get_or_create(
+            name="Fast 1", 
+            church=church1,
+            description="your standard fast", 
+            culmination_feast="your standard feast",
+            culmination_feast_date=date_tomorrow
+        )
+        fast2, _ = models.Fast.objects.get_or_create(
+            name="Fast 2", 
+            church=church2,
+            description="a prayerful fast",
+            culmination_feast="a wonderful feast",
+            culmination_feast_date=date_day_after_tomorrow
+        )
+        fast3, _ = models.Fast.objects.get_or_create(name="Fast 3", church=church3, description="fast no feast")
 
         today, _ = models.Day.objects.get_or_create(date=date.today())
         today.fasts.set([fast1, fast2, fast3])
