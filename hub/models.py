@@ -48,10 +48,14 @@ class Day(models.Model):
     date = models.DateField(unique=True)
     fasts = models.ManyToManyField(Fast, related_name="days")
 
-    # class Meta:
-    #     constraints = [
-    #         constraints.UniqueConstraint(fields=["fasts__church", "date"], name="unique_fast_on_date_for_church")
-    #     ]
-
+    def validate_unique(self, *args, **kwargs):
+        super().validate_unique(*args, **kwargs)
+        # check for two fasts from the same church
+        church_names = [fast.church.name for fast in self.fasts.all()]
+        if len(set(church_names)) != len(church_names):  # duplicate church name
+            raise ValidationError(
+                message="Cannot have more than one fast per day for a given church.",
+                code="unique_together",
+            )
     def __str__(self):
         return self.date.strftime("%B-%d-%Y")
