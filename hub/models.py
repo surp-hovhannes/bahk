@@ -23,7 +23,7 @@ class Fast(models.Model):
 
     class Meta:
         constraints = [
-            constraints.UniqueConstraint(fields=["name", "church"], name="unique_name_church")
+            constraints.UniqueConstraint(fields=["name", "church"], name="unique_name_church"),
         ]
 
     def __str__(self):
