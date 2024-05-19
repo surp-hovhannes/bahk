@@ -49,7 +49,8 @@ class Command(BaseCommand):
             church=church1,
             description="your standard fast", 
             culmination_feast="your standard feast",
-            culmination_feast_date=date_tomorrow
+            culmination_feast_date=date_tomorrow,
+            url="https://stjohnarmenianchurch.com/"
         )
         fast2, _ = models.Fast.objects.get_or_create(
             name="Fast 2", 
