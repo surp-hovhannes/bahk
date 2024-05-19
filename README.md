@@ -75,8 +75,8 @@ First, populate the database with the seed data by running
 python manage.py seed
 ```
 
-This creates 4 accounts: usernames `user1`, `user2`, `user3`, or `user4`. The password is `default123` for each. You can
-now log into the home page with any of these accounts at http://localhost:8000.
+This creates 4 accounts: usernames `user1a`, `user1b`, `user2`, and `user3`. The password is `default123` for each. 
+You can now log into the home page with any of these accounts at http://localhost:8000/hub/web/.
 
 Users `user1a` and `user1b` are part of `Church1` and are participating in `Fast1`. User `user2` is part of `Church2`
 and is participating in `Fast2`. User `user3` is part of `Church3` but is not participating in any fasts.
@@ -85,7 +85,11 @@ should also see the number of participants in the fast (including the user).
 
 Try joining a fast! Log in as `user3` and select `Fast3` from the menu (it should be the only option). Then click
 [Home](http://localhost:8000/hub/?next=/hub/) on the sidebar to go back to the home page. It should now show that
-you are fasting `Fast3` with one faithful (you).
+you are fasting `Fast3` with one faithful (you, `user3`).
+
+You'll see that each of the three fasts has a different set of information: `Fast1` has a culmination feast countdown,
+a description, and a "Learn More ..." button to the St. John's website. `Fast2` has a culmination feast countdown and a
+description. `Fast3` only has a description.
 
 ## Contact Us!
 
