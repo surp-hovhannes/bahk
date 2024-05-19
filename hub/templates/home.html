@@ -18,7 +18,8 @@
                             <a class="btn btn-primary" href="{{ fast_url }}">Learn More &hellip;</a>
                         {% endif %}
                     {% else %}
-                        <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with {{ participant_count }} others.</p>
+                        <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with 
+                            {{ participant_count }} other{{ participant_count|pluralize }}.</p>
                         <a class="btn btn-primary mb-3" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>
                         <p>{{ description }} </p>
                     {% endif %}
