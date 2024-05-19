@@ -15,7 +15,7 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
     last_day = forms.DateField(widget=forms.SelectDateWidget)
     class Meta:
         model = Fast
-        fields = ["name", "church", "description"]
+        fields = ["name", "church", "description", "culmination_feast", "culmination_feast_date", "url"]
 
     def clean_last_day(self):
         """Ensure last day is not before the first day."""
