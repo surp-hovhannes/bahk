@@ -13,7 +13,9 @@
                         <p>{{ participant_count }} faithful {{ participant_count|pluralize:"is,are" }} fasting with you today!</p>
                         <p>{{ description }} </p>
                         <!-- placeholder for a medium centered button that says learn more -->
-                        <a href="#" class="btn btn-primary">Learn More &hellip;</a>
+                        {% if fast_url %}
+                            <a class="btn btn-primary" href="{{ fast_url }}">Learn More &hellip;</a>
+                        {% endif %}
                     {% else %}
                         <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with {{ participant_count }} others.</p>
                         <a class="btn btn-primary mb-3" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>

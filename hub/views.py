@@ -123,6 +123,7 @@ def home(request):
     context = {
         "church": church_name,
         "fast": current_fast_name,
+        "fast_url": current_fast.url,
         "user": request.user,
         "participant_count": response.get("participant_count", 1),
         "is_participating": is_participating,
