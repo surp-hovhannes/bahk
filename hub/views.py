@@ -115,6 +115,8 @@ def home(request):
     # Get the current fast
     current_fast_name = response.get("name", "")
     current_fast = Fast.objects.get(name=current_fast_name) if current_fast_name else None
+    # get link to learn more if available
+    fast_url = current_fast.url if current_fast is not None else None
 
     # Check if the user is participating in the fast
     is_participating = current_fast in request.user.profile.fasts.all() if current_fast else False
@@ -123,7 +125,7 @@ def home(request):
     context = {
         "church": church_name,
         "fast": current_fast_name,
-        "fast_url": current_fast.url,
+        "fast_url": fast_url,
         "user": request.user,
         "participant_count": response.get("participant_count", 1),
         "is_participating": is_participating,
