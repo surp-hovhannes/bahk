@@ -20,7 +20,10 @@ class Fast(models.Model):
     description = models.TextField(null=True, blank=True)
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(unique=True, null=True, blank=True)
-    image = models.ImageField(upload_to='fast_images/', null=True, blank=True) 
+    image = models.ImageField(upload_to='fast_images/', null=True, blank=True)
+    # 2048 chars is the maximum URL length on Google Chrome
+    url = models.URLField(verbose_name="Link to learn more", null=True, blank=True, max_length=2048,
+                          help_text="URL to a link to learn more--must include protocol (e.g. https://)")
 
     class Meta:
         constraints = [
