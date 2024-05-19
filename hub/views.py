@@ -121,7 +121,6 @@ def home(request):
     # Check if the user is participating in the fast
     is_participating = current_fast in request.user.profile.fasts.all() if current_fast else False
 
-
     context = {
         "church": church_name,
         "fast": current_fast_name,
@@ -130,6 +129,7 @@ def home(request):
         "participant_count": response.get("participant_count", 1),
         "is_participating": is_participating,
         "description": response.get("description", ""),
+        "countdown": response.get("countdown")
     }
 
     return render(request, "home.html", context=context)
