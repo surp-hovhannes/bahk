@@ -7,7 +7,7 @@ from django.db.models import constraints
 
 class Church(models.Model):
     """Model for a church."""
-    name = models.CharField(max_length=128)
+    name = models.CharField(max_length=128, unique=True)
 
     def __str__(self):
         return self.name
@@ -53,14 +53,5 @@ class Day(models.Model):
     date = models.DateField(unique=True)
     fasts = models.ManyToManyField(Fast, related_name="days")
 
-    def validate_unique(self, *args, **kwargs):
-        super().validate_unique(*args, **kwargs)
-        # check for two fasts from the same church
-        church_names = [fast.church.name for fast in self.fasts.all()]
-        if len(set(church_names)) != len(church_names):  # duplicate church name
-            raise ValidationError(
-                message="Cannot have more than one fast per day for a given church.",
-                code="unique_together",
-            )
     def __str__(self):
         return self.date.strftime("%B-%d-%Y")
