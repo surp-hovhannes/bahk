@@ -16,7 +16,11 @@ from hub.models import Church, Fast, Profile
 from hub import serializers
 
 
+# Utilities
+
+
 def _get_fast_for_user_on_date(request):
+    """Returns the fast that the user is participating in on a given day."""
     user = request.user
     date_str = request.query_params.get("date")
     if date_str is None:
@@ -29,11 +33,13 @@ def _get_fast_for_user_on_date(request):
 
 
 def _get_user_fast_on_date(user, date):
+    """Given user, gets fast that the user is participating in on a given day."""
     # there should not be multiple fasts per day, but in case of bug, return last created
     return Fast.objects.filter(profiles__user=user, days__date=date).last()
 
 
 def _get_fast_on_date(request):
+    """Returns the fast for the user's church on a given day whether the user is participating in it or not."""
     date_str = request.query_params.get("date")
     if date_str is None:
         # get today by default
@@ -65,6 +71,9 @@ def _parse_date_str(date_str):
         return None
 
     return date
+
+
+# Views
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -177,6 +186,7 @@ def join_fasts(request):
     context = {"form": form}
 
     return render(request, 'registration/join_fasts.html', context)
+
 
 @login_required
 def edit_profile(request):
