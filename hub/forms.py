@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django import forms
 from django.contrib.auth.models import User
 
-from hub.models import Church, Fast, Profile
+from hub.models import Church, Day, Fast, Profile
 
 
 _MAX_FAST_LENGTH = 60  # days
@@ -28,6 +28,13 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
             raise ValidationError(f"Tried to create a fast lasting {length_of_fast} days. "
                                   f"Fasts longer than {_MAX_FAST_LENGTH} days are not permitted.")
         self.cleaned_data["length_of_fast"] = length_of_fast
+
+        # also checks that does not overlap with other fasts from the same church
+        days = Day.objects.filter(date__range=[first_day, last_day])
+        church_name = self.cleaned_data["church"]
+        church_names = sum([[f.church.name for f in day.fasts.all()] for day in days], []) + [church_name]
+        if len(church_names) > len(set(church_names)):
+            raise ValidationError("Fast overlaps with another fast from the same church (not permitted).")
 
 
 class CustomUserCreationForm(UserCreationForm):

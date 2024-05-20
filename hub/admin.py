@@ -1,7 +1,9 @@
 """Admin forms."""
 import datetime
 
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -81,10 +83,27 @@ class ProfileAdmin(admin.ModelAdmin):
     get_fasts.short_description = "Fasts"
 
 
+class DayAdminForm(forms.ModelForm):
+    class Meta:
+        model = Day
+        fields = ["date", "fasts"]
+
+    def clean_fasts(self):
+        fasts = self.cleaned_data["fasts"]
+        church_names = [fast.church.name for fast in fasts]
+        if len(church_names) > len(set(church_names)):
+            date = str(self.cleaned_data["date"])
+            print(date)
+            raise ValidationError("Only one fast per church on a given date is permitted.", code="invalid")
+        
+        return fasts
+
+
 @admin.register(Day, site=admin.site)
 class DayAdmin(admin.ModelAdmin):
     list_display = ("date", "get_fasts",)
     ordering = ("date",)
+    form = DayAdminForm
 
     def get_fasts(self, day):
         return _concatenate_queryset(day.fasts.all())
