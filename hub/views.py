@@ -29,8 +29,8 @@ def _get_fast_for_user_on_date(request):
 
 
 def _get_user_fast_on_date(user, date):
-    # TODO: add a check that there is only one fast?
-    return Fast.objects.filter(profiles__user=user, days__date=date).first()
+    # there should not be multiple fasts per day, but in case of bug, return last created
+    return Fast.objects.filter(profiles__user=user, days__date=date).last()
 
 
 def _get_fast_on_date(request):
@@ -45,7 +45,8 @@ def _get_fast_on_date(request):
     church = request.user.profile.church
 
     # Filter the fasts based on the church
-    return Fast.objects.filter(church=church, days__date=date).first()
+    # there should not be multiple fasts per day, but in case of bug, return last created
+    return Fast.objects.filter(church=church, days__date=date).last()
 
 
 def _parse_date_str(date_str):
