@@ -36,6 +36,7 @@ class Profile(models.Model):
     church = models.ForeignKey(Church, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles")
     fasts = models.ManyToManyField(Fast, related_name="profiles")
     profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
+    location = models.CharField(max_length=100, blank=True, null=True)  # New field
 
     def save(self, *args, **kwargs):
         if self.profile_image:

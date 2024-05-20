@@ -30,7 +30,7 @@ class JoinFastsForm(forms.Form):
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Profile
-        fields = ['church', 'profile_image']
+        fields = ['church', 'profile_image','location']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

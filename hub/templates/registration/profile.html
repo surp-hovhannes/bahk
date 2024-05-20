@@ -20,6 +20,10 @@
         {{ form.profile_image }}
     </div>
     <div class="mb-3">
+        <label for="{{ form.location.id_for_label }}" class="form-label">{{ form.location.label }}</label>
+        {{ form.location }}
+    </div>
+    <div class="mb-3">
         <label for="{{ form.church.id_for_label }}" class="form-label">{{ form.church.label }}</label>
         {{ form.church }}
     </div>
