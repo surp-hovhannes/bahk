@@ -1,0 +1,28 @@
+@media (min-width: 576px) {
+  .w-50 {
+    width: 50% !important;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .w-100-sm {
+    width: 100% !important;
+  }
+}
+
+.shadow {
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+.text-grey {
+  color: #666 !important; /* Adjust color as needed */
+}
+
+#logout-form {
+  display: inline;
+}
+#logout-form button {
+  padding: 0;
+  margin: 0;
+}
+  

@@ -1,0 +1,34 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+    <div class="container">
+        {% load static %}
+            <div>{{ current_date|date:"l, F j, Y" }}</div>
+        {% if church %}
+            {% if fast %}
+                <h2 class=" fs-4 text-grey ">{{ fast }}</h2>
+                <div class="content">
+                    {% if is_participating %}
+                        <p class="main-text">Today, you are participating in {{ church }}'s {{ fast }}.</p>
+                        <p class="main-text">{{ countdown }}!</p>
+                        <p>{{ participant_count }} faithful {{ participant_count|pluralize:"is,are" }} fasting with you today!</p>
+                        <p>{{ description }} </p>
+                        <!-- placeholder for a medium centered button that says learn more -->
+                        {% if fast_url %}
+                            <a class="btn btn-primary" href="{{ fast_url }}">Learn More &hellip;</a>
+                        {% endif %}
+                    {% else %}
+                        <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with 
+                            {{ participant_count }} other{{ participant_count|pluralize }}.</p>
+                        <a class="btn btn-primary mb-3" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>
+                        <p>{{ description }} </p>
+                    {% endif %}
+                </div>
+            {% else %}
+                <h2 class=" fs-4 text-grey ">Today in the {{ church }}, we are not fasting.</p>
+            {% endif %}
+        {% else %}
+                <p class="main-text">Join a church to begin your fasting journey today!</p>
+        {% endif %}
+    </div>
+{% endblock %}

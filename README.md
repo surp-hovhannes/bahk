@@ -29,16 +29,30 @@ cd bahk
 python -m venv venv
 ```
 
-To activate the virtual environment, run `source venv/bin/activate`. Now, you are ready to install the requirements:
+To activate the virtual environment, run `source venv/bin/activate`.
+
+The backend of this app runs on `PostgreSQL`. Python uses the PyPI package `psycopg2` to communicate with the database,
+which requires the following packages to be installed on your OS:
+```
+python<X>-dev  # where <X> is the python version (2 or 3), but you can specify minor version, too (e.g., 3.9)
+libpq-dev
+```
+
+For example, to install these on Ubuntu or another `apt-get`-based OS, run
+```
+sudo apt-get install python3-dev
+sudo apt-get install libpq-dev
+```
+
+ Now, you are ready to install the requirements:
 ```
 pip install -r requirements.txt
 ```
 
 ### Setting Up the Database
 
-First create a superuser for yourself. This account will allow you to access all aspects
-of the app.
-Navigate to the root directory (`bahk/`) and enter the following in the terminal:
+To set up the database, migrate, populate with seed data, and create a superuser for yourself.
+To do this, navigate to the root directory (`bahk/`) and enter the following in the terminal:
 ```
 python manage.py migrate
 python manage.py createsuperuser
@@ -51,40 +65,31 @@ python manage.py runserver
 ```
 This command runs `bahk` on your local server at port 8000 (you can specify your own port with the `--port <port>` flag).
 
-Access the app at http://localhost:8000
+Access the admin page for the app at http://localhost:8000/admin. There, you can create a profile for your superuser
+so you can use it to access the home page (http://localhost:8000).
 
-To navigate through the app, click "Login" in the upper right and enter the credentials of the superuser account 
-you created.
+### Testing the Site
 
-### Sample Endpoints
+First, populate the database with the seed data by running
+```
+python manage.py seed
+```
 
-Access the admin page at http://localhost:8000/admin/.
-Here, you can browse and modify the database using Django's admin interface. Go see your user under the "User"
-link on the side panel!
+This creates 4 accounts: usernames `user1a`, `user1b`, `user2`, and `user3`. The password is `default123` for each. 
+You can now log into the home page with any of these accounts at http://localhost:8000/hub/web/.
 
-You can also retrieve data like a client through API endpoints on the "hub" app. Try
-http://localhost:8000/hub/users/.
-You should see a list of users with URL, username, email, and groups that they belong to.
+Users `user1a` and `user1b` are part of `Church1` and are participating in `Fast1`. User `user2` is part of `Church2`
+and is participating in `Fast2`. User `user3` is part of `Church3` but is not participating in any fasts.
+These data will appear on the home page once you log in with one of the users. You
+should also see the number of participants in the fast (including the user).
 
-### Endpoints to Test
+Try joining a fast! Log in as `user3` and select `Fast3` from the menu (it should be the only option). Then click
+[Home](http://localhost:8000/hub/?next=/hub/) on the sidebar to go back to the home page. It should now show that
+you are fasting `Fast3` with one faithful (you, `user3`).
 
-To test the current endpoints, go to the [admin page](http://localhost:8000/admin/) and add the following:
-* Church: create a church and give it a name
-* Fast: create two fasts with names and assign them to your church
-* Users: create two users (no special groups or permissions)
-* Profiles: create a profile for each user, assigning them to your church and adding the fasts that you want each 
-user to participate in
-* Days: create a day for each day in the duration of each of your fasts and assign them to the appropriate fasts
-
-We are currently testing one endpoint:
-
-1. `http://localhost:8000/hub/fast/`: returns a dictionary with data for the logged-in user's fast on a given date.
-The date is passed in as a query parameter, *e.g.*, to get the fast on March 29, 2024, append `?date=20240329` to the 
-URL. If no date is passed, defaults to today. An invalid date string will return an empty fast. The dictionary should
-contain the following:
-    * the name of the fast
-    * the church to which the fast belongs
-    * the number of participants in the fast
+You'll see that each of the three fasts has a different set of information: `Fast1` has a culmination feast countdown,
+a description, and a "Learn More ..." button to the St. John's website. `Fast2` has a culmination feast countdown and a
+description. `Fast3` only has a description.
 
 ## Contact Us!
 

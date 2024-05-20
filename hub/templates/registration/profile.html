@@ -1,0 +1,15 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<h2>Update Your Profile</h2>
+
+<form method="post" class="form-group">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="{{ form.church.id_for_label }}" class="form-label">{{ form.church.label }}</label>
+        {{ form.church }}
+    </div>
+    <button type="submit" class="btn btn-primary">Update</button>
+</form>
+
+  {% endblock %}

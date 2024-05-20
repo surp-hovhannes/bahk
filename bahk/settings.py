@@ -10,6 +10,9 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
+import sys
+import dj_database_url
+import django_heroku
 
 from pathlib import Path
 
@@ -28,6 +31,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# Determine if we are running in production
+IS_PRODUCTION = os.getenv('IS_PRODUCTION', 'False') == 'True'
+
 
 # Application definition
 
@@ -40,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'hub.apps.HubConfig',
     'rest_framework',
+    'storages'
 ]
 
 MIDDLEWARE = [
@@ -58,7 +65,7 @@ ROOT_URLCONF = 'bahk.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -66,6 +73,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'bahk.context_processors.current_date'
             ],
         },
     },
@@ -130,8 +138,6 @@ STATIC_URL = 'static/'
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
@@ -147,6 +153,37 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10
 }
 
+# Redirect to home URL after login (Default redirects to /accounts/profile/)
+LOGIN_REDIRECT_URL = '/hub/web/'
+
+# temporary plug for email (not set up): logs emails to be sent to console for debugging
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
 # Activate Django-Heroku.
 import django_heroku
 django_heroku.settings(locals())
+
+# AWS S3 settings for production
+if IS_PRODUCTION:
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')  # Default region
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+else:
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Test settings
+if 'test' in sys.argv:
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'

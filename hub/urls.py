@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path("fast/", views.FastOnDate.as_view(), name="fast_on_date"),
+    path("web/", views.home, name="web_home"),
 ]
 
 urlpatterns += router.urls
