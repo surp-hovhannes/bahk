@@ -8,3 +8,4 @@ django-heroku
 dj-database-url
 psycopg2-binary
 django-storages
+Pillow  
