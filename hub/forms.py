@@ -52,6 +52,7 @@ class JoinFastsForm(forms.Form):
         if request is not None:
             self.fields["fasts"].queryset = Fast.objects.filter(church=request.user.profile.church)
 
+
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Profile
@@ -60,6 +61,7 @@ class ProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['church'].widget.attrs.update({'class': 'form-control'})
+
 
 class FastForm(forms.ModelForm):
     class Meta:
