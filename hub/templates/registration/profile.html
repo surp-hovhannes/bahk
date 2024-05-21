@@ -2,9 +2,27 @@
 
 {% block content %}
 <h2>Update Your Profile</h2>
-
-<form method="post" class="form-group">
+<div class="row">
+    <div class="col-md-1">
+        {% if user.profile.profile_image %}
+        <img class="rounded-circle inline-block" src="{% url 'resized_profile_image' user.profile.pk 50 50 %}" style="width: 50px; height: 50px; object-fit: cover;" alt="Profile Image">
+        {% endif %}
+    </div>
+    <div class="col-md-11">
+        <h3>{{ user.get_username }}</h3>
+        <p>{{ user.email }}</p>
+    </div>
+</div>
+<form method="post" enctype="multipart/form-data"  class="form-group">
     {% csrf_token %}
+    <div class="mb-3">
+        <label for="{{ form.profile_image.id_for_label }}" class="form-label">{{ form.profile_image.label }}</label>
+        {{ form.profile_image }}
+    </div>
+    <div class="mb-3">
+        <label for="{{ form.location.id_for_label }}" class="form-label">{{ form.location.label }}</label>
+        {{ form.location }}
+    </div>
     <div class="mb-3">
         <label for="{{ form.church.id_for_label }}" class="form-label">{{ form.church.label }}</label>
         {{ form.church }}
@@ -12,4 +30,4 @@
     <button type="submit" class="btn btn-primary">Update</button>
 </form>
 
-  {% endblock %}
+{% endblock %}
