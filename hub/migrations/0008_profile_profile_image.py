@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("hub", "0003_fast_image"),
+        ("hub", "0007_unique_church_name"),
     ]
 
     operations = [
