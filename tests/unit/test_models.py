@@ -13,6 +13,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 
 
+
 ### Create minimal models ###
 
 @pytest.mark.django_db
@@ -54,6 +55,15 @@ def test_create_user_profile(sample_user_fixture):
     assert profile.user == sample_user_fixture
     assert sample_user_fixture.profile == profile
 
+@pytest.mark.django_db
+def test_profile_image_upload(sample_user_fixture):
+    """Tests image upload for a Profile model object."""
+    image_path = os.path.join(settings.BASE_DIR, 'staticfiles', 'images', 'img.jpg')
+    image = SimpleUploadedFile(name='img.jpg', content=open(image_path, 'rb').read(), content_type='image/jpeg')
+    profile = Profile.objects.create(user=sample_user_fixture, profile_image=image)
+    
+    assert profile.profile_image.name.startswith('profile_images/')
+    assert profile.profile_image.name.endswith('img.jpg')
 
 @pytest.mark.django_db
 def test_create_day():

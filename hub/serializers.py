@@ -6,12 +6,17 @@ from rest_framework import serializers
 
 from hub import models
 
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Profile
+        fields = ['profile_image', 'location']
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
+    profile = ProfileSerializer(read_only=True)  # Include profile information
+
     class Meta:
         model = User
-        fields = ["url", "username", "email", "groups"]
-
+        fields = ["url", "username", "email", "groups", "profile"]
 
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:

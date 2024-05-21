@@ -15,6 +15,12 @@ from hub.forms import CustomUserCreationForm, JoinFastsForm, ProfileForm
 from hub.models import Church, Fast, Profile
 from hub import serializers
 
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from PIL import Image
+from io import BytesIO
+from .models import Profile
+
 
 # Utilities
 
@@ -191,10 +197,25 @@ def join_fasts(request):
 @login_required
 def edit_profile(request):
     if request.method == 'POST':
-        form = ProfileForm(request.POST, instance=request.user.profile)
+        form = ProfileForm(request.POST, request.FILES, instance=request.user.profile)
         if form.is_valid():
             form.save()
+            messages.success(request, 'Your profile was successfully updated!')
             return redirect('edit_profile')
+        else:
+            messages.error(request, 'Please correct the error below.')
     else:
         form = ProfileForm(instance=request.user.profile)
     return render(request, 'registration/profile.html', {'form': form})
+
+
+def resized_profile_image_view(request, pk, width, height):
+    profile = get_object_or_404(Profile, pk=pk)
+    image = Image.open(profile.profile_image.path)
+    image.thumbnail((width, height), Image.LANCZOS)
+
+    buffer = BytesIO()
+    image.save(buffer, format='JPEG')
+    buffer.seek(0)
+
+    return HttpResponse(buffer, content_type='image/jpeg')
