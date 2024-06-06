@@ -11,3 +11,4 @@ djangorestframework_simplejwt
 django-storages
 Pillow
 boto3
+python-decouple
