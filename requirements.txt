@@ -10,3 +10,4 @@ psycopg2-binary
 djangorestframework_simplejwt
 django-storages
 Pillow
+boto3
