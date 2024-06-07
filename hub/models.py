@@ -46,11 +46,9 @@ class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     church = models.ForeignKey(Church, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles")
     fasts = models.ManyToManyField(Fast, related_name="profiles")
-    profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
     location = models.CharField(max_length=100, blank=True, null=True) 
-    profile_image = models.ImageField(upload_to='profile_images/originals/')
+    profile_image = models.ImageField(upload_to='profile_images/originals/', null=True, blank=True)
     
-
     def __str__(self):
         return self.user.username
 
