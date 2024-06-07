@@ -1,12 +1,7 @@
 """Models for bahk hub."""
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import constraints
-from PIL import Image
-from PIL import ImageOps
-from io import BytesIO
-from django.core.files.uploadedfile import InMemoryUploadedFile
 
 class Church(models.Model):
     """Model for a church."""
