@@ -33,7 +33,7 @@
                 <li class="nav-item dropdown ms-auto">
                   <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                     {% if user.profile.profile_image %}
-                    <img class="rounded-circle inline-block" src="{% url 'resized_profile_image' user.profile.pk 20 20 %}" style="width: 20px; height: 20px; object-fit: cover;" alt="Profile Image">
+                    <img class="rounded-circle inline-block" src="{% url 'resized_profile_image' user.profile.pk 100 100 %}" style="width: 20px; height: 20px; object-fit: cover;" alt="Profile Image">
                     {% endif %}
                     {{ user.get_username }}
                   </a>

@@ -1,1424 +1,0 @@
-===== ./hub/__init__.py =====
-
-
-
-===== ./hub/templates/base_generic.html =====
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    {% block title %}
-      <title>Live and Pray</title>
-    {% endblock %}
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-      crossorigin="anonymous">
-    <!-- Add additional CSS in static file -->
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}" />
-  </head>
-  <body class="bg-light">
-    <div class="container-fluid mx-auto w-50 w-100-sm p-3 m-3 bg-white rounded shadow">
-      <div class="row mb-3 border-bottom border-light">
-        <div class="col-5 text-start">
-          <h1 class="fs-5 text-grey">Live &amp; Pray</h1> <!-- Replace with your site title -->
-        </div>
-        <div class="col-7">
-          <nav class="text-end justify-content-end d-flex">
-            {% block sidebar %}
-              <ul class="nav nav-pills">
-                {% if user.is_authenticated %}
-                  <li class="nav-item"><a class="nav-link" href="{% url 'web_home' %}?next={{ request.path }}">Home</a></li>
-                  <li class="nav-item"><a class="nav-link" href="{% url 'join_fasts' %}?next={{ request.path }}">Join Fasts</a></li>
-                  <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                      {{ user.get_username }}
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="userDropdown">
-                      <li class="nav-item"><a class="dropdown-item" href="{% url 'edit_profile' %}?next={{ request.path }}">Profile</a></li>
-                      <li><a class="dropdown-item" href="{% url 'logout' %}?next={{ request.path }}">Logout</a></li>
-                      <!-- Add more user-specific actions here -->
-                    </ul>
-                  </li>               
-                {% else %}
-                  <li class="nav-item"><a class="nav-link" href="{% url 'login' %}?next={{ request.path }}">Login</a></li>
-                {% endif %}
-              </ul>
-            {% endblock %}
-          </nav>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col-12">{% block content %}{% endblock %}</div>
-      </div>
-      <div class="row">
-        <div class="col-12">
-          {% block footer %}
-            <footer class="text-center mt-5">
-              <!-- Footer content here -->
-              <p class="copyright">Copyright St. John Armenian Church 2024</p>
-            </footer>
-          {% endblock %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Bootstrap JS and Popper.js -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" 
-      integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" 
-      crossorigin="anonymous">
-    </script>
-  </body>
-</html>
-
-
-
-===== ./hub/templates/registration/join_fasts.html =====
-{% extends "base_generic.html" %}
-
-{% block content %}
-  <h2>Join Fasts</h2>
-
-  <form action="" method="post" class="form-group">
-    {% csrf_token %}
-    <table class="table">
-    {{ form.as_table }}
-    </table>
-    <input type="submit" value="Join"  class="btn btn-primary">
-  </form>
-{% endblock %}
-
-
-===== ./hub/templates/registration/login.html =====
-{% extends "base_generic.html" %}
-
-{% block content %}
-
-  {% if form.errors %}
-    <p>Your username and password didn't match. Please try again.</p>
-  {% endif %}
-
-  {% if next %}
-    {% if user.is_authenticated %}
-      <p>Your account doesn't have access to this page. To proceed,
-      please login with an account that has access.</p>
-    {% else %}
-    {% endif %}
-  {% endif %}
-
-  <form method="post" action="{% url 'login' %}">
-    {% csrf_token %}
-    <div class="form-group row pb-3">
-      <div class="col-sm-10">
-        <input type="text" name="{{ form.username.name }}" id="{{ form.username.id_for_label }}" class="form-control" placeholder="{{ form.username.label }}" value="{{ form.username.value|default_if_none:'' }}">
-      </div>
-    </div>
-    <div class="form-group row pb-3 ">
-      <div class="col-sm-10">
-        <input type="password" name="{{ form.password.name }}" id="{{ form.password.id_for_label }}" class="form-control" placeholder="{{ form.password.label }}" value="{{ form.password.value|default_if_none:'' }}">
-      </div>
-    </div>
-    <div class="form-group row pb-3">
-      <div class="col-sm-10">
-        <input type="submit" value="login" class="btn btn-primary">
-      </div>
-    </div>
-  </form>
-
-  <!-- {# Assumes you set up the password_reset view in your URLconf #}
-  <p><a href="{% url 'password_reset' %}">Lost password?</a></p> -->
-
-  <p>Don't have an account? <a href="{% url 'register' %}">Sign up</a></p>
-  {% endblock %}
-
-
-===== ./hub/templates/registration/logged_out.html =====
-{% extends "base_generic.html" %}
-
-{% block content %}
-  <p>Logged out!</p>
-  <a href="{% url 'login'%}">Click here to login again.</a>
-{% endblock %}
-
-
-
-===== ./hub/templates/registration/profile.html =====
-{% extends "base_generic.html" %}
-
-{% block content %}
-<h2>Update Your Profile</h2>
-
-<form method="post" class="form-group">
-    {% csrf_token %}
-    <div class="mb-3">
-        <label for="{{ form.church.id_for_label }}" class="form-label">{{ form.church.label }}</label>
-        {{ form.church }}
-    </div>
-    <button type="submit" class="btn btn-primary">Update</button>
-</form>
-
-  {% endblock %}
-
-
-===== ./hub/templates/registration/register.html =====
-{% extends "base_generic.html" %}
-
-{% block content %}
-<!-- 
-<div class="register-page">
-
-  
-
-    <div class="form">
-      <form class="register-form" method="POST" action="">
-        {% csrf_token %}
-        <h2 class="register-title">REGISTER</h3>
-        <h4>{{form.username.label}}</h4>
-        {{form.username}}
-        <h4>{{form.email.label}}</h4>
-        {{form.email}}
-        <h4>{{form.password1.label}}</h4>
-        {{form.password1}}
-        <h4>{{form.password2.label}}</h4>
-        {{form.password2}}
-        <select name="church" class="selectpicker" data-title="Select Church" data-style="btn-default btn-block" data-menu-style="dropdown-blue">
-        {% for x,y in form.church.choices %}
-            <option value="{{ x }}"{% if form.church.value == x %} selected{% endif %}>{{ y }}</option>
-        {% endfor %}
-        </select>
-        <button type="submit"> Create </button>
-        <p class="message">Already registered? <a href=#>Log In</a></p>
-        </form>
-        {{ form.errors }}
-    </div>
-
-  </div> -->
-
-
-
-
-  
-<div class = "login">  
-  
-    {% if messages %}  
-        <ul>   
-            {% for message in messages %}  
-                <li>{{ message }}</li>  
-                {% endfor %}  
-        </ul>   
-    {% endif %}  
-      
-    <h1>Register Here</h1>  
-  
-         <form method="post" action="{% url 'register' %}">  
-             {% csrf_token %}  
-             <table>  
-                {{ form.as_table }}  
-                 <tr>  
-                    <td></td>  
-                    <td><input type="submit" name="submit" value="Register" /></td>  
-                </tr>  
-             </table>  
-         </form>  
-     </div>
-     <p class="message">Already registered? <a href="{% url 'login' %}?next={{ request.path }}">Login</a></p>
-
-{% endblock content %}
-
-
-===== ./hub/templates/home.html =====
-{% extends "base_generic.html" %}
-
-{% block content %}
-    <div class="container">
-        {% load static %}
-            <div>{{ current_date|date:"l, F j, Y" }}</div>
-        {% if church %}
-            {% if fast %}
-                <h2 class=" fs-4 text-grey ">{{ fast }}</h2>
-                <div class="content">
-                    {% if is_participating %}
-                        <p class="main-text">Today, you are participating in {{ church }}'s {{ fast }}.</p>
-                        <p>{{ participant_count }} faithful {{ participant_count|pluralize:"is,are" }} fasting with you today!</p>
-                        <p>{{ description }} </p>
-                        <!-- placeholder for a medium centered button that says learn more -->
-                        <a href="#" class="btn btn-primary">Learn More &hellip;</a>
-                    {% else %}
-                        <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with {{ participant_count }} others.</p>
-                        <a class="btn btn-primary mb-3" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>
-                        <p>{{ description }} </p>
-                    {% endif %}
-                </div>
-            {% else %}
-                <h2 class=" fs-4 text-grey ">Today in the {{ church }}, we are not fasting.</p>
-            {% endif %}
-        {% else %}
-                <p class="main-text">Join a church to begin your fasting journey today!</p>
-        {% endif %}
-    </div>
-{% endblock %}
-
-
-
-===== ./hub/apps.py =====
-from django.apps import AppConfig
-
-
-class HubConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'hub'
-
-
-
-===== ./hub/admin.py =====
-from django.contrib import admin
-
-from hub.models import Church, Day, Fast, Profile
-
-
-def _concatenate_queryset(queryset, delim=", "):
-    return delim.join([str(obj) for obj in queryset])
-
-
-@admin.register(Church, site=admin.site)
-class ChurchAdmin(admin.ModelAdmin):
-    list_display = ("name",)
-    ordering = ("name",)
-
-
-@admin.register(Fast, site=admin.site)
-class FastAdmin(admin.ModelAdmin):
-    list_display = ("name", "church", "description")
-    ordering = ("church", "name",)
-
-
-@admin.register(Profile, site=admin.site)
-class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "church", "get_fasts",)
-    ordering = ("church", "user",)
-
-    def get_fasts(self, profile):
-        return _concatenate_queryset(profile.fasts.all())
-    
-    get_fasts.short_description = "Fasts"
-
-
-@admin.register(Day, site=admin.site)
-class DayAdmin(admin.ModelAdmin):
-    list_display = ("date", "get_fasts",)
-    ordering = ("date",)
-
-    def get_fasts(self, day):
-        return _concatenate_queryset(day.fasts.all())
-    
-    get_fasts.short_description = "Fasts"
-
-
-
-===== ./hub/models.py =====
-"""Models for bahk hub."""
-from django.contrib.auth.models import User
-from django.db import models
-
-
-class Church(models.Model):
-    """Model for a church."""
-    name = models.CharField(max_length=128)
-
-    def __str__(self):
-        return self.name
-
-
-class Fast(models.Model):
-    """Model for a fast."""
-    name = models.CharField(max_length=128)
-    church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="fasts")
-    description = models.TextField(null=True, blank=True)
-
-    def __str__(self):
-        return f"{self.name} of the {self.church.name}"
-
-
-class Profile(models.Model):
-    """Model for a user profile.
-    
-    Based on https://simpleisbetterthancomplex.com/tutorial/2016/07/22/how-to-extend-django-user-model.html#onetoone
-    """
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    church = models.ForeignKey(Church, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles")
-    fasts = models.ManyToManyField(Fast, related_name="profiles")
-
-    def __str__(self):
-        return self.user.username
-
-
-class Day(models.Model):
-    """Model for a day in time."""
-    date = models.DateField()
-    fasts = models.ManyToManyField(Fast, related_name="days")
-
-    def __str__(self):
-        return self.date.strftime("%B-%d-%Y")
-
-
-
-===== ./hub/serializers.py =====
-"""Serializers for handling API requests."""
-from django.contrib.auth.models import Group, User
-from rest_framework import serializers
-
-from hub import models
-
-
-class UserSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = User
-        fields = ["url", "username", "email", "groups"]
-
-
-class GroupSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = Group
-        fields = ["url", "name"]
-
-
-class ChurchSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Church
-        fields = ["name"]
-
-
-class FastSerializer(serializers.ModelSerializer):
-    church = ChurchSerializer()
-    participant_count = serializers.SerializerMethodField()
-
-    def get_participant_count(self, obj):
-        return obj.profiles.count()
-
-    class Meta:
-        model = models.Fast
-        fields = ["name", "church", "participant_count", "description"]
-
-
-
-===== ./hub/static/images/img.jpg =====
-ÿØÿà JFIF      ÿÛ „ 		
-
-	
-
-
- " $( $%!1!%)+:..?8387(9.+
-
-
-++++++++++-++-++++-+7++--7----7-+7+-+-+--+-7-++++-7ÿÀ  ¾ ú" ÿÄ             ÿÄ G 	   !"12BQARa#3bqr‘‚’“¡±ÁÑá$Ss¢ñ%4Cƒ²ğTÂtÿÄ              ÿÄ +        !1A"Qaq‘¡á#2BRÿÚ   ? Ï$òõÌ¿­j”W²óòşµ¨g" e>ÎõuÇgšCÄ¿ãË—ù­DEªK¿MÌÿ u«&d—Ş©Å4¡³ÊŸğÖOñi3Uuª??&Xw8­K§Õ.‰ùÉ?ZÔ¿ŠîÙ½_cÓ…háQìg›—E©sxGüÌ¿­j2Ù.Ÿ½4ß­j¢ÚŞMú«G£DÄuÆß¡Brâ´>8ßbïWº>Zf_óZŠ„]tõIŞÿ «UœX÷j~®ƒº¹K,±ÑAp;Ï/ëZ«¸wÿ ìH¿÷Z]¨ÄãÛJ&„ïÖ¹
-1vi çß¢æOÖµİl»M.Ùu|«W£ƒfîQñ±Üm‚ôâ:V©&$Q}ºÊ’N÷¾ÔtI!ì‘ÿ MªË5LB²î3DB Ov¡&Y §—OÓjƒØÜ
-É&Ã½ÖÔÉÕW™í¡½lwì©»Eb7P7‘¿MªHym¾ÛQÉqlÀ—öĞ÷°E»!ÜcÒ´[iÍºÚIİ-ÖÔ÷ü›	›lzzÚƒ½ÖÑ¢b<±Â³Ój,7	Ìõ^[#,©®u	y<ƒn®—nªE«^ÉáPçº¼Vª$»rÏPêîs“ójĞÅÅÛ',œº .gä=f_Öµ_—-±Yå'üÖ¯z²€7¯$Š‡¤ìGú«Iß@Zì"#twgšN~ô­^-(=3Ê}åYZª’÷qÛ5$~gÎ¤âÊ)#ÒÍ'2'•~¨+‹Û6[™vÿ 5ªÙsçC2ÌÓ$+kÁX¿ºÿ ìËúÖ«VşëaıænÏñ[ùÕ.›r¨¨ä>ª4/&r)Î¯ÂŞ42¥^‹]¼N57Ó:m”÷Tã±'±±«¡;Qöír äĞV8½²V’ÔËÿ Õj4ëDÅâO±‡v”[N ô _Î¦¶×É¿n5Í“”¬\Pötëá­·Nê-({Ğ¦jÊİ]êâÜ¡;®¹Ü“¡MRT-×ÈU8Êœ¿ò¡ŒŠıû*Øìæ~¨ßzÜhÜ¬W'ÅÙªZ2{§#MM¹ÿ  “L´ı5![¤ä{Š½XÓrK qlEef[òúsÛ êNïŠ]ú±SÃŒ±ú)K@ˆıŞé …ª*¶fß—g†˜q±]üèmâ]×mŸßv–Ü¼»2‡ßéQáÈÜ¸ ‹Ûîy¡ÈòÒ›­Yû@ØxjçÜ.wMBH¤üjĞÆ¼”Ùoå&b»»ª´õË¹-“–;TıY¨ˆm–ãsTãì^R–˜§Õän†‡šÊU;”å[[+86%×vğıœöÎ»3oz‘æIô2ÄÚ1
-‡Ü®˜Iç¶ÛSëÍ—©Hğµl&ÜŞòÑõÓh[çU‹Gm8kÏrÕ¦çÅô©×”_‘[Z2~Ú¯í£î	 ƒÛK¤Èr´³]•W´Ğ²8ö.â­1æİµK!¦QB¹2†çÏmª*9ª¬)]Uä>ª4•
-±Mt@ŞŞ¼"zìI|œ‘tf‰BjˆĞÕè†"‘“-Bh¸ØÕ•z%#H¢L}´ÊÙÆÌWèÒØÆœ@PŠ”Ñx;†üi¶›€ïB‘¤»QPİJ;BPl¼f„ì©•_") Ô).ŸªŒU'^~ı5‹÷YH><»µÏ(8öYI>zº†È«~•zdbZ Íá)]1®,¢]Ş†IdF;ö…é¬[ »QÏ£j]:&İ<Š´"3.ù*èk­*^Nƒ%îìµHÉ"n-™yc;š€¶$ŠÒ>ÀFÇÊŠéOÚµOQñ±:Ø æO:µmSØiòE	Ş¬Knû¾#˜Ê¥´Û»–õ%…ûÔè"'0wª¦™6Üí½#“c(¤-õU “@Ïl£~tÊY7îÕKÉí¡Ğ^ÄWÀz•ÜÈü÷
-Öµ¨!¶“Şi¬w!ySBq½‰8:Ñ‘‰ì çdDy$Ü*õ3*åû+BÚcråµ®é'ÔoâW‘qø
-w’)XÛb‚Œ{;RåP0?»ZK+Hš%Uß;d“öW²v•©úÃú[3íÎ¼°É°èöV‰í“·ŠÇÃ§Ù[ÖaôÌê%X©W*'»şª°F¾ué)e"UéI|êäJkD«ãZê%‰A°£ˆ”\*j1GFÃ$™H£É4\0œSxG¨JTtF%vğ*enŒ9ö«-íÖ™[ÀF¹å4tF"ùŞŞ4]L‘Ç’«<¯Šä{(Õµß˜;	ïRN›H[š˜„£ŞB°$íŞl‡0;kIn"á ‡AÂÀä¼=¹mRr·EtP–şÍªôLz}‡½Vì;+ØŠÖj)‘‡lE ¡%GíÛ•ÀÑ\’¯„ó¡Ü9ßvj·†Ü‰ {µóN=6Ôb¹šÃI.'[…Ei2öõV“QVo’mÂÊ®F9*:¶?^ÕæÓĞ÷š¾§.°®·6Ò\+øŒèì¬²y‘_côOWº¹µC~ÔxÇ:7K7ÇjXÍÈ.)ıBæk†Ù<=•)%<ñª–àò¶ÿ fÅƒ’<Öã°Pò[
-$Ü9ß'è²ĞÒKuì„¤Õ7{uçºïA][T¥âxú¾"yny†
->ÍR]ÇQæ}Ú]ögıBÚu™nòAÀ´§oáF½°íªt8^8®må£2¯Ù'!ûêûùc…—W	ycœ­ŠåCA`rÛüySŠ{†‡›ÒMHa:ŒeË,jQr\ÄSQ!Í{+_ÜeV,uhVò©…¯Y3Éh­R¯E¯"Q1ÇO`£Ñ§Âˆ+ÑÇDÅ ØÉ…(Øc¨Áf§&^(²¦6éíÛüjˆ#¬·§|å#y=SMF8Ì“¼r^Í·%;vW.IÒ:1«gĞ-Ğ{:¾Í$ô»Ók5ãs¨”É-úbúN}ƒáÛ_1ºô®ñ^4ÑnïÔğ¸R½ÛüËm±P=¿]&]6òMå•¤‘²–Wn©â}µÉ<Ñ:cW¬ê÷º…Ã]_Üq_À¹|œä£Ù[?@ı5¸±)a~í.î&=RZ1òó
-É®Œù¹÷¶g\›öUòéWAUS~M–9/îåSõÁŸ¢!º·x–æ9Qáeâ,¨İ8ÒÕôŸHÍã7X¸~«ÄËÄo‡|‹Aô“Q°hã•K0ÿ +m–9}^FjŞÙİ#ÜiŒÈÃ&kGµUhäö]§·Ÿ1Oê_@áGÖ‘£u!ÈéjW¬ê¶6q‹Ùãz°G”™¼€ö×Ï´ÏíöÒ¤IpcfkÉQÚ5UóP&ôÓWR&±I.Ùšt¹^[¯ºßÚ;h¹ºĞ¼Bõ/í*y˜Cz´.­íUÄ?UeÚX¤»¹¶“‹,¯4³#7½ß-ıµ=5íax^ş×4fâ,Xğû;yy*s}h²™&µÔ`Í%Y">+i#GŸ ymû(6ßaHÏ[êñ`„³Ú«;Gy¨D­,×áZ›§6ĞÛLú¼‹!GšÖî)Ö_ Ã™ûëv‘Ç6É,s+&3ÌÕÄöìjÍ"Şâ1wpcˆ@ÊÌ­“c·g:7]¼¿G½0Au£ë‘K)v–,Gá_Ey6û©\“fË*øw¤ëjjºkÚ¢âİ3dFûrò¥¶Z¶«±½µÕÁ’%è^+²ªı[ÖŒß“8¯è'	¶Êæ­ •ò›oí'[‡h¯`‚éÙÃ+²ğc>Î\©¾ı£Á4«§h-›¹†~$y|w£hmdAÌoT<kÚ}”®KtÉtG“‡e-Ã'OnÜ¨û¹âà5Çx8q=a[§Ü­h&cPÖíl®g2$Î’,©‹,lÇÂ°šÍÄúÅÅÂJE¢>JÓ6+‡şš¬ê:tË¡%¤7<9Vo“â7½±ítº†—ˆ’XÆ\È‰h«”j|ÇŸÆ Û½±’hºrÆÎˆË"¨“)mYšoˆ¶¶İÙ”Œ‚9Æ§¹XMBñÁitéFS‚®éÕ
-ïÌ*5K¼W¯~‘ÏÚ*hlDFº"øQbX°|+ÕŒ6PH~Lpš! ¢
-~BğEEÂ­H5œ‚¢rèØbÚäPùĞ:ß¤66$º;ÊÅ–+uV‘cóØÔ§‘E[-6éj’j	cNVŸyz£†iøÔ,Qoã’Iâyb•øm·wÛµ§zg¡Í*¨¤Pˆ±hníš&âoï@mì¬÷¤¿Ú	f‡E´W’7hÛT—ædø€;G‘<«šsOgD"Ö„ş‘hëgÄ%dgN3;ª®;Ÿe]goòQ’ÄõeC‹Û«Ëu{·çäå¸î¯*&˜‘FS&qù²Çï®	íÒ^N¨*ìO$,uxĞÇŠ‹ŞøV Ûmí$…Ëj/ôüø¼CÄ-’Ê¶}M·î¢âÔasÓp2=?Ş XÖ´¹:t2qğ'ôu^hï8Ç>ÓF™û¾T¾&·¶É™¢î³0ìÛnßª¶:}¬Q	81FVVâJĞÏ—ßµ¬\i‘\YÃim¶Ët'¼•%eê#˜öî9ƒËËjxm·BÎ¼tBï×x(ë3q%³õ•·‰;ÌÜÛ·qË•f[L¿$Kr<cõ¼[äş±Ú)õş££æ÷Æi'“»›cÁåØO‹nT¶Û•ãˆng'ù;¼coº¨“&ÒP+¸‘®Uz:zIØ“¿i#ùÑ,ìÀO
-ú¡lZ5‘@ä[ngàjà…C:F«¿z\1‘¨«>IB™òXréL±’ä>4eUlÑV	-‡"áL•P•éaÈæi¨é&2!GÔ­á­ıĞ²@-eÄ…U©`_:ÏêÖ¥Àt"I¢N–ï-Í¿Õæ)#“tĞeV„É$ˆèòÙ_©[§¶´—6Ö+"«Û],öh°L—9M±ØÂ<ofôû¤G2H¡ƒ¦=k—ÕøÕ2¬ ç’9ÏWÓóßV…ªıB‹{x;¬Ñ¬Î‹$’.Ü¾ú±´©åá,åY+“üÌ¿Ç°öRëkyšHÄ,ŠıíÃÇãLP»NFi¢n/Ê¹Ÿ¦Fú¿ˆí¥’§£^†š-µå±+£–Åâkë¬Í.Î`}bôşL­mQÊö$™Ş+œ•WÈ(öV.KéEÃ\—’YÚVY&_*âvw‘Û%RØ¢³eŠùP÷–£YGkyl ¦ù,£ã(ä@¬¾±k¹H¡yY‰+Ì˜´+äOĞ]Vıe–ÍeD,å¹·‹¼±Ì¾ÑCOªİ_IÇº~$¿6ãÉcöB§4Ï\ŞGq‰İHW†—ãL»óÜ{v®"ix¯ËIİşt¦Ks»:•
-rêÇz¬°ëö{´b´éW:ÓGsn˜Âlå~Ê[•¼öøyVŠ8”Ô‚
-÷—Ä¿
-ù•Æ´ş°ÓGkFfe·eÉU"iõ¯¥’ˆ!†<],Ì¹+/—Âºã•Ò…›„‚®H+?¦úabìÉs@Â"ÊÙ+G#{oT¿§V¬ØÚ@Ï‹®~°¸¶5E•	À×$uN£r–ğË9RåS%Eêoº„Ò½&Ó§Nb)Ùš5´™±Ê@7ØÀú]é¼»5€•$,ĞjvW?3ßfR;ãËqAä¾‡XÍF—é„Imjúƒ+Ëp·‹Ôª9¨_/º±ò¯n¦Ônrëvh—İ_e/Òíæ•#Y[ü£³3w}ƒo=¶ìöV¢8R4P«Èb¸×õÜ¥Åt¼x”Uˆ¯4¦Ín~([»'Õñ Pe·IR:Y}Ö­§ÛJµM=v{¨ÆÒ*õ*ÿ Ôş´1å½HiCÊDÒ cF]×º²·Y|ÿ ÚZhà®›†ŞeÅf‘-ä•ÑĞóJŸÊšéZ¼IÈOG—Í;cÇcU›m{E_t7>Xá’7<X§l¨[ÍáÜj=
-¹*]À¬ßˆÚ‰¼ô–Ê(È‰ÖiYz"N¬k-uywrüIÖB²áªş4°oË¥Ò9-Ô¬IÌû®èÌªÕ^Û.Ù¥á¢!³‘¹¾¨ñ+ucDoúÆ±glrjéT&Áá·bB İüñ¦Vö‰|Ô2ô³ìmğøÔ-ï!âGmjVIºªªÌßY§1Âyã‰p½,Ø|ñó¤jsÈ¢Å²˜,FA¥rhºWÈ·òühÛõ[;[87re\•V»w‹;… ±6rşw*Ñ£–™fO¶!–õË)ÊI»+¥¡2ˆ„wwİLZx«‚«HÇ—/¾¬ÒÖâÖòEix²"L«’²vïÛQÕíR÷pÁ™REÁ¼ŸúÑÚ&šŠ-Ù×sÍÂíîî)œ½·`i|Ëİ>uYnÏ£2ÊÅæ{@¥S1Èlw±É|Uô»$àÆĞ¡~˜Ÿ»4~ÚÃj¶Æ7]Ú	XÍk7¼¾ĞG˜ªbÊ›âûp­¢–¬Œ‡u›NûPVÊBÂ¢å9l6;ÌÜœÅW#L7Ú®“däŒÜ•İ^õRÏs OJ¯½Rvå¾ÕPr6Û–İÚŞFƒĞéŞ=RÒ	\"³4jŒ¹4™º—qŞúæfDKÇ†UTËòçÊ½¢8–Òƒ³Gsİ_]é•¸MRù‡@yÖî%Ç½—:“jèdšÁä’F„…ˆ»²*åÆU÷"§¬x§÷¿ ÿ ¡UÙêwC$…ği&1{Äm¶ŞUh/°èNÏ£K°è¸#óßcïQ1#;&!—§¤1êP»êøZ§
-±Ù‚GŸ»KtìJ/àõq2ª‰•¸n¬ß&ËH®'pÙÆÛxzZ¬¹v9\wqlh?wÚê®¨ÄZ¸Ô%uãƒ‰Uï,ƒ°ıuí64šã;‡Vpù*?zy=ƒøšœ÷wåîÓoD‰¨ÚÀá™¤o£:Ù:øÜæ›`QC7}º™üTÀF;«.ªO¬ê×İZÚA2§¬³x”¹ySÖ¼—ŸÉ×vÊdxãC$Ì± ^·•ºVº¼&ˆŒ6L•×Ä¦úo!Öè{+gŠôa¿á¶á{1uêúéÜ*
-@OİEz¾ŸªÎá@`«ƒ*õs;T%Ñ-U 7YQšÓu”Ì²*ıäUÓ7-‰Ş—›¥C%±V¥ÛóSà7JåCúLò@ö–ö¥cl²1E“d;w?²ÚÏnTÒ×»£åÈ}Ü½¢©ôò¹ïîiªG!Ğî%$—ÈWˆ­Åï/İµ Z%ÍÅÌ*Â¹DÈ½åßn{Ö×LQê¶ëËVş•ô5¿â:ŠmİIWıuhÉµ&M¤š¡õ®‹n‡5Ç,—0Dm†İ5h»ÔHíû5Í+cÑ¹DèI
-Ğ4ˆÚ„Ó¬–ŞÚ;DrËX¹n¬hÔ‡ÙªnæDæs²"õœrı”q
-@qÚÁ+Ëë’Ê…Y{«ËùQ¯h]NÇÜ³w»6ú© ô…í.àt«4ÕøÕ^½5ÇkÇxm N3ÅÓòŸ…<¼½Uàwgœ0!I]±â1=€vışÚI¯iñªÈ’’¶Ò·<º­¦÷‡òöÕ÷Ö÷ÜZFé"+|‹¯L‘û¿
-e=Ê\YÜE'9G»Í·ÃÌ{h9{­i£%ªfi÷9¬¹wÖUÅ¾ ïW2ä˜Æ=Ş¼¿p5¤°³ˆl¥aáÆ˜µ´E… ˜ŒkŠ÷j¸ş¢S—NpŒU˜åÑeæs$eÒªŒËU]iLŒ±…“2¹1áôãçÛO}“{Yã,Yãºn¢ßéN%Qëp“¶Ïfëø$ş£$r8…B.6a"ãubmŞÁ±emş4ãÓÄg»´¸Vl%Ò¢“"Ş-éÜ¶AçeuŒ[˜1VÁrY¿Ú¥©Ø$ÖÚ{È
-´p<‡Oa¦Yÿ É‰(«£çªØ± ƒõUÁù^Êæ¨œ9å…øJcVUêe¯ lW’÷EtÆš²OC˜™1eÊrª«’ÔâtUa"™:™²‹©±¢šÓMhÇKÖ8â¯Š*å¿=êC
-ïÄã©î¬°®X¯·•A¦õc(¶g¯æ¶i­D¡OV.<6òøĞ¹¿ÃŞ§Wz[½É0:´,ªÈót¬~ÎcÎ»†ŒÜIWË­±†6ò»T•
- ØwïÑ­öv»ê€€ÍäÉh†6CÃ	üÅ£}1‹´² 92Ã=\©2eNlasM­(u"EeFñ0Ö‚røîNßc¦Ù6ZÍËö•Gêü;¹ˆe•yùz_‘x™ŸKğ¶V9u3/Šœh :Ûn[¡oÄÒL_şY‘
-Õ ÒmŸÿ ÌŒÔÍÿ F&_ÜÊµ—şîw;ï<_ùU·¢‚Ìãó»Ô¿Ò)\[HÈ½BX™:r^ßoÂ”¥¶§pD2z—é¥Œbâ›Úètº¸]ğŒ}¬ê·¿KI9UC*³2ıTšk\£¸Ô6FÄ«çÈS=`ÑHó9ÂQ7SUR„)×b¶Ù©Óö¶Àr>¬Š¦¨Ó´k[iåºŸ‹.\PÏÓÌîmQa|+LeŒ±.—JÓû“RL6“eJ”’üÍk²÷nÃ¿kWùÖå¤….¤é.„n•çµbäô‡SVaë[ŒÙq(½<évÑLxÜ¶™ô<ˆò¡oùÆÑ“Ú¹o•JÆVha•ìè™|T‡F’Ru`ìÒ:j2â¥²ör
-UÕ™éÑèmí`ı½æ›ª»«¤'O¼!l$|S“‘êÚ“Û›y.mØ´Êr‰…‡²˜X_Kuc4ğ’±‹…´xfêé=´V%ÈÜ×@:2*LŒ$]ºYº«],0Fˆ3\•~r²ªNv‰¼q,©+;:ü£mµ®ê·ĞH°ÇÂáˆ¸LÍ•cmİö ˜ö·TZL@ íÕÔÕŒüµpÄåz¼6Ë^—Zº@®AlzbE¡2ON˜$âÖÍNcmmÄ!^+ñ%ŞV“&øo@êWÚ‚ÏAi‰·Ë2¶$s“~Pºhão&evuèeUVK^ÊO9eføÎÔË¹\šoşSZÉªk¬?åm£è³S¦Ô[IExãºø«•LcášÉOpW©Ô°îõJÍOt–YtZ ©œR¬ëÕ–<¿¥<bë¥ú"KN…éòÉ#Msy»Ìì¹5ut…Ø{NÏñVƒİ?&œú²á-Ø¯sº?é-5Ëı¿dÖ-	U±¨ÉªZlÊÒ.Ø·*[ÿ Æ5$(íïR¬ªÔ%Î‘~q!pS<5_J7dTı´jí­mÄV
-Ñ«=ÄAÙ²eŞ¬Ô,-WŠËb÷(GÕbQgÂ!Š$qFl›m¾îu]ş¬¸H|¤Ÿ&ñù½ş5Ç’2m8ße!:ìè°‹İ,W&Ç½½9ôzÚn*"Ã½!‹QÍ¶ a©´w,°¿«IÀèëTß;ØüâĞf™‚şòá°*êØn¬Iş”Şwé^u—Ğ&¸--Ìİ+‚Â¹7Smí§œRÛ¿/Ñ¦ÖÍ/Ö4™î7TUYŸª™"­#„¶ü(6ú[W£qï
-ª[¨¤ŠEÕ™[\[¦‚”œT|!•YP”2ïá÷Z££mÀM¹o—şF…YQDqäÉ“*ãŞ¢¬[†¸¹ä®İ0§—sÈ|j°Å9ªŠĞ³ËºlW«X]Ks3ÇhÊÃ‹^­˜ZyØ¬LàîV&eü+ºhµ¸•a†è¤Œ¸¢ËmŞûÅšRJeµÑ$£8?¼#EÕğß¶º<®“DÖHöŸgÎQ½|$ÚB`Ú,±¬>_}6ÓµÛÉÅİ­ñ«^¯¥·m]¬z¯ÙÇ%ÔF¨•øŒğ»q1ó#øŠSèìò,“GG,rO·/ë]2‚â$en‘¤±¾E³’Ü(.ŠÙ>L¹oXÙstGQjÔ´³ì’G/…eç$~Lÿ ¾¹Sm¸Fÿ J¾>«j
-ïòªƒ’İ¯® —íİ×¦6®èìŞ©nÇ.P/v¯—!w'Å9TãIP’í˜ÿ J®’àG!*+§…U¾R27‰ô:ç;Ûp2>°—;âİ4?¤ÈÄLˆƒxïÒfUï*”ò®ú#Ò/C¶!¢ÅréÉ¼¿
-êI<tFö?š+[İS‚²«&9¸ªõøòœ·ı6¶N¯¥DY\ÆQã2)ëf\›«˜ş”.©r	‚Tu``á»'…¶ß²¹iÕµtŒ HÑ1Ä+3w;Õ9‚0`cÙ²uÅjûî­Pö<FoI—³Ê©tpóOJ·ÎîÕÑ«LFŞĞD[HĞnŸ¦Ê>{ÚŸxKw(ª‹VÕÔ[I[Ä™QÛ½Ë¶˜ 9óÿ ¥G:jAƒ´<g¥A;3?~/!¸¦^†–dÕmİãu{fÃ–æ8]ãmöuÉ¾‰Ü‡¡Í…ôéêÎ‰%»ÇM‹(öSã®‰‘í ª'/œ)Ê5ÁÕºªá	Øwû?Ä«å·„I"	Ïï®¬	°è”œ×Á¶3MVaÉôèØ{ğÜ2·áD.±ØËip€øYZR |IªcÜÕ]VN†Ñjº`éè{Ø2p×ğÚˆ[ı5·rïªR`ÑL»Šğ·µö¢ş5Šé¤åù:=ıáQ%¦¾ki"·¼²ĞBÊßÀ]>ËµMmw.¤_¶ÙTäì)EgdƒŞæ0[,UòıõÏÉÑU5+•SŞVl¿…D%àîO›KÖ/×¿oo'Ùv†Ÿh4zßE»Ã´ÕË»ô¢:ø¼÷£,}Ô#ã¬úıªñ_)Yee“ñå@\jWb,Z‘%WY—oee4«“o,ndÏÖcÆuË§ÏV;F¶ Úèò¤²$·v²Ä[(®1ùL|ú¼†6kø8i»**·SV]55ø²ùUñê+ä5•iá™ÇQT$°)mš+OG£Šhf‚ıÒU™‘W,—~b´vV—´ìé UVš%êo#Î¾Y}®êàG§`˜EÄ–YWöS}/Ò1,K$,r™Q¥d_
-yd“I±V­#è‰ognxúŒ“˜—¡&ÇˆËå·¶²:­Î‘4­sÉk#+Fş¬©Œ›Ğ,šEÉ<gq3u<®½ïÛQ‚ÓO‡.±ì[.pe\ÓÉ&Î¸áÅÜm¿¿ğÁ/R.¢	Û#*,ØÆÊÛvöÖ2+MG”ŠmÏw¬«oy#+JêäxR,i´6p<QºÁVUWïb(G'Ğ&’J¬ÈhQêqñ#s:ÆÏÒœUVÇofôâŞH1fµ/ÒU¹|7§'Oƒ–aWo¡^]¯"\rê\Sªµòw@S¤Ñ‘:^«%ÍÉ1°“¤eÇÂ{*ŸÉšˆ+’•İ…–¶_“l•š@ÒfÊ#fË”vT’ÂÛ¥‘	#»•ÍSšè–û3}¬À¹e\ƒ/W½û*ÏÉ³Y¯/v´©l–HÓŸç~ó]q/n,£èDµ&‚¤b¯´ì'²1ÅÖhÙ•qìŠ£ò`Ï•×fú^CùÖ›Sµâ½´Œò+Á>JÌ6Ú†’Õ˜–. q-7¨–›5±TºlËYŠ²»äËÏ~Ïº¤,.:[Ëİß…0kVÃ3áî­si8AGNnØ­,¥hSwgt#v/º®Íø÷£4Øî’æ9$‘™ysª®îíŒr&qœ”ªªåŞ49Õ€ªİöêÛı¨ZQ¤/’ıBŞàÏ#FÛ!~Ë\K[¼W¬wE.¸Ô.]óG§Ã—Mü˜¯QîÅP¾ Níí\~ºšŸiåôj”»Ü+¯Ò^ª*3ƒ …OÚ¡<¯¦¿Bœ-ÔH†B¦ ó¯4+0mÀ÷»j
-V2RèFšì´ïTÕßÙTŠ'Î°KÄÆ¦·¨ßÕ5£@-—'x˜©\YqğÒ	=9K¢{¨ñ§j6ì«7o:1|z1›—ÑÛÿ ñŸ°œ?İB>™¬ÇÜwo²ùVÀ3{Æ­|áEMüŒ}…ÍÄ/+ß©VxÕUİ:[o«ÿ w¥BñÄ¬ë,ˆ¬ç'AÔßú)E\6¶Ç¶?öÅ7­ªhÜL
-İÉ¾é¨È¿n&ş¿¾f“³xsî«~5½:]™í·ôk‹¥Yƒ¸æĞrÁ©™İ"é n-ÕÕáÇßN
-ü@¤·ôÂÇeG†âSkÒ¿…pYÀ9ˆÔ…tÂè¤m|†VŞèòmÿ …	ï%Â¼L¿Ô|2éÒw/¡}û¬’«VfK+vß8c?™CI¢Ù¡)÷£$5*”Wh?ÂKh5¹CùÙP¬‹¹!òú]U“:R‚xW7Ÿ5œ×Œzœ5©Ê@ìõQi>Œ“F©óÅw×aö]«*u=^=ÃÏ¸÷¸°w¿ª¿şY2²ÚDO´Æì´¼_€›s.Ø—È}>¯ßTÉ7±âØU¬Ô^“£ŸùV]ü¥ŞƒT‰Ï$ç#mvjCğöµ¸èµykg6ùµÄdøU••~ê»Šwí5vó¡Ïìj¶‹kÚ—³w‹n­CI¡'j_ÆOºğ2Ów5[0ìÚ4+BY4;€K‹V–¸º%şÃæ{?Çş”ÑÕ<k‹Ø>ª6HÿÙ
-
-
-===== ./hub/static/styles.css =====
-@media (min-width: 576px) {
-  .w-50 {
-    width: 50% !important;
-  }
-}
-
-@media (max-width: 575.98px) {
-  .w-100-sm {
-    width: 100% !important;
-  }
-}
-
-.shadow {
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
-}
-
-.text-grey {
-  color: #666 !important; /* Adjust color as needed */
-}
-
-#logout-form {
-  display: inline;
-}
-#logout-form button {
-  padding: 0;
-  margin: 0;
-}
-  
-
-
-===== ./hub/static/css/styles.css =====
-body {
-    margin: 0;
-    padding: 0;
-    font-family: Arial, sans-serif;
-    background-color: #fff;
-}
-
-.container {
-    width: 80%;
-    margin: 0 auto;
-    text-align: center;
-}
-
-.church-image {
-    width: 100%;
-    height: auto;
-}
-
-.content {
-    margin-top: 50px;
-}
-
-.main-text {
-    color: #000;
-    font-size: 24px;
-    font-weight: bold;
-}
-
-.copyright {
-    color: #666;
-    font-size: 12px;
-    margin-top: 20px;
-}
-
-
-
-===== ./hub/views.py =====
-"""Views to perform actions upon API requests."""
-import datetime
-import logging
-
-from django.contrib.auth import authenticate, login
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import Group, User
-from django.contrib import messages
-from django.http import HttpResponseRedirect
-from django.shortcuts import redirect, render
-from django.urls import reverse
-from rest_framework import permissions, response, views, viewsets
-
-from hub.forms import CustomUserCreationForm, JoinFastsForm, ProfileForm
-from hub.models import Church, Fast, Profile
-from hub import serializers
-
-
-def _get_fast_for_user_on_date(request):
-    user = request.user
-    date_str = request.query_params.get("date")
-    if date_str is None:
-        # get today by default
-        date = datetime.date.today()
-    else:
-        date = _parse_date_str(date_str)
-
-    return _get_user_fast_on_date(user, date)
-
-
-def _get_user_fast_on_date(user, date):
-    # TODO: add a check that there is only one fast?
-    return Fast.objects.filter(profiles__user=user, days__date=date).first()
-
-
-def _get_fast_on_date(request):
-    date_str = request.query_params.get("date")
-    if date_str is None:
-        # get today by default
-        date = datetime.date.today()
-    else:
-        date = _parse_date_str(date_str)
-
-    # Get the church from the user's profile
-    church = request.user.profile.church
-
-    # Filter the fasts based on the church
-    return Fast.objects.filter(church=church, days__date=date).first()
-
-
-def _parse_date_str(date_str):
-    """Parses a date string in the format yyyymmdd into a date object.
-    
-    Args:
-        date_str (str): string to parse into a date. Expects the format yyyymmdd (e.g., 20240331 for March 31, 2024).
-
-    Returns:
-        datetime.date: date object corresponding to the date string. None if the date is invalid.
-    """
-    try:
-        date = datetime.datetime.strptime(date_str, "%Y%m%d").date()
-    except ValueError as e:
-        logging.error("Date string %s did not follow the expected format yyyymmdd. Returning None.", date_str)
-        return None
-
-    return date
-
-
-class UserViewSet(viewsets.ModelViewSet):
-    """API endpoint that allows user to be viewed or edited."""
-    queryset = User.objects.all().order_by("-date_joined")
-    serializer_class = serializers.UserSerializer
-    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
-
-
-class GroupViewSet(viewsets.ModelViewSet):
-    """API endpoint that allows groups to be viewed or edited."""
-    queryset = Group.objects.all()
-    serializer_class = serializers.GroupSerializer
-    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
-    
-
-class FastOnDate(views.APIView):
-    """Returns fast data on the date specified in query params (`?date=<yyyymmdd>`) for the user.
-    
-    If no date provided, defaults to today. If there is no fast on the given date, or the date string provided is
-    invalid or malformed, the response will contain no fast information.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        fast = _get_fast_for_user_on_date(request)
-        return response.Response(serializers.FastSerializer(fast).data)
-    
-class FastOnDateWithoutUser(views.APIView):
-    """Returns fast data on the date specified in query params (`?date=<yyyymmdd>`).
-    
-    If no date provided, defaults to today. If there is no fast on the given date, or the date string provided is
-    invalid or malformed, the response will contain no fast information.
-    """
-
-    def get(self, request):
-        fast = _get_fast_on_date(request)
-        return response.Response(serializers.FastSerializer(fast).data)
-
-
-@login_required
-def home(request):
-    """View function for home page of site."""
-    view = FastOnDateWithoutUser.as_view()
-    response = view(request).data
-    church = request.user.profile.church
-    church_name = church.name if church is not None else ""
-
-    # Get the current fast
-    current_fast_name = response.get("name", "")
-    current_fast = Fast.objects.get(name=current_fast_name) if current_fast_name else None
-
-    # Check if the user is participating in the fast
-    is_participating = current_fast in request.user.profile.fasts.all() if current_fast else False
-
-
-    context = {
-        "church": church_name,
-        "fast": current_fast_name,
-        "user": request.user,
-        "participant_count": response.get("participant_count", 1),
-        "is_participating": is_participating,
-        "description": response.get("description", ""),
-    }
-
-    return render(request, "home.html", context=context)
-
-
-def register(request):
-    if request.method == 'POST':
-        form = CustomUserCreationForm(request.POST)
-        if form.is_valid():
-            username = form.cleaned_data["username"]
-            church_name = form.cleaned_data["church"]
-            form.save()
-            Profile.objects.get_or_create(user=User.objects.get(username=username), 
-                                          church=Church.objects.get(name=church_name))
-
-            password = form.cleaned_data["password1"]
-            user = authenticate(request, username=username, password=password)
-            if user is not None:
-                login(request, user)
-                
-            return HttpResponseRedirect(reverse("web_home"))
-        else:
-            messages.error(request, 'Account creation failed')
-
-    else:
-        form = CustomUserCreationForm()
-
-    context = {"form": form}
-
-    return render(request, 'registration/register.html', context)
-
-
-@login_required
-def join_fasts(request):
-    if request.method == 'POST':
-        form = JoinFastsForm(request.POST, request=request)
-        if form.is_valid():
-            new_fasts = set(form.cleaned_data["fasts"])
-            request.user.profile.fasts.add(*new_fasts)
-        return HttpResponseRedirect(reverse("web_home"))
-    else:
-        form = JoinFastsForm(request=request)
-
-    context = {"form": form}
-
-    return render(request, 'registration/join_fasts.html', context)
-
-@login_required
-def edit_profile(request):
-    if request.method == 'POST':
-        form = ProfileForm(request.POST, instance=request.user.profile)
-        if form.is_valid():
-            form.save()
-            return redirect('edit_profile')
-    else:
-        form = ProfileForm(instance=request.user.profile)
-    return render(request, 'registration/profile.html', {'form': form})
-
-
-===== ./hub/management/commands/seed.py =====
-"""Generates seed data for app with python manage.py seed."""
-from datetime import date
-
-from django.core.management.base import BaseCommand
-
-import hub.models as models
-
-
-USERNAMES1 = ["user1a", "user1b"]
-EMAILS1 = ["user1a@email.com", "user1b@email.com"]
-USERNAMES2 = ["user2"]
-EMAILS2 = ["user2@email.com"]
-USERNAMES3 = ["user3"]
-EMAILS3 = ["user3@email.com"]
-PASSWORD = "default123"
-
-
-class Command(BaseCommand):
-    help = "Clears "
-    def add_arguments(self, parser):
-        parser.add_argument('--clear_existing', action="store_true", 
-                            help="If true, clears existing data before populating with seed data")
-
-    def handle(self, *args, **options):
-        clear_existing = options["clear_existing"]
-        
-        if clear_existing:
-            self.stdout.write("Clearing data...")
-            self.clear_data()
-            self.stdout.write("Data cleared.")
-
-        self.populate_db()
-        self.stdout.write(self.style.SUCCESS("Database populated with seed successfully."))
-
-    def clear_data(self):
-        models.User.objects.all().delete()
-        models.Church.objects.all().delete()
-        models.Day.objects.all().delete()
-
-    def populate_db(self):
-        church1, _ = models.Church.objects.get_or_create(name="Church1")
-        church2, _ = models.Church.objects.get_or_create(name="Church2")
-        church3, _ = models.Church.objects.get_or_create(name="Church3")
-
-        fast1, _ = models.Fast.objects.get_or_create(name="Fast 1", church=church1)
-        fast2, _ = models.Fast.objects.get_or_create(name="Fast 2", church=church2)
-        fast3, _ = models.Fast.objects.get_or_create(name="Fast 3", church=church3)
-
-
-        today, _ = models.Day.objects.get_or_create(date=date.today())
-        today.fasts.set([fast1, fast2, fast3])
-
-        self._create_users(USERNAMES1, EMAILS1, church1, [fast1])
-        self._create_users(USERNAMES2, EMAILS2, church2, [fast2])
-        self._create_users(USERNAMES3, EMAILS3, church3)
-        
-    def _create_users(self, usernames, emails, church, fasts=None, password=PASSWORD):
-        for username, email in zip(usernames, emails):
-            user, created = models.User.objects.get_or_create(
-                username=username,
-                email=email,
-            )
-            if created:
-                user.set_password(password)
-                user.save()
-            profile, _ = models.Profile.objects.get_or_create(user=user, church=church)
-            if fasts is not None:
-                profile.fasts.set(fasts)
-
-        
-
-
-===== ./hub/migrations/__init__.py =====
-
-
-
-===== ./hub/migrations/0002_fast_description.py =====
-# Generated by Django 4.2.11 on 2024-05-07 19:24
-
-from django.db import migrations, models
-
-
-class Migration(migrations.Migration):
-
-    dependencies = [
-        ("hub", "0001_initial_models"),
-    ]
-
-    operations = [
-        migrations.AddField(
-            model_name="fast",
-            name="description",
-            field=models.TextField(blank=True, null=True),
-        ),
-    ]
-
-
-
-===== ./hub/migrations/0001_initial_models.py =====
-# Generated by Django 4.2.11 on 2024-03-23 19:18
-
-from django.conf import settings
-from django.db import migrations, models
-import django.db.models.deletion
-
-
-class Migration(migrations.Migration):
-
-    initial = True
-
-    dependencies = [
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
-
-    operations = [
-        migrations.CreateModel(
-            name='Church',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=128)),
-            ],
-        ),
-        migrations.CreateModel(
-            name='Fast',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=128)),
-                ('church', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='fasts', to='hub.church')),
-            ],
-        ),
-        migrations.CreateModel(
-            name='Profile',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('church', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='profiles', to='hub.church')),
-                ('fasts', models.ManyToManyField(related_name='profiles', to='hub.fast')),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
-            ],
-        ),
-        migrations.CreateModel(
-            name='Day',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('date', models.DateField()),
-                ('fasts', models.ManyToManyField(related_name='days', to='hub.fast')),
-            ],
-        ),
-    ]
-
-
-
-===== ./hub/forms.py =====
-from django.contrib.auth.forms import UserCreationForm 
-from django import forms
-from django.contrib.auth.models import User
-
-from hub.models import Church, Fast, Profile
-
-
-class CustomUserCreationForm(UserCreationForm):
-    email = forms.EmailField(required=True)
-    church = forms.ChoiceField(label="Churches", choices=[])
-    
-    class Meta:
-        model = User
-        fields = ["username", "email", "password1", "password2"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['church'].choices = [(church.name, church.name) for church in Church.objects.all()]
-
-
-class JoinFastsForm(forms.Form):
-    fasts = forms.ModelMultipleChoiceField(queryset=Fast.objects.none(), widget=forms.SelectMultiple)
-    
-    def __init__(self, *args, **kwargs):
-        request = kwargs.pop("request", None)  # Extract the request object
-        super().__init__(*args, **kwargs)
-        if request is not None:
-            self.fields["fasts"].queryset = Fast.objects.filter(church=request.user.profile.church)
-
-class ProfileForm(forms.ModelForm):
-    class Meta:
-        model = Profile
-        fields = ['church']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['church'].widget.attrs.update({'class': 'form-control'})
-
-
-===== ./hub/urls.py =====
-from django.urls import include, path
-from rest_framework import routers
-
-from hub import views
-
-
-router = routers.DefaultRouter()
-router.register(r"users", views.UserViewSet)
-router.register(r"groups", views.GroupViewSet)
-
-# Wire up our API using automatic URL routing.
-# Additionally, we include login URLs for the browsable API.
-urlpatterns = [
-    path("", include(router.urls)),
-    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
-    path("fast/", views.FastOnDate.as_view(), name="fast_on_date"),
-    path("web/", views.home, name="web_home"),
-]
-
-urlpatterns += router.urls
-
-
-
-===== ./bahk/asgi.py =====
-"""
-ASGI config for bahk project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/4.2/howto/deployment/asgi/
-"""
-
-import os
-
-from django.core.asgi import get_asgi_application
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bahk.settings')
-
-application = get_asgi_application()
-
-
-
-===== ./bahk/__init__.py =====
-
-
-
-===== ./bahk/settings.py =====
-"""
-Django settings for bahk project.
-
-Generated by 'django-admin startproject' using Django 4.2.9.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/4.2/topics/settings/
-
-For the full list of settings and their values, see
-https://docs.djangoproject.com/en/4.2/ref/settings/
-"""
-import os
-
-from pathlib import Path
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-340y5$yaevl3%&50ob@)r@6htxve-6b0161m03j$)4r_%g8djq'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
-
-# Application definition
-
-INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'hub.apps.HubConfig',
-    'rest_framework',
-]
-
-MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
-
-ROOT_URLCONF = 'bahk.urls'
-
-TEMPLATES = [
-    {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'bahk.context_processors.current_date'
-            ],
-        },
-    },
-]
-
-WSGI_APPLICATION = 'bahk.wsgi.application'
-
-
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-import dj_database_url
-
-if os.getenv('DATABASE_URL'):
-    # We are running on Heroku, use the DATABASE_URL environment variable
-    DATABASES = {
-        'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-
-
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
-
-# Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'America/Los_Angeles'
-
-USE_I18N = True
-
-USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
-STATIC_URL = 'static/'
-
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-
-REST_FRAMEWORK = {
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10
-}
-
-# Redirect to home URL after login (Default redirects to /accounts/profile/)
-LOGIN_REDIRECT_URL = '/hub/web/'
-
-# temporary plug for email (not set up): logs emails to be sent to console for debugging
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-# Activate Django-Heroku.
-import django_heroku
-django_heroku.settings(locals())
-
-
-===== ./bahk/wsgi.py =====
-"""
-WSGI config for bahk project.
-
-It exposes the WSGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/4.2/howto/deployment/wsgi/
-"""
-
-import os
-
-from django.core.wsgi import get_wsgi_application
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bahk.settings')
-
-application = get_wsgi_application()
-
-
-
-===== ./bahk/context_processors.py =====
-from datetime import datetime
-
-def current_date(request):
-    return {'current_date': datetime.today()}
-
-
-===== ./bahk/urls.py =====
-""" URL configuration for bahk project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='web_home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='web_home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
-from django.conf import settings
-from django.conf.urls.static import static
-from django.contrib import admin
-from django.urls import include, path
-from django.views.generic import RedirectView
-
-import hub.views as views
-
-
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('hub/', include('hub.urls')),
-    path('', RedirectView.as_view(url='hub/', permanent=True)),
-] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-
-# add account authentication urls
-urlpatterns += [
-    path("accounts/", include("django.contrib.auth.urls")),
-]
-
-# add user creation
-urlpatterns += [
-    path("create_user/web/", views.register, name="register"),
-    path("join_fasts/web/", views.join_fasts, name="join_fasts"),
-    path("edit_profile/web/", views.edit_profile, name="edit_profile"),
-]
-
-
-
-===== ./tests/__init__.py =====
-
-
-
-===== ./tests/integration/test_endpoints.py =====
-"""Tests API endpoints."""
-import pytest
-
-from django.urls import reverse
-from rest_framework.test import APIRequestFactory
-
-from hub import models, views
-
-
-@pytest.mark.parametrize("query_params", [
-    (""),  # no query params gets fast for today
-    ("?date=20240325"),  # matches sample_day_fixture's date
-])
-@pytest.mark.django_db
-def test_fast_on_date_endpoint(query_params, complete_fast_fixture, request):
-    """Tests endpoint retrieving fast on a date for a participating user."""
-    view = views.FastOnDate().as_view()
-
-    user = models.User.objects.filter(profile__fasts=complete_fast_fixture).first()
-    church = models.Church.objects.filter(fasts=complete_fast_fixture).first()
-
-    url = reverse("fast_on_date") + query_params
-
-    factory = APIRequestFactory()
-    request = factory.get(url, format="json")
-    request.user = user
-    response = view(request)
-
-    assert response.status_code == 200
-    assert response.data == {
-        "name": complete_fast_fixture.name, 
-        "church": {
-            "name": church.name
-        },
-        "participant_count": complete_fast_fixture.profiles.count(),
-    }
-
-
-
-===== ./tests/conftest.py =====
-pytest_plugins = [
-    "tests.fixtures.model_fixtures",
-]
-
-
-===== ./tests/unit/test_models.py =====
-"""Tests models."""
-import datetime
-
-import pytest
-
-from hub.models import Church, Day, Fast, Profile
-
-
-### Create minimal models ###
-
-@pytest.mark.django_db
-def test_create_church():
-    """Tests creation of a Church model object."""
-    name = "Armenian Apostolic Church"
-    church = Church.objects.create(name=name)
-    assert church
-    assert church.name == name
-
-
-@pytest.mark.django_db
-def test_create_fast(sample_church_fixture):
-    """Tests creation of a Fast model object."""
-    name = "Fast of the Catechumens"
-    fast = Fast.objects.create(name=name, church=sample_church_fixture)
-    assert fast
-    assert fast.name == name
-
-
-@pytest.mark.django_db
-def test_create_user_profile(sample_user_fixture):
-    """Tests creation of a profile for a user."""
-    profile = Profile.objects.create(user=sample_user_fixture)
-    assert profile
-    assert profile.user == sample_user_fixture
-    assert sample_user_fixture.profile == profile
-
-
-@pytest.mark.django_db
-def test_create_day():
-    """Tests creation of a Day model object for today."""
-    date = datetime.date.today()
-    day = Day.objects.create(date=date)
-    assert day
-    assert day.date == date
-
-
-### Create complete models ###
-    
-@pytest.mark.django_db
-def test_create_complete_user_profile(
-    sample_user_fixture, 
-    sample_church_fixture, 
-    sample_fast_fixture,
-    another_fast_fixture,
-):
-    """Tests creation of full user profile."""
-    profile = Profile.objects.create(
-        user=sample_user_fixture, 
-        church=sample_church_fixture,
-    )
-    profile.fasts.set([sample_fast_fixture, another_fast_fixture])
-
-    assert profile.user == sample_user_fixture
-    assert sample_user_fixture.profile == profile
-    assert profile.church == sample_church_fixture
-    assert set(profile.fasts.all()) == {sample_fast_fixture, another_fast_fixture}
-    assert set(sample_fast_fixture.profiles.all()) == {profile}
-    assert set(another_fast_fixture.profiles.all()) == {profile}
-    assert set(sample_church_fixture.profiles.all()) == {profile}
-
-
-@pytest.mark.django_db
-def test_create_complete_fast(
-    sample_church_fixture, 
-    sample_profile_fixture, 
-    another_profile_fixture
-):
-    """Tests creation of a full fast with church and days."""
-    name = "Completely Specified Fast"
-    today = Day.objects.create(date=datetime.date.today())
-    tomorrow = Day.objects.create(date=datetime.date.today() + datetime.timedelta(days=1))
-    fast = Fast.objects.create(name=name, church=sample_church_fixture)
-    fast.profiles.set([sample_profile_fixture, another_profile_fixture])
-    fast.days.set([today, tomorrow])
-
-    assert fast.name == name
-    assert fast.church == sample_church_fixture
-    assert set(fast.profiles.all()) == {sample_profile_fixture, another_profile_fixture}
-    assert set(sample_profile_fixture.fasts.all()) == {fast}
-    assert set(another_profile_fixture.fasts.all()) == {fast}
-    assert set(fast.days.all()) == {today, tomorrow}
-    assert set(today.fasts.all()) == {fast}
-    assert set(tomorrow.fasts.all()) == {fast}
-
-
-@pytest.mark.django_db
-def test_create_complete_church(
-    sample_profile_fixture,
-    another_profile_fixture,
-    sample_fast_fixture,
-    another_fast_fixture
-):
-    """Tests creation of a completely specified church with fasts and user profiles."""
-    name = "Completely Specified Church"
-    church = Church.objects.create(name=name)
-    church.profiles.set([sample_profile_fixture, another_profile_fixture])
-    assert sample_profile_fixture.church == church
-    assert another_profile_fixture.church == church
-
-    sample_fast_fixture.church = church
-    sample_fast_fixture.save(update_fields=["church"])
-    another_fast_fixture.church = church
-    another_fast_fixture.save(update_fields=["church"])
-    assert set(church.fasts.all()) == {sample_fast_fixture, another_fast_fixture}
-
-
-
-===== ./tests/fixtures/model_fixtures.py =====
-"""Fixtures of models."""
-import datetime
-import pytest
-
-from django.contrib.auth.models import User
-
-from hub.models import Church, Day, Fast, Profile
-
-
-@pytest.fixture
-def sample_user_fixture():
-    return User.objects.create(username="sample_user")
-
-
-@pytest.fixture
-def another_user_fixture():
-    return User.objects.create(username="another_user")
-
-
-@pytest.fixture
-def sample_church_fixture():
-    return Church.objects.create(name="Sample Church")
-
-
-@pytest.fixture
-def sample_fast_fixture(sample_church_fixture):
-    return Fast.objects.create(name="Sample Fast", church=sample_church_fixture, description="A sample fast.")
-
-
-@pytest.fixture
-def another_fast_fixture(sample_church_fixture):
-    return Fast.objects.create(name="Another Fast", church=sample_church_fixture, description="Another sample fast.")
-
-
-@pytest.fixture
-def sample_profile_fixture(sample_user_fixture):
-    return Profile.objects.create(user=sample_user_fixture)
-
-
-@pytest.fixture
-def another_profile_fixture(another_user_fixture):
-    return Profile.objects.create(user=another_user_fixture)
-
-
-@pytest.fixture
-def sample_day_fixture():
-    return Day.objects.create(date=datetime.date(2024, 3, 25))
-
-
-@pytest.fixture
-def today_fixture():
-    return Day.objects.create(date=datetime.date.today())
-
-# complete models
-
-@pytest.fixture
-def complete_fast_fixture(sample_profile_fixture, sample_church_fixture, sample_day_fixture, today_fixture):
-    fast = Fast.objects.create(name="Complete Fast", church=sample_church_fixture)
-    fast.profiles.set([sample_profile_fixture])
-    fast.days.set([sample_day_fixture, today_fixture])
-
-    return fast
-
-
-
-===== ./requirements.txt =====
-django==4.2.11
-djangorestframework==3.14.0
-pytest==8.1.1
-pytest-django==4.8.0
-whitenoise
-gunicorn
-django-heroku
-dj-database-url
-psycopg2-binary
-
-

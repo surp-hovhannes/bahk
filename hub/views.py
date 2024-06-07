@@ -20,6 +20,9 @@ from django.shortcuts import get_object_or_404
 from PIL import Image
 from io import BytesIO
 from .models import Profile
+from django.conf import settings
+from django.core.files.storage import default_storage
+
 
 
 # Utilities
@@ -211,7 +214,16 @@ def edit_profile(request):
 
 def resized_profile_image_view(request, pk, width, height):
     profile = get_object_or_404(Profile, pk=pk)
-    image = Image.open(profile.profile_image.path)
+    image_file = profile.profile_image
+
+    if settings.DEFAULT_FILE_STORAGE == 'storages.backends.s3boto3.S3Boto3Storage':
+        # Open the image file from the S3 storage backend
+        with default_storage.open(image_file.name, 'rb') as f:
+            image = Image.open(f)
+    else:
+        # Open the image file from the local file system
+        image = Image.open(image_file.path)
+
     image.thumbnail((width, height), Image.LANCZOS)
 
     buffer = BytesIO()
