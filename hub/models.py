@@ -2,6 +2,8 @@
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import constraints
+from imagekit.models import ImageSpecField
+from imagekit.processors import ResizeToFill
 
 class Church(models.Model):
     """Model for a church."""
@@ -19,6 +21,10 @@ class Fast(models.Model):
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(null=True, blank=True)
     image = models.ImageField(upload_to='fast_images/', null=True, blank=True)
+    image_thumbnail = ImageSpecField(source='image',
+                                     processors=[ResizeToFill(500, 500)],
+                                     format='JPEG',
+                                     options={'quality': 60})
     # 2048 chars is the maximum URL length on Google Chrome
     url = models.URLField(verbose_name="Link to learn more", null=True, blank=True, max_length=2048,
                           help_text="URL to a link to learn more--must include protocol (e.g. https://)")
@@ -43,6 +49,10 @@ class Profile(models.Model):
     fasts = models.ManyToManyField(Fast, related_name="profiles")
     location = models.CharField(max_length=100, blank=True, null=True) 
     profile_image = models.ImageField(upload_to='profile_images/originals/', null=True, blank=True)
+    profile_image_thumbnail = ImageSpecField(source='profile_image',
+                                             processors=[ResizeToFill(100, 100)],
+                                             format='JPEG',
+                                             options={'quality': 60})
     
     def __str__(self):
         return self.user.username

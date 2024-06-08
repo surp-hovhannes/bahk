@@ -12,3 +12,4 @@ django-storages
 Pillow
 boto3
 python-decouple
+django-imagekit
