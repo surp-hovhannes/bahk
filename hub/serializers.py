@@ -34,6 +34,18 @@ class FastSerializer(serializers.ModelSerializer):
     church = ChurchSerializer()
     participant_count = serializers.SerializerMethodField()
     countdown = serializers.SerializerMethodField()
+    start_date = serializers.SerializerMethodField()
+    joined = serializers.SerializerMethodField()
+
+    def get_joined(self, obj):    
+        # test if request is present otherwise return False
+        if 'request' not in self.context:
+            return False
+        else:
+            request = self.context.get('request')
+            if request and hasattr(request, 'user'):
+                return request.user.profile.fasts.filter(id=obj.id).exists()
+            return False
 
     def get_participant_count(self, obj):
         return obj.profiles.count()
@@ -51,6 +63,9 @@ class FastSerializer(serializers.ModelSerializer):
             return f"{obj.name} has passed"
         return f"{days_to_finish} day{'' if days_to_finish == 1 else 's'} until the end of {obj.name}"
 
+    def get_start_date(self, obj):
+        return obj.days.order_by('date').first().date
+
     class Meta:
         model = models.Fast
-        fields = ["name", "church", "participant_count", "description", "countdown"]
+        fields = '__all__'

@@ -1,5 +1,6 @@
 {% extends "base_generic.html" %}
 
+
 {% block content %}
     <div class="container">
         {% load static %}
@@ -27,6 +28,17 @@
             {% else %}
                 <h2 class=" fs-4 text-grey ">Today in the {{ church }}, we are not fasting.</p>
             {% endif %}
+
+            <h2 class=" fs-4 text-grey ">Upcoming Fasts</h2>
+            <div class="row">
+                {% if upcoming_fasts %}
+                    {% for fast in upcoming_fasts %}
+                        {% include 'components/fast_card.html' with fast=fast %}
+                    {% endfor %}
+                {% else %}
+                    <p>No upcoming fasts in {{ church }}.</p>
+                {% endif %}
+            </div>
         {% else %}
                 <p class="main-text">Join a church to begin your fasting journey today!</p>
         {% endif %}

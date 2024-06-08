@@ -1,0 +1,19 @@
+<div class="col-lg-4 col-md-6 col-sm-12">
+    <div class="card mb-3">
+        {% if fast.image %}
+            <img src="{{ fast.image.url }}" class="card-img-top" alt="{{ fast.name }}">
+        {% endif %}
+        <div class="card-body">
+            <h5 class="card-title">{{ fast.name }}</h5>
+            <p class="card-text">Start date: {{ fast.start_date }}</p>
+            {% if fast.joined %}
+                <button type="button" class="btn btn-success" disabled>Joined!</button>
+            {% else %}
+            <form action="{% url 'add_fast_to_profile' fast.id %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">Join Fast</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>

@@ -14,6 +14,8 @@ from rest_framework import permissions, response, views, viewsets
 from hub.forms import CustomUserCreationForm, JoinFastsForm, ProfileForm
 from hub.models import Church, Fast, Profile
 from hub import serializers
+from .serializers import FastSerializer
+
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -140,6 +142,14 @@ def home(request):
     # Check if the user is participating in the fast
     is_participating = current_fast in request.user.profile.fasts.all() if current_fast else False
 
+    # Query for all upcoming fasts
+    upcoming_fasts = Fast.objects.filter(
+        church=church,
+        days__date__gte=datetime.date.today()
+    ).order_by("days__date").distinct()
+
+    serialized_fasts = FastSerializer(upcoming_fasts, many=True, context={'request': request}).data
+
     context = {
         "church": church_name,
         "fast": current_fast_name,
@@ -148,7 +158,8 @@ def home(request):
         "participant_count": response.get("participant_count", 1),
         "is_participating": is_participating,
         "description": response.get("description", ""),
-        "countdown": response.get("countdown")
+        "countdown": response.get("countdown"),
+        "upcoming_fasts": serialized_fasts
     }
 
     return render(request, "home.html", context=context)
@@ -183,16 +194,12 @@ def register(request):
 
 @login_required
 def join_fasts(request):
-    if request.method == 'POST':
-        form = JoinFastsForm(request.POST, request=request)
-        if form.is_valid():
-            new_fasts = set(form.cleaned_data["fasts"])
-            request.user.profile.fasts.add(*new_fasts)
-        return HttpResponseRedirect(reverse("web_home"))
-    else:
-        form = JoinFastsForm(request=request)
 
-    context = {"form": form}
+    all_fasts = Fast.objects.all()
+
+    serialized_fasts = FastSerializer(all_fasts, many=True, context={'request': request}).data
+
+    context = {"all_fasts": serialized_fasts}
 
     return render(request, 'registration/join_fasts.html', context)
 
@@ -231,3 +238,10 @@ def resized_profile_image_view(request, pk, width, height):
     buffer.seek(0)
 
     return HttpResponse(buffer, content_type='image/jpeg')
+
+@login_required
+def add_fast_to_profile(request, fast_id):
+    fast = get_object_or_404(Fast, id=fast_id)
+    request.user.profile.fasts.add(fast)
+    messages.success(request, f"You have joined {fast.name}.")
+    return redirect(request.META.get('HTTP_REFERER', 'home'))

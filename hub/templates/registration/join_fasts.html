@@ -1,13 +1,10 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-  <h2>Join Fasts</h2>
-
-  <form action="" method="post" class="form-group">
-    {% csrf_token %}
-    <table class="table">
-    {{ form.as_table }}
-    </table>
-    <input type="submit" value="Join"  class="btn btn-primary">
-  </form>
+  <h2>Fasts</h2>
+  <div class="row">
+  {% for fast in all_fasts %}
+    {% include 'components/fast_card.html' with fast=fast %}
+  {% endfor %}
+  </div>
 {% endblock %}
