@@ -42,7 +42,7 @@ class FastSerializer(serializers.ModelSerializer):
         if obj.culmination_feast and obj.culmination_feast_date:
             days_to_feast = (obj.culmination_feast_date - datetime.date.today()).days
             if days_to_feast < 0:
-                return "{obj.culmination_feast} has passed"
+                return f"{obj.culmination_feast} has passed"
             return f"{days_to_feast} day{'' if days_to_feast == 1 else 's'} until {obj.culmination_feast}"
         
         finish_date = max([day.date for day in obj.days.all()])
