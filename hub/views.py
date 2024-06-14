@@ -10,11 +10,13 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.safestring import mark_safe
+from django.db.models import Min, Exists, OuterRef
+
 
 from rest_framework import permissions, response, views, viewsets
 
-from hub.forms import CustomUserCreationForm, JoinFastsForm, ProfileForm
-from hub.models import Church, Fast, Profile
+from hub.forms import CustomUserCreationForm, ProfileForm
+from hub.models import Church, Fast, Profile, Day
 from hub import serializers
 from .serializers import FastSerializer
 
@@ -157,7 +159,7 @@ def home(request):
     upcoming_fasts = Fast.objects.filter(
         church=church,
         days__date__gte=datetime.date.today()
-    ).order_by("days__date").distinct()
+    ).annotate(first_day=Min('days__date')).order_by("first_day")[:3]
 
     serialized_fasts = FastSerializer(upcoming_fasts, many=True, context={'request': request}).data
 
@@ -220,7 +222,7 @@ def register(request):
 @login_required
 def join_fasts(request):
 
-    all_fasts = Fast.objects.all()
+    all_fasts = Fast.objects.annotate(has_days=Exists(Day.objects.filter(fasts=OuterRef('pk')))).filter(has_days=True)
 
     serialized_fasts = FastSerializer(all_fasts, many=True, context={'request': request}).data
 
