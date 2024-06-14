@@ -1,6 +1,8 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
+<div class="row w-100 p-3 mx-3 mb-3 rounded-bottom shadow bg-light text-dark">
+
 <!-- 
 <div class="register-page">
 
@@ -31,33 +33,40 @@
 
   </div> -->
 
+<div class="col-lg-6 mx-auto">
 
+    {% if messages %}
+        <div class="alert alert-info">
+            {% for message in messages %}
+                <p>{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
 
+    <h1 class="text-center">Register Here</h1>
 
-  
-<div class = "login">  
-  
-    {% if messages %}  
-        <ul>   
-            {% for message in messages %}  
-                <li>{{ message }}</li>  
-                {% endfor %}  
-        </ul>   
-    {% endif %}  
-      
-    <h1>Register Here</h1>  
-  
-         <form method="post" action="{% url 'register' %}">  
-             {% csrf_token %}  
-             <table>  
-                {{ form.as_table }}  
-                 <tr>  
-                    <td></td>  
-                    <td><input type="submit" name="submit" value="Register" /></td>  
-                </tr>  
-             </table>  
-         </form>  
-     </div>
-     <p class="message">Already registered? <a href="{% url 'login' %}?next={{ request.path }}">Login</a></p>
+    <form method="post" action="{% url 'register' %}" class="mt-4">
+        {% csrf_token %}
+            {% for field in form %}
+            <div class="form-group mb-3">
+                {{ field.errors }}
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+            {% if field.field.widget.input_type == 'select' %}
+                {{ field }}
+            {% else %}
+                <input type="{{ field.field.widget.input_type }}" name="{{ field.html_name }}" id="{{ field.auto_id }}" class="form-control" value="{{ field.value|default_if_none:'' }}">
+            {% endif %}                
+            {% if field.help_text %}
+                    <small class="form-text text-dark ">{{ field.help_text }}</small>
+            {% endif %}
+            </div>
+        {% endfor %}
+        <div class="form-group">
+            <input type="submit" name="submit" value="Register" class="btn btn-primary" />
+        </div>
+    </form>
+
+    <p class="message text-center mt-4">Already registered? <a href="{% url 'login' %}?next={{ request.path }}" class="text-primary">Login</a></p>
+</div>
 
 {% endblock content %}

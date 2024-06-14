@@ -3,6 +3,44 @@
   background-color: #390714;
 }
 
+.accent-text {
+  color: #E54670;
+}
+
+.accent-bg {
+  background-color: #E54670;
+}
+
+.days_to_feast {
+  font-size: 4em;
+  line-height: 1em;
+}
+
+.participant-avatars img {
+  margin-left: -10px;
+}
+
+select#id_church {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #495057;
+  vertical-align: middle;
+  background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23343a40' viewBox='0 0 16 16'%3e%3cpath d='M1 5l7 7 7-7z'/%3e%3c/svg%3e") no-repeat right 0.75rem center/8px 10px;
+  background-color: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding: 0.5rem 2.25rem 0.5rem 0.75rem;
+  font-size: 1.25rem;
+  line-height: 1.5;
+  border-radius: 0.3rem;
+}
+
 /*!
  * Bootstrap  v5.3.3 (https://getbootstrap.com/)
  * Copyright 2011-2024 The Bootstrap Authors

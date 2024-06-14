@@ -12,48 +12,63 @@
 {% endif %}
 
 <div id="fast-main-container" class="row w-100 p-3 mx-3 shadow text-light">
-    <div class="col-8">
+    <div class="col-12 text-center">
         {% load static %}
         {% if church %}
-            <div class="">
             {% if fast %}
-                    <div class="p-3">
+                    <div class="my-3">
                         <div class="text-uppercase mb-3">Fast Together</div>
                         <h2 class="fs-1">{{ fast.name }}</h2>
-                        <p class="fs-5">{{ fast.start_date }} - {{ fast.end_date }}</p>
+                        <p class="fs-5">{{ fast.start_date|date:"F j" }} - {{ fast.end_date|date:"F j" }}</p>
                     </div>
                 {% if is_participating %}
-                    <p >{{ countdown }}!</p>
-                    <p>{{ participant_count }} faithful {{ participant_count|pluralize:"is,are" }} fasting with you today!</p>
-                    <p>{{ description }} </p>
-                    <!-- placeholder for a medium centered button that says learn more -->
-                    {% if fast.url %}
-                        <a class="btn btn-primary" href="{{ fast.url }}">Learn More &hellip;</a>
-                    {% endif %}
+                    <div class="is-participating d-flex flex-column flex-lg-row justify-content-start mx-auto col-lg-10">
+                        <div class="col-6 col-lg-4 p3 mx-auto">
+                            <div class="p-3 m-4" style="background-color:#4D202C">
+                                <div class="days_to_feast">{{ fast.days_to_feast }}</div>
+                                <div>{{ fast.days_to_feast|pluralize:"day,days" }} until {{ fast.culmination_feast }}</div>
+                            </div>
+                            <p><strong>{{ fast.participant_count }}</strong> faithful {{ fast.participant_count|pluralize:"is,are" }} fasting with you today!</p>
+                            {% include 'components/participant_avatars.html' with participants=other_participants %}
+                        </div>
+                        <div class="p-3 col-12 col-lg-8">
+                            <p class="text-start">{{ description|truncatechars_html:500 }}</p>
+                            {% if description %}
+                                <a class="btn btn-light btn-pill rounded-pill" data-bs-target="#FastDescription" data-bs-toggle="modal" href="#" role="button">Read More &hellip;</a>
+                            {% endif %}
+                        </div>
+                    </div>
                 {% else %}
                     <div class="d-flex flex-column flex-lg-row justify-content-start">
                         <div class="p-3 col-12 col-lg-4 mx-lg-3">
-                            <p>You have not yet joined {{ fast.name }} along with 
-                            {{ participant_count }} other{{ participant_count|pluralize }}.</p>
+                            <div class="mb-3">
+                                <p>You have not yet joined {{ fast.name }} along with 
+                                {{ participant_count }} other{{ participant_count|pluralize }}.</p>
+                                {% include 'components/participant_avatars.html' with participants=other_participants %}
+                            </div>
                             <form action="{% url 'add_fast_to_profile' fast.id %}" method="post">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-light btn-pill rounded-pill">Join Fast</button>
+                                <button type="submit" class="btn btn-warning btn-pill rounded-pill fs-3 ">Join Fast</button>
                             </form>
                         </div>
-                        <div class="p-3  col-12 col-lg-6 mx-lg-6">
-                            <p>{{ description }} </p>
+                        <div class="p-3 col-12 col-lg-6 mx-lg-6">
+                            <p class="text-start">{{ description|truncatechars_html:500 }}</p>
+                            {% if description %}
+                                <a class="btn btn-light btn-pill rounded-pill" data-bs-target="#FastDescription" data-bs-toggle="modal" href="#" role="button">Read More &hellip;</a>
+                            {% endif %}
                         </div>
                     </div>
                 {% endif %}
-                </div>
             {% else %}
                 {% if days_until_next %}
                     {% if upcoming_fasts %}
-                        <div class="text-uppercase mb-3">{{ current_date|date:"l, F j, Y" }}</div>
-                        <h2 class="fs-3">{{ days_until_next }} days until {{ upcoming_fasts.0.name }}.</h2>
-                        <div class="d-lg-flex flex-column align-items-center mt-4">
+                        <div class="p-3 mb-3">
+                            <div class="text-uppercase mb-3">{{ current_date|date:"l, F j, Y" }}</div>
+                            <h2 class="fs-3">{{ days_until_next }} days until {{ upcoming_fasts.0.name }}</h2>
+                        </div>
+                        <div class="d-lg-flex flex-column flex-lg-row align-items-center col-lg-8 mx-auto">
                             {% include 'components/fast_card.html' with fast=upcoming_fasts.0 %}
-                            <div class=" " ><a href="{{ upcoming.fasts.fast_url }}">Learn More About This Fast &rAarr;</a></div>
+                            <div class="col-12 col-lg-8 p-3 text-start m-3">{{ upcoming_fasts.0.description|truncatechars_html:500 }}</div>
                         </div>
                     {% endif %}
                 {% else %}
@@ -68,7 +83,13 @@
 
 <div class="row w-100 p-3 mx-3 mb-3 rounded-bottom shadow bg-light text-dark">
     <div class="container">   
-            <div id="upcoming-fasts">
+            <div id="info_buttons">
+                <div class="d-flex justify-content-evenly">
+                    <a href="#" class="btn btn-white rounded-pill shadow" data-bs-toggle="modal" data-bs-target="#WhatIsFasting">What is Fasting</a>
+                    <a href="#" class="btn btn-white rounded-pill shadow" data-bs-toggle="modal" data-bs-target="#HowToFast">How to Fast</a>
+                </div>
+            </div>
+            <div id="upcoming-fasts" class="overflow-auto text-nowrap">
                 <h2 class=" fs-4 text-start py-3 ">Upcoming Fasts</h2>
                 <div class="row">
                     {% if upcoming_fasts %}
@@ -82,5 +103,131 @@
             </div>
     </div>
 </div>
+
+{% if fast and description %}
+<!-- Read More Model -->
+<div id="FastDescription" class="modal fade" role="dialog">
+    <div class="modal-dialog">
+        
+        <!-- Modal content-->
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">{{ fast.name }}</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>{{ description|linebreaks }}</p>
+                {% if fast.url %}
+                    <p><a href="{{ fast.url }}">Learn More &hellip;</a></p>
+                {% endif %}
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
+<!-- What Is Fasting Model -->
+<div id="WhatIsFasting" class="modal fade" role="dialog">
+    <div class="modal-dialog">
+        
+        <!-- Modal content-->
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">What Is Fasting?</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Fasting in the Armenian Apostolic Church is a deeply spiritual practice rooted in the traditions 
+                    and teachings of early Christianity. It is not merely an act of abstaining from food but a comprehensive 
+                    exercise in spiritual discipline, aimed at enhancing one's faith and connection with God. The Church 
+                    prescribes several periods of fasting throughout the liturgical year, including Great Lent, the Fast 
+                    of the Nativity, and various shorter fasts leading up to significant feasts. These fasts are observed 
+                    with varying degrees of strictness, often involving abstinence from meat, dairy, and other rich foods, 
+                    as well as reducing overall food intake. The purpose of fasting is to purify the body and soul, fostering 
+                    a spirit of repentance and humility.</p>
+                    
+                <p>In addition to dietary restrictions, the Armenian Apostolic Church encourages the faithful to increase 
+                    their participation in prayer, almsgiving, and acts of charity during fasting periods. This holistic 
+                    approach ensures that fasting is not an isolated act but part of a broader effort to grow spiritually 
+                    and morally. The teachings emphasize that the physical aspect of fasting should be complemented by 
+                    spiritual renewal and ethical behavior, reflecting the comprehensive nature of Christian discipleship. 
+                    Through fasting, believers seek to draw closer to God, emulate the sacrifices of Christ and the saints, 
+                    and prepare themselves for the celebration of holy events in the Church calendar.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- What Is Fasting Model -->
+<div id="HowToFast" class="modal fade" role="dialog">
+    <div class="modal-dialog">
+        
+        <!-- Modal content-->
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">How Do I Fast?</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Fasting in the Armenian Apostolic Church involves more than just abstaining from certain foods; it is a spiritual discipline aimed at fostering a deeper connection with God. Here’s a guide on how to fast:</p>
+    
+                <h5>1. Understand the Purpose</h5>
+                <ul>
+                    <li><strong>Spiritual Renewal</strong>: Fasting is a time for prayer, repentance, and spiritual growth.</li>
+                    <li><strong>Physical Discipline</strong>: It helps control bodily desires and fosters self-control.</li>
+                    <li><strong>Preparation</strong>: It prepares the faithful for major feasts and holy events in the Church calendar.</li>
+                </ul>
+                
+                <h5>2. Follow Dietary Restrictions</h5>
+                <ul>
+                    <li><strong>Abstain from Certain Foods</strong>: During fasting periods, abstain from meat, dairy, eggs, and animal products. Some fasts also restrict the consumption of fish, oil, and wine.</li>
+                    <li><strong>Simplify Meals</strong>: Consume simple and modest meals, focusing on fruits, vegetables, grains, and legumes.</li>
+                    <li><strong>Reduce Quantity</strong>: Limit the amount of food intake to foster a sense of physical discipline.</li>
+                </ul>
+                
+                <h5>3. Incorporate Spiritual Practices</h5>
+                <ul>
+                    <li><strong>Increase Prayer</strong>: Spend more time in prayer, both privately and with the community. Attend church services more frequently if possible.</li>
+                    <li><strong>Read Scriptures</strong>: Dedicate time to reading and reflecting on the Bible and other spiritual texts.</li>
+                    <li><strong>Repentance and Confession</strong>: Use this period for self-examination and confessing sins, seeking reconciliation with God and others.</li>
+                </ul>
+                
+                <h5>4. Engage in Acts of Charity</h5>
+                <ul>
+                    <li><strong>Almsgiving</strong>: Give to those in need, whether through donations, volunteering, or other acts of kindness.</li>
+                    <li><strong>Service</strong>: Engage in acts of service within your community, helping those less fortunate.</li>
+                </ul>
+                
+                <h5>5. Observe Fasting Periods</h5>
+                <ul>
+                    <li><strong>Great Lent</strong>: The most significant fasting period, leading up to Easter, lasting 40 days plus Holy Week.</li>
+                    <li><strong>Other Fasts</strong>: Include the Fast of the Nativity, the Fast of the Assumption, and various other shorter fasts throughout the year.</li>
+                </ul>
+                
+                <h5>6. Consult Church Guidance</h5>
+                <ul>
+                    <li><strong>Seek Advice</strong>: Speak with your priest or spiritual advisor for specific guidance tailored to your personal circumstances.</li>
+                    <li><strong>Adjustments</strong>: The Church understands individual health and personal conditions; modifications can be made accordingly.</li>
+                </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
 
 {% endblock %}

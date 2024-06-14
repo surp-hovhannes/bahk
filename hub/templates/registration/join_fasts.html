@@ -1,10 +1,13 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
+<div class="row w-100 p-3 mx-3 mb-3 rounded-bottom shadow bg-light text-dark">
+
   <h2>Fasts</h2>
   <div class="row">
   {% for fast in all_fasts %}
     {% include 'components/fast_card.html' with fast=fast %}
   {% endfor %}
   </div>
+</div>
 {% endblock %}

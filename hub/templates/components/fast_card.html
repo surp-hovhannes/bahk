@@ -13,7 +13,7 @@
             </div>
             <div class="text-left">
                 <h5 class="card-title text-shadow fw-bold">{{ fast.name }}</h5>
-                <p class="card-text font-weight-light">{{ fast.start_date }}</p>
+                <p class="card-text font-weight-light">{{ fast.start_date|date:"F j"  }}</p>
                 <span class="card-text font-weight-light preparing p-1 rounded">{{ fast.participant_count }} {{ fast.participant_count|pluralize:"person,people" }} preparing</span>
             </div>
         </div>
