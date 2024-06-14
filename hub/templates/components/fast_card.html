@@ -1,19 +1,21 @@
 <div class="col-lg-4 col-md-6 col-sm-12">
-    <div class="card mb-3">
-        {% if fast.image %}
-            <img src="{{ fast.image }}" class="card-img-top" alt="{{ fast.name }}">
-        {% endif %}
-        <div class="card-body">
-            <h5 class="card-title">{{ fast.name }}</h5>
-            <p class="card-text">Start date: {{ fast.start_date }}</p>
-            {% if fast.joined %}
-                <button type="button" class="btn btn-success" disabled>Joined!</button>
-            {% else %}
-            <form action="{% url 'add_fast_to_profile' fast.id %}" method="post">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-primary">Join Fast</button>
-            </form>
-            {% endif %}
+    <div class="card mb-3" style="background-image: url('{{ fast.image }}'); background-size: cover;">
+        <div class="card-body d-flex flex-column justify-content-end align-items-center text-white" style="background: rgba(0, 0, 0, 0.5);">
+            <div id="button_holder" class="mt-5 pb-3">
+                {% if fast.joined %}
+                <button type="button" class="btn btn-light btn-pill rounded-pill" disabled>Joined!</button>
+                {% else %}
+                <form action="{% url 'add_fast_to_profile' fast.id %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-light btn-pill rounded-pill">Join Fast</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="text-left">
+                <h5 class="card-title text-shadow fw-bold">{{ fast.name }}</h5>
+                <p class="card-text font-weight-light">{{ fast.start_date }}</p>
+                <span class="card-text font-weight-light preparing p-1 rounded">{{ fast.participant_count }} {{ fast.participant_count|pluralize:"person,people" }} preparing</span>
+            </div>
         </div>
     </div>
 </div>

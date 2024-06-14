@@ -1,0 +1,29 @@
+// hub/static/scss/custom.scss
+
+$dark-bg: #390714;
+$light-bg: #F8F8F8;
+$accent-color: #E54670;
+
+$--bs-body-color: #000000;
+$--bs-body-bg: $light-bg;
+
+$--bs-secondary-color: $light-bg;
+$--bs-secondary-color-rgb: rgba(229, 70, 112, 1);
+$--bs-secondary: $dark-bg;
+$--bs-secondary-bg-rgb: rgba(57, 7, 20, 1);
+
+$body-bg: $light-bg;
+
+$secondary: $dark-bg;
+$body-secondary-color: $light-bg;
+$secondary-color: $light-bg;
+$tertiary: $accent-color;
+
+$font-family-base: "Figtree", sans-serif;
+
+#fast-main-container {
+    background-color: $dark-bg;
+  }
+
+@import "../../../node_modules/bootstrap/scss/bootstrap";
+

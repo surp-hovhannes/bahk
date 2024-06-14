@@ -2,45 +2,85 @@
 
 
 {% block content %}
-    <div class="container">
+
+{% if fast and fast.image %}
+    <style>
+        #fast-main-container {
+            background: linear-gradient(to right,rgba(57, 7, 20, 1) 35%, rgba(57, 7, 20, .95) 50%, transparent 100%), url('{{ fast.image }}') no-repeat right center / contain;
+        }   
+    </style>
+{% endif %}
+
+<div id="fast-main-container" class="row w-100 p-3 mx-3 shadow text-light">
+    <div class="col-8">
         {% load static %}
-            <div>{{ current_date|date:"l, F j, Y" }}</div>
         {% if church %}
+            <div class="">
             {% if fast %}
-                <h2 class=" fs-4 text-grey ">{{ fast }}</h2>
-                <div class="content">
-                    {% if is_participating %}
-                        <p class="main-text">Today, you are participating in {{ church }}'s {{ fast }}.</p>
-                        <p class="main-text">{{ countdown }}!</p>
-                        <p>{{ participant_count }} faithful {{ participant_count|pluralize:"is,are" }} fasting with you today!</p>
-                        <p>{{ description }} </p>
-                        <!-- placeholder for a medium centered button that says learn more -->
-                        {% if fast_url %}
-                            <a class="btn btn-primary" href="{{ fast_url }}">Learn More &hellip;</a>
-                        {% endif %}
-                    {% else %}
-                        <p class="main-text">You have not yet joined in {{ church }}'s {{ fast }} along with 
-                            {{ participant_count }} other{{ participant_count|pluralize }}.</p>
-                        <a class="btn btn-primary mb-3" href=" {% url 'join_fasts' %}?next={{ request.path }} ">Join Today &hellip;</a>
-                        <p>{{ description }} </p>
+                    <div class="p-3">
+                        <div class="text-uppercase mb-3">Fast Together</div>
+                        <h2 class="fs-1">{{ fast.name }}</h2>
+                        <p class="fs-5">{{ fast.start_date }} - {{ fast.end_date }}</p>
+                    </div>
+                {% if is_participating %}
+                    <p >{{ countdown }}!</p>
+                    <p>{{ participant_count }} faithful {{ participant_count|pluralize:"is,are" }} fasting with you today!</p>
+                    <p>{{ description }} </p>
+                    <!-- placeholder for a medium centered button that says learn more -->
+                    {% if fast.url %}
+                        <a class="btn btn-primary" href="{{ fast.url }}">Learn More &hellip;</a>
                     {% endif %}
+                {% else %}
+                    <div class="d-flex flex-column flex-lg-row justify-content-start">
+                        <div class="p-3 col-12 col-lg-4 mx-lg-3">
+                            <p>You have not yet joined {{ fast.name }} along with 
+                            {{ participant_count }} other{{ participant_count|pluralize }}.</p>
+                            <form action="{% url 'add_fast_to_profile' fast.id %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-light btn-pill rounded-pill">Join Fast</button>
+                            </form>
+                        </div>
+                        <div class="p-3  col-12 col-lg-6 mx-lg-6">
+                            <p>{{ description }} </p>
+                        </div>
+                    </div>
+                {% endif %}
                 </div>
             {% else %}
-                <h2 class=" fs-4 text-grey ">Today in the {{ church }}, we are not fasting.</p>
-            {% endif %}
-
-            <h2 class=" fs-4 text-grey ">Upcoming Fasts</h2>
-            <div class="row">
-                {% if upcoming_fasts %}
-                    {% for fast in upcoming_fasts %}
-                        {% include 'components/fast_card.html' with fast=fast %}
-                    {% endfor %}
+                {% if days_until_next %}
+                    {% if upcoming_fasts %}
+                        <div class="text-uppercase mb-3">{{ current_date|date:"l, F j, Y" }}</div>
+                        <h2 class="fs-3">{{ days_until_next }} days until {{ upcoming_fasts.0.name }}.</h2>
+                        <div class="d-lg-flex flex-column align-items-center mt-4">
+                            {% include 'components/fast_card.html' with fast=upcoming_fasts.0 %}
+                            <div class=" " ><a href="{{ upcoming.fasts.fast_url }}">Learn More About This Fast &rAarr;</a></div>
+                        </div>
+                    {% endif %}
                 {% else %}
-                    <p>No upcoming fasts in {{ church }}.</p>
+                    <h2 class="fs-3">There are no more fasts this year.</h2>
                 {% endif %}
-            </div>
+            {% endif %}
         {% else %}
-                <p class="main-text">Join a church to begin your fasting journey today!</p>
+            <!-- Placeholder for if they don't have a church -->
         {% endif %}
     </div>
+</div>
+
+<div class="row w-100 p-3 mx-3 mb-3 rounded-bottom shadow bg-light text-dark">
+    <div class="container">   
+            <div id="upcoming-fasts">
+                <h2 class=" fs-4 text-start py-3 ">Upcoming Fasts</h2>
+                <div class="row">
+                    {% if upcoming_fasts %}
+                        {% for fast in upcoming_fasts %}
+                            {% include 'components/fast_card.html' with fast=fast %}
+                        {% endfor %}
+                    {% else %}
+                        <p>No upcoming fasts in {{ church }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+    </div>
+</div>
+
 {% endblock %}

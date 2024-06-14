@@ -1,0 +1,7 @@
+<div class="w-100 mx-3 shadow bg-secondary text-light row">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>

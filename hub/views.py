@@ -136,6 +136,11 @@ def home(request):
     # Get the current fast
     current_fast_name = response.get("name", "")
     current_fast = Fast.objects.get(name=current_fast_name) if current_fast_name else None
+
+    # user fast serializer to serialize the current_fast
+    serialized_current_fast = FastSerializer(current_fast, context={'request': request}).data
+
+
     # get link to learn more if available
     fast_url = current_fast.url if current_fast is not None else None
 
@@ -150,16 +155,25 @@ def home(request):
 
     serialized_fasts = FastSerializer(upcoming_fasts, many=True, context={'request': request}).data
 
+    # calculate days until next upcoming fast
+    if upcoming_fasts:
+        next_fast_date = upcoming_fasts[0].days.all()[0].date
+        days_until_next = (next_fast_date - datetime.date.today()).days
+    else:
+        days_until_next = None
+
+
     context = {
         "church": church_name,
-        "fast": current_fast_name,
+        "fast": serialized_current_fast,
         "fast_url": fast_url,
         "user": request.user,
         "participant_count": response.get("participant_count", 1),
         "is_participating": is_participating,
         "description": response.get("description", ""),
         "countdown": response.get("countdown"),
-        "upcoming_fasts": serialized_fasts
+        "upcoming_fasts": serialized_fasts,
+        "days_until_next": days_until_next
     }
 
     return render(request, "home.html", context=context)

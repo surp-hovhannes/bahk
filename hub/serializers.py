@@ -35,6 +35,7 @@ class FastSerializer(serializers.ModelSerializer):
     participant_count = serializers.SerializerMethodField()
     countdown = serializers.SerializerMethodField()
     start_date = serializers.SerializerMethodField()
+    end_date = serializers.SerializerMethodField()
     joined = serializers.SerializerMethodField()
 
     def get_joined(self, obj):    
@@ -65,6 +66,9 @@ class FastSerializer(serializers.ModelSerializer):
 
     def get_start_date(self, obj):
         return obj.days.order_by('date').first().date
+    
+    def get_end_date(self, obj):
+        return obj.days.order_by('date').last().date
 
     class Meta:
         model = models.Fast
