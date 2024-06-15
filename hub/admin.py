@@ -40,6 +40,7 @@ class FastAdmin(admin.ModelAdmin):
         if request.method == "POST":
             form = CreateFastWithDatesAdminForm(request.POST, request.FILES)
             if form.is_valid():
+                fast = form.save()
                 data = form.cleaned_data
 
                 # days
