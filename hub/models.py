@@ -19,7 +19,8 @@ class Fast(models.Model):
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="fasts")
     description = models.TextField(null=True, blank=True)
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
-    culmination_feast_date = models.DateField(null=True, blank=True)
+    culmination_feast_date = models.DateField(null=True, blank=True,
+                                              help_text="You can enter in day/month/year format, e.g., 8/15/24")
     image = models.ImageField(upload_to='fast_images/', null=True, blank=True)
     image_thumbnail = ImageSpecField(source='image',
                                      processors=[ResizeToFill(500, 500)],
