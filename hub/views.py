@@ -273,3 +273,11 @@ def add_fast_to_profile(request, fast_id):
     request.user.profile.fasts.add(fast)
     messages.success(request, f"You have joined {fast.name}.")
     return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+
+@login_required
+def remove_fast_from_profile(request, fast_id):
+    fast = get_object_or_404(Fast, id=fast_id)
+    request.user.profile.fasts.remove(fast)
+    messages.success(request, f"You have left {fast.name}.")
+    return redirect(request.META.get('HTTP_REFERER', 'home'))

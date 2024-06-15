@@ -44,6 +44,10 @@
                                 <div class="days_to_feast">{{ fast.days_to_feast }}</div>
                                 <div>{{ fast.days_to_feast|pluralize:"day,days" }} until {{ fast.culmination_feast }}</div>
                             </div>
+                            <form action="{% url 'remove_fast_from_profile' fast.id %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-light btn-pill rounded-pill">Leave Fast</button>
+                            </form>
                             <p><strong>{{ fast.participant_count }}</strong> faithful {{ fast.participant_count|pluralize:"is,are" }} fasting with you today!</p>
                             {% include 'components/participant_avatars.html' with participants=other_participants %}
                         </div>
