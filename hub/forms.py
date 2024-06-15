@@ -13,6 +13,7 @@ _MAX_FAST_LENGTH = 60  # days
 class CreateFastWithDatesAdminForm(forms.ModelForm):
     first_day = forms.DateField(widget=forms.SelectDateWidget)
     last_day = forms.DateField(widget=forms.SelectDateWidget)
+    culmination_feast_date = forms.DateField(widget=forms.SelectDateWidget)
     class Meta:
         model = Fast
         fields = ["name", "church", "description", "culmination_feast", "culmination_feast_date", "url"]
