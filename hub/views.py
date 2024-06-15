@@ -181,7 +181,8 @@ def home(request):
         "description": response.get("description", ""),
         "countdown": response.get("countdown"),
         "upcoming_fasts": serialized_fasts,
-        "days_until_next": days_until_next
+        "days_until_next": days_until_next,
+        "has_passed": response.get("has_passed", False)
     }
 
     # if user doesn't have a profile image or location create a message to prompt them to update their profile
@@ -271,4 +272,12 @@ def add_fast_to_profile(request, fast_id):
     fast = get_object_or_404(Fast, id=fast_id)
     request.user.profile.fasts.add(fast)
     messages.success(request, f"You have joined {fast.name}.")
+    return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+
+@login_required
+def remove_fast_from_profile(request, fast_id):
+    fast = get_object_or_404(Fast, id=fast_id)
+    request.user.profile.fasts.remove(fast)
+    messages.success(request, f"You have left {fast.name}.")
     return redirect(request.META.get('HTTP_REFERER', 'home'))

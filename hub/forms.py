@@ -13,27 +13,41 @@ _MAX_FAST_LENGTH = 60  # days
 class CreateFastWithDatesAdminForm(forms.ModelForm):
     first_day = forms.DateField(widget=forms.SelectDateWidget)
     last_day = forms.DateField(widget=forms.SelectDateWidget)
+
     class Meta:
         model = Fast
+        # "image" is excluded because it is not clear how to save an image with a form
         fields = ["name", "church", "description", "culmination_feast", "culmination_feast_date", "url"]
 
     def clean_last_day(self):
-        """Ensure last day is not before the first day."""
+        """Ensure last day is 
+        - not before the first day
+        - not longer than max length
+        - before the culmination feast.
+        """
+        # last day must be after first day
         first_day = self.cleaned_data["first_day"]
         last_day = self.cleaned_data["last_day"]
         length_of_fast = (last_day - first_day).days + 1
         if length_of_fast < 1:
             raise ValidationError(f"Last day ({last_day}) cannot be before the first day ({first_day})")
+        # length of fast must be within limit 
         if length_of_fast > _MAX_FAST_LENGTH:
             raise ValidationError(f"Tried to create a fast lasting {length_of_fast} days. "
                                   f"Fasts longer than {_MAX_FAST_LENGTH} days are not permitted.")
         self.cleaned_data["length_of_fast"] = length_of_fast
+        # last day must be before culmination feast, if present
+        culmination_feast_date = self.cleaned_data.get("culmination_feast_date")
+        if culmination_feast_date is not None and culmination_feast_date <= last_day:
+            raise ValidationError(
+                f"Last day ({last_day}) must be before culmination feast ({culmination_feast_date})"
+            )
 
         # also checks that does not overlap with other fasts from the same church
         days = Day.objects.filter(date__range=[first_day, last_day])
-        church_name = self.cleaned_data["church"]
-        church_names = sum([[f.church.name for f in day.fasts.all()] for day in days], []) + [church_name]
-        if len(church_names) > len(set(church_names)):
+        church_name = self.cleaned_data["church"].name
+        names_of_churches_with_overlapping_fasts = sum([[f.church.name for f in day.fasts.all()] for day in days], [])
+        if church_name in names_of_churches_with_overlapping_fasts:
             raise ValidationError("Fast overlaps with another fast from the same church (not permitted).")
 
 

@@ -25,6 +25,7 @@ urlpatterns = [
     path("fast/", views.FastOnDate.as_view(), name="fast_on_date"),
     path("web/", views.home, name="web_home"),
     path('add_fast_to_profile/<int:fast_id>/', views.add_fast_to_profile, name='add_fast_to_profile'),
+    path('remove_fast_from_profile/<int:fast_id>/', views.remove_fast_from_profile, name='remove_fast_from_profile'),
 ]
 
 urlpatterns += router.urls
