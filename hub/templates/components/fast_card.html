@@ -17,6 +17,14 @@
                 <span class="card-text font-weight-light preparing p-1 rounded">{{ fast.participant_count }} 
                     {{ fast.participant_count|pluralize:"person,people" }} {% if fast.has_passed %}fasted{% else %}preparing{% endif %}</span>
             </div>
+            {% if fast.joined %}
+            <div id="leave_button_holder" class="mt-3 pb-3">
+                <form action="{% url 'remove_fast_from_profile' fast.id %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-light btn-sm rounded-pill">Leave Fast</button>
+                </form>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
