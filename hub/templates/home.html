@@ -5,9 +5,25 @@
 
 {% if fast and fast.image %}
     <style>
-        #fast-main-container {
-            background: linear-gradient(to right,rgba(57, 7, 20, 1) 35%, rgba(57, 7, 20, .95) 50%, transparent 100%), url('{{ fast.image }}') no-repeat right center / contain;
-        }   
+
+            #fast-main-container {
+                background: linear-gradient(to top,rgba(57, 7, 20, 1) 65%, rgba(57, 7, 20, .95) 70%, transparent 100%), url('{{ fast.image }}') no-repeat center top / contain;
+            } 
+
+            #fast-main-container .col-12:first-child {
+                margin-top: 150px;
+            }
+        
+        @media (min-width: 768px) { 
+            #fast-main-container {
+                background: linear-gradient(to right,rgba(57, 7, 20, 1) 35%, rgba(57, 7, 20, .95) 50%, transparent 100%), url('{{ fast.image }}') no-repeat right center / contain;
+            } 
+
+            #fast-main-container .col-12:first-child {
+                margin-top: 0px;
+            }
+        }
+
     </style>
 {% endif %}
 
@@ -23,7 +39,7 @@
                     </div>
                 {% if is_participating %}
                     <div class="is-participating d-flex flex-column flex-lg-row justify-content-start mx-auto col-lg-10">
-                        <div class="col-6 col-lg-4 p3 mx-auto">
+                        <div class="col-xs-8 col-sm-8 col-lg-4 p3 mx-auto">
                             <div class="p-3 m-4" style="background-color:#4D202C">
                                 <div class="days_to_feast">{{ fast.days_to_feast }}</div>
                                 <div>{{ fast.days_to_feast|pluralize:"day,days" }} until {{ fast.culmination_feast }}</div>

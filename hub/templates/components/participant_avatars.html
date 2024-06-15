@@ -3,10 +3,10 @@
     {% load static %}
     <div class="participant-avatars">
     {% for participant in participants %}
-        {% if particpant.profile_image_thumbnail %}
-            <img src="{{ participant.profile_image_thumbnail }}" class="avatar avatar-md rounded-circle border border-white border-2 position-relative" width="50" height="50" alt="{{ participant.user.username }}">
+        {% if participant.profile_image_thumbnail %}
+            <img src="{{ participant.profile_image_thumbnail.url }}" class="avatar avatar-md rounded-circle border border-white border-2 position-relative shadow" width="50" height="50" alt="{{ participant.user.username }}">
         {% else %}
-            <img src="{% static 'images/avatar.jpg' %}" class="avatar avatar-md rounded-circle border border-white border-2 position-relative" width="50" height="50" alt="{{ participant.user.username }}">
+            <img src="{% static 'images/avatar.jpg' %}" class="avatar avatar-md rounded-circle border border-white border-2 position-relative shadow" width="50" height="50" alt="{{ participant.user.username }}">
         {% endif %}
     {% endfor %}
     </div>
