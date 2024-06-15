@@ -181,7 +181,8 @@ def home(request):
         "description": response.get("description", ""),
         "countdown": response.get("countdown"),
         "upcoming_fasts": serialized_fasts,
-        "days_until_next": days_until_next
+        "days_until_next": days_until_next,
+        "has_passed": response.get("has_passed", False)
     }
 
     # if user doesn't have a profile image or location create a message to prompt them to update their profile

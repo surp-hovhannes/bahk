@@ -38,6 +38,7 @@ class FastSerializer(serializers.ModelSerializer):
     start_date = serializers.SerializerMethodField()
     end_date = serializers.SerializerMethodField()
     joined = serializers.SerializerMethodField()
+    has_passed = serializers.SerializerMethodField()
 
     def get_joined(self, obj):    
         # test if request is present otherwise return False
@@ -78,6 +79,9 @@ class FastSerializer(serializers.ModelSerializer):
     
     def get_end_date(self, obj):
         return obj.days.order_by('date').last().date
+    
+    def get_has_passed(self, obj):
+        return self.get_end_date(obj) < datetime.date.today()
 
     class Meta:
         model = models.Fast
