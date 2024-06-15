@@ -38,7 +38,7 @@ class FastAdmin(admin.ModelAdmin):
         """View to create fast along with its dates."""
         # form submitted with data
         if request.method == "POST":
-            form = CreateFastWithDatesAdminForm(request.POST, request.FILES)
+            form = CreateFastWithDatesAdminForm(request.POST)
             if form.is_valid():
                 fast = form.save()
                 data = form.cleaned_data
