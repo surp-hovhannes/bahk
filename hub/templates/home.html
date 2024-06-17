@@ -52,8 +52,8 @@
                             {% include 'components/participant_avatars.html' with participants=other_participants %}
                         </div>
                         <div class="p-3 col-12 col-lg-8">
-                            <p class="text-start">{{ description|truncatechars_html:500 }}</p>
-                            {% if description %}
+                            <p class="text-start">{{ fast.description|truncatechars_html:500 }}</p>
+                            {% if fast.description %}
                                 <a class="btn btn-light btn-pill rounded-pill" data-bs-target="#FastDescription" data-bs-toggle="modal" href="#" role="button">Read More &hellip;</a>
                             {% endif %}
                         </div>
@@ -72,8 +72,8 @@
                             </form>
                         </div>
                         <div class="p-3 col-12 col-lg-6 mx-lg-6">
-                            <p class="text-start">{{ description|truncatechars_html:500 }}</p>
-                            {% if description %}
+                            <p class="text-start">{{ fast.description|truncatechars_html:500 }}</p>
+                            {% if fast.description %}
                                 <a class="btn btn-light btn-pill rounded-pill" data-bs-target="#FastDescription" data-bs-toggle="modal" href="#" role="button">Read More &hellip;</a>
                             {% endif %}
                         </div>
@@ -124,7 +124,7 @@
     </div>
 </div>
 
-{% if fast and description %}
+{% if fast and fast.description %}
 <!-- Read More Model -->
 <div id="FastDescription" class="modal fade" role="dialog">
     <div class="modal-dialog">
@@ -136,7 +136,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>{{ description|linebreaks }}</p>
+                <p>{{ fast.description|linebreaks }}</p>
                 {% if fast.url %}
                     <p><a href="{{ fast.url }}">Learn More &hellip;</a></p>
                 {% endif %}
