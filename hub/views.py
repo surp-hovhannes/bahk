@@ -155,7 +155,7 @@ def home(request):
     # Query up to 6, for other participants for avatar display
     other_participants = current_fast.profiles.all()[:6] if current_fast else None
 
-    # Query for all upcoming fasts
+    # Query for all upcoming fasts and order by first day of the fast from today onward
     upcoming_fasts = Fast.objects.filter(
         church=church,
         days__date__gte=datetime.date.today()
@@ -165,7 +165,8 @@ def home(request):
 
     # calculate days until next upcoming fast
     if upcoming_fasts:
-        next_fast_date = upcoming_fasts[0].days.all()[0].date
+        next_fast = upcoming_fasts.first()
+        next_fast_date = next_fast.days.filter(date__gte=datetime.date.today()).first().date
         days_until_next = (next_fast_date - datetime.date.today()).days
     else:
         days_until_next = None
