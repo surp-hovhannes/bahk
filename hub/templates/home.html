@@ -84,6 +84,7 @@
                     {% if upcoming_fasts %}
                         <div class="p-3 mb-3">
                             <div class="text-uppercase mb-3">{{ current_date|date:"l, F j, Y" }}</div>
+                            <div class="days_to_feast">{{ days_until_next }}</div>
                             <h2 class="fs-3">{{ days_until_next|pluralize:"day,days" }} until {{ upcoming_fasts.0.name }}</h2>
                         </div>
                         <div class="d-lg-flex flex-column flex-lg-row align-items-center col-lg-8 mx-auto">
