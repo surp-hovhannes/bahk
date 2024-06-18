@@ -224,8 +224,12 @@ def register(request):
 @login_required
 def join_fasts(request):
 
-    all_fasts = Fast.objects.annotate(has_days=Exists(Day.objects.filter(fasts=OuterRef('pk')))).filter(has_days=True)
-
+    all_fasts = Fast.objects.annotate(
+        start_date=Min('days__date')
+    ).filter(
+        Exists(Day.objects.filter(fasts=OuterRef('pk')))
+    ).order_by('start_date')
+    
     serialized_fasts = FastSerializer(all_fasts, many=True, context={'request': request}).data
 
     context = {"all_fasts": serialized_fasts}
