@@ -67,5 +67,23 @@ select#id_church {
     border-radius: .3rem;
 }
 
+#outer-container {
+  padding: 0
+}
+#outer-navbar {
+  margin-top: 0 !important;
+}
+
+@media (min-width: 768px){
+  #outer-container {
+    margin: 0 auto;
+  }
+  #outer-navbar {
+    margin-top: 16px !important;
+  }
+} 
+
+
+
 @import "../../../node_modules/bootstrap/scss/bootstrap";
 
