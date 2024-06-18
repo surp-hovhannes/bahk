@@ -13,7 +13,13 @@
             </div>
             <div>
                 <h5 class="card-title text-shadow fw-bold">{{ fast.name }}</h5>
-                <p class="card-text font-weight-light">{{ fast.next_fast_date|date:"F j"  }}</p>
+                <p class="card-text font-weight-light">
+                    {% if fast.next_fast_date %}
+                        {{ fast.next_fast_date|date:"F j"  }}
+                    {% else %}
+                        <div class="text-muted">Fast Has Ended</div>
+                    {% endif %}
+                </p>
                 <span class="card-text font-weight-light preparing p-1 rounded">{{ fast.participant_count }} 
                     {{ fast.participant_count|pluralize:"person,people" }} {% if fast.has_passed %}fasted{% else %}preparing{% endif %}</span>
             </div>
