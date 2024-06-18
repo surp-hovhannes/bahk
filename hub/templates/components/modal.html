@@ -1,0 +1,25 @@
+<!-- Modal Component -->
+<div id="{{ modal_id }}" class="modal fade" role="dialog">
+    <div class="modal-dialog">
+        
+        <!-- Modal content-->
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">{{ modal_title }}</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% if modal_body %}
+                    {{ modal_body|linebreaks|safe }}
+                {% endif %}
+                {% if modal_content_file %}
+                    {% include modal_content_file %}
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+        
+    </div>
+</div>
