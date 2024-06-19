@@ -1,0 +1,37 @@
+<div id="outer-navbar" class="w-100 p-3 mx-3 mt-3 rounded-top shadow bg-secondary text-light">
+  <div class="row">
+    <nav class="navbar navbar-expand-lg navbar-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="/hub/web">Live &amp; Pray</a>
+        <button class="navbar-toggler ms-auto" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+          {% block sidebar %}
+          <ul class="navbar-nav ms-auto">
+            {% if user.is_authenticated %}
+            <li class="nav-item ms-auto"><a class="nav-link" href="{% url 'web_home' %}?next={{ request.path }}">Home</a></li>
+            <li class="nav-item ms-auto"><a class="nav-link" href="{% url 'join_fasts' %}?next={{ request.path }}">Join Fasts</a></li>
+            <li class="nav-item dropdown ms-auto">
+              <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                {% if user.profile.profile_image %}
+                <img class="rounded-circle inline-block" src="{{ user.profile.profile_image_thumbnail.url }}" style="width: 20px; height: 20px; object-fit: cover;" alt="Profile Image">
+                {% endif %}  
+                {{ user.get_username }}
+              </a>
+              <ul class="dropdown-menu" aria-labelledby="userDropdown">
+                <li class="nav-item"><a class="dropdown-item" href="{% url 'edit_profile' %}?next={{ request.path }}">Profile</a></li>
+                <li><a class="dropdown-item" href="{% url 'logout' %}?next={{ request.path }}">Logout</a></li>
+                <!-- Add more user-specific actions here -->
+              </ul>
+            </li>               
+            {% else %}
+            <li class="nav-item"><a class="nav-link" href="{% url 'login' %}?next={{ request.path }}">Login</a></li>
+            {% endif %}
+          </ul>
+          {% endblock %}
+        </div>
+      </div>
+    </nav>
+  </div>
+</div>  

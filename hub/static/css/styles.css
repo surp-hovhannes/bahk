@@ -31,3 +31,10 @@ body {
     font-size: 12px;
     margin-top: 20px;
 }
+
+
+.preparing {
+    background-color: #40150C;
+    color: #DB6D56;
+    font-size: 0.8em;
+  }

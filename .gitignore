@@ -170,3 +170,4 @@ media/
 
 # static files
 staticfiles/
+output.txt

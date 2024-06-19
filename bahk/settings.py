@@ -47,7 +47,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'hub.apps.HubConfig',
     'rest_framework',
-    'storages'
+    'storages',
+    'imagekit'
 ]
 
 MIDDLEWARE = [
@@ -188,3 +189,9 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 if 'test' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
+# test if is_production and print something to console
+if IS_PRODUCTION:
+    print("Running tests in production environment")
+else:
+    print("Running tests in development environment")

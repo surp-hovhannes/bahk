@@ -40,14 +40,8 @@ class FastAdmin(admin.ModelAdmin):
         if request.method == "POST":
             form = CreateFastWithDatesAdminForm(request.POST)
             if form.is_valid():
+                fast = form.save()
                 data = form.cleaned_data
-
-                # fast
-                fast = Fast.objects.get_or_create(
-                    name=data["name"], 
-                    church=data["church"],
-                    description=data["description"]
-                )[0]
 
                 # days
                 dates = [data["first_day"] + datetime.timedelta(days=num_days) 

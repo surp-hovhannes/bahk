@@ -1,33 +1,38 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-<h2>Update Your Profile</h2>
-<div class="row">
-    <div class="col-md-1">
-        {% if user.profile.profile_image %}
-        <img class="rounded-circle inline-block" src="{% url 'resized_profile_image' user.profile.pk 200 200 %}" style="width: 50px; height: 50px; object-fit: cover;" alt="Profile Image">
-        {% endif %}
-    </div>
-    <div class="col-md-11">
-        <h3>{{ user.get_username }}</h3>
-        <p>{{ user.email }}</p>
+<div class="row w-100 p-3 mx-3 mb-3 rounded-bottom shadow bg-light text-dark">
+    <div class="col-lg-6 mx-auto pb-3">
+    <h2 class="my-3">Update Your Profile</h2>
+        <div class="d-flex flex-row flex-grow-0 my-5">
+            <div class="me-2">
+                {% if user.profile.profile_image %}
+                <img class="rounded-circle inline-block" src="{{ user.profile.profile_image.url }}" style="width: 75px; height: 75px; object-fit: cover;" alt="Profile Image">
+                {% endif %}
+            </div>
+            <div>
+                <h3>{{ user.get_username }}</h3>
+                <p>{{ user.email }}</p>
+            </div>
+        </div>
+        <form method="post" enctype="multipart/form-data"  class="form-group">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="form-group mb-3">
+                {{ field.errors }}
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+            {% if field.field.widget.input_type == 'select' %}
+                {{ field }}
+            {% else %}
+                <input type="{{ field.field.widget.input_type }}" name="{{ field.html_name }}" id="{{ field.auto_id }}" class="form-control" value="{{ field.value|default_if_none:'' }}">
+            {% endif %}                
+            {% if field.help_text %}
+                    <small class="form-text text-dark ">{{ field.help_text }}</small>
+            {% endif %}
+            </div>
+        {% endfor %}
+            <button type="submit" class="btn btn-primary">Update</button>
+        </form>
     </div>
 </div>
-<form method="post" enctype="multipart/form-data"  class="form-group">
-    {% csrf_token %}
-    <div class="mb-3">
-        <label for="{{ form.profile_image.id_for_label }}" class="form-label">{{ form.profile_image.label }}</label>
-        {{ form.profile_image }}
-    </div>
-    <div class="mb-3">
-        <label for="{{ form.location.id_for_label }}" class="form-label">{{ form.location.label }}</label>
-        {{ form.location }}
-    </div>
-    <div class="mb-3">
-        <label for="{{ form.church.id_for_label }}" class="form-label">{{ form.church.label }}</label>
-        {{ form.church }}
-    </div>
-    <button type="submit" class="btn btn-primary">Update</button>
-</form>
-
 {% endblock %}

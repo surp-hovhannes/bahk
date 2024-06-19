@@ -1,0 +1,89 @@
+// hub/static/scss/custom.scss
+
+$dark-bg: #390714;
+$light-bg: #ccc;
+$accent-color: #E54670;
+
+$--bs-body-color: #000000;
+$--bs-body-bg: $light-bg;
+
+$--bs-secondary-color: $light-bg;
+$--bs-secondary-color-rgb: rgb(204, 204, 204);
+$--bs-secondary: $dark-bg;
+$--bs-secondary-bg-rgb: rgba(57, 7, 20);
+
+$body-bg: #f8f8f8;
+
+$secondary: $dark-bg;
+$body-secondary-color: $light-bg;
+$secondary-color: $light-bg;
+$tertiary: $accent-color;
+
+$font-family-base: "Figtree", sans-serif;
+
+#fast-main-container {
+    background-color: $dark-bg;
+  }
+
+.accent-text {
+    color: $accent-color;
+}
+
+.accent-text:link {
+    color: $accent-color;
+}
+
+.accent-bg {
+    background-color: $accent-color; 
+}
+
+.days_to_feast {
+  font-size: 4em;
+  line-height: 1em;
+}
+
+.participant-avatars img{
+  margin-left: -10px;
+}
+
+select#id_church {
+    display: block;
+    width: 100%;
+    padding: .375rem 2.25rem .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    vertical-align: middle;
+    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23343a40' viewBox='0 0 16 16'%3e%3cpath d='M1 5l7 7 7-7z'/%3e%3c/svg%3e") no-repeat right .75rem center/8px 10px;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: .25rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding: .5rem 2.25rem .5rem .75rem;
+    font-size: 1.25rem;
+    line-height: 1.5;
+    border-radius: .3rem;
+}
+
+#outer-container {
+  padding: 0
+}
+#outer-navbar {
+  margin-top: 0 !important;
+}
+
+@media (min-width: 768px){
+  #outer-container {
+    margin: 0 auto;
+  }
+  #outer-navbar {
+    margin-top: 16px !important;
+  }
+} 
+
+
+
+@import "../../../node_modules/bootstrap/scss/bootstrap";
+
