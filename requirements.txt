@@ -13,3 +13,7 @@ Pillow
 boto3
 python-decouple
 django-imagekit
+django-celery-beat 
+redis 
+celery
+django-anymail
