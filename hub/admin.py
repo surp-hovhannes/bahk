@@ -68,7 +68,7 @@ class FastAdmin(admin.ModelAdmin):
 
 @admin.register(Profile, site=admin.site)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "church", "get_fasts", "profile_image")
+    list_display = ("user", "church", "get_fasts", "profile_image", 'receive_upcoming_fast_reminders', )
     ordering = ("church", "user",)
 
     def get_fasts(self, profile):

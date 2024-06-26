@@ -77,7 +77,7 @@ class JoinFastsForm(forms.Form):
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Profile
-        fields = ['church', 'profile_image','location']
+        fields = ['church', 'profile_image','location', 'receive_upcoming_fast_reminders']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

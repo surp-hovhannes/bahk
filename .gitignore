@@ -171,3 +171,4 @@ media/
 # static files
 staticfiles/
 output.txt
+dump.rdb
