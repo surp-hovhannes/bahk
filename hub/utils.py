@@ -3,8 +3,11 @@ from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
-from hub.models import Profile, Fast
+from hub.models import Profile, Fast, Day
 from datetime import datetime, timedelta
+from .serializers import FastSerializer
+from django.db.models import OuterRef, Subquery
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,30 +16,37 @@ logger = logging.getLogger(__name__)
 def send_fast_reminders():
     today = datetime.today().date()
     three_days_from_now = today + timedelta(days=3)
-    profiles = Profile.objects.filter(receive_upcoming_fast_reminders=True).prefetch_related('fasts__days')
     
+    next_fast_subquery = Day.objects.filter(
+        fasts__profiles__id=OuterRef('pk'),
+        date__gt=today,
+        date__lt=three_days_from_now
+    ).order_by('date').values('id')[:1]
+
+    profiles = Profile.objects.filter(receive_upcoming_fast_reminders=True).annotate(
+        next_fast_id=Subquery(next_fast_subquery)
+    ).filter(next_fast_id__isnull=False)
+
     for profile in profiles:
-        for fast in profile.fasts.all():
-            next_fast_day = fast.days.filter(date__gt=today).order_by('date').first()
-            # uncomment the line below before commtting
-            #if next_fast_day and today <= next_fast_day.date <= three_days_from_now:
-            if next_fast_day:
-                subject = f'Upcoming Fast: {fast.name}'
-                from_email = f"Live and Pray <{settings.EMAIL_HOST_USER}>"
-                html_content = render_to_string('email/upcoming_fasts_reminder.html', {
-                    'user': profile.user,
-                    'upcoming_fast': next_fast_day,
-                })
-                text_content = strip_tags(html_content)
+        next_fast = Fast.objects.get(id=profile.next_fast_id)
 
-                email = EmailMultiAlternatives(
-                    subject, text_content, from_email, [profile.user.email]
-                )
+        if next_fast:
+            subject = f'Upcoming Fast: {next_fast.name}'
+            from_email = f"Live and Pray <{settings.EMAIL_HOST_USER}>"
+            serialized_next_fast = FastSerializer(next_fast).data
+            html_content = render_to_string('email/upcoming_fasts_reminder.html', {
+                'user': profile.user,
+                'fast': serialized_next_fast,
+            })
+            text_content = strip_tags(html_content)
 
-                email.attach_alternative(html_content, "text/html")
-                email.send()
-                logger.info(f'Fast reminder sent to {profile.user.email} for {next_fast_day.date}')
-                break
+            email = EmailMultiAlternatives(
+                subject, text_content, from_email, [profile.user.email]
+            )
+
+            email.attach_alternative(html_content, "text/html")
+            email.send()
+            logger.info(f'Fast reminder sent to {profile.user.email} for {next_fast.name}')
 
 def test_email():
     try:
