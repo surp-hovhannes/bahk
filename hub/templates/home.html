@@ -33,9 +33,9 @@
         {% if church %}
             {% if fast %}
                     <div class="my-3">
-                        <div class="text-uppercase mb-3">Fast Together</div>
-                        <h2 class="fs-1">{{ fast.name }}</h2>
-                        <p class="fs-5">{{ fast.start_date|date:"F j" }} - {{ fast.end_date|date:"F j" }}</p>
+                        <div class="text-uppercase mb-3"><strong>Fast</strong> Together Today</div>
+                        <h2 class="fs-1 accent-font">{{ fast.name }}</h2>
+                        <p class="fs-5">{{ fast.start_date|date:"F j" }} &mdash; {{ fast.end_date|date:"F j" }}</p>
                     </div>
                 {% if is_participating %}
                     <div class="is-participating d-flex flex-column flex-lg-row justify-content-start mx-auto col-lg-10">
@@ -46,7 +46,7 @@
                                 <div>{{ fast.days_to_feast|pluralize:"day,days" }} until {{ fast.culmination_feast }}</div>
                             </div>
                             {% endif %}
-                            <p><strong>{{ fast.participant_count }}</strong> faithful {{ fast.participant_count|pluralize:"is,are" }} fasting with you today!</p>
+                            <p><strong>{{ fast.participant_count }} faithful</strong> {{ fast.participant_count|pluralize:"is,are" }} fasting with you today!</p>
                             {% include 'components/participant_avatars.html' with participants=other_participants %}
                             <form action="{% url 'remove_fast_from_profile' fast.id %}" method="post">
                                 {% csrf_token %}
