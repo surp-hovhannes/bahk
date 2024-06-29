@@ -4,6 +4,8 @@ from django.db import models
 from django.db.models import constraints
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
+from imagekit.processors import Transpose
+
 
 class Church(models.Model):
     """Model for a church."""
@@ -51,7 +53,7 @@ class Profile(models.Model):
     location = models.CharField(max_length=100, blank=True, null=True) 
     profile_image = models.ImageField(upload_to='profile_images/originals/', null=True, blank=True)
     profile_image_thumbnail = ImageSpecField(source='profile_image',
-                                             processors=[ResizeToFill(100, 100)],
+                                             processors=[Transpose(), ResizeToFill(100, 100)],
                                              format='JPEG',
                                              options={'quality': 60})
     

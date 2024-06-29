@@ -1,18 +1,18 @@
 // hub/static/scss/custom.scss
 
 $dark-bg: #390714;
-$light-bg: #F8F8F8;
+$light-bg: #ccc;
 $accent-color: #E54670;
 
 $--bs-body-color: #000000;
 $--bs-body-bg: $light-bg;
 
 $--bs-secondary-color: $light-bg;
-$--bs-secondary-color-rgb: rgb(248, 248, 248);
+$--bs-secondary-color-rgb: rgb(204, 204, 204);
 $--bs-secondary: $dark-bg;
 $--bs-secondary-bg-rgb: rgba(57, 7, 20);
 
-$body-bg: $light-bg;
+$body-bg: #f8f8f8;
 
 $secondary: $dark-bg;
 $body-secondary-color: $light-bg;
@@ -26,6 +26,10 @@ $font-family-base: "Figtree", sans-serif;
   }
 
 .accent-text {
+    color: $accent-color;
+}
+
+.accent-text:link {
     color: $accent-color;
 }
 
@@ -62,6 +66,24 @@ select#id_church {
     line-height: 1.5;
     border-radius: .3rem;
 }
+
+#outer-container {
+  padding: 0
+}
+#outer-navbar {
+  margin-top: 0 !important;
+}
+
+@media (min-width: 768px){
+  #outer-container {
+    margin: 0 auto;
+  }
+  #outer-navbar {
+    margin-top: 16px !important;
+  }
+} 
+
+
 
 @import "../../../node_modules/bootstrap/scss/bootstrap";
 

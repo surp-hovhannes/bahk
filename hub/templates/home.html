@@ -40,16 +40,18 @@
                 {% if is_participating %}
                     <div class="is-participating d-flex flex-column flex-lg-row justify-content-start mx-auto col-lg-10">
                         <div class="col-xs-8 col-sm-8 col-lg-4 p3 mx-auto">
+                            {% if fast.days_to_feast %}
                             <div class="p-3 m-4" style="background-color:#4D202C">
                                 <div class="days_to_feast">{{ fast.days_to_feast }}</div>
                                 <div>{{ fast.days_to_feast|pluralize:"day,days" }} until {{ fast.culmination_feast }}</div>
                             </div>
-                            <form action="{% url 'remove_fast_from_profile' fast.id %}" method="post">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-light btn-pill rounded-pill">Leave Fast</button>
-                            </form>
+                            {% endif %}
                             <p><strong>{{ fast.participant_count }}</strong> faithful {{ fast.participant_count|pluralize:"is,are" }} fasting with you today!</p>
                             {% include 'components/participant_avatars.html' with participants=other_participants %}
+                            <form action="{% url 'remove_fast_from_profile' fast.id %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-light btn-sm rounded-pill mt-3">Leave Fast</button>
+                            </form>
                         </div>
                         <div class="p-3 col-12 col-lg-8">
                             <p class="text-start">{{ fast.description|truncatechars_html:500 }}</p>
@@ -84,11 +86,17 @@
                     {% if upcoming_fasts %}
                         <div class="p-3 mb-3">
                             <div class="text-uppercase mb-3">{{ current_date|date:"l, F j, Y" }}</div>
+                            <div class="days_to_feast">{{ days_until_next }}</div>
                             <h2 class="fs-3">{{ days_until_next|pluralize:"day,days" }} until {{ upcoming_fasts.0.name }}</h2>
                         </div>
                         <div class="d-lg-flex flex-column flex-lg-row align-items-center col-lg-8 mx-auto">
                             {% include 'components/fast_card.html' with fast=upcoming_fasts.0 %}
-                            <div class="col-12 col-lg-8 p-3 text-start m-3">{{ upcoming_fasts.0.description|truncatechars_html:500 }}</div>
+                            <div class="col-12 col-lg-8 p-3">
+                                <p class="text-start">{{ upcoming_fasts.0.description|truncatechars_html:500 }}</p>
+                                {% if upcoming_fasts.0.description %}
+                                    <a class="btn btn-light btn-pill rounded-pill" data-bs-target="#FastDescription" data-bs-toggle="modal" href="#" role="button">Read More &hellip;</a>
+                                {% endif %}
+                            </div>
                         </div>
                     {% endif %}
                 {% else %}
@@ -124,130 +132,15 @@
     </div>
 </div>
 
-{% if fast and fast.description %}
-<!-- Read More Model -->
-<div id="FastDescription" class="modal fade" role="dialog">
-    <div class="modal-dialog">
-        
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-header">
-                <h4 class="modal-title">{{ fast.name }}</h4>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>{{ fast.description|linebreaks }}</p>
-                {% if fast.url %}
-                    <p><a href="{{ fast.url }}">Learn More &hellip;</a></p>
-                {% endif %}
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-            
-        </div>
-    </div>
-</div>
+{% if description or upcoming_fasts.0.description %}
+    {% with modal_title=fast.name|default:upcoming_fasts.0.name modal_body=description|default:upcoming_fasts.0.description %}
+        {% include 'components/modal.html' with modal_id='FastDescription' modal_title=modal_title modal_body=modal_body %}
+    {% endwith %}
 {% endif %}
 
+{% include 'components/modal.html' with modal_id='WhatIsFasting' modal_title='What Is Fasting?' modal_content_file='content/WhatIsFasting.html' %}
 
-<!-- What Is Fasting Model -->
-<div id="WhatIsFasting" class="modal fade" role="dialog">
-    <div class="modal-dialog">
-        
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-header">
-                <h4 class="modal-title">What Is Fasting?</h4>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Fasting in the Armenian Apostolic Church is a deeply spiritual practice rooted in the traditions 
-                    and teachings of early Christianity. It is not merely an act of abstaining from food but a comprehensive 
-                    exercise in spiritual discipline, aimed at enhancing one's faith and connection with God. The Church 
-                    prescribes several periods of fasting throughout the liturgical year, including Great Lent, the Fast 
-                    of the Nativity, and various shorter fasts leading up to significant feasts. These fasts are observed 
-                    with varying degrees of strictness, often involving abstinence from meat, dairy, and other rich foods, 
-                    as well as reducing overall food intake. The purpose of fasting is to purify the body and soul, fostering 
-                    a spirit of repentance and humility.</p>
-                    
-                <p>In addition to dietary restrictions, the Armenian Apostolic Church encourages the faithful to increase 
-                    their participation in prayer, almsgiving, and acts of charity during fasting periods. This holistic 
-                    approach ensures that fasting is not an isolated act but part of a broader effort to grow spiritually 
-                    and morally. The teachings emphasize that the physical aspect of fasting should be complemented by 
-                    spiritual renewal and ethical behavior, reflecting the comprehensive nature of Christian discipleship. 
-                    Through fasting, believers seek to draw closer to God, emulate the sacrifices of Christ and the saints, 
-                    and prepare themselves for the celebration of holy events in the Church calendar.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-            
-        </div>
-    </div>
-</div>
-
-<!-- What Is Fasting Model -->
-<div id="HowToFast" class="modal fade" role="dialog">
-    <div class="modal-dialog">
-        
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-header">
-                <h4 class="modal-title">How Do I Fast?</h4>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Fasting in the Armenian Apostolic Church involves more than just abstaining from certain foods; it is a spiritual discipline aimed at fostering a deeper connection with God. Here’s a guide on how to fast:</p>
-    
-                <h5>1. Understand the Purpose</h5>
-                <ul>
-                    <li><strong>Spiritual Renewal</strong>: Fasting is a time for prayer, repentance, and spiritual growth.</li>
-                    <li><strong>Physical Discipline</strong>: It helps control bodily desires and fosters self-control.</li>
-                    <li><strong>Preparation</strong>: It prepares the faithful for major feasts and holy events in the Church calendar.</li>
-                </ul>
-                
-                <h5>2. Follow Dietary Restrictions</h5>
-                <ul>
-                    <li><strong>Abstain from Certain Foods</strong>: During fasting periods, abstain from meat, dairy, eggs, and animal products. Some fasts also restrict the consumption of fish, oil, and wine.</li>
-                    <li><strong>Simplify Meals</strong>: Consume simple and modest meals, focusing on fruits, vegetables, grains, and legumes.</li>
-                    <li><strong>Reduce Quantity</strong>: Limit the amount of food intake to foster a sense of physical discipline.</li>
-                </ul>
-                
-                <h5>3. Incorporate Spiritual Practices</h5>
-                <ul>
-                    <li><strong>Increase Prayer</strong>: Spend more time in prayer, both privately and with the community. Attend church services more frequently if possible.</li>
-                    <li><strong>Read Scriptures</strong>: Dedicate time to reading and reflecting on the Bible and other spiritual texts.</li>
-                    <li><strong>Repentance and Confession</strong>: Use this period for self-examination and confessing sins, seeking reconciliation with God and others.</li>
-                </ul>
-                
-                <h5>4. Engage in Acts of Charity</h5>
-                <ul>
-                    <li><strong>Almsgiving</strong>: Give to those in need, whether through donations, volunteering, or other acts of kindness.</li>
-                    <li><strong>Service</strong>: Engage in acts of service within your community, helping those less fortunate.</li>
-                </ul>
-                
-                <h5>5. Observe Fasting Periods</h5>
-                <ul>
-                    <li><strong>Great Lent</strong>: The most significant fasting period, leading up to Easter, lasting 40 days plus Holy Week.</li>
-                    <li><strong>Other Fasts</strong>: Include the Fast of the Nativity, the Fast of the Assumption, and various other shorter fasts throughout the year.</li>
-                </ul>
-                
-                <h5>6. Consult Church Guidance</h5>
-                <ul>
-                    <li><strong>Seek Advice</strong>: Speak with your priest or spiritual advisor for specific guidance tailored to your personal circumstances.</li>
-                    <li><strong>Adjustments</strong>: The Church understands individual health and personal conditions; modifications can be made accordingly.</li>
-                </ul>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-            
-        </div>
-    </div>
-</div>
+{% include 'components/modal.html' with modal_id='HowToFast' modal_title='How To Fast?' modal_content_file='content/HowToFast.html'%}
 
 
 {% endblock %}

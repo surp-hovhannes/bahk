@@ -85,7 +85,10 @@ class FastSerializer(serializers.ModelSerializer):
         return self.get_end_date(obj) < datetime.date.today()
     
     def get_next_fast_date(self, obj):
-        return obj.days.filter(date__gte=datetime.date.today()).order_by('date').first().date
+        next_day = obj.days.filter(date__gte=datetime.date.today()).order_by('date').first()
+        if next_day is not None:
+            return next_day.date
+        return None
 
     class Meta:
         model = models.Fast
