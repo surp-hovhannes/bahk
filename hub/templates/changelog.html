@@ -1,0 +1,19 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<div class="row w-100 p-3 mx-3 mb-3 rounded-bottom shadow bg-light text-dark">
+
+  <h2>Changelog Updates</h2>
+  {% for changelog in changelogs %}
+    <div class="row">
+      <div class="col-12 my-3">
+        <h4>{{ changelog.title }} &dash; {{ changelog.version }}</h4>
+        <p>{{ changelog.date }}</p>
+        <!-- render description using markdownx -->
+        <div>{{ changelog.formatted_description|safe }}</div>
+        <hr>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}
