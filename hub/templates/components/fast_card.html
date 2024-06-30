@@ -1,5 +1,5 @@
 <div class="col-lg-4 col-md-6 col-sm-12 text-center">
-    <div class="card mb-3" data-bs-target="#FastCardDescription" data-bs-toggle="modal" onclick='location.href="#"' style="background-image: url('{{ fast.image }}'); background-size: cover; cursor: pointer;">
+    <div class="card mb-3" data-bs-target="#{{ fast.modal_id }}" data-bs-toggle="modal" onclick='location.href="#"' style="background-image: url('{{ fast.image }}'); background-size: cover; cursor: pointer;">
         <div class="card-body d-flex flex-column justify-content-center align-items-center text-white" style="background: rgba(0, 0, 0, 0.5);">
             <div id="button_holder" class="mt-5 pb-3">
                 {% if fast.joined %}
@@ -43,27 +43,6 @@
     </div>
 </div>
 
-
-<!-- Read More Model -->
-<div id="FastCardDescription" class="modal fade text-dark" role="dialog">
-    <div class="modal-dialog">                   
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-header">
-                <h4 class="modal-title">{{ fast.name }}</h4>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>{{ fast.description|linebreaks }}</p>
-                {% if fast.url %}
-                    <p><a href="{{ fast.url }}">Learn More &hellip;</a></p>
-                {% endif %}
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-            
-        </div>
-    </div>
-</div>
-{% endif %}
+{% load capture_tag %}
+{% capture modal_body_content %}<img src="{{ fast.image }}" class="img-fluid" alt="{{ fast.name }}"><p class="mt-1">{{ fast.description }}</p>{% if fast.url %}<p><a href="{{ fast.url }}">More informaton &hellip;</a></p>{% endif %}{% endcapture %}
+{% include 'components/modal.html' with modal_id=fast.modal_id modal_title=fast.name modal_body=modal_body_content %}
