@@ -50,7 +50,9 @@ INSTALLED_APPS = [
     'storages',
     'imagekit',
     'django_celery_beat',
-    'anymail'
+    'anymail',
+    'app_management',
+    'markdownx',
 ]
 
 MIDDLEWARE = [
