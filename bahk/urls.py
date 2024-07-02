@@ -26,6 +26,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('hub/', include('hub.urls')),
     path('', RedirectView.as_view(url='hub/', permanent=True)),
+    path('markdownx/', include('markdownx.urls')),  # Include markdownx URLs
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # add account authentication urls
@@ -38,6 +39,7 @@ urlpatterns += [
     path("create_user/web/", views.register, name="register"),
     path("join_fasts/web/", views.join_fasts, name="join_fasts"),
     path("edit_profile/web/", views.edit_profile, name="edit_profile"),
+    path('changelog/web/', views.changelog, name='changelog')
 ]
 
 # for serving media files during development
