@@ -14,3 +14,4 @@ boto3
 python-decouple
 django-imagekit
 django-markdownx
+django-cors-headers
