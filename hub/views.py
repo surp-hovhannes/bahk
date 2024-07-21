@@ -140,7 +140,6 @@ def home(request):
     church = request.user.profile.church
     church_name = church.name if church is not None else ""
 
-
     # Get the current fast
     current_fast_name = response.get("name", "")
     current_fast = Fast.objects.get(name=current_fast_name) if current_fast_name else None
@@ -164,7 +163,7 @@ def home(request):
         days__date__gte=datetime.date.today()
     ).annotate(first_day=Min('days__date')).order_by("first_day")[:3]
 
-    serialized_fasts = FastSerializer(upcoming_fasts, many=True, context={'request': request}).data
+    serialized_upcoming_fasts = FastSerializer(upcoming_fasts, many=True, context={'request': request}).data
 
     # calculate days until next upcoming fast
     if upcoming_fasts:
@@ -182,9 +181,8 @@ def home(request):
         "participant_count": response.get("participant_count", 1),
         "is_participating": is_participating,
         "other_participants": other_participants,
-        "description": response.get("description", ""),
         "countdown": response.get("countdown"),
-        "upcoming_fasts": serialized_fasts,
+        "upcoming_fasts": serialized_upcoming_fasts,
         "days_until_next": days_until_next,
         "has_passed": response.get("has_passed", False)
     }

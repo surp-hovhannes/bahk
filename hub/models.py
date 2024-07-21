@@ -38,6 +38,10 @@ class Fast(models.Model):
             constraints.UniqueConstraint(fields=["culmination_feast_date", "church"], name="unique_feast_date_church"),
         ]
 
+    @property
+    def modal_id(self):
+        return f"fastModal_{self.id}"
+
     def __str__(self):
         return f"{self.name} of the {self.church.name}"
 
