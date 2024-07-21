@@ -40,6 +40,7 @@ class FastSerializer(serializers.ModelSerializer):
     joined = serializers.SerializerMethodField()
     has_passed = serializers.SerializerMethodField()
     next_fast_date = serializers.SerializerMethodField()
+    modal_id = serializers.ReadOnlyField()
 
     def get_church(self, obj):
         return ChurchSerializer(obj.church, context=self.context).data if obj.church else None
