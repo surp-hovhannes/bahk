@@ -49,8 +49,10 @@ INSTALLED_APPS = [
     'rest_framework',
     'storages',
     'imagekit',
+    'django_celery_beat',
+    'anymail',
     'app_management',
-    'markdownx'
+    'markdownx',
 ]
 
 MIDDLEWARE = [
@@ -187,10 +189,33 @@ else:
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+# Celery Configuration
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+# Mailgun Configuration
+EMAIL_HOST = 'smtp.mailgun.org'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'postmaster@' + config('MAILGUN_DOMAIN')
+EMAIL_HOST_PASSWORD = config('MAILGUN_API_KEY')
+EMAIL_TEST_ADDRESS = config('EMAIL_TEST_ADDRESS', default='test@test.com')
+ANYMAIL = {
+    "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
+    "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')  
+}
+EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend" 
+DEFAULT_FROM_EMAIL = "bahk@gmail.com"
+
 # Test settings
 if 'test' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 
 # test if is_production and print something to console
 if IS_PRODUCTION:

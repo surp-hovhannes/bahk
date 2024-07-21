@@ -288,6 +288,22 @@ def remove_fast_from_profile(request, fast_id):
     messages.success(request, f"You have left {fast.name}.")
     return redirect(request.META.get('HTTP_REFERER', 'home'))
 
+
+@login_required
+def test_email_view(request):
+    # Create some test data
+    user = User.objects.first()
+    fast = Fast.objects.first()
+    serialized_current_fast = FastSerializer(fast, context={'request': request}).data if fast else None
+
+    context = {
+        'user': user,
+        'fast': serialized_current_fast
+    }
+    
+    return render(request, 'email/upcoming_fasts_reminder.html', context)
+
+
 def changelog(request):
 
     # get all changelogs sorted by version

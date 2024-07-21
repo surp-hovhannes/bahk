@@ -42,6 +42,11 @@ class FastSerializer(serializers.ModelSerializer):
     next_fast_date = serializers.SerializerMethodField()
     modal_id = serializers.ReadOnlyField()
 
+    def get_church(self, obj):
+        return ChurchSerializer(obj.church, context=self.context).data if obj.church else None
+
+        
+
     def get_joined(self, obj):    
         # test if request is present otherwise return False
         if 'request' not in self.context:
