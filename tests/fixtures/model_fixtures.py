@@ -1,10 +1,12 @@
+
+
 """Fixtures of models."""
 import datetime
 import pytest
 
 from django.contrib.auth.models import User
 
-from hub.models import Church, Day, Fast, Profile
+from hub.models import User, Church, Fast, Profile, Day
 
 
 @pytest.fixture
@@ -44,7 +46,8 @@ def another_profile_fixture(another_user_fixture):
 
 @pytest.fixture
 def sample_day_fixture():
-    return Day.objects.create(date=datetime.date(2024, 3, 25))
+    date = datetime.date.today() + datetime.timedelta(days=1)
+    return Day.objects.create(date=date)
 
 
 @pytest.fixture
@@ -55,7 +58,17 @@ def today_fixture():
 
 @pytest.fixture
 def complete_fast_fixture(sample_profile_fixture, sample_church_fixture, sample_day_fixture, today_fixture):
-    fast = Fast.objects.create(name="Complete Fast", church=sample_church_fixture, description="complete fast")
+    fast = Fast.objects.create(name="Complete Fast", church=sample_church_fixture, description="complete fast", culmination_feast="Culmination Feast", culmination_feast_date=datetime.date.today() + datetime.timedelta(days=2))
+    fast.profiles.set([sample_profile_fixture])
+    fast.days.set([sample_day_fixture, today_fixture])
+
+    return fast
+
+# incomplete models
+
+@pytest.fixture
+def incomplete_fast_fixture(sample_profile_fixture, sample_church_fixture, sample_day_fixture, today_fixture):
+    fast = Fast.objects.create(name="incomplete Fast", church=sample_church_fixture, description="fast without culmination feast")
     fast.profiles.set([sample_profile_fixture])
     fast.days.set([sample_day_fixture, today_fixture])
 
