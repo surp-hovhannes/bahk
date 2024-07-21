@@ -228,7 +228,7 @@ def join_fasts(request):
     all_fasts = Fast.objects.annotate(
         start_date=Min('days__date')
     ).filter(
-        Exists(Day.objects.filter(fasts=OuterRef('pk')))
+        days__isnull=False
     ).order_by('start_date')
     
     serialized_fasts = FastSerializer(all_fasts, many=True, context={'request': request}).data

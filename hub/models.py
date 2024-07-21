@@ -77,8 +77,7 @@ class Profile(models.Model):
 class Day(models.Model):
     """Model for a day in time."""
     date = models.DateField()
-    fasts = models.ManyToManyField(Fast, related_name="days")
-    _fast = models.ForeignKey(Fast, on_delete=models.CASCADE, null=True)
+    fast = models.ForeignKey(Fast, on_delete=models.CASCADE, null=True, related_name="days")
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days", default=Church.get_default_pk)
 
     def __str__(self):
