@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("hub", "0008_profile_location_profile_profile_image"),
+        ("hub", "0009_alter_fast_culmination_feast_date"),
     ]
 
     operations = [
