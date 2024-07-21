@@ -54,7 +54,7 @@ def test_email():
             'Test Email',
             'This is a test email sent from Celery.',
             settings.EMAIL_HOST_USER,  # Replace with your sender email
-            ['matt.ash@gmail.com'],  # Replace with the recipient email
+            [settings.EMAIL_TEST_ADDRESS],  # Replace with the recipient email
             fail_silently=False,
         )
         logger.info('Email sent successfully.')
