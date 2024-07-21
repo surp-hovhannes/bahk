@@ -53,7 +53,7 @@ def _get_fast_for_user_on_date(request):
 def _get_user_fast_on_date(user, date):
     """Given user, gets fast that the user is participating in on a given day."""
     # there should not be multiple fasts per day, but in case of bug, return last created
-    return Fast.objects.filter(profiles__user=user, days__date=date).last()
+    return Fast.objects.filter(profiles__user=user, days__date=date, church=user.profile.church).last()
 
 
 def _get_fast_on_date(request):

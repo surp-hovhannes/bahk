@@ -11,6 +11,13 @@ class Church(models.Model):
     """Model for a church."""
     name = models.CharField(max_length=128, unique=True)
 
+    @classmethod
+    def get_default_pk(cls):
+        church, _ = cls.objects.get_or_create(
+            name="Armenian Apostolic Church"
+        )
+        return church.pk
+
     def __str__(self):
         return self.name
 
@@ -70,8 +77,9 @@ class Profile(models.Model):
 class Day(models.Model):
     """Model for a day in time."""
     date = models.DateField()
-    fast = models.ForeignKey(Fast, on_delete=models.CASCADE, related_name="days")
-    church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days")
+    fasts = models.ManyToManyField(Fast, related_name="days")
+    _fast = models.ForeignKey(Fast, on_delete=models.CASCADE, null=True)
+    church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days", default=Church.get_default_pk)
 
     def __str__(self):
         return self.date.strftime("%B-%d-%Y")
