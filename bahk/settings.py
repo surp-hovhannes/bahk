@@ -48,7 +48,9 @@ INSTALLED_APPS = [
     'hub.apps.HubConfig',
     'rest_framework',
     'storages',
-    'imagekit'
+    'imagekit',
+    'app_management',
+    'markdownx'
 ]
 
 MIDDLEWARE = [

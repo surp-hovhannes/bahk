@@ -29,6 +29,9 @@ from .models import Profile
 from django.conf import settings
 from django.core.files.storage import default_storage
 
+from app_management.models import Changelog
+from markdownx.utils import markdownify
+
 
 
 # Utilities
@@ -284,3 +287,13 @@ def remove_fast_from_profile(request, fast_id):
     request.user.profile.fasts.remove(fast)
     messages.success(request, f"You have left {fast.name}.")
     return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+def changelog(request):
+
+    # get all changelogs sorted by version
+    changelogs = Changelog.objects.all().order_by('-version')
+
+    context = {
+        "changelogs": changelogs
+    }
+    return render(request, 'changelog.html', context)
