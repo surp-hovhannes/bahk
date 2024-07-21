@@ -15,13 +15,4 @@ class Migration(migrations.Migration):
             name="receive_upcoming_fast_reminders",
             field=models.BooleanField(default=True),
         ),
-        migrations.AlterField(
-            model_name="fast",
-            name="culmination_feast_date",
-            field=models.DateField(
-                blank=True,
-                help_text="You can enter in day/month/year format, e.g., 8/15/24",
-                null=True,
-            ),
-        ),
     ]
