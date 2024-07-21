@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0012_auto_20240720_2053'),
+        ('hub', '0012_fast_m2m_to_fk_mapping'),
     ]
 
     operations = [

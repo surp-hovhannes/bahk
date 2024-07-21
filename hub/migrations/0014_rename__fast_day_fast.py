@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0013_remove_day_fasts'),
+        ('hub', '0013_remove_day_fasts_m2m'),
     ]
 
     operations = [

@@ -22,7 +22,7 @@ def save_fast_m2m(apps, schema):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0011_day__fast_day_church_alter_day_date'),
+        ('hub', '0011_add_day__fast_day_church_fk_day_date_not_unique'),
     ]
 
     operations = [
