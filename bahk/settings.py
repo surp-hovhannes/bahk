@@ -203,13 +203,13 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'postmaster@' + config('MAILGUN_DOMAIN')
 EMAIL_HOST_PASSWORD = config('MAILGUN_API_KEY')
+EMAIL_TEST_ADDRESS = config('EMAIL_TEST_ADDRESS', default='test@test.com')
 ANYMAIL = {
     "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
     "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')  
 }
 EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend" 
 DEFAULT_FROM_EMAIL = "bahk@gmail.com"
-# SERVER_EMAIL = "your-sender-email@example.com"
 
 # Test settings
 if 'test' in sys.argv:
