@@ -49,8 +49,8 @@
                 "IS_PRODUCTION": "False"
             },
             "addons": [
-                "heroku-postgresql:in-dyno",
-                "heroku-redis:in-dyno",
+                "heroku-postgresql:essential-0",
+                "heroku-redis:mini",
                 "mailgun:starter"
             ],
             "scripts": {
