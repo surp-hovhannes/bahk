@@ -4,55 +4,59 @@
     "repository": "https://github.com/surp-hovhannes/bahk",
     "stack": "heroku-24",
     "addons": [
-      "heroku-postgresql:essential-0",
-      "heroku-redis:mini",
-      "mailgun:starter"
+        "heroku-postgresql:essential-0",
+        "heroku-redis:mini",
+        "mailgun:starter"
     ],
     "buildpacks": [
-      {
-        "url": "heroku/python"
-      }
+        {
+            "url": "heroku/python"
+        }
     ],
     "env": {
         "IS_PRODUCTION": "True"
     },
     "scripts": {
-      "postdeploy": "python manage.py migrate",
-      "test": "python manage.py test"
+        "postdeploy": "python manage.py migrate",
+        "test": "python manage.py test"
     },
     "formation": {
-      "web": {
-        "quantity": 1,
-        "size": "eco",
-        "command": "gunicorn bahk.wsgi --log-file -"
-      }
+        "web": {
+            "quantity": 1,
+            "size": "eco",
+            "command": "gunicorn bahk.wsgi --log-file -"
+        }
     },
     "environments": {
-      "review": {
-        "addons": [
-          "heroku-postgresql:essential-0",
-          "heroku-redis:mini",
-          "mailgun:starter"
-        ],
-        "env": {
-          "DJANGO_SETTINGS_MODULE": "bahk.settings",
-          "DEBUG": "True"
+        "review": {
+            "addons": [
+                "heroku-postgresql:essential-0",
+                "heroku-redis:mini",
+                "mailgun:starter"
+            ],
+            "env": {
+                "DJANGO_SETTINGS_MODULE": "bahk.settings",
+                "DEBUG": "True"
+            },
+            "scripts": {
+                "postdeploy": "python manage.py migrate && python manage.py seed"
+            }
         },
-        "scripts": {
-          "postdeploy": "python manage.py migrate && python manage.py seed"
+        "test": {
+            "env": {
+                "DJANGO_SETTINGS_MODULE": "bahk.settings",
+                "DEBUG": "True",
+                "IS_PRODUCTION": "False"
+            },
+            "addons": [
+                "heroku-postgresql:in-dyno",
+                "heroku-redis:in-dyno",
+                "mailgun:starter"
+            ],
+            "scripts": {
+                "test-setup": "python manage.py migrate",
+                "test": "python manage.py test"
+            }
         }
-      },
-      "test": {
-          "addons": [
-              "heroku-postgresql:in-dyno",
-              "heroku-redis:in-dyno",
-              "mailgun:starter"
-          ],
-          "scripts": {
-              "test-setup": "python manage.py migrate",
-              "test": "python manage.py test"
-          }
-      }
     }
-  }
-  
+}
