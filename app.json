@@ -17,7 +17,8 @@
         "IS_PRODUCTION": "True"
     },
     "scripts": {
-      "postdeploy": "python manage.py migrate"
+      "postdeploy": "python manage.py migrate",
+      "test": "python manage.py test"
     },
     "formation": {
       "web": {
@@ -40,6 +41,17 @@
         "scripts": {
           "postdeploy": "python manage.py migrate && python manage.py seed"
         }
+      },
+      "test": {
+          "addons": [
+              "heroku-postgresql:in-dyno",
+              "heroku-redis:in-dyno",
+              "mailgun:starter"
+          ],
+          "scripts": {
+              "test-setup": "python manage.py migrate",
+              "test": "python manage.py test"
+          }
       }
     }
   }
