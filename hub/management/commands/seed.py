@@ -35,7 +35,6 @@ class Command(BaseCommand):
     def clear_data(self):
         models.User.objects.all().delete()
         models.Church.objects.all().delete()
-        models.Day.objects.all().delete()
 
     def populate_db(self):
         date_tomorrow = date.today() + timedelta(days=1)
