@@ -12,20 +12,30 @@ from hub.forms import CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Fast, Profile
 
 
-def _concatenate_queryset(queryset, delim=", "):
-    return delim.join([str(obj) for obj in queryset])
+def _concatenate_queryset(queryset, delim=", ", num=3):
+    return delim.join([str(obj) for obj in queryset][:num])
 
 
 @admin.register(Church, site=admin.site)
 class ChurchAdmin(admin.ModelAdmin):
-    list_display = ("name",)
+    list_display = ("name", "get_fasts")
     ordering = ("name",)
 
+    def get_fasts(self, church):
+        return _concatenate_queryset(church.fasts.all())
+    
+    get_fasts.short_description = "Fasts"
 
 @admin.register(Fast, site=admin.site)
 class FastAdmin(admin.ModelAdmin):
-    list_display = ("name", "church", "description", "image")
+    list_display = ("name", "church", "get_days", "culmination_feast", "culmination_feast_date", "description", "image",
+                    "url",)
     ordering = ("church", "name",)
+
+    def get_days(self, fast):
+        return _concatenate_queryset(fast.days.all())
+        
+    get_days.short_description = "Days"
 
     def get_urls(self):
         """Add endpoints to admin views."""
@@ -68,7 +78,7 @@ class FastAdmin(admin.ModelAdmin):
 
 @admin.register(Profile, site=admin.site)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "church", "get_fasts", "profile_image", 'receive_upcoming_fast_reminders', )
+    list_display = ("user", "church", "get_fasts", "location", "receive_upcoming_fast_reminders", "profile_image", )
     ordering = ("church", "user",)
 
     def get_fasts(self, profile):
@@ -77,29 +87,7 @@ class ProfileAdmin(admin.ModelAdmin):
     get_fasts.short_description = "Fasts"
 
 
-class DayAdminForm(forms.ModelForm):
-    class Meta:
-        model = Day
-        fields = ["date", "fasts"]
-
-    def clean_fasts(self):
-        fasts = self.cleaned_data["fasts"]
-        church_names = [fast.church.name for fast in fasts]
-        if len(church_names) > len(set(church_names)):
-            date = str(self.cleaned_data["date"])
-            print(date)
-            raise ValidationError("Only one fast per church on a given date is permitted.", code="invalid")
-        
-        return fasts
-
-
 @admin.register(Day, site=admin.site)
 class DayAdmin(admin.ModelAdmin):
-    list_display = ("date", "get_fasts",)
-    ordering = ("date",)
-    form = DayAdminForm
-
-    def get_fasts(self, day):
-        return _concatenate_queryset(day.fasts.all())
-    
-    get_fasts.short_description = "Fasts"
+    list_display = ("date", "church", "fast",)
+    ordering = ("church", "date",)

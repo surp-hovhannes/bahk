@@ -35,7 +35,6 @@ class Command(BaseCommand):
     def clear_data(self):
         models.User.objects.all().delete()
         models.Church.objects.all().delete()
-        models.Day.objects.all().delete()
 
     def populate_db(self):
         date_tomorrow = date.today() + timedelta(days=1)
@@ -61,8 +60,8 @@ class Command(BaseCommand):
         )
         fast3, _ = models.Fast.objects.get_or_create(name="Fast 3", church=church3, description="fast no feast")
 
-        today, _ = models.Day.objects.get_or_create(date=date.today())
-        today.fasts.set([fast1, fast2, fast3])
+        for fast in [fast1, fast2, fast3]:
+            models.Day.objects.get_or_create(date=date.today(), fast=fast, church=fast.church)
 
         self._create_users(USERNAMES1, EMAILS1, church1, [fast1])
         self._create_users(USERNAMES2, EMAILS2, church2, [fast2])
@@ -80,5 +79,4 @@ class Command(BaseCommand):
             profile, _ = models.Profile.objects.get_or_create(user=user, church=church)
             if fasts is not None:
                 profile.fasts.set(fasts)
-
         
