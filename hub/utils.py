@@ -6,7 +6,7 @@ from django.utils.html import strip_tags
 from hub.models import Profile, Fast, Day
 from datetime import datetime, timedelta
 from .serializers import FastSerializer
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Q
 
 import logging
 
@@ -17,11 +17,14 @@ def send_fast_reminders():
     today = datetime.today().date()
     three_days_from_now = today + timedelta(days=3)
 
-    # Subquery to find the next fast for each profile
+    # Subquery to find the next fast for each profile, excluding those with "Friday Fasts" or "Wednesday Fasts" in the name
+    # TODO: Find a better way to handle weekly fasts
     next_fast_subquery = Day.objects.filter(
         fast__profiles__id=OuterRef('pk'),
         date__gt=today,
         date__lt=three_days_from_now
+    ).filter(
+        ~Q(fast__name__icontains="Friday Fasts") & ~Q(fast__name__icontains="Wednesday Fasts")
     ).order_by('date').values('fast__id')[:1]
 
     # Filter profiles based on the subquery
