@@ -6,7 +6,7 @@ from django.utils.html import strip_tags
 from hub.models import Profile, Fast, Day
 from datetime import datetime, timedelta
 from .serializers import FastSerializer
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Q
 
 import logging
 
@@ -16,21 +16,30 @@ logger = logging.getLogger(__name__)
 def send_fast_reminders():
     today = datetime.today().date()
     three_days_from_now = today + timedelta(days=3)
-    
+
+    # Subquery to find the next fast for each profile, excluding those with "Friday Fasts" or "Wednesday Fasts" in the name
+    # TODO: Find a better way to handle weekly fasts
     next_fast_subquery = Day.objects.filter(
-        fasts__profiles__id=OuterRef('pk'),
+        fast__profiles__id=OuterRef('pk'),
         date__gt=today,
         date__lt=three_days_from_now
-    ).order_by('date').values('id')[:1]
+    ).filter(
+        ~Q(fast__name__icontains="Friday Fasts") & ~Q(fast__name__icontains="Wednesday Fasts")
+    ).order_by('date').values('fast__id')[:1]
 
+    # Filter profiles based on the subquery
     profiles = Profile.objects.filter(receive_upcoming_fast_reminders=True).annotate(
         next_fast_id=Subquery(next_fast_subquery)
     ).filter(next_fast_id__isnull=False)
 
     for profile in profiles:
-        next_fast = Fast.objects.get(id=profile.next_fast_id)
+        if profile.next_fast_id:
+            try:
+                next_fast = Fast.objects.get(id=profile.next_fast_id)
+            except Fast.DoesNotExist:
+                logger.warning(f"Reminder Email: No Fast found with ID {profile.next_fast_id} for profile {profile.user.email}")
+                continue
 
-        if next_fast:
             subject = f'Upcoming Fast: {next_fast.name}'
             from_email = f"Live and Pray <{settings.EMAIL_HOST_USER}>"
             serialized_next_fast = FastSerializer(next_fast).data
@@ -46,7 +55,10 @@ def send_fast_reminders():
 
             email.attach_alternative(html_content, "text/html")
             email.send()
-            logger.info(f'Fast reminder sent to {profile.user.email} for {next_fast.name}')
+            logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {next_fast.name}')
+        else:
+            logger.info(f"Reminder Email: No upcoming fasts found for profile {profile.user.email}")
+
 
 def test_email():
     try:
