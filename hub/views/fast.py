@@ -5,7 +5,7 @@ from .mixins import ChurchContextMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 import datetime
-from rest_framework import views, response
+from rest_framework import views, response, status
 import logging
 
 
@@ -28,7 +28,7 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
         - A list of fasts filtered by the church context.
     """
     serializer_class = FastSerializer
-    permission_classes = [permissions.AllowAny]  # Allow any user to access this view
+    permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
         church = self.get_church()
@@ -51,7 +51,7 @@ class FastDetailView(generics.RetrieveAPIView):
     """
     queryset = Fast.objects.all()
     serializer_class = FastSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
 class FastByDateView(ChurchContextMixin, generics.ListAPIView):
     """

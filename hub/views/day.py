@@ -22,7 +22,7 @@ class FastDaysListView(generics.ListAPIView):
         - A list of days associated with the specified fast.
     """
     serializer_class = DaySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
         fast_id = self.kwargs.get('fast_id')
