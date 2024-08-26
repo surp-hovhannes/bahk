@@ -116,3 +116,10 @@ class DaySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Day
         fields = ['id', 'date', 'fast', 'church']
+
+class ParticipantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Profile
+        fields = ['id', 'user', 'profile_image', 'location'] 
+
+    user = serializers.CharField(source='user.username')  # If you want to include the username instead of the user object

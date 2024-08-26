@@ -1,6 +1,6 @@
 from rest_framework import generics, permissions
 from ..models import Fast, Church
-from ..serializers import FastSerializer, JoinFastSerializer
+from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer
 from .mixins import ChurchContextMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -27,8 +27,6 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
     Returns:
         - A list of fasts filtered by the church context.
     """
-   
-
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]  # Allow any user to access this view
 
@@ -121,8 +119,83 @@ class JoinFastView(generics.UpdateAPIView):
 
     def perform_update(self, serializer):
         fast = Fast.objects.get(id=self.request.data.get('fast_id'))
+
+        if not fast:
+            return response.Response({"detail": "Fast not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        if fast in self.get_object().fasts.all():
+            return response.Response({"detail": "You are already part of this fast."}, status=status.HTTP_400_BAD_REQUEST)
+        
         self.get_object().fasts.add(fast)
         serializer.save()
+
+class LeaveFastView(generics.UpdateAPIView):
+    """
+    API view for a user to leave a specific fast.
+
+    This view allows an authenticated user to leave a fast by removing the fast from their profile.
+    The fast is specified by its ID in the request data.
+
+    Permissions:
+        - IsAuthenticated: Only authenticated users can access this view.
+
+    Request Data:
+        - fast_id: The ID of the fast to leave.
+
+    Returns:
+        - A success message or an error message if the user is not part of the fast.
+    """
+    serializer_class = JoinFastSerializer  # You can reuse the JoinFastSerializer if it works for this
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user.profile
+
+    def perform_update(self, serializer):
+        fast_id = self.request.data.get('fast_id')
+        fast = Fast.objects.filter(id=fast_id).first()
+
+        if not fast:
+            return response.Response({"detail": "Fast not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if fast not in self.get_object().fasts.all():
+            return response.Response({"detail": "You are not part of this fast."}, status=status.HTTP_400_BAD_REQUEST)
+
+        self.get_object().fasts.remove(fast)
+        return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
+
+class FastParticipantsView(views.APIView):
+    """
+    API view to retrieve participants of a specific fast.
+
+    This view returns a list of up to 6 participants in the fast identified by the `fast_id` provided in the URL.
+    It includes participant profile data such as username, profile image, and location.
+
+    Permissions:
+        - IsAuthenticated: Only authenticated users can access this view.
+    
+    URL Parameters:
+        - fast_id: The ID of the fast for which to retrieve the participants.
+
+    Returns:
+        - A list of participant profiles for the specified fast.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, fast_id):
+        # Retrieve the fast based on the fast_id provided in the URL
+        current_fast = Fast.objects.filter(id=fast_id).first()
+
+        if not current_fast:
+            return response.Response({"detail": "Fast not found."}, status=404)
+
+        # Retrieve up to 6 participants for the specified fast
+        other_participants = current_fast.profiles.all()[:6]
+
+        # Serialize the participant data
+        serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
+
+        return response.Response(serialized_participants.data)
 
 
 # legacy Fast views

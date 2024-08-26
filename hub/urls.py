@@ -3,7 +3,7 @@ from rest_framework import routers
 
 
 from .views.profile import ProfileDetailView, ProfileImageUploadView
-from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser
+from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser, FastParticipantsView, LeaveFastView
 from .views.day import FastDaysListView, UserDaysView
 from .views.user import UserViewSet, GroupViewSet
 from .views.web import home, test_email_view, add_fast_to_profile, remove_fast_from_profile, register, join_fasts, edit_profile, changelog
@@ -37,9 +37,12 @@ urlpatterns = [
     path('fasts/', FastListView.as_view(), name='fast-list'),
     path('fasts/<int:pk>/', FastDetailView.as_view(), name='fast-detail'),
     path('fasts/join/', JoinFastView.as_view(), name='fast-join'),
+    path('fasts/leave/', LeaveFastView.as_view(), name='leave-fast'),
     path('fasts/by-date/', FastByDateView.as_view(), name='fast-by-date'),
+    path('fasts/<int:fast_id>/participants/', FastParticipantsView.as_view(), name='fast-participants'),
 
-    # TODO: Remove these legacy endpoints
+
+    # TODO: Remove these legacy endpoints after frontend is updated
     path('user/fasts/', FastOnDate.as_view(), name="fast_on_date"),
     path("fast/", FastOnDateWithoutUser.as_view(), name="fast_on_date"),
    
