@@ -11,6 +11,13 @@ class Church(models.Model):
     """Model for a church."""
     name = models.CharField(max_length=128, unique=True)
 
+    @classmethod
+    def get_default_pk(cls):
+        church, _ = cls.objects.get_or_create(
+            name="Armenian Apostolic Church"
+        )
+        return church.pk
+
     def __str__(self):
         return self.name
 
@@ -38,6 +45,10 @@ class Fast(models.Model):
             constraints.UniqueConstraint(fields=["culmination_feast_date", "church"], name="unique_feast_date_church"),
         ]
 
+    @property
+    def modal_id(self):
+        return f"fastModal_{self.id}"
+
     def __str__(self):
         return f"{self.name} of the {self.church.name}"
 
@@ -56,15 +67,17 @@ class Profile(models.Model):
                                              processors=[Transpose(), ResizeToFill(100, 100)],
                                              format='JPEG',
                                              options={'quality': 60})
-    
+    receive_upcoming_fast_reminders = models.BooleanField(default=True)
+
     def __str__(self):
         return self.user.username
 
 
 class Day(models.Model):
     """Model for a day in time."""
-    date = models.DateField(unique=True)
-    fasts = models.ManyToManyField(Fast, related_name="days")
+    date = models.DateField()
+    fast = models.ForeignKey(Fast, on_delete=models.CASCADE, null=True, related_name="days")
+    church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days", default=Church.get_default_pk)
 
     def __str__(self):
         return self.date.strftime("%B-%d-%Y")

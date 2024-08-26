@@ -53,7 +53,7 @@ def _get_fast_for_user_on_date(request):
 def _get_user_fast_on_date(user, date):
     """Given user, gets fast that the user is participating in on a given day."""
     # there should not be multiple fasts per day, but in case of bug, return last created
-    return Fast.objects.filter(profiles__user=user, days__date=date).last()
+    return Fast.objects.filter(profiles__user=user, days__date=date, church=user.profile.church).last()
 
 
 def _get_fast_on_date(request):
@@ -140,7 +140,6 @@ def home(request):
     church = request.user.profile.church
     church_name = church.name if church is not None else ""
 
-
     # Get the current fast
     current_fast_name = response.get("name", "")
     current_fast = Fast.objects.get(name=current_fast_name) if current_fast_name else None
@@ -164,7 +163,7 @@ def home(request):
         days__date__gte=datetime.date.today()
     ).annotate(first_day=Min('days__date')).order_by("first_day")[:3]
 
-    serialized_fasts = FastSerializer(upcoming_fasts, many=True, context={'request': request}).data
+    serialized_upcoming_fasts = FastSerializer(upcoming_fasts, many=True, context={'request': request}).data
 
     # calculate days until next upcoming fast
     if upcoming_fasts:
@@ -182,9 +181,8 @@ def home(request):
         "participant_count": response.get("participant_count", 1),
         "is_participating": is_participating,
         "other_participants": other_participants,
-        "description": response.get("description", ""),
         "countdown": response.get("countdown"),
-        "upcoming_fasts": serialized_fasts,
+        "upcoming_fasts": serialized_upcoming_fasts,
         "days_until_next": days_until_next,
         "has_passed": response.get("has_passed", False)
     }
@@ -230,7 +228,7 @@ def join_fasts(request):
     all_fasts = Fast.objects.annotate(
         start_date=Min('days__date')
     ).filter(
-        Exists(Day.objects.filter(fasts=OuterRef('pk')))
+        days__isnull=False
     ).order_by('start_date')
     
     serialized_fasts = FastSerializer(all_fasts, many=True, context={'request': request}).data
@@ -289,6 +287,22 @@ def remove_fast_from_profile(request, fast_id):
     request.user.profile.fasts.remove(fast)
     messages.success(request, f"You have left {fast.name}.")
     return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+
+@login_required
+def test_email_view(request):
+    # Create some test data
+    user = User.objects.first()
+    fast = Fast.objects.first()
+    serialized_current_fast = FastSerializer(fast, context={'request': request}).data if fast else None
+
+    context = {
+        'user': user,
+        'fast': serialized_current_fast
+    }
+    
+    return render(request, 'email/upcoming_fasts_reminder.html', context)
+
 
 def changelog(request):
 
