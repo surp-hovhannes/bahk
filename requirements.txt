@@ -18,3 +18,5 @@ redis
 celery
 django-anymail
 django-markdownx
+
+django-cors-headers
