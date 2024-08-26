@@ -9,7 +9,12 @@ from hub import models
 class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Profile
-        fields = ['profile_image', 'location']
+        fields = ['profile_image', 'location', 'church', 'receive_upcoming_fast_reminders']
+    
+class ProfileImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Profile
+        fields = ['profile_image']
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     profile = ProfileSerializer(read_only=True)  # Include profile information
@@ -99,3 +104,15 @@ class FastSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Fast
         fields = '__all__'
+
+class JoinFastSerializer(serializers.ModelSerializer):
+    fast_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = models.Profile
+        fields = ['fast_id']
+
+class DaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Day
+        fields = ['id', 'date', 'fast', 'church']

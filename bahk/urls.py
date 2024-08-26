@@ -22,6 +22,7 @@ from django.views.generic import RedirectView
 import hub.views as views
 
 
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('hub/', include('hub.urls')),
@@ -34,13 +35,10 @@ urlpatterns += [
     path("accounts/", include("django.contrib.auth.urls")),
 ]
 
-# add user creation
-urlpatterns += [
-    path("create_user/web/", views.register, name="register"),
-    path("join_fasts/web/", views.join_fasts, name="join_fasts"),
-    path("edit_profile/web/", views.edit_profile, name="edit_profile"),
-    path('changelog/web/', views.changelog, name='changelog')
-]
+# pin hub endpoints to /api/ root url
+#urlpatterns += [
+#    path("api/", include("hub.urls")),
+#]
 
 # for serving media files during development
 if not settings.IS_PRODUCTION:
