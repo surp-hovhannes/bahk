@@ -21,12 +21,22 @@ from django.views.generic import RedirectView
 
 import hub.views as views
 
-
+#Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('hub/', include('hub.urls')),
     path('', RedirectView.as_view(url='hub/', permanent=True)),
+
+    # Authentication endpoints
+    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
     path('markdownx/', include('markdownx.urls')),  # Include markdownx URLs
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
@@ -36,9 +46,9 @@ urlpatterns += [
 ]
 
 # pin hub endpoints to /api/ root url
-#urlpatterns += [
-#    path("api/", include("hub.urls")),
-#]
+urlpatterns += [
+    path("api/", include("hub.urls")),
+]
 
 # for serving media files during development
 if not settings.IS_PRODUCTION:
