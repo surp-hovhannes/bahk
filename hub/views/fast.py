@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions
+from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
 from ..models import Fast, Church
 from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer
 from .mixins import ChurchContextMixin
@@ -190,7 +191,7 @@ class FastParticipantsView(views.APIView):
             return response.Response({"detail": "Fast not found."}, status=404)
 
         # Retrieve up to 6 participants for the specified fast
-        other_participants = current_fast.profiles.all()[:6]
+        other_participants = current_fast.profiles.all()[:NUMBER_PARTICIPANTS_TO_SHOW_WEB]
 
         # Serialize the participant data
         serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
