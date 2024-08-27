@@ -50,14 +50,12 @@ class FastSerializer(serializers.ModelSerializer):
     def get_church(self, obj):
         return ChurchSerializer(obj.church, context=self.context).data if obj.church else None
 
-        
-
     def get_joined(self, obj):
         # Check if 'request' is present in the context
-        request = self.context.get('request', None)
+        request = self.context.get('request')
         
         # If there's no request or the user is not authenticated, return False
-        if not request or not request.user.is_authenticated:
+        if request is None or not request.user.is_authenticated:
             return False
         
         # If the user is authenticated, check if they have joined the fast
