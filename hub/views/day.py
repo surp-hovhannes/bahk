@@ -2,6 +2,7 @@ from rest_framework import generics, permissions
 from ..models import Day
 from ..serializers import DaySerializer
 
+
 class FastDaysListView(generics.ListAPIView):
     """
     API view to list all days associated with a specific fast.
@@ -27,6 +28,7 @@ class FastDaysListView(generics.ListAPIView):
     def get_queryset(self):
         fast_id = self.kwargs.get('fast_id')
         return Day.objects.filter(fast__id=fast_id)
+
 
 class UserDaysView(generics.ListAPIView):
     """

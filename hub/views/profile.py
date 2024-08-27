@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from rest_framework.parsers import MultiPartParser, FormParser
-from ..models import Profile
 from ..serializers import ProfileSerializer, ProfileImageSerializer
+
 
 class ProfileDetailView(generics.RetrieveUpdateAPIView):
     """
@@ -24,6 +24,7 @@ class ProfileDetailView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user.profile
+
 
 class ProfileImageUploadView(generics.UpdateAPIView):
     """

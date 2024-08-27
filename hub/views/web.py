@@ -1,18 +1,15 @@
-import datetime
-
+"""Views for web app."""
 import datetime  # Standard library import
 
 from django.contrib.auth import authenticate, login  # Django auth imports
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from django.db.models import Min, Exists, OuterRef  # Django ORM imports
-
-from rest_framework import permissions, response, views, viewsets
+from django.db.models import Min  # Django ORM imports
 
 from hub.forms import CustomUserCreationForm, ProfileForm
 from hub.models import Church, Fast, Profile
@@ -24,12 +21,12 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from PIL import Image
 from io import BytesIO
+from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
 from ..models import Profile
 from django.conf import settings
 from django.core.files.storage import default_storage
 
 from app_management.models import Changelog
-from markdownx.utils import markdownify
 
 
 @login_required
@@ -55,7 +52,7 @@ def home(request):
     is_participating = current_fast in request.user.profile.fasts.all() if current_fast else False
 
     # Query up to 6, for other participants for avatar display
-    other_participants = current_fast.profiles.all()[:6] if current_fast else None
+    other_participants = current_fast.profiles.all()[:NUMBER_PARTICIPANTS_TO_SHOW_WEB] if current_fast else None
 
     # Query for all upcoming fasts and order by first day of the fast from today onward
     upcoming_fasts = Fast.objects.filter(
@@ -95,6 +92,7 @@ def home(request):
 
     return render(request, "home.html", context=context)
 
+
 def register(request):
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
@@ -124,7 +122,6 @@ def register(request):
 
 @login_required
 def join_fasts(request):
-
     all_fasts = Fast.objects.annotate(
         start_date=Min('days__date')
     ).filter(
@@ -172,6 +169,7 @@ def resized_profile_image_view(request, pk, width, height):
     buffer.seek(0)
 
     return HttpResponse(buffer, content_type='image/jpeg')
+
 
 @login_required
 def add_fast_to_profile(request, fast_id):

@@ -35,6 +35,7 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
         church = self.get_church()
         return Fast.objects.filter(church=church)
 
+
 class FastDetailView(generics.RetrieveAPIView):
     """
     API view to retrieve detailed information about a specific fast.
@@ -53,6 +54,7 @@ class FastDetailView(generics.RetrieveAPIView):
     queryset = Fast.objects.all()
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]
+
 
 class FastByDateView(ChurchContextMixin, generics.ListAPIView):
     """
@@ -93,6 +95,7 @@ class FastByDateView(ChurchContextMixin, generics.ListAPIView):
         church = self.get_church()
         return Fast.objects.filter(church=church, days__date=target_date)
 
+
 class JoinFastView(generics.UpdateAPIView):
     """
     API view for a user to join a specific fast.
@@ -130,6 +133,7 @@ class JoinFastView(generics.UpdateAPIView):
         self.get_object().fasts.add(fast)
         serializer.save()
 
+
 class LeaveFastView(generics.UpdateAPIView):
     """
     API view for a user to leave a specific fast.
@@ -164,6 +168,7 @@ class LeaveFastView(generics.UpdateAPIView):
 
         self.get_object().fasts.remove(fast)
         return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
+
 
 class FastParticipantsView(views.APIView):
     """
@@ -217,6 +222,7 @@ class FastOnDate(views.APIView):
             fast = _get_fast_on_date(request)
             return response.Response(FastSerializer(fast).data)
     
+
 class FastOnDateWithoutUser(views.APIView):
     """Returns fast data on the date specified in query params (`?date=<yyyymmdd>`).
     
@@ -228,6 +234,7 @@ class FastOnDateWithoutUser(views.APIView):
         fast = _get_fast_on_date(request)
         return response.Response(FastSerializer(fast).data)
     
+
 def _get_fast_for_user_on_date(request):
     """Returns the fast that the user is participating in on a given day."""
     user = request.user

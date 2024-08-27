@@ -1,6 +1,7 @@
 from rest_framework.exceptions import ValidationError
 from ..models import Church
 
+
 class ChurchContextMixin:
     """Mixin to provide church context based on the user's profile or query parameter."""
 
