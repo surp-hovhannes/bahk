@@ -1,6 +1,6 @@
 from rest_framework import generics, permissions
 from rest_framework.parsers import MultiPartParser, FormParser
-from ..serializers import ProfileSerializer, ProfileImageSerializer
+from ..serializers import UserSerializer, ProfileImageSerializer
 
 
 class ProfileDetailView(generics.RetrieveUpdateAPIView):
@@ -19,11 +19,11 @@ class ProfileDetailView(generics.RetrieveUpdateAPIView):
     Returns:
         - The profile data of the authenticated user.
     """
-    serializer_class = ProfileSerializer
+    serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return self.request.user.profile
+        return self.request.user
 
 
 class ProfileImageUploadView(generics.UpdateAPIView):
