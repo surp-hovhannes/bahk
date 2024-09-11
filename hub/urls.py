@@ -5,7 +5,7 @@ from rest_framework import routers
 from .views.profile import ProfileDetailView, ProfileImageUploadView
 from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser, FastParticipantsView, LeaveFastView
 from .views.day import FastDaysListView, UserDaysView
-from .views.user import UserViewSet, GroupViewSet
+from .views.user import UserViewSet, GroupViewSet, UserRegistrationView
 from .views.web import home, test_email_view, add_fast_to_profile, remove_fast_from_profile, register, join_fasts, edit_profile, changelog
 
 router = routers.DefaultRouter()
@@ -50,7 +50,10 @@ urlpatterns = [
 
 
     # Misc endpoints
-    path('test_email/', test_email_view, name='test_email')
+    path('test_email/', test_email_view, name='test_email'),
+
+    # New API registration endpoint
+    path('register/', UserRegistrationView.as_view(), name='api-register'),
 ]
 
 urlpatterns += router.urls
