@@ -40,7 +40,7 @@ class ChurchDetailView(generics.RetrieveAPIView):
         - AllowAny: Anyone can access this view.
 
     URL Parameters:
-        - pk: The ID of the church which is being retrieved.
+        - pk (optional): The ID of the church which is being retrieved. No ID, returns a list of all churches.
 
     Returns:
         - The church's information in JSON format.
