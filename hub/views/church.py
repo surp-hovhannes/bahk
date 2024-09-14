@@ -52,11 +52,3 @@ class ChurchDetailView(generics.RetrieveAPIView):
     serializer_class = ChurchSerializer
     permission_classes = [permissions.AllowAny]
     queryset = Church.objects.all()
-
-    def get_queryset(self):
-        """
-        Optionally restricts the returned churches to a given user,
-        by filtering against a `username` query parameter in the URL.
-        """
-        queryset = Church.objects.all()
-        return queryset
