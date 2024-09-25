@@ -118,7 +118,7 @@ class FastSerializer(serializers.ModelSerializer):
     def get_total_number_of_days(self, obj):
         return obj.days.count()
     
-    def get_curent_day_number(self, obj):
+    def get_current_day_number(self, obj):
         try:
             if obj.days.count() == 0:
                 return None
