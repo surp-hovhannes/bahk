@@ -45,7 +45,10 @@ class FastSerializer(serializers.ModelSerializer):
     joined = serializers.SerializerMethodField()
     has_passed = serializers.SerializerMethodField()
     next_fast_date = serializers.SerializerMethodField()
+    total_number_of_days = serializers.SerializerMethodField()
+    curent_day_number = serializers.SerializerMethodField()
     modal_id = serializers.ReadOnlyField()
+
 
     def get_church(self, obj):
         return ChurchSerializer(obj.church, context=self.context).data if obj.church else None
@@ -111,6 +114,29 @@ class FastSerializer(serializers.ModelSerializer):
         if next_day is not None:
             return next_day.date
         return None
+    
+    def get_total_number_of_days(self, obj):
+        return obj.days.count()
+    
+    def get_curent_day_number(self, obj):
+        try:
+            if obj.days.count() == 0:
+                return None
+            
+            start_date = self.get_start_date(obj)
+            if start_date is None:
+                return None
+            
+            current_date = datetime.date.today()
+            end_date = self.get_end_date(obj)
+            
+            if current_date > end_date:
+                return None 
+            
+            return (current_date - start_date).days + 1
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
 
     class Meta:
         model = models.Fast
