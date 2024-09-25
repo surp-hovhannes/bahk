@@ -36,7 +36,7 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
 class ChurchSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Church
-        fields = ["name"]
+        fields = ["id","name"]
 
 
 class FastSerializer(serializers.ModelSerializer):
