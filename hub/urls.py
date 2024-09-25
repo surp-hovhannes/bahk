@@ -6,6 +6,7 @@ from .views.profile import ProfileDetailView, ProfileImageUploadView
 from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser, FastParticipantsView, LeaveFastView
 from .views.day import FastDaysListView, UserDaysView
 from .views.user import UserViewSet, GroupViewSet
+from .views.church import ChurchListView, ChurchDetailView
 from .views.web import home, test_email_view, add_fast_to_profile, remove_fast_from_profile, register, join_fasts, edit_profile, changelog
 
 router = routers.DefaultRouter()
@@ -38,6 +39,10 @@ urlpatterns = [
     # Day endpoints
     path('fasts/<int:fast_id>/days/', FastDaysListView.as_view(), name='fast-days-list'),
     path('user/days/', UserDaysView.as_view(), name='user-days'),
+
+    # Church endpoints
+    path('churches/', ChurchListView.as_view(), name='church-list'),
+    path('churches/<int:pk>/', ChurchDetailView.as_view(), name='church-detail'),
 
     # Web endpoints
     path("web/", home, name="web_home"),

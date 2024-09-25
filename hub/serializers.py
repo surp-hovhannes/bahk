@@ -7,9 +7,13 @@ from rest_framework import serializers
 from hub import models
 
 class ProfileSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+
     class Meta:
         model = models.Profile
-        fields = ['profile_image', 'location', 'church', 'receive_upcoming_fast_reminders']
+        fields = ['user_id','username','email','profile_image', 'location', 'church', 'receive_upcoming_fast_reminders']
     
 class ProfileImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,7 +36,7 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
 class ChurchSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Church
-        fields = ["name"]
+        fields = ["id","name"]
 
 
 class FastSerializer(serializers.ModelSerializer):
