@@ -104,7 +104,7 @@ class FastSerializer(serializers.ModelSerializer):
     has_passed = serializers.SerializerMethodField()
     next_fast_date = serializers.SerializerMethodField()
     total_number_of_days = serializers.SerializerMethodField()
-    curent_day_number = serializers.SerializerMethodField()
+    current_day_number = serializers.SerializerMethodField()
     modal_id = serializers.ReadOnlyField()
 
 
