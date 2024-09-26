@@ -3,6 +3,9 @@ import datetime
 
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from rest_framework.validators import UniqueValidator
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from hub import models
 
@@ -31,6 +34,57 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Group
         fields = ["url", "name"]
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(
+        required=True,
+        validators=[UniqueValidator(queryset=User.objects.all())]
+    )
+    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True, required=True)
+    church = serializers.PrimaryKeyRelatedField(source='profile.church', queryset=models.Church.objects.all(), required=True)
+
+    class Meta:
+        model = User
+        fields = ('username', 'password', 'password2', 'email', 'church')
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({"password": "Password fields didn't match."})
+        return attrs
+
+    def create(self, validated_data):
+        church = validated_data.pop('profile')['church']
+        user = User.objects.create(
+            username=validated_data['username'],
+            email=validated_data['email'],
+        )
+        user.set_password(validated_data['password'])
+        user.save()
+        models.Profile.objects.create(user=user, church=church)
+
+        # Generate tokens
+        refresh = RefreshToken.for_user(user)
+        tokens = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+
+        # Add tokens to the response
+        user.tokens = tokens
+        return user
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        profile = models.Profile.objects.get(user=instance)
+        representation['church'] = profile.church.id
+        
+        # Include tokens in the response
+        if hasattr(instance, 'tokens'):
+            representation['tokens'] = instance.tokens
+        
+        return representation
 
 
 class ChurchSerializer(serializers.ModelSerializer):
