@@ -5,7 +5,7 @@ from rest_framework import routers
 from .views.profile import ProfileDetailView, ProfileImageUploadView
 from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser, FastParticipantsView, LeaveFastView
 from .views.day import FastDaysListView, UserDaysView
-from .views.user import UserViewSet, GroupViewSet
+from .views.user import UserViewSet, GroupViewSet, RegisterView
 from .views.church import ChurchListView, ChurchDetailView
 from .views.web import home, test_email_view, add_fast_to_profile, remove_fast_from_profile, register, join_fasts, edit_profile, changelog
 
@@ -20,6 +20,7 @@ urlpatterns = [
     path("", include(router.urls)),
 
     # User profile endpoints
+    path('register/', RegisterView.as_view(), name='auth_register'),
     path('profile/', ProfileDetailView.as_view(), name='profile-detail'),
     path('profile/image-upload/', ProfileImageUploadView.as_view(), name='profile-image-upload'),   
 
