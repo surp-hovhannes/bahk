@@ -33,6 +33,8 @@ class ProfileSerializer(serializers.ModelSerializer):
         return instance
     
 class ProfileImageSerializer(serializers.ModelSerializer):
+    profile_image = serializers.ImageField(max_length=None, use_url=True)
+
     class Meta:
         model = models.Profile
         fields = ['profile_image']
