@@ -13,10 +13,11 @@ class ProfileSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    thumbnail = serializers.URLField(source='profile_image_thumbnail.url', read_only=True)
 
     class Meta:
         model = models.Profile
-        fields = ['user_id','username','email','profile_image', 'location', 'church', 'receive_upcoming_fast_reminders']
+        fields = ['user_id','username','email','profile_image', 'thumbnail', 'location', 'church', 'receive_upcoming_fast_reminders']
     
 class ProfileImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -106,6 +107,7 @@ class FastSerializer(serializers.ModelSerializer):
     total_number_of_days = serializers.SerializerMethodField()
     current_day_number = serializers.SerializerMethodField()
     modal_id = serializers.ReadOnlyField()
+    thumbnail = serializers.URLField(source='image_thumbnail.url', read_only=True)
 
 
     def get_church(self, obj):
