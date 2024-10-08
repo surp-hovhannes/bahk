@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
 from ..models import Fast, Church
-from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer
+from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer
 from .mixins import ChurchContextMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -202,6 +202,33 @@ class FastParticipantsView(views.APIView):
         serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
 
         return response.Response(serialized_participants.data)
+
+
+class FastStatsView(views.APIView):
+    """
+    API view to retrieve statistics about users fasting participation
+
+    This view returns statistics about the specified user's fasting participation.
+
+    Permissions:
+        - IsAuthenticated: Only authenticated users can access this view.
+
+    Returns:
+        - Array of fast ids that the user has joined
+        - Total number of fasts the user has joined
+        - Total number of fast days the user has participated in
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # Retrieve the user's profile
+        user_profile = request.user.profile
+
+        # Serialize the user's fasting statistics
+        serialized_stats = FastStatsSerializer(user_profile)
+
+        return response.Response(serialized_stats.data)
+
 
 
 # legacy Fast views
