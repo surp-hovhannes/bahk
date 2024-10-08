@@ -209,6 +209,23 @@ class JoinFastSerializer(serializers.ModelSerializer):
         model = models.Profile
         fields = ['fast_id']
 
+class FastStatsSerializer(serializers.Serializer):
+    joined_fasts = FastSerializer(many=True, read_only=True, source='fasts')
+    total_fasts = serializers.SerializerMethodField()
+    total_fast_days = serializers.SerializerMethodField()
+
+    def get_total_fasts(self, obj):
+        # returns the total number of fasts the user has joined
+        return obj.fasts.count()
+    
+    def get_total_fast_days(self, obj):
+        # returns the total number of days the user has fasted
+        return sum(fast.days.count() for fast in obj.fasts.all())
+    
+    class Meta:
+        fields = [ 'joined_fasts', 'total_fasts', 'total_fast_days']
+
+
 class DaySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Day
