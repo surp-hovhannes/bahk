@@ -198,6 +198,11 @@ class FastSerializer(serializers.ModelSerializer):
             print(f"An error occurred: {e}")
             return None
 
+    def get_thumbnail(self, obj):
+        if obj.image:
+            return obj.image.url
+        return None
+
     class Meta:
         model = models.Fast
         fields = '__all__'
@@ -210,9 +215,12 @@ class JoinFastSerializer(serializers.ModelSerializer):
         fields = ['fast_id']
 
 class FastStatsSerializer(serializers.Serializer):
-    joined_fasts = FastSerializer(many=True, read_only=True, source='fasts')
+    joined_fasts = serializers.SerializerMethodField()
     total_fasts = serializers.SerializerMethodField()
     total_fast_days = serializers.SerializerMethodField()
+
+    def get_joined_fasts(self, obj):
+        return obj.fasts.values_list('id', flat=True)
 
     def get_total_fasts(self, obj):
         # returns the total number of fasts the user has joined
@@ -223,7 +231,7 @@ class FastStatsSerializer(serializers.Serializer):
         return sum(fast.days.count() for fast in obj.fasts.all())
     
     class Meta:
-        fields = [ 'joined_fasts', 'total_fasts', 'total_fast_days']
+        fields = ['joined_fasts', 'total_fasts', 'total_fast_days']
 
 
 class DaySerializer(serializers.ModelSerializer):

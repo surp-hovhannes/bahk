@@ -208,13 +208,15 @@ class FastStatsView(views.APIView):
     """
     API view to retrieve statistics about users fasting participation
 
-    This view returns statistics about the specified user is participating in fasts.
+    This view returns statistics about the specified user's fasting participation.
 
     Permissions:
         - IsAuthenticated: Only authenticated users can access this view.
 
     Returns:
-        - Statistics about the specified fast.
+        - Array of fast ids that the user has joined
+        - Total number of fasts the user has joined
+        - Total number of fast days the user has participated in
     """
     permission_classes = [permissions.IsAuthenticated]
 
