@@ -107,7 +107,8 @@ class FastSerializer(serializers.ModelSerializer):
     total_number_of_days = serializers.SerializerMethodField()
     current_day_number = serializers.SerializerMethodField()
     modal_id = serializers.ReadOnlyField()
-    thumbnail = serializers.URLField(source='image_thumbnail.url', read_only=True)
+    thumbnail = serializers.SerializerMethodField()
+
 
 
     def get_church(self, obj):
