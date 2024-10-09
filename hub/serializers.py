@@ -110,7 +110,6 @@ class FastSerializer(serializers.ModelSerializer):
     thumbnail = serializers.SerializerMethodField()
 
 
-
     def get_church(self, obj):
         return ChurchSerializer(obj.church, context=self.context).data if obj.church else None
 
