@@ -240,8 +240,15 @@ class DaySerializer(serializers.ModelSerializer):
         fields = ['id', 'date', 'fast', 'church']
 
 class ParticipantSerializer(serializers.ModelSerializer):
+    thumbnail = serializers.SerializerMethodField()
+
+    def get_thumbnail(self, obj):
+        if obj.profile_image_thumbnail:
+            return obj.profile_image_thumbnail.url
+        return None
+
     class Meta:
         model = models.Profile
-        fields = ['id', 'user', 'profile_image', 'location'] 
+        fields = ['id', 'user', 'profile_image', 'thumbnail', 'location'] 
 
     user = serializers.CharField(source='user.username')  # If you want to include the username instead of the user object
