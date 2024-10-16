@@ -55,6 +55,7 @@ class FastAdmin(admin.ModelAdmin):
                     "url_link",)
     list_display_links = ("get_name", "church_link", "url_link",)
     ordering = ("-year", "church", "name",)
+    save_as = True
 
     def get_name(self, fast):
         return str(fast)
