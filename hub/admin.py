@@ -28,10 +28,16 @@ class ChurchAdmin(admin.ModelAdmin):
 
 @admin.register(Fast, site=admin.site)
 class FastAdmin(admin.ModelAdmin):
-    list_display = ("name", "church", "get_days", "culmination_feast", "culmination_feast_date", "description", "image",
+    list_display = ("get_name", "church", "get_days", "culmination_feast", "culmination_feast_date", "description", "image",
                     "url",)
     ordering = ("church", "name",)
 
+    def get_name(self, fast):
+        year = fast.days.first().date.year
+        return f"{fast.name} ({year})"
+    
+    get_name.short_description = "Fast Name"
+    
     def get_days(self, fast):
         return _concatenate_queryset(fast.days.all())
         
