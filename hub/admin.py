@@ -1,12 +1,11 @@
 """Admin forms."""
 import datetime
 
-from django import forms
 from django.contrib import admin
-from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils.html import format_html
 
 from hub.forms import CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Fast, Profile
@@ -29,7 +28,8 @@ class ChurchAdmin(admin.ModelAdmin):
 @admin.register(Fast, site=admin.site)
 class FastAdmin(admin.ModelAdmin):
     list_display = ("get_name", "church", "get_days", "culmination_feast", "culmination_feast_date", "description", "image",
-                    "url",)
+                    "url_link",)
+    list_display_links = ("url_link",)
     ordering = ("church", "name",)
 
     def get_name(self, fast):
@@ -42,6 +42,13 @@ class FastAdmin(admin.ModelAdmin):
         return _concatenate_queryset(fast.days.all())
         
     get_days.short_description = "Days"
+
+    def url_link(self, fast):
+        if not fast.url:
+            return ""
+        return format_html('<a href="{}">{}</a>', fast.url, fast.url)
+    
+    url_link.short_descrption = "Link to Learn More"
 
     def get_urls(self):
         """Add endpoints to admin views."""
