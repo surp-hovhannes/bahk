@@ -155,7 +155,6 @@ class FastAdmin(admin.ModelAdmin):
                 "name": old_fast.name,
                 "church": old_fast.church,
                 "culmination_feast": old_fast.culmination_feast,
-                "culmination_feast_date": old_fast.culmination_feast_date,
                 "description": old_fast.description,
                 "url": old_fast.url,
             })
