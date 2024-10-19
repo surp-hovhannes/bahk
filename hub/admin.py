@@ -7,7 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from hub.forms import CreateFastWithDatesAdminForm, DuplicateFastWithNewDatesAdminForm
+from hub.forms import CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Fast, Profile
 
 
@@ -127,35 +127,38 @@ class FastAdmin(admin.ModelAdmin):
     
     def duplicate_fast_with_new_dates(self, request, pk):
         """View to duplicate fast with new dates for a new year. Previous participants are not added."""
+        old_fast = Fast.objects.get(pk=pk)
         # form submitted with data
         if request.method == "POST":
-            form = DuplicateFastWithNewDatesAdminForm(request.POST)
+            form = CreateFastWithDatesAdminForm(request.POST)
             if form.is_valid():
+                duplicate_fast = form.save()
                 data = form.cleaned_data
-                old_fast = Fast.objects.get(pk=pk)
-                duplicate_fast = Fast.objects.create(
-                    name=old_fast.name,
-                    church=old_fast.church,
-                    description=old_fast.description,
-                    culmination_feast=old_fast.culmination_feast,
-                    culmination_feast_date=data["culmination_feast_date"],
-                    image=old_fast.image,
-                    url=old_fast.url,
-                )
 
-                # days TODO
+                # use previous fast's image since not set in form
+                duplicate_fast.image = old_fast.image
+                duplicate_fast.image_thumbnail = old_fast.image_thumbnail
+
+                # days
                 dates = [data["first_day"] + datetime.timedelta(days=num_days) 
-                         for num_days in range(data["length_of_fast"])]
+                        for num_days in range(data["length_of_fast"])]
                 days = [Day.objects.get_or_create(date=date)[0] for date in dates]
                 duplicate_fast.days.set(days)
-                duplicate_fast.save()  # updates year based on days
+                duplicate_fast.save()  # run save method to ensure year is set
 
                 # go back to fast admin page
                 obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
                 
                 return redirect(to=obj_url)
         else:
-            form = DuplicateFastWithNewDatesAdminForm()
+            form = CreateFastWithDatesAdminForm(initial={
+                "name": old_fast.name,
+                "church": old_fast.church,
+                "culmination_feast": old_fast.culmination_feast,
+                "culmination_feast_date": old_fast.culmination_feast_date,
+                "description": old_fast.description,
+                "url": old_fast.url,
+            })
 
         fast_name = Fast.objects.get(pk=pk).name 
         context = dict(

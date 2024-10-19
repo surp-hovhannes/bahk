@@ -44,12 +44,11 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
             )
 
         # also checks that does not overlap with other fasts from the same church
-        # TODO: do I need this validation still with the new migration?
-        # days = Day.objects.filter(date__range=[first_day, last_day])
-        # church_name = self.cleaned_data["church"].name
-        # names_of_churches_with_overlapping_fasts = sum([[f.church.name for f in day.fasts.all()] for day in days], [])
-        # if church_name in names_of_churches_with_overlapping_fasts:
-        #     raise ValidationError("Fast overlaps with another fast from the same church (not permitted).")
+        days = Day.objects.filter(date__range=[first_day, last_day])
+        church_name = self.cleaned_data["church"].name
+        names_of_churches_with_overlapping_fasts = sum([[f.church.name for f in day.fasts.all()] for day in days], [])
+        if church_name in names_of_churches_with_overlapping_fasts:
+            raise ValidationError("Fast overlaps with another fast from the same church (not permitted).")
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -63,14 +62,6 @@ class CustomUserCreationForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['church'].choices = [(church.name, church.name) for church in Church.objects.all()]
-
-
-class DuplicateFastWithNewDatesAdminForm(CreateFastWithDatesAdminForm):
-    class Meta:
-        model = Fast
-        # "image" is excluded because it is not clear how to save an image with a form
-        fields = ["culmination_feast_date"]
-
 
 
 class JoinFastsForm(forms.Form):
