@@ -7,7 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from hub.forms import CreateFastWithDatesAdminForm
+from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Fast, Profile
 
 
@@ -90,9 +90,41 @@ class FastAdmin(admin.ModelAdmin):
                 "<int:pk>/change/duplicate_fast_with_new_dates/", 
                 self.admin_site.admin_view(self.duplicate_fast_with_new_dates),
                 name="duplicate-fast-with-new-dates",
-            )
+            ),
+            path(
+                "<int:pk>/change/add_days_to_fast/",
+                self.admin_site.admin_view(self.add_days_to_fast),
+                name="add-days-to-fast",
+            ),
         ] + super().get_urls()
     
+    def add_days_to_fast(self, request, pk):
+        """View to add days to a fast."""
+        fast = Fast.objects.get(pk=pk)
+        # form submitted with data
+        if request.method == "POST":
+            form = AddDaysToFastAdminForm(request.POST)
+            if form.is_valid():
+                days = [Day.objects.get_or_create(date=date)[0] for date in form.cleaned_data["dates"]]
+                fast.days.set(days)
+
+                obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
+                
+                return redirect(to=obj_url)
+        else:
+            form = AddDaysToFastAdminForm()
+
+        fast_name = Fast.objects.get(pk=pk).name 
+        context = dict(
+            self.admin_site.each_context(request),
+            opts=Fast._meta,
+            title=f"Add days to {fast_name}",
+            form=form,
+            fast_name=fast_name,
+        )
+
+        return TemplateResponse(request, "add_days_to_fast.html", context)
+
     def create_fast_with_dates(self, request):
         """View to create fast along with its dates."""
         # form submitted with data

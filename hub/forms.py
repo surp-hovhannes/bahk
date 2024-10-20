@@ -1,4 +1,6 @@
 """Django form classes."""
+import datetime
+
 from django.contrib.auth.forms import UserCreationForm 
 from django.core.exceptions import ValidationError
 from django import forms
@@ -9,6 +11,21 @@ from hub.models import Church, Day, Fast, Profile
 
 _MAX_FAST_LENGTH = 60  # days
 
+
+class AddDaysToFastAdminForm(forms.Form):
+    dates = forms.TextInput()
+
+    def clean_dates(self):
+        """Ensures that dates are entered properly (acceptable date format, line-separated)."""
+        date_strings = self.cleaned_data["dates"].split("\n")
+        dates = []
+        for date_str in date_strings:
+            try:
+                dates.append(datetime.datetime.strptime(date_str, "%m/%d/%Y").date())
+            except:
+                raise ValidationError(f"{date_str} not in valid date format (<month>/<day>/<year>)")
+        self.cleaned_data["dates"] = dates
+        
 
 class CreateFastWithDatesAdminForm(forms.ModelForm):
     first_day = forms.DateField(widget=forms.SelectDateWidget)
