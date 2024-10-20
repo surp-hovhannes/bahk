@@ -86,6 +86,11 @@ class FastAdmin(admin.ModelAdmin):
         return [
             path("create_fast_with_dates/", self.admin_site.admin_view(self.create_fast_with_dates),
                  name="create-fast-with-dates"),
+            path(
+                "<int:pk>/change/duplicate_fast_with_new_dates/", 
+                self.admin_site.admin_view(self.duplicate_fast_with_new_dates),
+                name="duplicate-fast-with-new-dates",
+            )
         ] + super().get_urls()
     
     def create_fast_with_dates(self, request):
@@ -118,6 +123,51 @@ class FastAdmin(admin.ModelAdmin):
         )
 
         return TemplateResponse(request, "create_fast_with_dates.html", context)
+    
+    def duplicate_fast_with_new_dates(self, request, pk):
+        """View to duplicate fast with new dates for a new year. Previous participants are not added."""
+        old_fast = Fast.objects.get(pk=pk)
+        # form submitted with data
+        if request.method == "POST":
+            form = CreateFastWithDatesAdminForm(request.POST)
+            if form.is_valid():
+                duplicate_fast = form.save()
+                data = form.cleaned_data
+
+                # use previous fast's image since not set in form
+                duplicate_fast.image = old_fast.image
+                duplicate_fast.image_thumbnail = old_fast.image_thumbnail
+
+                # days
+                dates = [data["first_day"] + datetime.timedelta(days=num_days) 
+                        for num_days in range(data["length_of_fast"])]
+                days = [Day.objects.get_or_create(date=date)[0] for date in dates]
+                duplicate_fast.days.set(days)
+                duplicate_fast.save()  # run save method to ensure year is set
+
+                # go back to fast admin page
+                obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
+                
+                return redirect(to=obj_url)
+        else:
+            form = CreateFastWithDatesAdminForm(initial={
+                "name": old_fast.name,
+                "church": old_fast.church,
+                "culmination_feast": old_fast.culmination_feast,
+                "description": old_fast.description,
+                "url": old_fast.url,
+            })
+
+        fast_name = Fast.objects.get(pk=pk).name 
+        context = dict(
+            self.admin_site.each_context(request),
+            opts=Fast._meta,
+            title=f"Duplicate {fast_name} with new dates",
+            form=form,
+            fast_name=fast_name,
+        )
+
+        return TemplateResponse(request, "duplicate_fast_with_new_dates.html", context)
 
 
 @admin.register(Profile, site=admin.site)
