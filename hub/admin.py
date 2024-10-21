@@ -7,6 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
+from hub.constants import DATE_FORMAT_STRING
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Fast, Profile
 
@@ -15,7 +16,8 @@ _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
 
 
 def _concatenate_queryset(queryset, delim=", ", num=_MAX_NUM_TO_SHOW):
-    return delim.join([str(obj) for obj in queryset][:num])
+    needs_ellipsis = len(queryset) > num
+    return delim.join([str(obj) for obj in queryset][:num]) + (needs_ellipsis * ",...")
 
 
 def _get_fast_links_url(obj, max_num_to_show=_MAX_NUM_TO_SHOW):
@@ -106,7 +108,7 @@ class FastAdmin(admin.ModelAdmin):
             form = AddDaysToFastAdminForm(request.POST)
             if form.is_valid():
                 days = [Day.objects.get_or_create(date=date)[0] for date in form.cleaned_data["dates"]]
-                fast.days.set(days)
+                fast.days.add(*days)
 
                 obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
                 
