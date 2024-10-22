@@ -157,7 +157,7 @@ class FastAdmin(admin.ModelAdmin):
         )
 
         return TemplateResponse(request, "create_fast_with_dates.html", context)
-    
+
     def duplicate_fast_with_new_dates(self, request, pk):
         """View to duplicate fast with new dates for a new year. Previous participants are not added."""
         old_fast = Fast.objects.get(pk=pk)

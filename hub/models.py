@@ -33,7 +33,6 @@ class Fast(models.Model):
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(null=True, blank=True,
                                               help_text="You can enter in day/month/year format, e.g., 8/15/24")
-    # auto-saved to be the year of the first day of the fast
     year = models.IntegerField(
         validators=[
             MinValueValidator(2024), 
