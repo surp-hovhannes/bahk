@@ -16,6 +16,7 @@ import django_heroku
 
 from pathlib import Path
 from decouple import config, Csv
+from ssl import CERT_NONE
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -198,6 +199,13 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+BROKER_USE_SSL = {
+    'ssl_cert_reqs': CERT_NONE
+}
+REDIS_BACKEND_USE_SSL = {
+    'ssl_cert_reqs': CERT_NONE
+}
+
 
 # Mailgun Configuration
 EMAIL_HOST = 'smtp.mailgun.org'
