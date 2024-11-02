@@ -1,14 +1,37 @@
 """Django form classes."""
+import datetime
+
 from django.contrib.auth.forms import UserCreationForm 
 from django.core.exceptions import ValidationError
 from django import forms
 from django.contrib.auth.models import User
 
+from hub.constants import DATE_FORMAT_STRING
 from hub.models import Church, Day, Fast, Profile
 
 
 _MAX_FAST_LENGTH = 60  # days
 
+
+class AddDaysToFastAdminForm(forms.Form):
+    dates = forms.CharField(
+        help_text="Type in each date on a new line in the format month/day/year. "
+                  "For example, 8/15/2024 for August 15, 2024", 
+        widget=forms.Textarea
+    )
+
+    def clean_dates(self):
+        """Ensures that dates are entered properly (acceptable date format, line-separated)."""
+        print(self.cleaned_data["dates"])
+        dates = []
+        for date_str in self.cleaned_data["dates"].splitlines():
+            try:
+                dates.append(datetime.datetime.strptime(date_str, DATE_FORMAT_STRING).date())
+            except:
+                raise ValidationError(f"{date_str} not in valid date format (<month>/<day>/<year>)")
+        
+        return dates
+        
 
 class CreateFastWithDatesAdminForm(forms.ModelForm):
     first_day = forms.DateField(widget=forms.SelectDateWidget)
@@ -49,6 +72,8 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
         names_of_churches_with_overlapping_fasts = sum([[f.church.name for f in day.fasts.all()] for day in days], [])
         if church_name in names_of_churches_with_overlapping_fasts:
             raise ValidationError("Fast overlaps with another fast from the same church (not permitted).")
+        
+        return last_day
 
 
 class CustomUserCreationForm(UserCreationForm):
