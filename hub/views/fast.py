@@ -12,11 +12,11 @@ import logging
 
 class FastListView(ChurchContextMixin, generics.ListAPIView):
     """
-    API view to list all fasts for a specific church.
+    API view to list all fasts for a specific church within a configurable date range.
 
     This view inherits from `ChurchContextMixin`, which determines the church based on the user's profile 
     if authenticated, or a `church_id` query parameter if unauthenticated. The fasts are filtered based on the 
-    determined church.
+    determined church and a date range.
 
     Inherits:
         - ChurchContextMixin: Provides the church context for filtering.
@@ -25,15 +25,52 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
     Permissions:
         - AllowAny: Any user, authenticated or not, can access this view.
     
+    Query Parameters:
+        - start_date: Optional. Start date in YYYY-MM-DD format. Defaults to 6 months ago.
+        - end_date: Optional. End date in YYYY-MM-DD format. Defaults to 6 months in future.
+    
     Returns:
-        - A list of fasts filtered by the church context.
+        - A list of fasts filtered by:
+            - church context
+            - date range (defaults to ±6 months from current date if no parameters provided)
+        - Results are distinct and unpaginated
     """
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]
+    pagination_class = None
 
     def get_queryset(self):
         church = self.get_church()
-        return Fast.objects.filter(church=church)
+        today = timezone.now().date()
+        
+        # Default date range (±6 months)
+        default_start = today - datetime.timedelta(days=180)
+        default_end = today + datetime.timedelta(days=180)
+
+        # Get and validate date parameters
+        start_date = default_start
+        end_date = default_end
+
+        start_date_str = self.request.query_params.get('start_date')
+        end_date_str = self.request.query_params.get('end_date')
+
+        if start_date_str:
+            try:
+                start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass  # Keep default if invalid
+
+        if end_date_str:
+            try:
+                end_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass  # Keep default if invalid
+
+        return Fast.objects.filter(
+            church=church,
+            days__date__gte=start_date,
+            days__date__lte=end_date
+        ).distinct()
 
 
 class FastDetailView(generics.RetrieveAPIView):
