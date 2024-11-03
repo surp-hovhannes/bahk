@@ -13,10 +13,11 @@ class ProfileSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    thumbnail = serializers.URLField(source='profile_image_thumbnail.url', read_only=True)
 
     class Meta:
         model = models.Profile
-        fields = ['user_id','username','email','profile_image', 'location', 'church', 'receive_upcoming_fast_reminders']
+        fields = ['user_id','username','email','profile_image', 'thumbnail', 'location', 'church', 'receive_upcoming_fast_reminders']
     
 class ProfileImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -106,6 +107,7 @@ class FastSerializer(serializers.ModelSerializer):
     total_number_of_days = serializers.SerializerMethodField()
     current_day_number = serializers.SerializerMethodField()
     modal_id = serializers.ReadOnlyField()
+    thumbnail = serializers.SerializerMethodField()
 
 
     def get_church(self, obj):
@@ -196,6 +198,11 @@ class FastSerializer(serializers.ModelSerializer):
             print(f"An error occurred: {e}")
             return None
 
+    def get_thumbnail(self, obj):
+        if obj.image:
+            return obj.image.url
+        return None
+
     class Meta:
         model = models.Fast
         fields = '__all__'
@@ -207,14 +214,41 @@ class JoinFastSerializer(serializers.ModelSerializer):
         model = models.Profile
         fields = ['fast_id']
 
+class FastStatsSerializer(serializers.Serializer):
+    joined_fasts = serializers.SerializerMethodField()
+    total_fasts = serializers.SerializerMethodField()
+    total_fast_days = serializers.SerializerMethodField()
+
+    def get_joined_fasts(self, obj):
+        return obj.fasts.values_list('id', flat=True)
+
+    def get_total_fasts(self, obj):
+        # returns the total number of fasts the user has joined
+        return obj.fasts.count()
+    
+    def get_total_fast_days(self, obj):
+        # returns the total number of days the user has fasted
+        return sum(fast.days.count() for fast in obj.fasts.all())
+    
+    class Meta:
+        fields = ['joined_fasts', 'total_fasts', 'total_fast_days']
+
+
 class DaySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Day
         fields = ['id', 'date', 'fast', 'church']
 
 class ParticipantSerializer(serializers.ModelSerializer):
+    thumbnail = serializers.SerializerMethodField()
+
+    def get_thumbnail(self, obj):
+        if obj.profile_image_thumbnail:
+            return obj.profile_image_thumbnail.url
+        return None
+
     class Meta:
         model = models.Profile
-        fields = ['id', 'user', 'profile_image', 'location'] 
+        fields = ['id', 'user', 'profile_image', 'thumbnail', 'location'] 
 
     user = serializers.CharField(source='user.username')  # If you want to include the username instead of the user object

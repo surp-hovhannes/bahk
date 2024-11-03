@@ -1,5 +1,8 @@
 """Models for bahk hub."""
+import datetime
+
 from django.contrib.auth.models import User
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import constraints
 from imagekit.models import ImageSpecField
@@ -30,6 +33,15 @@ class Fast(models.Model):
     culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(null=True, blank=True,
                                               help_text="You can enter in day/month/year format, e.g., 8/15/24")
+    # auto-saved to be the year of the first day of the fast
+    year = models.IntegerField(
+        validators=[
+            MinValueValidator(2024), 
+            MaxValueValidator(3000)
+        ],
+        null=True,
+        blank=True,
+    )
     image = models.ImageField(upload_to='fast_images/', null=True, blank=True)
     image_thumbnail = ImageSpecField(source='image',
                                      processors=[ResizeToFill(500, 500)],
@@ -39,9 +51,15 @@ class Fast(models.Model):
     url = models.URLField(verbose_name="Link to learn more", null=True, blank=True, max_length=2048,
                           help_text="URL to a link to learn more--must include protocol (e.g. https://)")
 
+    def save(self, **kwargs):
+        super().save(**kwargs)  # save first to create a primary key (needed to access self.days)
+        if self.days.exists():
+            self.year = self.days.first().date.year
+        super().save(**kwargs)
+
     class Meta:
         constraints = [
-            constraints.UniqueConstraint(fields=["name", "church"], name="unique_name_church"),
+            constraints.UniqueConstraint(fields=["name", "church", "year"], name="unique_name_church_year"),
             constraints.UniqueConstraint(fields=["culmination_feast_date", "church"], name="unique_feast_date_church"),
         ]
 
@@ -50,7 +68,10 @@ class Fast(models.Model):
         return f"fastModal_{self.id}"
 
     def __str__(self):
-        return f"{self.name} of the {self.church.name}"
+        s = self.name
+        if self.year:
+            s += f" ({self.year})"
+        return s
 
 
 class Profile(models.Model):
