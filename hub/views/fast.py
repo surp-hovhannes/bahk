@@ -16,7 +16,7 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
 
     This view inherits from `ChurchContextMixin`, which determines the church based on the user's profile 
     if authenticated, or a `church_id` query parameter if unauthenticated. The fasts are filtered based on the 
-    determined church and a date range.
+    determined church and a date range (i.e., a fast is included if *any* of its days fall within the date range).
 
     Inherits:
         - ChurchContextMixin: Provides the church context for filtering.
