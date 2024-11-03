@@ -11,7 +11,21 @@ from django.http import JsonResponse
 
 
 def get_daily_readings_for_today(*_args, **_kwargs):
-    """Based on https://www.geeksforgeeks.org/python-web-scraping-tutorial/"""
+    """Scrapes daily readings from sacredtradition.am.
+
+    Returns:
+        JSON of daily readings::
+
+        {
+            <book>: {
+                <chapter>:
+                    [<start-verse>, <end-verse>]
+                }
+            },
+            ...
+        }
+
+    Based on https://www.geeksforgeeks.org/python-web-scraping-tutorial/"""
     today_str = datetime.strftime(datetime.today().date(), "%Y%m%d")
 
     url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={today_str}"
