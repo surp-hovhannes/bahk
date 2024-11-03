@@ -13,19 +13,10 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Configure SSL settings for Redis if using rediss://
 broker_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-if broker_url.startswith('rediss://'):
-    app.conf.broker_transport_options = {
-        'ssl_cert_reqs': CERT_NONE,
-        'ssl_ca_certs': None,
-        'ssl_certfile': None,
-        'ssl_keyfile': None,
-    }
-    app.conf.redis_backend_use_ssl = {
-        'ssl_cert_reqs': CERT_NONE,
-        'ssl_ca_certs': None,
-        'ssl_certfile': None,
-        'ssl_keyfile': None,
-    }
+app.conf.broker_url = broker_url
+
+# The SSL settings will be automatically picked up from Django settings
+# (CELERY_BROKER_USE_SSL and CELERY_REDIS_BACKEND_USE_SSL)
 
 # Discover tasks automatically
 app.autodiscover_tasks()
