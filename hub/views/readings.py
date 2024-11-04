@@ -14,7 +14,7 @@ import urllib.request
 from django.http import JsonResponse
 
 
-class GetDailyReadingsForToday(generics.GenericAPIView):
+class GetDailyReadingsForDate(generics.GenericAPIView):
     """
     API view to retrieve daily scripture readings by scraping sacredtradition.am.
 
