@@ -12,16 +12,15 @@ from rest_framework.response import Response
 import urllib.request
 
 from django.http import JsonResponse
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
     """
     API view to retrieve daily scripture readings by scraping sacredtradition.am.
-
-    This view scrapes the Daily Worship app's website to get the daily readings
-    for the current date. It parses the HTML content to extract book names,
-    chapters, and verse ranges. Including the optional paramater 'date', it
-    will return the readings for that date instead of today's date.
+    Results are cached for 24 hours per unique date requested.
 
     Permissions:
         - AllowAny: No authentication required
@@ -52,6 +51,9 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         }
     """
 
+    def get_cache_key(self, date):
+        return f"daily_readings_{date}"
+
     def get(self, request, *args, **kwargs):
         if date_str := self.request.query_params.get('date'):
             try:
@@ -61,6 +63,13 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         else:
             date = datetime.strftime(datetime.today().date(), "%Y%m%d")
 
+        # Try to get from cache first
+        cache_key = self.get_cache_key(date)
+        cached_readings = cache.get(cache_key)
+        if cached_readings:
+            return Response(cached_readings)
+
+        # If not in cache, fetch and store
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={date}"
         response = urllib.request.urlopen(url)
         data = response.read()
@@ -86,4 +95,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             html_content = html_content[i2 + 1:]
             book_start = html_content.find("<b>")
 
+        # Cache the results for 24 hours (86400 seconds)
+        cache.set(cache_key, readings, 86400)
+        
         return Response(readings)
