@@ -57,7 +57,7 @@ urlpatterns = [
     path('changelog/web/', changelog, name='changelog'),
 
     # Readings endpoints
-    path("readings/", GetDailyReadingsForDate.as_view(), name="daily-readings-today"),
+    path("readings/", GetDailyReadingsForDate.as_view(), name="daily-readings"),
 
 
     # Misc endpoints
