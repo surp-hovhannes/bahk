@@ -55,7 +55,7 @@
             ],
             "scripts": {
                 "test-setup": "python manage.py migrate",
-                "test": "python manage.py test"
+                "test": "REUSE_DB=1 python -Wa manage.py test --keepdb --noinput"
             }
         }
     }
