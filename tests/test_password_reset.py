@@ -121,3 +121,21 @@ class PasswordResetTests(APITestCase):
         # Verify the password was not changed
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password('oldpassword123')) 
+
+    def test_password_reset_confirm_endpoint_passwords_dont_match(self):
+        token = default_token_generator.make_token(self.user)
+        uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
+        
+        data = {
+            'token': token,
+            'uidb64': uidb64,
+            'new_password': 'newpassword123',
+            'confirm_password': 'differentpassword123'
+        }
+        
+        response = self.client.post(self.password_reset_confirm_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # Verify the password was not changed
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('oldpassword123')) 
