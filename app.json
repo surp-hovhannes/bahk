@@ -55,7 +55,7 @@
             ],
             "scripts": {
                 "test-setup": "python manage.py migrate",
-                "test": "python manage.py test"
+                "test": "python -Wa manage.py test --noinput"
             }
         }
     }

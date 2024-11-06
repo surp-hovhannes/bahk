@@ -234,6 +234,17 @@ if 'test' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    
+    # Use the same database user for tests
+    if 'DATABASE_URL' in os.environ:
+        db_config = dj_database_url.config(default=os.environ['DATABASE_URL'])
+        DATABASES = {
+            'default': db_config,
+            'TEST': {
+                'NAME': db_config['NAME'],
+                'USER': db_config['USER'],
+            }
+        }
 
 # test if is_production and print something to console
 if IS_PRODUCTION:
