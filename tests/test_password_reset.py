@@ -1,4 +1,3 @@
-from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.core import mail
@@ -9,6 +8,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 
 from hub.serializers import PasswordResetSerializer, PasswordResetConfirmSerializer
+
 
 class PasswordResetTests(APITestCase):
     def setUp(self):
