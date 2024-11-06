@@ -234,6 +234,18 @@ if 'test' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    
+    # Use the same database for tests with a test_ prefix
+    if 'DATABASE_URL' in os.environ:
+        db_config = dj_database_url.config(default=os.environ['DATABASE_URL'])
+        DATABASES = {
+            'default': {
+                **db_config,
+                'TEST': {
+                    'NAME': f"test_{db_config['NAME']}",
+                }
+            }
+        }
 
 # test if is_production and print something to console
 if IS_PRODUCTION:
@@ -245,3 +257,5 @@ else:
 CORS_ORIGIN_ALLOW_ALL = config('CORS_ORIGIN_ALLOW_ALL', default=False, cast=bool)
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 
+# Frontend URL for password reset, if local development or production
+FRONTEND_URL = config('FRONTEND_URL', default='https://web.fastandpray.app')

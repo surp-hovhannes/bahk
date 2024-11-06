@@ -6,6 +6,11 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_str
+from django.core.mail import send_mail
+from django.conf import settings
 
 from hub import models
 
@@ -13,12 +18,21 @@ class ProfileSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
-    thumbnail = serializers.URLField(source='profile_image_thumbnail.url', read_only=True)
+    thumbnail = serializers.SerializerMethodField()
+
+    def get_thumbnail(self, obj):
+        if obj.profile_image_thumbnail:
+            try:
+                return obj.profile_image_thumbnail.url
+            except:
+                return None
+        return None
 
     class Meta:
         model = models.Profile
-        fields = ['user_id','username','email','profile_image', 'thumbnail', 'location', 'church', 'receive_upcoming_fast_reminders']
-    
+        fields = ['user_id', 'username', 'email', 'profile_image', 'thumbnail', 
+                 'location', 'church', 'receive_upcoming_fast_reminders']
+
 class ProfileImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Profile
@@ -252,3 +266,36 @@ class ParticipantSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'profile_image', 'thumbnail', 'location'] 
 
     user = serializers.CharField(source='user.username')  # If you want to include the username instead of the user object
+
+class PasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        try:
+            user = User.objects.get(email=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User with this email address does not exist.")
+        return value
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    uidb64 = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        
+        # Decode the uidb64 to get the user ID
+        try:
+            uid = force_str(urlsafe_base64_decode(data['uidb64']))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise serializers.ValidationError("Invalid uidb64 or user does not exist.")
+    
+        # Check if the token is valid
+        if not default_token_generator.check_token(user, data['token']):
+            raise serializers.ValidationError("Invalid token.")
+        
+        return data
