@@ -235,14 +235,15 @@ if 'test' in sys.argv:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
     
-    # Use the same database user for tests
+    # Use the same database for tests with a test_ prefix
     if 'DATABASE_URL' in os.environ:
         db_config = dj_database_url.config(default=os.environ['DATABASE_URL'])
         DATABASES = {
-            'default': db_config,
-            'TEST': {
-                'NAME': db_config['NAME'],
-                'USER': db_config['USER'],
+            'default': {
+                **db_config,
+                'TEST': {
+                    'NAME': f"test_{db_config['NAME']}",
+                }
             }
         }
 
