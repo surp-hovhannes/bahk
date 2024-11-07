@@ -5,12 +5,11 @@ Currently based on the Daily Worship app's website, sacredtradition.am
 from datetime import datetime
 import logging
 import re
+import urllib.request
 
 from rest_framework.exceptions import ValidationError
 from rest_framework import generics
 from rest_framework.response import Response
-
-import urllib.request
 
 from django.core.cache import cache
 
@@ -110,7 +109,6 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         data = response.read()
         html_content = data.decode("utf-8")
 
-        readings = {}
         formatted_readings = []
         book_start = html_content.find("<b>")
         
