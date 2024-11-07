@@ -12,9 +12,6 @@ from rest_framework.response import Response
 
 import urllib.request
 
-from django.http import JsonResponse
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 
 
@@ -32,30 +29,44 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
     Returns:
         - A JSON response with the following structure:
         {
-            "<date>": {
-                "<book_name>": {
-                    "<chapter_number>": [
-                        "<start_verse>",
-                        "<end_verse>"
-                    ]
+            "date": "YYYY-MM-DD",
+            "readings": [
+                {
+                    "book": "Book Name",
+                    "startChapter": 1,
+                    "startVerse": 1,
+                    "endChapter": 1,
+                    "endVerse": 10
                 }
-            }
+            ]
         }
 
     Example Response:
         {
-            "2024-03-11": {
-                "Matthew": {
-                    "5": ["1", "12"]
+            "date": "2024-03-11",
+            "readings": [
+                {
+                    "book": "Matthew",
+                    "startChapter": 5,
+                    "startVerse": 1,
+                    "endChapter": 5,
+                    "endVerse": 12
                 },
-                "Isaiah": {
-                    "55": ["1", "13"]
+                {
+                    "book": "Isaiah",
+                    "startChapter": 55,
+                    "startVerse": 1,
+                    "endChapter": 55,
+                    "endVerse": 13
                 }
-            }
+            ]
         }
     """
 
     def get_cache_key(self, date):
+        """
+        Generate a cache key for the daily readings.
+        """
         return f"daily_readings_{date}"
 
     def get(self, request, *args, **kwargs):
@@ -127,10 +138,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             # Instead of building the old dictionary format, create a reading object
             reading = {
                 "book": book,
-                "start_chapter": int(start_chapter),  # Convert to integers
-                "start_verse": int(start_verse), 
-                "end_chapter": int(end_chapter),
-                "end_verse": int(end_verse)
+                "startChapter": int(start_chapter),  # Convert to integers
+                "startVerse": int(start_verse), 
+                "endChapter": int(end_chapter),
+                "endVerse": int(end_verse)
             }
             formatted_readings.append(reading)
 
