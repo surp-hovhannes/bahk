@@ -79,7 +79,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         cache_key = self.get_cache_key(response_date)
         cached_readings = cache.get(cache_key)
         if cached_readings:
-            return Response({response_date: cached_readings})
+            return Response({
+                "date": response_date,
+                "readings": cached_readings
+            })
 
         # If not in cache, fetch and store
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={scraper_date}"
@@ -97,6 +100,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         html_content = data.decode("utf-8")
 
         readings = {}
+        formatted_readings = []
         book_start = html_content.find("<b>")
         
         while book_start != -1:
@@ -120,17 +124,26 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             end_chapter = groups.group(4).strip(".") if groups.group(4) else start_chapter  # rm decimal from group
             end_verse = groups.group(5)
     
-            readings[book] = {
-				"start_chapter": start_chapter,
-				"start_verse":  start_verse, 
-				"end_chapter": end_chapter,
-				"end_verse":  end_verse
-			}    
+            # Instead of building the old dictionary format, create a reading object
+            reading = {
+                "book": book,
+                "startChapter": int(start_chapter),  # Convert to integers
+                "startVerse": int(start_verse),
+                "endChapter": int(end_chapter),
+                "endVerse": int(end_verse)
+            }
+            formatted_readings.append(reading)
 
             html_content = html_content[i2 + len("</b>"):]
             book_start = html_content.find("<b>")
 
+        # Create the final response format
+        response_data = {
+            "date": response_date,
+            "readings": formatted_readings
+        }
+
         # Cache the results for 24 hours (86400 seconds)
-        cache.set(cache_key, readings, 86400)
+        cache.set(cache_key, formatted_readings, 86400)
         
-        return Response({response_date: readings})
+        return Response(response_data)
