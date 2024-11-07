@@ -117,7 +117,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             book = groups.group(1)
             chapter_start = groups.group(2)
             verse_start = groups.group(3)
-            chapter_end = groups.group(4) if groups.group(4) else chapter_start
+            chapter_end = groups.group(4).strip(".") if groups.group(4) else chapter_start  # rm decimal from group
             verse_end = groups.group(5)
     
             readings[book] = [(chapter_start, verse_start), (chapter_end, verse_end)]
