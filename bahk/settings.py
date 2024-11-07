@@ -227,7 +227,7 @@ ANYMAIL = {
     "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')  
 }
 EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend" 
-DEFAULT_FROM_EMAIL = "bahk@gmail.com"
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fastandprayhelp@gmail.com')
 
 # Test settings
 if 'test' in sys.argv:
