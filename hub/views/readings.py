@@ -127,10 +127,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             # Instead of building the old dictionary format, create a reading object
             reading = {
                 "book": book,
-                "startChapter": int(start_chapter),  # Convert to integers
-                "startVerse": int(start_verse),
-                "endChapter": int(end_chapter),
-                "endVerse": int(end_verse)
+                "start_chapter": int(start_chapter),  # Convert to integers
+                "start_verse": int(start_verse), 
+                "end_chapter": int(end_chapter),
+                "end_verse": int(end_verse)
             }
             formatted_readings.append(reading)
 
