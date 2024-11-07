@@ -3,6 +3,7 @@
 Currently based on the Daily Worship app's website, sacredtradition.am
 """
 from datetime import datetime
+import logging
 import re
 
 from rest_framework.exceptions import ValidationError
@@ -94,16 +95,25 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             i2 = html_content.find("</b>")
             reading_str = html_content[i1:i2]
     
-            groups = re.search("^([A-za-z\'\. ]+) ([0-9]+)\.([0-9]+)\-([0-9]+)$", reading_str)
+            parser_regex = r"^([A-za-z\'\. ]+) ([0-9]+)\.([0-9]+)\-([0-9]+\.)?([0-9]+)$"
+            groups = re.search(parser_regex, reading_str)
+
+            # skip reading if does not match parser regex
+            if groups is None:
+                logging.error("Could not parse reading %s at %s with regex %s", reading_str, url, parser_regex)
+                html_content = html_content[i2 + 1:]
+                book_start = html_content.find("<b>")
+                continue
 
             book = groups.group(1)
-            chapter = groups.group(2)
+            chapter_start = groups.group(2)
             verse_start = groups.group(3)
-            verse_end = groups.group(4)
+            chapter_end = groups.group(4) if groups.group(4) else chapter_start
+            verse_end = groups.group(5)
     
-            readings[book] = {chapter: [verse_start, verse_end]}
+            readings[book] = [(chapter_start, verse_start), (chapter_end, verse_end)]
     
-            html_content = html_content[i2 + 1:]
+            html_content = html_content[i2 + len("</b>"):]
             book_start = html_content.find("<b>")
 
         # Cache the results for 24 hours (86400 seconds)
