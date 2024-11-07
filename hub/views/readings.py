@@ -83,7 +83,16 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
 
         # If not in cache, fetch and store
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={scraper_date}"
-        response = urllib.request.urlopen(url)
+        try:
+            response = urllib.request.urlopen(url)
+        except urllib.error.URLError:
+            logging.error("Invalid url %s", url)
+            return Response({})
+
+        if response.status != 200:
+            logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
+            return Response({})
+
         data = response.read()
         html_content = data.decode("utf-8")
 
