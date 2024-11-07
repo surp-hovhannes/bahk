@@ -115,13 +115,18 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                 continue
 
             book = groups.group(1)
-            chapter_start = groups.group(2)
-            verse_start = groups.group(3)
-            chapter_end = groups.group(4).strip(".") if groups.group(4) else chapter_start  # rm decimal from group
-            verse_end = groups.group(5)
+            start_chapter = groups.group(2)
+            start_verse = groups.group(3)
+            end_chapter = groups.group(4).strip(".") if groups.group(4) else start_chapter  # rm decimal from group
+            end_verse = groups.group(5)
     
-            readings[book] = [(chapter_start, verse_start), (chapter_end, verse_end)]
-    
+            readings[book] = {
+				"start_chapter": start_chapter,
+				"start_verse":  start_verse, 
+				"end_chapter": end_chapter,
+				"end_verse":  end_verse
+			}    
+
             html_content = html_content[i2 + len("</b>"):]
             book_start = html_content.find("<b>")
 
