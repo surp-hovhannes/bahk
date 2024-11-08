@@ -120,7 +120,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             html_content = html_content[i2 + 1:]
             book_start = html_content.find("<b>")
     
-            parser_regex = r"^([A-za-z\'\. ]+) ([0-9]+)\.([0-9]+)(\-)?([0-9]+\.)?([0-9]+)?$"
+            parser_regex = r"^([A-za-z\'\. ]+) ([0-9]+)\.([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
             groups = re.search(parser_regex, reading_str)
 
             # skip reading if does not match parser regex
@@ -133,8 +133,8 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                 book = groups.group(1)
                 start_chapter = groups.group(2)
                 start_verse = groups.group(3)
-                end_chapter = groups.group(5).strip(".") if groups.group(5) is not None else start_chapter  # rm decimal
-                end_verse = groups.group(6) if groups.group(6) is not None else start_verse
+                end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter  # rm decimal
+                end_verse = groups.group(5) if groups.group(5) is not None else start_verse
     
                 # Instead of building the old dictionary format, create a reading object
                 reading = {
