@@ -116,35 +116,40 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             i1 = book_start + len("<b>")
             i2 = html_content.find("</b>")
             reading_str = html_content[i1:i2]
+            # advance to next section of web text to prevent infinite loop
+            html_content = html_content[i2 + 1:]
+            book_start = html_content.find("<b>")
     
-            parser_regex = r"^([A-za-z\'\. ]+) ([0-9]+)\.([0-9]+)\-([0-9]+\.)?([0-9]+)$"
+            parser_regex = r"^([A-za-z\'\. ]+) ([0-9]+)\.([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
             groups = re.search(parser_regex, reading_str)
 
             # skip reading if does not match parser regex
             if groups is None:
                 logging.error("Could not parse reading %s at %s with regex %s", reading_str, url, parser_regex)
-                html_content = html_content[i2 + 1:]
-                book_start = html_content.find("<b>")
                 continue
 
-            book = groups.group(1)
-            start_chapter = groups.group(2)
-            start_verse = groups.group(3)
-            end_chapter = groups.group(4).strip(".") if groups.group(4) else start_chapter  # rm decimal from group
-            end_verse = groups.group(5)
+            try:
+                # parse groups
+                book = groups.group(1)
+                start_chapter = groups.group(2)
+                start_verse = groups.group(3)
+                end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter  # rm decimal
+                end_verse = groups.group(5) if groups.group(5) is not None else start_verse
     
-            # Instead of building the old dictionary format, create a reading object
-            reading = {
-                "book": book,
-                "startChapter": int(start_chapter),  # Convert to integers
-                "startVerse": int(start_verse), 
-                "endChapter": int(end_chapter),
-                "endVerse": int(end_verse)
-            }
-            formatted_readings.append(reading)
+                # Instead of building the old dictionary format, create a reading object
+                reading = {
+                    "book": book,
+                    "startChapter": int(start_chapter),  # Convert to integers
+                    "startVerse": int(start_verse), 
+                    "endChapter": int(end_chapter), 
+                    "endVerse": int(end_verse) 
+                }
+            except Exception as e:
+                logging.error("Could not parse reading with text %s with regex %s from %s. Skipping.", 
+                              reading_str, parser_regex, url)
+                continue
 
-            html_content = html_content[i2 + len("</b>"):]
-            book_start = html_content.find("<b>")
+            formatted_readings.append(reading)
 
         # Create the final response format
         response_data = {
