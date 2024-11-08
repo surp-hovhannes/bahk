@@ -88,6 +88,11 @@ class CustomUserCreationForm(UserCreationForm):
         super().__init__(*args, **kwargs)
         self.fields['church'].choices = [(church.name, church.name) for church in Church.objects.all()]
 
+    def clean_email(self):
+        new_email = self.cleaned_data.get("email")
+        if User.objects.filter(email=new_email).exists():
+            raise ValidationError(f"Cannot register with email {new_email}. User already exists with this address.")
+        
 
 class JoinFastsForm(forms.Form):
     fasts = forms.ModelMultipleChoiceField(queryset=Fast.objects.none(), widget=forms.SelectMultiple)
