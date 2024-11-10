@@ -256,7 +256,6 @@ class YearFilter(SimpleListFilter):
     
     def lookups(self, request, model_admin):
         all_years = set(r.day.date.year for r in model_admin.model.objects.all())
-        print(all_years)
         return [(y, y) for y in all_years]
 
     def queryset(self, request, queryset):
@@ -270,11 +269,11 @@ class YearFilter(SimpleListFilter):
 
 @admin.register(Reading, site=admin.site)
 class ReadingAdmin(admin.ModelAdmin):
-    list_display = ("church_link", "date_link", "__str__",)
-    list_display_links = ("church_link", "date_link", "__str__",)
+    list_display = ("church_link", "day", "__str__", "book", "start_chapter", "start_verse",)
+    list_display_links = ("church_link", "day", "__str__",)
     list_filter = (YearFilter,)
-    ordering = ("book", "start_chapter", "start_verse",)
-
+    ordering = ("day", "book", "start_chapter", "start_verse",)
+    
     def church_link(self, reading):
         if not reading.day and not reading.day.church:
             return ""
@@ -282,12 +281,3 @@ class ReadingAdmin(admin.ModelAdmin):
         return format_html('<a href="{}">{}</a>', url, reading.day.church.name)
     
     church_link.short_description = "Church"
-
-    def date_link(self, reading):
-        if not reading.day:
-            return ""
-        url = reverse("admin:hub_day_change", args=[reading.day.pk])
-        return format_html('<a href="{}">{}</a>', url, reading.day)
-    
-    date_link.short_description = "Date"
-    
