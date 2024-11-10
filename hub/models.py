@@ -102,3 +102,31 @@ class Day(models.Model):
 
     def __str__(self):
         return self.date.strftime("%B-%d-%Y")
+
+
+class Reading(models.Model):
+    """Stores details for a Bible reading."""
+    day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="readings")
+    book = models.CharField(max_length=64)
+    start_chapter = models.IntegerField(verbose_name="Start Chapter")
+    start_verse = models.IntegerField(verbose_name="Start Verse")
+    end_chapter = models.IntegerField(verbose_name="End Chapter", help_text="May be same as start chapter")
+    end_verse = models.IntegerField(verbose_name="End Verse", help_text="May be same as end verse")
+
+    class Meta:
+        constraints = [
+            constraints.UniqueConstraint(
+                fields=["day", "book", "start_chapter", "start_verse", "end_chapter", "end_verse"], 
+                name="unique_reading_per_day"
+            ),
+        ]
+
+    def __str__(self):
+        s = f"{self.book}: Chapter {self.start_chapter}, "
+        if self.start_chapter == self.end_chapter and self.start_verse != self.end_verse:
+            s += f"Verses {self.start_verse}-{self.end_verse}"
+        else:
+            s += f"Verse {self.start_verse}"
+            if self.start_chapter != self.end_chapter:
+                s += f" - Chapter {self.end_chapter}, Verse {self.end_verse}"
+        return s
