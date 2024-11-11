@@ -8,7 +8,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework import generics
 from rest_framework.response import Response
 
-from hub.models import Day
+from hub.models import Day, Reading
+from hub.utils import scrape_readings
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -74,16 +75,22 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
 
         day, _ = Day.objects.get_or_create(date=date_obj)
         formatted_readings = []
+        if not day.readings.exists():
+            # import readings for this date into db
+            readings = scrape_readings(date_obj)
+            for reading in readings:
+                reading.update({"day": day})
+                Reading.objects.get_or_create(**reading)
+
         for reading in day.readings.all():
-            formatted_reading = {
+            formatted_readings.append({
                 "book": reading.book,
                 "start_chapter": reading.start_chapter,
                 "start_verse": reading.start_verse,
                 "end_chapter": reading.end_chapter,
                 "end_verse": reading.end_verse,
                 "url": reading.create_url()
-            }
-            formatted_readings.append(formatted_reading)
+            })
 
         # Create the final response format
         response_data = {

@@ -1,16 +1,99 @@
-import datetime
+"""Utilities for supporting backend."""
+from datetime import datetime, timedelta
+import logging
+import re
+
+import urllib
+
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
+from django.db.models import OuterRef, Subquery, Q
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
-from hub.models import Profile, Fast, Day
-from datetime import datetime, timedelta
-from .serializers import FastSerializer
-from django.db.models import OuterRef, Subquery, Q
 
-import logging
+from hub.models import Day, Fast, Profile
+from hub.serializers import FastSerializer
+
 
 logger = logging.getLogger(__name__)
+
+PARSER_REGEX = r"^([A-za-z1-4\'\. ]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
+
+
+def scrape_readings(date_obj, date_format="%Y%m%d", max_num_readings=40):
+    """Scrapes readings from sacredtradition.am"""    
+    date_str = date_obj.strftime(date_format)
+
+    url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={date_str}"
+    try:
+        response = urllib.request.urlopen(url)
+    except urllib.error.URLError:
+        logging.error("Invalid url %s", url)
+        return []
+
+    if response.status != 200:
+        logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
+        return []
+
+    data = response.read()
+    html_content = data.decode("utf-8")
+
+    book_start = html_content.find("<b>")
+    
+    readings = []
+    ct = 0
+    while book_start != -1:
+        # prevent infinite loop
+        if ct > max_num_readings:
+            logging.error("Reached maximum number of readings: %d. Breaking to avoid infinite loop.", max_num_readings)
+            break
+        ct += 1
+
+        i1 = book_start + len("<b>")
+        i2 = html_content.find("</b>")
+        reading_str = html_content[i1:i2]
+
+        # advance to next section of web text early to prevent infinite loop in case of failure later on
+        html_content = html_content[i2 + 1:]
+        book_start = html_content.find("<b>")
+
+        if "," in reading_str:
+            # TODO: if comma found, second reading appended to first, as for Daniel 3.1-23 and Azariah 1-68
+            # for now, omit second reading
+            reading_str = reading_str.split(",")[0]
+        
+        groups = re.search(PARSER_REGEX, reading_str)
+
+        # skip reading if does not match parser regex
+        if groups is None:
+            logging.error("Could not parse reading %s at %s with regex %s", reading_str, url, PARSER_REGEX)
+            continue
+
+        try:
+            # parse groups
+            book = groups.group(1)
+            # remove decimal if start chapter provided; otherwise, part of book with 1 chapter
+            start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
+            start_verse = groups.group(3)
+            # remove decimal if end chapter provided; otherwise, must be the same as the start chapter
+            end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter
+            end_verse = groups.group(5) if groups.group(5) is not None else start_verse
+
+            readings.append({
+                "book": book,
+                "start_chapter": int(start_chapter),
+                "start_verse": int(start_verse),
+                "end_chapter": int(end_chapter),
+                "end_verse": int(end_verse)
+            })
+        except Exception:
+            logging.error(
+                "Could not parse reading with text %s with regex %s from %s. Skipping.", 
+                reading_str, PARSER_REGEX, url, exc_info=True
+            )
+            continue
+    
+    return readings
 
 
 def send_fast_reminders():
