@@ -124,7 +124,9 @@ class Reading(models.Model):
 
     def create_url(self):
         """Creates URL to read the reading."""
-        return f"https://catenabible.com/{CATENA_ABBREV_FOR_BOOK[self.book]}/{self.start_chapter:d}"
+        book_abbrev = CATENA_ABBREV_FOR_BOOK[self.book]
+        verse_ref = "" if self.start_verse <= 2 else f"#{book_abbrev}{self.start_chapter:03d}{self.start_verse - 2:03d}"
+        return f"https://catenabible.com/{book_abbrev}/{self.start_chapter:d}/{verse_ref}"
 
 
     def __str__(self):
