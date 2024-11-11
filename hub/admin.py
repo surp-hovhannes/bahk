@@ -247,6 +247,8 @@ class DayAdmin(admin.ModelAdmin):
 
     def reading_links(self, day):
         return _get_fk_links_url(day.readings.all(), "reading")
+    
+    reading_links.short_description = "Readings"
 
 
 from django.contrib.admin import SimpleListFilter
@@ -271,7 +273,7 @@ class YearFilter(SimpleListFilter):
 class ReadingAdmin(admin.ModelAdmin):
     list_display = ("church_link", "day", "__str__", "book", "start_chapter", "start_verse",)
     list_display_links = ("church_link", "day", "__str__",)
-    list_filter = (YearFilter,)
+    list_filter = (YearFilter, "book", "start_chapter", "start_verse",)
     ordering = ("day", "book", "start_chapter", "start_verse",)
     
     def church_link(self, reading):
