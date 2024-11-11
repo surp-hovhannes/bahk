@@ -1,6 +1,4 @@
 """Models for bahk hub."""
-import datetime
-
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -8,6 +6,8 @@ from django.db.models import constraints
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
 from imagekit.processors import Transpose
+
+from hub.constants import CATENA_ABBREV_FOR_BOOK
 
 
 class Church(models.Model):
@@ -120,6 +120,12 @@ class Reading(models.Model):
                 name="unique_reading_per_day"
             ),
         ]
+
+
+    def create_url(self):
+        """Creates URL to read the reading."""
+        return f"https://catenabible.com/{CATENA_ABBREV_FOR_BOOK[self.book]}/{self.start_chapter:d}"
+
 
     def __str__(self):
         s = f"{self.book}: Chapter {self.start_chapter}, "
