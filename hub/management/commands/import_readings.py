@@ -32,7 +32,7 @@ class Command(BaseCommand):
         end_date = datetime.strptime(options["end_date"], "%Y-%m-%d")
         for date_obj in daterange(start_date, end_date):
             day, _ = models.Day.objects.get_or_create(church=church, date=date_obj)
-            readings = scrape_readings(date_obj)
+            readings = scrape_readings(date_obj, church)
             for reading in readings:
                 reading |= {"day": day}
                 models.Reading.objects.get_or_create(**reading)

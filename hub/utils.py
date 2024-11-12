@@ -20,8 +20,13 @@ logger = logging.getLogger(__name__)
 PARSER_REGEX = r"^([A-za-z1-4\'\. ]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
 
 
-def scrape_readings(date_obj, date_format="%Y%m%d", max_num_readings=40):
-    """Scrapes readings from sacredtradition.am"""    
+def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
+    """Scrapes readings from sacredtradition.am""" 
+    if "Armenian Apostolic" not in church.name:
+        logging.error("Web-scraping for readings only set up for the Armenian Apostolic Church. %s not supported.", 
+                      church.name)
+        return []
+
     date_str = date_obj.strftime(date_format)
 
     url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={date_str}"

@@ -11,7 +11,6 @@ from rest_framework.response import Response
 
 from hub.models import Church, Day, Reading
 from hub.utils import scrape_readings
-import bahk.settings as settings
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -86,7 +85,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         formatted_readings = []
         if not day.readings.exists():
             # import readings for this date into db
-            readings = scrape_readings(date_obj)
+            readings = scrape_readings(date_obj, church)
             for reading in readings:
                 reading.update({"day": day})
                 Reading.objects.get_or_create(**reading)
