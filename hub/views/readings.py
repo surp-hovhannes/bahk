@@ -3,6 +3,7 @@
 Currently based on the Daily Worship app's website, sacredtradition.am
 """
 from datetime import datetime
+import logging
 
 from rest_framework.exceptions import ValidationError
 from rest_framework import generics
@@ -61,6 +62,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             ]
         }
     """
+    queryset = Reading.objects.all()
 
     def get(self, request, *args, **kwargs):
         date_format = "%Y-%m-%d"
@@ -73,7 +75,13 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         else:
             date_obj = datetime.today().date()
 
-        day, _ = Day.objects.get_or_create(date=date_obj)
+        church = request.user.profile.church
+        try:
+            day = Day.objects.get(date=date_obj, church=church)
+        except Day.DoesNotExist:
+            logging.warning("Day %r does not exist for church %s. No readings returned.", date_str, church)
+            return Response({"date": date_str, "readings": []})
+
         formatted_readings = []
         if not day.readings.exists():
             # import readings for this date into db
@@ -83,12 +91,13 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                 Reading.objects.get_or_create(**reading)
 
         for reading in day.readings.all():
+            # format in lower camel case to match JavaScript variable naming
             formatted_readings.append({
                 "book": reading.book,
-                "start_chapter": reading.start_chapter,
-                "start_verse": reading.start_verse,
-                "end_chapter": reading.end_chapter,
-                "end_verse": reading.end_verse,
+                "startChapter": reading.start_chapter,
+                "startVerse": reading.start_verse,
+                "endChapter": reading.end_chapter,
+                "endVerse": reading.end_verse,
                 "url": reading.create_url()
             })
 

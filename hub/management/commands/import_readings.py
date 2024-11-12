@@ -1,5 +1,6 @@
 """Generates seed data for app with python manage.py seed."""
 from datetime import date, datetime, timedelta
+import logging
 
 from django.core.management.base import BaseCommand
 
@@ -21,7 +22,11 @@ class Command(BaseCommand):
                             help="date to end importing readings")
 
     def handle(self, *args, **options):
-        church, _ = models.Church.objects.get_or_create(name=options["church"])
+        try:
+            church = models.Church.objects.get(name=options["church"])
+        except models.Church.DoesNotExist:
+            logging.error("Church %s does not exist. No readings imported.", options["church"])
+            return
 
         start_date = datetime.strptime(options["start_date"], "%Y-%m-%d")
         end_date = datetime.strptime(options["end_date"], "%Y-%m-%d")
@@ -30,4 +35,4 @@ class Command(BaseCommand):
             readings = scrape_readings(date_obj)
             for reading in readings:
                 reading |= {"day": day}
-            models.Reading.objects.get_or_create(**reading)
+                models.Reading.objects.get_or_create(**reading)
