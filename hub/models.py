@@ -8,6 +8,7 @@ from imagekit.processors import ResizeToFill
 from imagekit.processors import Transpose
 
 from hub.constants import CATENA_ABBREV_FOR_BOOK
+import bahk.settings as settings
 
 
 class Church(models.Model):
@@ -17,7 +18,7 @@ class Church(models.Model):
     @classmethod
     def get_default_pk(cls):
         church, _ = cls.objects.get_or_create(
-            name="Armenian Apostolic Church"
+            name=settings.DEFAULT_CHURCH_NAME
         )
         return church.pk
 
