@@ -9,8 +9,9 @@ from rest_framework.exceptions import ValidationError
 from rest_framework import generics
 from rest_framework.response import Response
 
-from hub.models import Day, Reading
+from hub.models import Church, Day, Reading
 from hub.utils import scrape_readings
+import bahk.settings as settings
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -75,12 +76,12 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         else:
             date_obj = datetime.today().date()
 
-        church = request.user.profile.church
-        try:
-            day = Day.objects.get(date=date_obj, church=church)
-        except Day.DoesNotExist:
-            logging.warning("Day %r does not exist for church %s. No readings returned.", date_str, church)
-            return Response({"date": date_str, "readings": []})
+        if request.user.is_authenticated:
+            church = request.user.profile.church
+        else:
+            church = Church.objects.get(pk=Church.get_default_pk())
+
+        day, _ = Day.objects.get_or_create(date=date_obj, church=church)
 
         formatted_readings = []
         if not day.readings.exists():
