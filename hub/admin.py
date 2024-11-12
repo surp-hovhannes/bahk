@@ -7,7 +7,6 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from hub.constants import DATE_FORMAT_STRING
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Fast, Profile, Reading
 
@@ -251,8 +250,7 @@ class DayAdmin(admin.ModelAdmin):
     reading_links.short_description = "Readings"
 
 
-from django.contrib.admin import SimpleListFilter
-class YearFilter(SimpleListFilter):
+class ReadingYearFilter(admin.SimpleListFilter):
     title = "year"
     parameter_name = "year"
     
@@ -273,7 +271,7 @@ class YearFilter(SimpleListFilter):
 class ReadingAdmin(admin.ModelAdmin):
     list_display = ("church_link", "day", "__str__", "book", "start_chapter", "start_verse",)
     list_display_links = ("church_link", "day", "__str__",)
-    list_filter = (YearFilter, "book", "start_chapter", "start_verse",)
+    list_filter = (ReadingYearFilter, "book", "start_chapter", "start_verse",)
     ordering = ("day", "book", "start_chapter", "start_verse",)
     
     def church_link(self, reading):
