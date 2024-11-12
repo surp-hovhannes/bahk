@@ -55,6 +55,8 @@ INSTALLED_APPS = [
     'app_management',
     'markdownx',
     'corsheaders',
+    'notifications',
+    'push_notifications',
 ]
 
 MIDDLEWARE = [
@@ -259,3 +261,23 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 
 # Frontend URL for password reset, if local development or production
 FRONTEND_URL = config('FRONTEND_URL', default='https://web.fastandpray.app')
+
+# Push Notifications Settings
+PUSH_NOTIFICATIONS_SETTINGS = {
+    'FCM_API_KEY': config('FCM_API_KEY', default=''),
+    'APNS_CERTIFICATE_URL': config('APNS_CERTIFICATE_URL', default=''),
+    'APNS_TOPIC': config('APNS_TOPIC', default=''),
+}
+
+# Download the APNS certificate from the URL
+APNS_CERTIFICATE_URL = PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE_URL']
+if APNS_CERTIFICATE_URL:
+    import requests
+    response = requests.get(APNS_CERTIFICATE_URL)
+    if response.status_code == 200:
+        APNS_CERTIFICATE_PATH = os.path.join(BASE_DIR, 'apns_certificate.pem')
+        with open(APNS_CERTIFICATE_PATH, 'wb') as f:
+            f.write(response.content)
+        PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = APNS_CERTIFICATE_PATH
+    else:
+        raise ValueError(f"Failed to download APNS certificate from URL: {APNS_CERTIFICATE_URL}")
