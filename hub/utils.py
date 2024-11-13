@@ -11,20 +11,21 @@ from django.db.models import OuterRef, Subquery, Q
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
-from hub.models import Day, Fast, Profile
+import bahk.settings as settings
+from hub.models import Church, Day, Fast, Profile
 from hub.serializers import FastSerializer
 
 
 logger = logging.getLogger(__name__)
 
 PARSER_REGEX = r"^([A-za-z1-4\'\. ]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
-
+SUPPORTED_CHURCHES = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME)
 
 def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
     """Scrapes readings from sacredtradition.am""" 
-    if "Armenian Apostolic" not in church.name:
-        logging.error("Web-scraping for readings only set up for the Armenian Apostolic Church. %s not supported.", 
-                      church.name)
+    if church not in SUPPORTED_CHURCHES:
+        logging.error("Web-scraping for readings only set up for the following churches: %r. %s not supported.", 
+                      SUPPORTED_CHURCHES, church)
         return []
 
     date_str = date_obj.strftime(date_format)
