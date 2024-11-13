@@ -34,5 +34,5 @@ class Command(BaseCommand):
             day, _ = models.Day.objects.get_or_create(church=church, date=date_obj)
             readings = scrape_readings(date_obj, church)
             for reading in readings:
-                reading |= {"day": day}
+                reading.update({"day": day})
                 models.Reading.objects.get_or_create(**reading)
