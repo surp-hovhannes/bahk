@@ -268,7 +268,7 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     'APNS_CERTIFICATE_URL': config('APNS_CERTIFICATE_URL', default=''),
     'APNS_TOPIC': config('APNS_TOPIC', default=''),
 }
-
+""" 
 # Download the APNS certificate from the URL
 APNS_CERTIFICATE_URL = PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE_URL']
 if APNS_CERTIFICATE_URL:
@@ -280,4 +280,4 @@ if APNS_CERTIFICATE_URL:
             f.write(response.content)
         PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = APNS_CERTIFICATE_PATH
     else:
-        raise ValueError(f"Failed to download APNS certificate from URL: {APNS_CERTIFICATE_URL}")
+        raise ValueError(f"Failed to download APNS certificate from URL: {APNS_CERTIFICATE_URL}") """
