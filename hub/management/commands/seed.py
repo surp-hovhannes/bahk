@@ -2,6 +2,8 @@
 from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
+from django.db import connection
+from django.core.management import call_command
 
 import hub.models as models
 
@@ -33,8 +35,15 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Database populated with seed successfully."))
 
     def clear_data(self):
+        """Clear all existing data and reset sequences."""
+        models.Day.objects.all().delete()
+        models.Fast.objects.all().delete()
+        models.Profile.objects.all().delete()
         models.User.objects.all().delete()
         models.Church.objects.all().delete()
+
+        # Reset sequences using Django's built-in command
+        call_command('reset_sequences', '--noinput')
 
     def populate_db(self):
         date_tomorrow = date.today() + timedelta(days=1)
