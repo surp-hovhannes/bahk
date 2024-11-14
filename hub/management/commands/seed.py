@@ -43,25 +43,37 @@ class Command(BaseCommand):
         church2, _ = models.Church.objects.get_or_create(name="Church2")
         church3, _ = models.Church.objects.get_or_create(name="Church3")
 
-        fast1, _ = models.Fast.objects.get_or_create(
-            name="Fast 1", 
-            church=church1,
-            description="your standard fast", 
-            culmination_feast="your standard feast",
-            culmination_feast_date=date_tomorrow,
-            url="https://stjohnarmenianchurch.com/"
-        )
-        fast2, _ = models.Fast.objects.get_or_create(
-            name="Fast 2", 
-            church=church2,
-            description="a prayerful fast",
-            culmination_feast="a wonderful feast",
-            culmination_feast_date=date_day_after_tomorrow
-        )
-        fast3, _ = models.Fast.objects.get_or_create(name="Fast 3", church=church3, description="fast no feast")
+        try:
+            fast1 = models.Fast.objects.get(name="Fast 1", church=church1)
+        except:
+            fast1 = models.Fast.objects.create(
+                name="Fast 1", 
+                church=church1,
+                description="your standard fast", 
+                culmination_feast="your standard feast",
+                culmination_feast_date=date_tomorrow,
+                url="https://stjohnarmenianchurch.com/",
+            )
+        try:
+            fast2 = models.Fast.objects.get(name="Fast 2", church=church2)
+        except:
+            fast2 = models.Fast.objects.create(
+                name="Fast 2", 
+                church=church2,
+                description="a prayerful fast",
+                culmination_feast="a wonderful feast",
+                culmination_feast_date=date_day_after_tomorrow
+            )
+        try:
+            fast3 = models.Fast.objects.get(name="Fast 3", church=church3)
+        except:
+            fast3 = models.Fast.objects.create(name="Fast 3", church=church3, description="fast no feast")
 
         for fast in [fast1, fast2, fast3]:
-            models.Day.objects.get_or_create(date=date.today(), fast=fast, church=fast.church)
+            try:
+                models.Day.objects.get(date=date.today(), fast=fast, church=fast.church)
+            except models.Day.DoesNotExist:
+                models.Day.objects.create(date=date.today(), fast=fast, church=fast.church)
 
         self._create_users(USERNAMES1, EMAILS1, church1, [fast1])
         self._create_users(USERNAMES2, EMAILS2, church2, [fast2])
