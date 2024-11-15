@@ -21,4 +21,4 @@ django-markdownx
 
 django-cors-headers
 django-push-notifications
-exponent-server-sdk
+exponent_server_sdk

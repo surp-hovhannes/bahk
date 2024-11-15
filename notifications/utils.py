@@ -2,14 +2,11 @@ from exponent_server_sdk import DeviceNotRegisteredError, PushClient, PushMessag
 from requests.exceptions import ConnectionError, HTTPError
 from .models import DeviceToken
 import logging
-import re
+import json
+from datetime import datetime
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
-
-def is_valid_expo_push_token(token):
-    """Validate the format of an Expo push token."""
-    pattern = r'^ExponentPushToken\[[a-zA-Z0-9_-]+\]$'
-    return bool(re.match(pattern, token))
 
 def send_push_notification(message, data=None, tokens=None):
     """
@@ -21,68 +18,77 @@ def send_push_notification(message, data=None, tokens=None):
         tokens (list, optional): List of specific tokens to send to. If None, sends to all registered tokens.
     
     Returns:
-        bool: True if all notifications were sent successfully, False otherwise
+        dict: Contains success status and details about sent/failed notifications
     """
+    result = {
+        'success': False,
+        'sent': 0,
+        'failed': 0,
+        'invalid_tokens': [],
+        'errors': []
+    }
+
     try:
-        # If no specific tokens provided, get all registered tokens
+        # Validate and prepare tokens
         if tokens is None:
-            tokens = DeviceToken.objects.values_list('token', flat=True)
-            tokens = list(tokens)  # Convert QuerySet to list
+            tokens = DeviceToken.objects.filter(
+                is_active=True
+            ).values_list('token', flat=True)
+        
+        tokens = list(tokens)  # Convert QuerySet to list if necessary
         
         if not tokens:
             logger.warning("No device tokens available for push notification")
-            return False
+            result['errors'].append("No device tokens available")
+            return result
 
         # Initialize Expo client
         client = PushClient()
         
-        # Create a list to store all messages
-        messages = []
-        
-        # Create a message for each token
-        for token in tokens:
-            messages.append(
-                PushMessage(
-                    to=token,
-                    body=message,
-                    data=data or {},
-                    sound="default",
-                    priority='high',
-                )
-            )
-
-        # Send all messages
-        responses = []
-        for msg in messages:
+        # Validate data parameter
+        if data and not isinstance(data, dict):
             try:
-                response = client.publish(msg)
-                responses.append(response)
-                logger.info(f"Successfully sent to {msg.to}")
-            except Exception as e:
-                logger.error(f"Error sending to {msg.to}: {str(e)}")
-                
-        # Log success
-        logger.info(f"Push notification sent to {len(responses)} devices")
-        return True
-        
-    except PushServerError as exc:
-        logger.error(f"Push server error: {str(exc)}")
-        return False
-        
-    except (ConnectionError, HTTPError) as exc:
-        logger.error(f"Connection/HTTP error: {str(exc)}")
-        return False
-        
-    except DeviceNotRegisteredError:
-        for token in tokens:
-            logger.warning(f"Device not registered: {token}")
-        return False
-        
-    except Exception as exc:
-        logger.error(f"Unexpected error sending push notification: {str(exc)}")
-        return False 
+                data = json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                logger.error("Invalid data format provided")
+                data = {}
 
-        send_push_notification(
-    message="Hello from the console!",
-    tokens=[token]
-)
+        # Send notifications
+        for token in tokens:
+            try:
+                response = client.publish(
+                    PushMessage(
+                        to=token,
+                        body=message,
+                        data=data or {},
+                        sound="default",
+                        priority='high',
+                    )
+                )
+                
+                # Update device token last_used timestamp
+                DeviceToken.objects.filter(token=token).update(
+                    last_used=timezone.now()
+                )
+                
+                result['sent'] += 1
+                logger.info(f"Successfully sent to {token}")
+                
+            except DeviceNotRegisteredError:
+                logger.warning(f"Device not registered: {token}")
+                DeviceToken.objects.filter(token=token).update(is_active=False)
+                result['failed'] += 1
+                result['invalid_tokens'].append(token)
+                
+            except Exception as e:
+                logger.error(f"Error sending to {token}: {str(e)}")
+                result['failed'] += 1
+                result['errors'].append(str(e))
+
+        result['success'] = result['sent'] > 0
+        return result
+
+    except Exception as exc:
+        logger.error(f"Unexpected error in send_push_notification: {str(exc)}")
+        result['errors'].append(str(exc))
+        return result 

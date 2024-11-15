@@ -56,7 +56,6 @@ INSTALLED_APPS = [
     'markdownx',
     'corsheaders',
     'notifications',
-    'push_notifications',
 ]
 
 MIDDLEWARE = [
@@ -320,11 +319,10 @@ def download_certificate(filename):
         return None
 
 # Push Notifications Settings
-PUSH_NOTIFICATIONS_SETTINGS = {
-    'FCM_API_KEY': config('FCM_API_KEY', default=''),
-    'APNS_TOPIC': config('APNS_TOPIC', default=''),
-    'WP_PRIVATE_KEY': None,
-    'WP_PUBLIC_KEY': None,
+EXPO_PUSH_SETTINGS = {
+    'EXPO_PUSH_URL': 'https://exp.host/--/api/v2/push/send',
+    'DEFAULT_SOUND': 'default',
+    'DEFAULT_PRIORITY': 'high',
 }
 
 # APNS Certificate
@@ -332,7 +330,7 @@ apns_cert_filename = config('APNS_CERTIFICATE_FILENAME', default='apns_certifica
 if apns_cert_filename:
     apns_cert_path = download_certificate(apns_cert_filename)
     if apns_cert_path:
-        PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = apns_cert_path
+        EXPO_PUSH_SETTINGS['APNS_CERTIFICATE'] = apns_cert_path
     else:
         print(f"Warning: Failed to load APNS certificate: {apns_cert_filename}")
 
@@ -341,6 +339,6 @@ fcm_cert_filename = config('FCM_CERTIFICATE_FILENAME', default='fcm_certificate.
 if fcm_cert_filename:
     fcm_cert_path = download_certificate(fcm_cert_filename)
     if fcm_cert_path:
-        PUSH_NOTIFICATIONS_SETTINGS['FCM_CREDENTIALS'] = fcm_cert_path
+        EXPO_PUSH_SETTINGS['FCM_CREDENTIALS'] = fcm_cert_path
     else:
         print(f"Warning: Failed to load FCM certificate: {fcm_cert_filename}")
