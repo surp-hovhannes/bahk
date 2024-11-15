@@ -2,8 +2,14 @@ from exponent_server_sdk import DeviceNotRegisteredError, PushClient, PushMessag
 from requests.exceptions import ConnectionError, HTTPError
 from .models import DeviceToken
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+def is_valid_expo_push_token(token):
+    """Validate the format of an Expo push token."""
+    pattern = r'^ExponentPushToken\[[a-zA-Z0-9_-]+\]$'
+    return bool(re.match(pattern, token))
 
 def send_push_notification(message, data=None, tokens=None):
     """
@@ -27,49 +33,56 @@ def send_push_notification(message, data=None, tokens=None):
             logger.warning("No device tokens available for push notification")
             return False
 
-        # Construct the push message
-        push_message = PushMessage(
-            to=tokens,
-            body=message,
-            data=data or {},
-            sound="default",
-            priority='high',
-        )
+        # Initialize Expo client
+        client = PushClient()
         
-        # Send the push message
-        response = PushClient().publish(push_message)
+        # Create a list to store all messages
+        messages = []
         
-        # Validate the response
-        response.validate_response()
-        
+        # Create a message for each token
+        for token in tokens:
+            messages.append(
+                PushMessage(
+                    to=token,
+                    body=message,
+                    data=data or {},
+                    sound="default",
+                    priority='high',
+                )
+            )
+
+        # Send all messages
+        responses = []
+        for msg in messages:
+            try:
+                response = client.publish(msg)
+                responses.append(response)
+                logger.info(f"Successfully sent to {msg.to}")
+            except Exception as e:
+                logger.error(f"Error sending to {msg.to}: {str(e)}")
+                
         # Log success
-        logger.info(f"Push notification sent successfully to {len(tokens)} devices")
+        logger.info(f"Push notification sent to {len(responses)} devices")
         return True
         
     except PushServerError as exc:
-        # Handle server errors
-        logger.error(f"Push server error: {exc.message}, Errors: {exc.errors}, Response data: {exc.response_data}")
+        logger.error(f"Push server error: {str(exc)}")
         return False
         
     except (ConnectionError, HTTPError) as exc:
-        # Handle connection and HTTP errors
         logger.error(f"Connection/HTTP error: {str(exc)}")
         return False
         
     except DeviceNotRegisteredError:
-        # Handle unregistered devices
         for token in tokens:
             logger.warning(f"Device not registered: {token}")
-            # Mark the device as inactive
-            DeviceToken.objects.filter(token=token).update(active=False)
-        return False
-        
-    except PushTicketError as exc:
-        # Handle per-notification errors
-        logger.error(f"Push ticket error: {exc.message}, Response: {exc.push_response}")
         return False
         
     except Exception as exc:
-        # Handle any other errors
         logger.error(f"Unexpected error sending push notification: {str(exc)}")
         return False 
+
+        send_push_notification(
+    message="Hello from the console!",
+    tokens=[token]
+)

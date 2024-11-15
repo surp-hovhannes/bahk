@@ -262,22 +262,100 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 # Frontend URL for password reset, if local development or production
 FRONTEND_URL = config('FRONTEND_URL', default='https://web.fastandpray.app')
 
+def download_certificate(url, filename):
+    """Download certificate from S3 and store locally."""
+    try:
+        # If we're in production, use boto3 to get the file from S3
+        if IS_PRODUCTION:
+            import boto3
+            s3 = boto3.client('s3',
+                aws_access_key_id=AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                region_name=AWS_S3_REGION_NAME
+            )
+            
+            # Create certificates directory if it doesn't exist
+            cert_dir = os.path.join(BASE_DIR, 'certificates')
+            os.makedirs(cert_dir, exist_ok=True)
+            
+            # Download the file
+            cert_path = os.path.join(cert_dir, filename)
+            s3.download_file(
+                AWS_STORAGE_BUCKET_NAME,
+                f'certificates/{filename}',
+                cert_path
+            )
+            return cert_path
+            
+        # For local development, use local file
+        else:
+            local_path = os.path.join(BASE_DIR, 'certificates', filename)
+            if os.path.exists(local_path):
+                return local_path
+            else:
+                print(f"Warning: Certificate file not found at {local_path}")
+                return None
+                
+    except Exception as e:
+        print(f"Error downloading certificate: {str(e)}")
+        if not DEBUG:
+            raise
+        return None
+
 # Push Notifications Settings
 PUSH_NOTIFICATIONS_SETTINGS = {
     'FCM_API_KEY': config('FCM_API_KEY', default=''),
-    'APNS_CERTIFICATE_URL': config('APNS_CERTIFICATE_URL', default=''),
     'APNS_TOPIC': config('APNS_TOPIC', default=''),
+    'WP_PRIVATE_KEY': None,
+    'WP_PUBLIC_KEY': None,
 }
-""" 
-# Download the APNS certificate from the URL
-APNS_CERTIFICATE_URL = PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE_URL']
-if APNS_CERTIFICATE_URL:
-    import requests
-    response = requests.get(APNS_CERTIFICATE_URL)
-    if response.status_code == 200:
-        APNS_CERTIFICATE_PATH = os.path.join(BASE_DIR, 'apns_certificate.pem')
-        with open(APNS_CERTIFICATE_PATH, 'wb') as f:
-            f.write(response.content)
-        PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = APNS_CERTIFICATE_PATH
+
+# Handle certificates
+
+def get_local_certificate(filename):
+    """Try to get certificate from local certificates directory"""
+    local_path = os.path.join(BASE_DIR, 'certificates', filename)
+    if os.path.exists(local_path):
+        print(f"Using local certificate: {local_path}")
+        return local_path
+    return None
+
+# APNS Certificate
+apns_cert_filename = config('APNS_CERTIFICATE_FILENAME', default=None)
+if apns_cert_filename:
+    # Try to download from S3
+    apns_cert_path = download_certificate(
+        f"https://{AWS_S3_CUSTOM_DOMAIN}/certificates/{apns_cert_filename}",
+        apns_cert_filename
+    )
+    if apns_cert_path:
+        PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = apns_cert_path
     else:
-        raise ValueError(f"Failed to download APNS certificate from URL: {APNS_CERTIFICATE_URL}") """
+        print(f"Warning: Failed to load APNS certificate from {apns_cert_filename}")
+else:
+    # Try to find local certificate
+    local_apns_cert = get_local_certificate('apns_certificate.pem')
+    if local_apns_cert:
+        PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = local_apns_cert
+    else:
+        print("Warning: No APNS certificate found in environment or locally")
+
+# FCM Certificate
+fcm_cert_filename = config('FCM_CERTIFICATE_FILENAME', default=None)
+if fcm_cert_filename:
+    # Try to download from S3
+    fcm_cert_path = download_certificate(
+        f"https://{AWS_S3_CUSTOM_DOMAIN}/certificates/{fcm_cert_filename}",
+        fcm_cert_filename
+    )
+    if fcm_cert_path:
+        PUSH_NOTIFICATIONS_SETTINGS['FCM_CREDENTIALS'] = fcm_cert_path
+    else:
+        print(f"Warning: Failed to load FCM certificate from {fcm_cert_filename}")
+else:
+    # Try to find local certificate
+    local_fcm_cert = get_local_certificate('fcm_certificate.json')
+    if local_fcm_cert:
+        PUSH_NOTIFICATIONS_SETTINGS['FCM_CREDENTIALS'] = local_fcm_cert
+    else:
+        print("Warning: No FCM certificate found in environment or locally")

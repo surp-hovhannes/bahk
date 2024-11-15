@@ -172,3 +172,14 @@ media/
 staticfiles/
 output.txt
 dump.rdb
+
+# cursor rules
+.cursorrules
+
+# push notifications
+certificate.pem
+certificates/
+*.pem
+*.p12
+*.key
+*.json
