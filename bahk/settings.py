@@ -28,9 +28,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-340y5$yaevl3%&50ob@)r@6htxve-6b0161m03j$)4r_%g8djq')
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 # Determine if we are running in production
 IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
@@ -262,11 +262,24 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 # Frontend URL for password reset, if local development or production
 FRONTEND_URL = config('FRONTEND_URL', default='https://web.fastandpray.app')
 
-def download_certificate(url, filename):
-    """Download certificate from S3 and store locally."""
+# AWS S3 settings
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+
+# Define AWS_S3_CUSTOM_DOMAIN if we have the necessary AWS settings
+if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+else:
+    AWS_S3_CUSTOM_DOMAIN = None
+
+# Handle certificates
+def download_certificate(filename):
+    """Download certificate from S3 or get from local path"""
     try:
-        # If we're in production, use boto3 to get the file from S3
-        if IS_PRODUCTION:
+        # If we have AWS credentials, try S3 first
+        if AWS_S3_CUSTOM_DOMAIN:
             import boto3
             s3 = boto3.client('s3',
                 aws_access_key_id=AWS_ACCESS_KEY_ID,
@@ -280,24 +293,28 @@ def download_certificate(url, filename):
             
             # Download the file
             cert_path = os.path.join(cert_dir, filename)
-            s3.download_file(
-                AWS_STORAGE_BUCKET_NAME,
-                f'certificates/{filename}',
-                cert_path
-            )
-            return cert_path
-            
-        # For local development, use local file
-        else:
-            local_path = os.path.join(BASE_DIR, 'certificates', filename)
-            if os.path.exists(local_path):
-                return local_path
-            else:
-                print(f"Warning: Certificate file not found at {local_path}")
-                return None
+            try:
+                s3.download_file(
+                    AWS_STORAGE_BUCKET_NAME,
+                    f'certificates/{filename}',
+                    cert_path
+                )
+                print(f"Successfully downloaded certificate from S3: {filename}")
+                return cert_path
+            except Exception as e:
+                print(f"Failed to download from S3: {str(e)}")
+                
+        # Try local file as fallback
+        local_path = os.path.join(BASE_DIR, 'certificates', filename)
+        if os.path.exists(local_path):
+            print(f"Using local certificate: {filename}")
+            return local_path
+        
+        print(f"Certificate not found: {filename}")
+        return None
                 
     except Exception as e:
-        print(f"Error downloading certificate: {str(e)}")
+        print(f"Error handling certificate {filename}: {str(e)}")
         if not DEBUG:
             raise
         return None
@@ -310,52 +327,20 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     'WP_PUBLIC_KEY': None,
 }
 
-# Handle certificates
-
-def get_local_certificate(filename):
-    """Try to get certificate from local certificates directory"""
-    local_path = os.path.join(BASE_DIR, 'certificates', filename)
-    if os.path.exists(local_path):
-        print(f"Using local certificate: {local_path}")
-        return local_path
-    return None
-
 # APNS Certificate
-apns_cert_filename = config('APNS_CERTIFICATE_FILENAME', default=None)
+apns_cert_filename = config('APNS_CERTIFICATE_FILENAME', default='apns_certificate.pem')
 if apns_cert_filename:
-    # Try to download from S3
-    apns_cert_path = download_certificate(
-        f"https://{AWS_S3_CUSTOM_DOMAIN}/certificates/{apns_cert_filename}",
-        apns_cert_filename
-    )
+    apns_cert_path = download_certificate(apns_cert_filename)
     if apns_cert_path:
         PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = apns_cert_path
     else:
-        print(f"Warning: Failed to load APNS certificate from {apns_cert_filename}")
-else:
-    # Try to find local certificate
-    local_apns_cert = get_local_certificate('apns_certificate.pem')
-    if local_apns_cert:
-        PUSH_NOTIFICATIONS_SETTINGS['APNS_CERTIFICATE'] = local_apns_cert
-    else:
-        print("Warning: No APNS certificate found in environment or locally")
+        print(f"Warning: Failed to load APNS certificate: {apns_cert_filename}")
 
 # FCM Certificate
-fcm_cert_filename = config('FCM_CERTIFICATE_FILENAME', default=None)
+fcm_cert_filename = config('FCM_CERTIFICATE_FILENAME', default='fcm_certificate.json')
 if fcm_cert_filename:
-    # Try to download from S3
-    fcm_cert_path = download_certificate(
-        f"https://{AWS_S3_CUSTOM_DOMAIN}/certificates/{fcm_cert_filename}",
-        fcm_cert_filename
-    )
+    fcm_cert_path = download_certificate(fcm_cert_filename)
     if fcm_cert_path:
         PUSH_NOTIFICATIONS_SETTINGS['FCM_CREDENTIALS'] = fcm_cert_path
     else:
-        print(f"Warning: Failed to load FCM certificate from {fcm_cert_filename}")
-else:
-    # Try to find local certificate
-    local_fcm_cert = get_local_certificate('fcm_certificate.json')
-    if local_fcm_cert:
-        PUSH_NOTIFICATIONS_SETTINGS['FCM_CREDENTIALS'] = local_fcm_cert
-    else:
-        print("Warning: No FCM certificate found in environment or locally")
+        print(f"Warning: Failed to load FCM certificate: {fcm_cert_filename}")
