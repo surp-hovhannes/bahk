@@ -72,6 +72,7 @@ class Command(BaseCommand):
         for fast in fasts:
             for i in range(3):
                 days.append(models.Day(date=date.today() + timedelta(days=i), fast=fast, church=fast.church))
+                fast.save()
         models.Day.objects.bulk_create(days)
 
         self._create_users(USERNAMES1, EMAILS1, churches[0], [fasts[0]])

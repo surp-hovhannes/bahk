@@ -55,7 +55,7 @@ class Fast(models.Model):
         super().save(**kwargs)  # save first to create a primary key (needed to access self.days)
         if self.days.exists():
             self.year = self.days.first().date.year
-        super().save(**kwargs)
+        super().save(update_fields=["year"])
 
     class Meta:
         constraints = [
