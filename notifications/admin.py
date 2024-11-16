@@ -97,3 +97,26 @@ class DeviceTokenAdmin(admin.ModelAdmin):
             'admin/notifications/devicetoken/send_push.html',
             context
         )
+
+    def send_test_notification(self, request, queryset):
+        tokens = list(queryset.values_list('token', flat=True))
+        result = send_push_notification(
+            message="Test notification from admin",
+            tokens=tokens
+        )
+        
+        # Log the result
+        print(f"Push notification result: {result}")  # Debug logging
+        
+        if result['success']:
+            messages.success(
+                request, 
+                f"Successfully sent notifications to {result['sent']} devices. Failed: {result['failed']}"
+            )
+        else:
+            messages.error(
+                request, 
+                f"Failed to send notifications. Errors: {', '.join(result['errors'])}"
+            )
+    
+    send_test_notification.short_description = "Send test notification to selected devices"
