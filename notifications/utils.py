@@ -29,6 +29,7 @@ def send_push_notification(message, data=None, tokens=None):
     }
 
     try:
+        logger.info(f"Starting push notification with tokens: {tokens}")
         # Validate and prepare tokens
         if tokens is None:
             tokens = DeviceToken.objects.filter(
