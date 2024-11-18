@@ -162,6 +162,9 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10
 }
 
+# path to backend for authenticating users by email or username (instead of only username)
+AUTHENTICATION_BACKENDS = ["hub.auth.EmailOrUsernameBackend"]
+
 # Redirect to home URL after login (Default redirects to /accounts/profile/)
 LOGIN_REDIRECT_URL = '/hub/web/'
 
