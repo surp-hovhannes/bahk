@@ -7,9 +7,8 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from hub.constants import DATE_FORMAT_STRING
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
-from hub.models import Church, Day, Fast, Profile
+from hub.models import Church, Day, Fast, Profile, Reading
 
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
@@ -20,17 +19,17 @@ def _concatenate_queryset(queryset, delim=", ", num=_MAX_NUM_TO_SHOW):
     return delim.join([str(obj) for obj in queryset][:num]) + (needs_ellipsis * ",...")
 
 
-def _get_fast_links_url(obj, max_num_to_show=_MAX_NUM_TO_SHOW):
-    num_to_display = min(obj.fasts.all().count(), max_num_to_show)
+def _get_fk_links_url(fk_queryset, fk_name, max_num_to_show=_MAX_NUM_TO_SHOW):
+    num_to_display = min(fk_queryset.count(), max_num_to_show)
 
     args = []
     is_partial_list = False
-    for i, fast in enumerate(obj.fasts.all()):
+    for i, fk in enumerate(fk_queryset):
         if i == num_to_display:
             is_partial_list = True  # not all fasts will be shown
             break
-        url = reverse("admin:hub_fast_change", args=[fast.pk])
-        args += [url, fast.name]
+        url = reverse(f"admin:hub_{fk_name}_change", args=[fk.pk])
+        args += [url, fk]
     
     format_string = ", ".join(num_to_display * ['<a href="{}">{}</a>'])
     # add ellipsis if only partial list of fasts shown
@@ -46,7 +45,7 @@ class ChurchAdmin(admin.ModelAdmin):
     list_display_links = ("name", "fast_links",)
 
     def fast_links(self, church):
-        return _get_fast_links_url(church)
+        return _get_fk_links_url(church.fasts.all(), "fast")
     
     fast_links.short_description = "Fasts"
 
@@ -219,14 +218,14 @@ class ProfileAdmin(admin.ModelAdmin):
     church_link.short_description = "Church"
 
     def fast_links(self, profile):
-        return _get_fast_links_url(profile)
+        return _get_fk_links_url(profile.fasts.all(), "fast")
     
     fast_links.short_description = "Fasts"
 
 
 @admin.register(Day, site=admin.site)
 class DayAdmin(admin.ModelAdmin):
-    list_display = ("date", "church_link", "fast_link",)
+    list_display = ("date", "church_link", "fast_link", "reading_links")
     ordering = ("church", "date",)
 
     def church_link(self, day):
@@ -244,3 +243,41 @@ class DayAdmin(admin.ModelAdmin):
         return format_html('<a href="{}">{}</a>', url, day.fast.name)
     
     fast_link.short_description = "Fast"
+
+    def reading_links(self, day):
+        return _get_fk_links_url(day.readings.all(), "reading")
+    
+    reading_links.short_description = "Readings"
+
+
+class ReadingYearFilter(admin.SimpleListFilter):
+    title = "year"
+    parameter_name = "year"
+    
+    def lookups(self, request, model_admin):
+        all_years = set(r.day.date.year for r in model_admin.model.objects.all())
+        return [(y, y) for y in all_years]
+
+    def queryset(self, request, queryset):
+        if self.value() is not None:
+            year = int(self.value())
+            return queryset.filter(
+                day__date__gte=datetime.date(year, 1, 1),
+                day__date__lte=datetime.date(year, 12, 31)
+            )
+    
+
+@admin.register(Reading, site=admin.site)
+class ReadingAdmin(admin.ModelAdmin):
+    list_display = ("church_link", "day", "__str__", "book", "start_chapter", "start_verse",)
+    list_display_links = ("church_link", "day", "__str__",)
+    list_filter = (ReadingYearFilter, "book", "start_chapter", "start_verse",)
+    ordering = ("day", "book", "start_chapter", "start_verse",)
+    
+    def church_link(self, reading):
+        if not reading.day and not reading.day.church:
+            return ""
+        url = reverse("admin:hub_church_change", args=[reading.day.church.pk])
+        return format_html('<a href="{}">{}</a>', url, reading.day.church.name)
+    
+    church_link.short_description = "Church"

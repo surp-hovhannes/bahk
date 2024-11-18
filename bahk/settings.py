@@ -18,9 +18,12 @@ from pathlib import Path
 from decouple import config, Csv
 from ssl import CERT_NONE
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Default church name (used if user is not logged in)
+DEFAULT_CHURCH_NAME = "Armenian Apostolic Church"
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -34,7 +37,6 @@ ALLOWED_HOSTS = []
 
 # Determine if we are running in production
 IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
-
 
 
 # Application definition
@@ -167,9 +169,6 @@ AUTHENTICATION_BACKENDS = ["hub.auth.EmailOrUsernameBackend"]
 
 # Redirect to home URL after login (Default redirects to /accounts/profile/)
 LOGIN_REDIRECT_URL = '/hub/web/'
-
-# temporary plug for email (not set up): logs emails to be sent to console for debugging
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Activate Django-Heroku.
 import django_heroku
