@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
-from django.db import connection, transaction
+from django.db import transaction
 
 import hub.models as models
 
@@ -33,15 +33,6 @@ class Command(BaseCommand):
         models.User.objects.all().delete()
         models.Church.objects.all().delete()
 
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT setval(pg_get_serial_sequence('"hub_fast"','id'), 1, false);
-                SELECT setval(pg_get_serial_sequence('"hub_day"','id'), 1, false);
-                SELECT setval(pg_get_serial_sequence('"hub_profile"','id'), 1, false);
-                SELECT setval(pg_get_serial_sequence('"hub_church"','id'), 1, false);
-                SELECT setval(pg_get_serial_sequence('"auth_user"','id'), 1, false);
-            """)
-
     def populate_db(self):
         churches = [
             models.Church.objects.create(name="Armenian Apostolic Church"),
@@ -68,12 +59,10 @@ class Command(BaseCommand):
             models.Fast.objects.create(name="Fast 3", church=churches[2], description="fast no feast"),
         ]
 
-        days = []
-        for fast in fasts:
-            for i in range(3):
-                days.append(models.Day(date=date.today() + timedelta(days=i), fast=fast, church=fast.church))
-                fast.save()
-        models.Day.objects.bulk_create(days)
+        for n, fast in enumerate(fasts):
+            for i in range(n + 1):  # number of fast is number of days it lasts
+                day = models.Day.objects.create(date=date.today() + timedelta(days=i), fast=fast, church=fast.church)
+                fast.save(update_fields=["year"])  # saving fast with day(s) updates the year field
 
         self._create_users(USERNAMES1, EMAILS1, churches[0], [fasts[0]])
         self._create_users(USERNAMES2, EMAILS2, churches[1], [fasts[1]])
@@ -86,12 +75,11 @@ class Command(BaseCommand):
         for username, email in zip(usernames, emails):
             user = models.User.objects.create_user(username=username, email=email, password=PASSWORD)
             users.append(user)
-            profile = models.Profile(user=user, church=church)
+            profile = models.Profile.objects.create(user=user, church=church)
             profiles.append(profile)
-
-        models.Profile.objects.bulk_create(profiles)
 
         if fasts is not None:
             for profile in profiles:
                 profile.fasts.set(fasts)
+                profile.save()
         
