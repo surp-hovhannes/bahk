@@ -2,6 +2,7 @@
 from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 
 import hub.models as models
 
@@ -16,79 +17,69 @@ PASSWORD = "default123"
 
 
 class Command(BaseCommand):
-    help = "Clears "
-    def add_arguments(self, parser):
-        parser.add_argument('--clear_existing', action="store_true", 
-                            help="If true, clears existing data before populating with seed data")
+    help = "Clears existing data and populates the database with seed data"
 
+    @transaction.atomic
     def handle(self, *args, **options):
-        clear_existing = options["clear_existing"]
-        
-        if clear_existing:
-            self.stdout.write("Clearing data...")
-            self.clear_data()
-            self.stdout.write("Data cleared.")
-
+        self.clear_data()
         self.populate_db()
-        self.stdout.write(self.style.SUCCESS("Database populated with seed successfully."))
+        self.stdout.write(self.style.SUCCESS("Database populated with seed data successfully."))
 
     def clear_data(self):
+        """Clear all existing data and reset sequences."""
+        models.Day.objects.all().delete()
+        models.Fast.objects.all().delete()
+        models.Profile.objects.all().delete()
         models.User.objects.all().delete()
         models.Church.objects.all().delete()
 
     def populate_db(self):
-        date_tomorrow = date.today() + timedelta(days=1)
-        date_day_after_tomorrow = date.today() + timedelta(days=2)
-        church1, _ = models.Church.objects.get_or_create(name="Church1")
-        church2, _ = models.Church.objects.get_or_create(name="Church2")
-        church3, _ = models.Church.objects.get_or_create(name="Church3")
+        churches = [
+            models.Church.objects.create(name="Armenian Apostolic Church"),
+            models.Church.objects.create(name="Church2"),
+            models.Church.objects.create(name="Church3"),
+        ]
 
-        try:
-            fast1 = models.Fast.objects.get(name="Fast 1", church=church1)
-        except:
-            fast1 = models.Fast.objects.create(
-                name="Fast 1", 
-                church=church1,
-                description="your standard fast", 
+        fasts = [
+            models.Fast.objects.create(
+                name="Fast 1",
+                church=churches[0],
+                description="your standard fast",
                 culmination_feast="your standard feast",
-                culmination_feast_date=date_tomorrow,
-                url="https://stjohnarmenianchurch.com/",
-            )
-        try:
-            fast2 = models.Fast.objects.get(name="Fast 2", church=church2)
-        except:
-            fast2 = models.Fast.objects.create(
+                culmination_feast_date=date.today() + timedelta(days=1),
+                url="https://stjohnarmenianchurch.com/"
+            ),
+            models.Fast.objects.create(
                 name="Fast 2", 
-                church=church2,
+                church=churches[1],
                 description="a prayerful fast",
                 culmination_feast="a wonderful feast",
-                culmination_feast_date=date_day_after_tomorrow
-            )
-        try:
-            fast3 = models.Fast.objects.get(name="Fast 3", church=church3)
-        except:
-            fast3 = models.Fast.objects.create(name="Fast 3", church=church3, description="fast no feast")
+                culmination_feast_date=date.today() + timedelta(days=2)
+            ),
+            models.Fast.objects.create(name="Fast 3", church=churches[2], description="fast no feast"),
+        ]
 
-        for fast in [fast1, fast2, fast3]:
-            try:
-                models.Day.objects.get(date=date.today(), fast=fast, church=fast.church)
-            except models.Day.DoesNotExist:
-                models.Day.objects.create(date=date.today(), fast=fast, church=fast.church)
+        for n, fast in enumerate(fasts):
+            for i in range(n + 1):  # number of fast is number of days it lasts
+                day = models.Day.objects.create(date=date.today() + timedelta(days=i), fast=fast, church=fast.church)
+                fast.save(update_fields=["year"])  # saving fast with day(s) updates the year field
 
-        self._create_users(USERNAMES1, EMAILS1, church1, [fast1])
-        self._create_users(USERNAMES2, EMAILS2, church2, [fast2])
-        self._create_users(USERNAMES3, EMAILS3, church3)
-        
-    def _create_users(self, usernames, emails, church, fasts=None, password=PASSWORD):
+        self._create_users(USERNAMES1, EMAILS1, churches[0], [fasts[0]])
+        self._create_users(USERNAMES2, EMAILS2, churches[1], [fasts[1]])
+        self._create_users(USERNAMES3, EMAILS3, churches[2])
+
+    @transaction.atomic        
+    def _create_users(self, usernames, emails, church, fasts=None):
+        users = []
+        profiles = []
         for username, email in zip(usernames, emails):
-            user, created = models.User.objects.get_or_create(
-                username=username,
-                email=email,
-            )
-            if created:
-                user.set_password(password)
-                user.save()
-            profile, _ = models.Profile.objects.get_or_create(user=user, church=church)
-            if fasts is not None:
+            user = models.User.objects.create_user(username=username, email=email, password=PASSWORD)
+            users.append(user)
+            profile = models.Profile.objects.create(user=user, church=church)
+            profiles.append(profile)
+
+        if fasts is not None:
+            for profile in profiles:
                 profile.fasts.set(fasts)
+                profile.save()
         

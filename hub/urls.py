@@ -63,7 +63,10 @@ urlpatterns = [
     path("readings/", GetDailyReadingsForDate.as_view(), name="daily-readings"),
 
     # Misc endpoints
-    path('test_email/', test_email_view, name='test_email')
+    path('test_email/', test_email_view, name='test_email'),
+
+    # Push Notifications endpoints
+    path('notifications/', include('notifications.urls')),
 ]
 
 urlpatterns += router.urls

@@ -20,3 +20,5 @@ django-anymail
 django-markdownx
 
 django-cors-headers
+django-push-notifications
+exponent_server_sdk

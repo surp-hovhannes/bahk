@@ -31,9 +31,9 @@ DEFAULT_CHURCH_NAME = "Armenian Apostolic Church"
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-340y5$yaevl3%&50ob@)r@6htxve-6b0161m03j$)4r_%g8djq')
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 # Determine if we are running in production
 IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'app_management',
     'markdownx',
     'corsheaders',
+    'notifications',
     'learning_resources',
 ]
 
@@ -262,3 +263,85 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 
 # Frontend URL for password reset, if local development or production
 FRONTEND_URL = config('FRONTEND_URL', default='https://web.fastandpray.app')
+
+# AWS S3 settings
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+
+# Define AWS_S3_CUSTOM_DOMAIN if we have the necessary AWS settings
+if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+else:
+    AWS_S3_CUSTOM_DOMAIN = None
+
+# Handle certificates
+def download_certificate(filename):
+    """Download certificate from S3 or get from local path"""
+    try:
+        # If we have AWS credentials, try S3 first
+        if AWS_S3_CUSTOM_DOMAIN:
+            import boto3
+            s3 = boto3.client('s3',
+                aws_access_key_id=AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                region_name=AWS_S3_REGION_NAME
+            )
+            
+            # Create certificates directory if it doesn't exist
+            cert_dir = os.path.join(BASE_DIR, 'certificates')
+            os.makedirs(cert_dir, exist_ok=True)
+            
+            # Download the file
+            cert_path = os.path.join(cert_dir, filename)
+            try:
+                s3.download_file(
+                    AWS_STORAGE_BUCKET_NAME,
+                    f'certificates/{filename}',
+                    cert_path
+                )
+                print(f"Successfully downloaded certificate from S3: {filename}")
+                return cert_path
+            except Exception as e:
+                print(f"Failed to download from S3: {str(e)}")
+                
+        # Try local file as fallback
+        local_path = os.path.join(BASE_DIR, 'certificates', filename)
+        if os.path.exists(local_path):
+            print(f"Using local certificate: {filename}")
+            return local_path
+        
+        print(f"Certificate not found: {filename}")
+        return None
+                
+    except Exception as e:
+        print(f"Error handling certificate {filename}: {str(e)}")
+        if not DEBUG:
+            raise
+        return None
+
+# Push Notifications Settings
+EXPO_PUSH_SETTINGS = {
+    'EXPO_PUSH_URL': 'https://exp.host/--/api/v2/push/send',
+    'DEFAULT_SOUND': 'default',
+    'DEFAULT_PRIORITY': 'high',
+}
+
+# APNS Certificate
+apns_cert_filename = config('APNS_CERTIFICATE_FILENAME', default='apns_certificate.pem')
+if apns_cert_filename:
+    apns_cert_path = download_certificate(apns_cert_filename)
+    if apns_cert_path:
+        EXPO_PUSH_SETTINGS['APNS_CERTIFICATE'] = apns_cert_path
+    else:
+        print(f"Warning: Failed to load APNS certificate: {apns_cert_filename}")
+
+# FCM Certificate
+fcm_cert_filename = config('FCM_CERTIFICATE_FILENAME', default='fcm_certificate.json')
+if fcm_cert_filename:
+    fcm_cert_path = download_certificate(fcm_cert_filename)
+    if fcm_cert_path:
+        EXPO_PUSH_SETTINGS['FCM_CREDENTIALS'] = fcm_cert_path
+    else:
+        print(f"Warning: Failed to load FCM certificate: {fcm_cert_filename}")
