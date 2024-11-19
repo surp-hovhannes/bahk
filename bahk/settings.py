@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'app_management',
     'markdownx',
     'corsheaders',
+    'learning_resources',
 ]
 
 MIDDLEWARE = [

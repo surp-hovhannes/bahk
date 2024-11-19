@@ -62,7 +62,6 @@ urlpatterns = [
     # Readings endpoints
     path("readings/", GetDailyReadingsForDate.as_view(), name="daily-readings"),
 
-
     # Misc endpoints
     path('test_email/', test_email_view, name='test_email')
 ]

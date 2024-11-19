@@ -20,7 +20,7 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 
 import hub.views as views
-
+from learning_resources.views import VideoListView, ArticleListView
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -48,6 +48,12 @@ urlpatterns += [
 # pin hub endpoints to /api/ root url
 urlpatterns += [
     path("api/", include("hub.urls")),
+]
+
+# Learning resources endpoints
+urlpatterns += [
+    path("api/learning-resources/videos/", VideoListView.as_view(), name="learning-resources-list"),
+    path("api/learning-resources/articles/", ArticleListView.as_view(), name="learning-resources-list"),
 ]
 
 # for serving media files during development
