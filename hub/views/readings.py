@@ -4,20 +4,18 @@ Currently based on the Daily Worship app's website, sacredtradition.am
 """
 from datetime import datetime
 import logging
-import re
-import urllib.request
 
 from rest_framework.exceptions import ValidationError
 from rest_framework import generics
 from rest_framework.response import Response
 
-from django.core.cache import cache
+from hub.models import Church, Day, Reading
+from hub.utils import scrape_readings
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
     """
-    API view to retrieve daily scripture readings by scraping sacredtradition.am.
-    Results are cached for 24 hours per unique date requested.
+    API view to provide daily Scripture readings from database along with link to read them.
 
     Permissions:
         - AllowAny: No authentication required
@@ -35,7 +33,8 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "startChapter": 1,
                     "startVerse": 1,
                     "endChapter": 1,
-                    "endVerse": 10
+                    "endVerse": 10,
+                    "url": https://link.to.read.this.passage/
                 }
             ]
         }
@@ -49,115 +48,63 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "startChapter": 5,
                     "startVerse": 1,
                     "endChapter": 5,
-                    "endVerse": 12
+                    "endVerse": 12,
+                    "url": "https://catenabible.com/mt/5"
                 },
                 {
                     "book": "Isaiah",
                     "startChapter": 55,
                     "startVerse": 1,
                     "endChapter": 55,
-                    "endVerse": 13
+                    "endVerse": 13,
+                    "url": "https://catenabible.com/is/55"
                 }
             ]
         }
     """
-
-    def get_cache_key(self, date):
-        """
-        Generate a cache key for the daily readings.
-        """
-        return f"daily_readings_{date}"
+    queryset = Reading.objects.all()
 
     def get(self, request, *args, **kwargs):
-        # Format for API response (YYYY-MM-DD)
-        response_date_format = "%Y-%m-%d"
-        # Format required by sacredtradition.am (YYYYMMDD)
-        scraper_date_format = "%Y%m%d"
+        date_format = "%Y-%m-%d"
 
-        if date_str := self.request.query_params.get('date'):
+        if date_str := self.request.query_params.get('date', datetime.today().strftime(date_format)):
             try:
-                date_obj = datetime.strptime(date_str, response_date_format).date()
+                date_obj = datetime.strptime(date_str, date_format).date()
             except ValueError:
                 raise ValidationError("Invalid date format. Expected format: YYYY-MM-DD")
         else:
             date_obj = datetime.today().date()
 
-        response_date = date_obj.strftime(response_date_format)
-        scraper_date = date_obj.strftime(scraper_date_format)
+        if request.user.is_authenticated:
+            church = request.user.profile.church
+        else:
+            church = Church.objects.get(pk=Church.get_default_pk())
 
-        # Try to get from cache first
-        cache_key = self.get_cache_key(response_date)
-        cached_readings = cache.get(cache_key)
-        if cached_readings:
-            return Response({
-                "date": response_date,
-                "readings": cached_readings
-            })
-
-        # If not in cache, fetch and store
-        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={scraper_date}"
-        try:
-            response = urllib.request.urlopen(url)
-        except urllib.error.URLError:
-            logging.error("Invalid url %s", url)
-            return Response({})
-
-        if response.status != 200:
-            logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
-            return Response({})
-
-        data = response.read()
-        html_content = data.decode("utf-8")
+        day, _ = Day.objects.get_or_create(date=date_obj, church=church)
 
         formatted_readings = []
-        book_start = html_content.find("<b>")
-        
-        while book_start != -1:
-            i1 = book_start + len("<b>")
-            i2 = html_content.find("</b>")
-            reading_str = html_content[i1:i2]
-            # advance to next section of web text to prevent infinite loop
-            html_content = html_content[i2 + 1:]
-            book_start = html_content.find("<b>")
-    
-            parser_regex = r"^([A-za-z\'\. ]+) ([0-9]+)\.([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
-            groups = re.search(parser_regex, reading_str)
+        if not day.readings.exists():
+            # import readings for this date into db
+            readings = scrape_readings(date_obj, church)
+            for reading in readings:
+                reading.update({"day": day})
+                Reading.objects.get_or_create(**reading)
 
-            # skip reading if does not match parser regex
-            if groups is None:
-                logging.error("Could not parse reading %s at %s with regex %s", reading_str, url, parser_regex)
-                continue
-
-            try:
-                # parse groups
-                book = groups.group(1)
-                start_chapter = groups.group(2)
-                start_verse = groups.group(3)
-                end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter  # rm decimal
-                end_verse = groups.group(5) if groups.group(5) is not None else start_verse
-    
-                # Instead of building the old dictionary format, create a reading object
-                reading = {
-                    "book": book,
-                    "startChapter": int(start_chapter),  # Convert to integers
-                    "startVerse": int(start_verse), 
-                    "endChapter": int(end_chapter), 
-                    "endVerse": int(end_verse) 
-                }
-            except Exception as e:
-                logging.error("Could not parse reading with text %s with regex %s from %s. Skipping.", 
-                              reading_str, parser_regex, url)
-                continue
-
-            formatted_readings.append(reading)
+        for reading in day.readings.all():
+            # format in lower camel case to match JavaScript variable naming
+            formatted_readings.append({
+                "book": reading.book,
+                "startChapter": reading.start_chapter,
+                "startVerse": reading.start_verse,
+                "endChapter": reading.end_chapter,
+                "endVerse": reading.end_verse,
+                "url": reading.create_url()
+            })
 
         # Create the final response format
         response_data = {
-            "date": response_date,
-            "readings": formatted_readings
+            "date": date_str,
+            "readings": formatted_readings,
         }
 
-        # Cache the results for 24 hours (86400 seconds)
-        cache.set(cache_key, formatted_readings, 86400)
-        
         return Response(response_data)
