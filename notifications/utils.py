@@ -5,17 +5,19 @@ import logging
 import json
 from datetime import datetime
 from django.utils import timezone
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
-def send_push_notification(message, data=None, tokens=None):
+def send_push_notification(message, data=None, users=None, notification_type=None):
     """
     Send push notifications to specified tokens or all registered devices.
     
     Args:
         message (str): The notification message to send
         data (dict, optional): Additional data to send with the notification
-        tokens (list, optional): List of specific tokens to send to. If None, sends to all registered tokens.
+        users (list, optional): List of specific users to send to. If None, sends to all registered users.
+        notification_type (str, optional): Type of notification ('upcoming_fast', 'ongoing_fast', 'daily_fast', 'weekly_fast')
     
     Returns:
         dict: Contains success status and details about sent/failed notifications
@@ -29,15 +31,50 @@ def send_push_notification(message, data=None, tokens=None):
     }
 
     try:
-        logger.info(f"Starting push notification with tokens: {tokens}")
-        # Validate and prepare tokens
-        if tokens is None:
-            tokens = DeviceToken.objects.filter(
-                is_active=True
-            ).values_list('token', flat=True)
+        logger.info(f"Starting push notification with users: {users}")
         
-        tokens = list(tokens)  # Convert QuerySet to list if necessary
+        # Get all active tokens for the specified users
+        tokens_queryset = DeviceToken.objects.filter(is_active=True)
         
+        if users:
+            tokens_queryset = tokens_queryset.filter(user__in=users)
+
+        # Filter based on user preferences if notification_type is provided
+        if notification_type:
+            if notification_type == 'upcoming_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__receive_upcoming_fast_push_notifications=True
+                )
+                if not data.get('weekly_fast', False):
+                    tokens_queryset = tokens_queryset.exclude(
+                        Q(user__profile__fasts__name__icontains='friday') |
+                        Q(user__profile__fasts__name__icontains='wednesday')
+                    )
+            elif notification_type == 'ongoing_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__receive_ongoing_fast_push_notifications=True
+                )
+                if not data.get('weekly_fast', False):
+                    tokens_queryset = tokens_queryset.exclude(
+                        Q(user__profile__fasts__name__icontains='friday') |
+                        Q(user__profile__fasts__name__icontains='wednesday')
+                    )
+            elif notification_type == 'daily_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__receive_daily_fast_push_notifications=True
+                )
+                if not data.get('weekly_fast', False):
+                    tokens_queryset = tokens_queryset.exclude(
+                        Q(user__profile__fasts__name__icontains='friday') |
+                        Q(user__profile__fasts__name__icontains='wednesday')
+                    )
+            elif notification_type == 'weekly_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__include_weekly_fasts_in_notifications=True
+                )
+
+        tokens = list(tokens_queryset.values_list('token', flat=True))
+
         if not tokens:
             logger.warning("No device tokens available for push notification")
             result['errors'].append("No device tokens available")
