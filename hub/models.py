@@ -76,10 +76,7 @@ class Fast(models.Model):
 
 
 class Profile(models.Model):
-    """Model for a user profile.
-    
-    Based on https://simpleisbetterthancomplex.com/tutorial/2016/07/22/how-to-extend-django-user-model.html#onetoone
-    """
+    """Model for a user profile."""
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     church = models.ForeignKey(Church, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles")
     fasts = models.ManyToManyField(Fast, related_name="profiles")
@@ -90,6 +87,10 @@ class Profile(models.Model):
                                              format='JPEG',
                                              options={'quality': 60})
     receive_upcoming_fast_reminders = models.BooleanField(default=True)
+    receive_upcoming_fast_push_notifications = models.BooleanField(default=True)
+    receive_ongoing_fast_push_notifications = models.BooleanField(default=True)
+    receive_daily_fast_push_notifications = models.BooleanField(default=True)
+    include_weekly_fasts_in_notifications = models.BooleanField(default=True)
 
     def __str__(self):
         return self.user.username

@@ -130,7 +130,7 @@ def send_fast_reminders():
                 continue
 
             subject = f'Upcoming Fast: {next_fast.name}'
-            from_email = f"Live and Pray <{settings.EMAIL_HOST_USER}>"
+            from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
             serialized_next_fast = FastSerializer(next_fast).data
             html_content = render_to_string('email/upcoming_fasts_reminder.html', {
                 'user': profile.user,
