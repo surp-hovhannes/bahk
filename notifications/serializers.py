@@ -11,6 +11,7 @@ class DeviceTokenSerializer(serializers.ModelSerializer):
         """
         Check that device_type is either 'ios' or 'android'
         """
-        if value not in ['ios', 'android', 'web']:
-            raise serializers.ValidationError("device_type must be either 'ios' or 'android'")
+        acceptable_device_types = [type_tuple[0] for type_tuple in DeviceToken.DEVICE_TYPES]
+        if value not in acceptable_device_types:
+            raise serializers.ValidationError(f"device_type was {value}, must be in: {acceptable_device_types}")
         return value
