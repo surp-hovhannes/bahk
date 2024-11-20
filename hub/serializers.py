@@ -11,6 +11,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_str
 from django.core.mail import send_mail
 from django.conf import settings
+from django.utils import timezone
 
 from hub import models
 
@@ -142,8 +143,9 @@ class FastSerializer(serializers.ModelSerializer):
         return obj.profiles.count()
     
     def get_countdown(self, obj):
+        current_date = timezone.localdate(timezone=self.context['tz'])
         if obj.culmination_feast and obj.culmination_feast_date:
-            days_to_feast = (obj.culmination_feast_date - datetime.date.today()).days
+            days_to_feast = (obj.culmination_feast_date - current_date).days
             if days_to_feast < 0:
                 return f"{obj.culmination_feast} has passed"
             return f"<span class='days_to_finish'>{days_to_feast}</span> day{'' if days_to_feast == 1 else 's'} until {obj.culmination_feast}"
@@ -153,14 +155,15 @@ class FastSerializer(serializers.ModelSerializer):
             return f"No days available for {obj.name}"
         
         finish_date = max(days)
-        days_to_finish = (finish_date - datetime.date.today()).days + 1  # + 1 to get days until first day *after* fast
+        days_to_finish = (finish_date - current_date).days + 1  # + 1 to get days until first day *after* fast
         if days_to_finish < 0:
             return f"{obj.name} has passed"
         return f"<span class='days_to_finish'>{days_to_finish}</span> day{'' if days_to_finish == 1 else 's'} until the end of {obj.name}"
     
     def get_days_to_feast(self, obj):
+        current_date = timezone.localdate(timezone=self.context['tz'])
         if obj.culmination_feast and obj.culmination_feast_date:
-            days_to_feast = (obj.culmination_feast_date - datetime.date.today()).days
+            days_to_feast = (obj.culmination_feast_date - current_date).days
             if days_to_feast < 0:
                 return None
             return days_to_feast
@@ -177,14 +180,16 @@ class FastSerializer(serializers.ModelSerializer):
         return obj.days.order_by('date').last().date
     
     def get_has_passed(self, obj):
+        current_date = timezone.localdate(timezone=self.context['tz'])
         if obj.days.count() == 0:
             return False
-        return self.get_end_date(obj) < datetime.date.today()
+        return self.get_end_date(obj) < current_date
     
     def get_next_fast_date(self, obj):
+        current_date = timezone.localdate(timezone=self.context['tz'])
         if obj.days.count() == 0:
             return None
-        next_day = obj.days.filter(date__gte=datetime.date.today()).order_by('date').first()
+        next_day = obj.days.filter(date__gte=current_date).order_by('date').first()
         if next_day is not None:
             return next_day.date
         return None
@@ -194,20 +199,16 @@ class FastSerializer(serializers.ModelSerializer):
     
     def get_current_day_number(self, obj):
         try:
-            if obj.days.count() == 0:
+            current_date = timezone.localdate(timezone=self.context['tz'])
+            
+            # Get the days for the fast that are less than or equal to the current date
+            days = obj.days.filter(date__lte=current_date).order_by('date')
+            
+            if days.exists():
+                # Count the number of days from the first day until the current date
+                return days.count()
+            else:
                 return None
-            
-            start_date = self.get_start_date(obj)
-            if start_date is None:
-                return None
-            
-            current_date = datetime.date.today()
-            end_date = self.get_end_date(obj)
-            
-            if current_date > end_date:
-                return None 
-            
-            return (current_date - start_date).days + 1
         except Exception as e:
             print(f"An error occurred: {e}")
             return None
