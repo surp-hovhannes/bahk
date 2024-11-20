@@ -36,8 +36,6 @@ def send_upcoming_fast_push_notification_task():
     upcoming_fasts = Fast.objects.filter(id__in=profiles.values('next_fast_id'))
 
     if upcoming_fasts:
-
-        print(upcoming_fasts)
         # Get the users associated with the upcoming fasts
         users_to_notify = User.objects.filter(profile__in=profiles)
 
@@ -78,7 +76,7 @@ def send_daily_fast_push_notification_task():
         # filter users who are joined to today's fast
         users_to_notify = User.objects.filter(profile__church=today_fast.fast.church).distinct()
         # send push notification to each user
-        message = "Today is fast day! Join us in fasting and praying together!"
+        message = "Today is a fast day! Join us in fasting and praying together!"
         data = {
             "fast_id": today_fast.fast.id,
             "fast_name": today_fast.fast.name,
