@@ -8,6 +8,7 @@ from rest_framework.exceptions import ValidationError
 import datetime
 from rest_framework import views, response, status
 import logging
+import pytz
 
 
 class FastListView(ChurchContextMixin, generics.ListAPIView):
@@ -28,6 +29,7 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
     Query Parameters:
         - start_date: Optional. Start date in YYYY-MM-DD format. Defaults to 6 months ago.
         - end_date: Optional. End date in YYYY-MM-DD format. Defaults to 6 months in future.
+        - tz: Optional. Timezone offset from UTC in the IANA format (e.g., America/New_York).
     
     Returns:
         - A list of fasts filtered by:
@@ -39,9 +41,22 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     pagination_class = None
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['tz'] = self.get_timezone()
+        return context
+
+    def get_timezone(self):
+        tz_str = self.request.query_params.get('tz')
+        if tz_str:
+            return pytz.timezone(tz_str)
+        else:
+            return timezone.utc
+
     def get_queryset(self):
         church = self.get_church()
-        today = timezone.now().date()
+        tz = self.get_timezone()
+        today = timezone.localdate(timezone=tz)
         
         # Default date range (±6 months)
         default_start = today - datetime.timedelta(days=180)
@@ -109,6 +124,8 @@ class FastByDateView(ChurchContextMixin, generics.ListAPIView):
 
     Query Parameters:
         - date: Optional. A string representing the date in `yyyy-mm-dd` format.
+        - tz: Optional. A string representing the timezone offset from UTC in the IANA format (e.g., America/New_York).
+        - church_id: Optional. A string representing the church id. Required if unauthenticated.
 
     Returns:
         - A list of fasts filtered by the church and date context.
@@ -116,20 +133,34 @@ class FastByDateView(ChurchContextMixin, generics.ListAPIView):
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]  # Allow any user to access this view
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['tz'] = self.get_timezone()
+        return context
+
+    def get_timezone(self):
+        tz_str = self.request.query_params.get('tz')
+        if tz_str:
+            return pytz.timezone(tz_str)
+        else:
+            return timezone.utc
+
     def get_queryset(self):
-        # Retrieve the date from query parameters, default to today
+        church = self.get_church()
+        
         date_str = self.request.query_params.get('date')
+        tz = self.get_timezone()
+
         if date_str:
             try:
                 # Parse the date string (expected format: yyyy-mm-dd)
-                target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
+                target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
                 raise ValidationError("Invalid date format. Expected format: yyyy-mm-dd.")
         else:
             # Default to the current date
-            target_date = timezone.now().date()
+            target_date = timezone.localdate(timezone=tz)
 
-        church = self.get_church()
         return Fast.objects.filter(church=church, days__date=target_date)
 
 
