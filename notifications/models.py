@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+import re
 
 # Create your models here.
 
@@ -19,6 +21,15 @@ class DeviceToken(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used = models.DateTimeField(null=True, blank=True)
+
+    def clean(self):
+        pattern = r'^ExponentPushToken\[[a-zA-Z0-9_-]+\]$'
+        if not bool(re.match(pattern, self.token)):
+            raise ValidationError('Invalid Expo push token format')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.token
