@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'markdownx',
     'corsheaders',
     'notifications',
+    'learning_resources',
 ]
 
 MIDDLEWARE = [
