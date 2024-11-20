@@ -86,11 +86,11 @@ class Profile(models.Model):
                                              processors=[Transpose(), ResizeToFill(100, 100)],
                                              format='JPEG',
                                              options={'quality': 60})
-    receive_upcoming_fast_reminders = models.BooleanField(default=True)
+    receive_upcoming_fast_reminders = models.BooleanField(default=False)
     receive_upcoming_fast_push_notifications = models.BooleanField(default=True)
     receive_ongoing_fast_push_notifications = models.BooleanField(default=True)
-    receive_daily_fast_push_notifications = models.BooleanField(default=True)
-    include_weekly_fasts_in_notifications = models.BooleanField(default=True)
+    receive_daily_fast_push_notifications = models.BooleanField(default=False)
+    include_weekly_fasts_in_notifications = models.BooleanField(default=False)
 
     def __str__(self):
         return self.user.username
