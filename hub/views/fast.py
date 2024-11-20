@@ -146,7 +146,8 @@ class FastByDateView(ChurchContextMixin, generics.ListAPIView):
             return timezone.utc
 
     def get_queryset(self):
-        # Retrieve the date from query parameters, default to today
+        church = self.get_church()
+        
         date_str = self.request.query_params.get('date')
         tz = self.get_timezone()
 
@@ -158,9 +159,8 @@ class FastByDateView(ChurchContextMixin, generics.ListAPIView):
                 raise ValidationError("Invalid date format. Expected format: yyyy-mm-dd.")
         else:
             # Default to the current date
-            target_date = timezone.localdate()
+            target_date = timezone.localdate(timezone=tz)
 
-        church = self.get_church()
         return Fast.objects.filter(church=church, days__date=target_date)
 
 
