@@ -32,7 +32,11 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Profile
         fields = ['user_id', 'username', 'email', 'profile_image', 'thumbnail', 
-                 'location', 'church', 'receive_upcoming_fast_reminders']
+                 'location', 'church', 'receive_upcoming_fast_reminders', 
+                 'receive_upcoming_fast_push_notifications', 
+                 'receive_ongoing_fast_push_notifications',
+                 'receive_daily_fast_push_notifications',
+                 'include_weekly_fasts_in_notifications']
 
 class ProfileImageSerializer(serializers.ModelSerializer):
     class Meta:
