@@ -40,28 +40,38 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
             tokens_queryset = tokens_queryset.filter(user__in=users)
 
         # Filter based on user preferences if notification_type is provided
-        if notification_type == 'upcoming_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_upcoming_fast_push_notifications=True
-            )
-        elif notification_type == 'ongoing_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_ongoing_fast_push_notifications=True
-            )
-        elif notification_type == 'daily_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_daily_fast_push_notifications=True
-            )
-        elif notification_type == 'weekly_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__include_weekly_fasts_in_notifications=True
-            )
-
-        if notification_type != 'weekly_fast' and not data.get('weekly_fast', False):
-            tokens_queryset = tokens_queryset.exclude(
-                Q(user__profile__fasts__name__icontains='friday') |
-                Q(user__profile__fasts__name__icontains='wednesday')
-            )
+        if notification_type:
+            if notification_type == 'upcoming_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__receive_upcoming_fast_push_notifications=True
+                )
+                if not data.get('weekly_fast', False):
+                    tokens_queryset = tokens_queryset.exclude(
+                        Q(user__profile__fasts__name__icontains='friday') |
+                        Q(user__profile__fasts__name__icontains='wednesday')
+                    )
+            elif notification_type == 'ongoing_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__receive_ongoing_fast_push_notifications=True
+                )
+                if not data.get('weekly_fast', False):
+                    tokens_queryset = tokens_queryset.exclude(
+                        Q(user__profile__fasts__name__icontains='friday') |
+                        Q(user__profile__fasts__name__icontains='wednesday')
+                    )
+            elif notification_type == 'daily_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__receive_daily_fast_push_notifications=True
+                )
+                if not data.get('weekly_fast', False):
+                    tokens_queryset = tokens_queryset.exclude(
+                        Q(user__profile__fasts__name__icontains='friday') |
+                        Q(user__profile__fasts__name__icontains='wednesday')
+                    )
+            elif notification_type == 'weekly_fast':
+                tokens_queryset = tokens_queryset.filter(
+                    user__profile__include_weekly_fasts_in_notifications=True
+                )
 
         tokens = list(tokens_queryset.values_list('token', flat=True))
 
