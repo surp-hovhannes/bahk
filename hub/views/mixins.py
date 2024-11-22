@@ -1,5 +1,7 @@
 from rest_framework.exceptions import ValidationError
 from ..models import Church
+from django.utils import timezone
+import pytz
 
 
 class ChurchContextMixin:
@@ -23,3 +25,19 @@ class ChurchContextMixin:
                 raise ValidationError("Church with the provided ID does not exist.")
 
         return church
+
+class TimezoneMixin:
+    """
+    Mixin to handle timezone context for serializers.
+    Expects 'tz' query parameter in IANA format (e.g., 'America/New_York').
+    """
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['tz'] = self.get_timezone()
+        return context
+
+    def get_timezone(self):
+        tz_str = self.request.query_params.get('tz')
+        if tz_str:
+            return pytz.timezone(tz_str)
+        return timezone.utc

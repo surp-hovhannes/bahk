@@ -2,7 +2,7 @@ from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
 from ..models import Fast, Church
 from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer
-from .mixins import ChurchContextMixin
+from .mixins import ChurchContextMixin, TimezoneMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 import datetime
@@ -11,7 +11,7 @@ import logging
 import pytz
 
 
-class FastListView(ChurchContextMixin, generics.ListAPIView):
+class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
     API view to list all fasts for a specific church within a configurable date range.
 
@@ -21,6 +21,7 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
 
     Inherits:
         - ChurchContextMixin: Provides the church context for filtering.
+        - TimezoneMixin: Provides the timezone context for serializers.
         - ListAPIView: Standard DRF view for listing model instances.
 
     Permissions:
@@ -40,18 +41,6 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['tz'] = self.get_timezone()
-        return context
-
-    def get_timezone(self):
-        tz_str = self.request.query_params.get('tz')
-        if tz_str:
-            return pytz.timezone(tz_str)
-        else:
-            return timezone.utc
 
     def get_queryset(self):
         church = self.get_church()
@@ -88,27 +77,32 @@ class FastListView(ChurchContextMixin, generics.ListAPIView):
         ).distinct()
 
 
-class FastDetailView(generics.RetrieveAPIView):
+class FastDetailView(TimezoneMixin, generics.RetrieveAPIView):
     """
     API view to retrieve detailed information about a specific fast.
 
     This view allows authenticated users to retrieve the details of a specific fast by its ID.
 
     Inherits:
+        - TimezoneMixin: Provides the timezone context for serializers.
         - RetrieveAPIView: Standard DRF view for retrieving a single model instance by ID.
 
     Permissions:
         - IsAuthenticated: Only authenticated users can access this view.
+
+    Query Parameters:
+        - tz: Optional. Timezone offset from UTC in the IANA format (e.g., America/New_York).
     
     Returns:
         - Details of the requested fast.
     """
-    queryset = Fast.objects.all()
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]
 
+    queryset = Fast.objects.all()
 
-class FastByDateView(ChurchContextMixin, generics.ListAPIView):
+
+class FastByDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
     API view to list fasts based on a specific date or the current date.
 
@@ -117,6 +111,7 @@ class FastByDateView(ChurchContextMixin, generics.ListAPIView):
 
     Inherits:
         - ChurchContextMixin: Provides the church context for filtering.
+        - TimezoneMixin: Provides the timezone context for serializers.
         - ListAPIView: Standard DRF view for listing model instances.
 
     Permissions:
@@ -132,18 +127,6 @@ class FastByDateView(ChurchContextMixin, generics.ListAPIView):
     """
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]  # Allow any user to access this view
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['tz'] = self.get_timezone()
-        return context
-
-    def get_timezone(self):
-        tz_str = self.request.query_params.get('tz')
-        if tz_str:
-            return pytz.timezone(tz_str)
-        else:
-            return timezone.utc
 
     def get_queryset(self):
         church = self.get_church()
