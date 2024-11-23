@@ -11,6 +11,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# TODO: These tasks are not functional if the app has more than one church with active fasts.
+# We need to update the tasks to send notifications to all churches when there are multiple churches.
+
 @shared_task
 def send_push_notification_task(message, data=None, tokens=None, notification_type=None):
     send_push_notification(message, data, tokens, notification_type)
@@ -72,6 +75,7 @@ def send_ongoing_fast_push_notification_task():
 def send_daily_fast_push_notification_task():
     # query today's fast
     today_fast = Day.objects.filter(date=timezone.now().date()).first()
+    print(today_fast)
     if today_fast:
         # filter users who are joined to today's fast
         users_to_notify = User.objects.filter(profile__church=today_fast.fast.church).distinct()

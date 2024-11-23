@@ -39,29 +39,22 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         if users:
             tokens_queryset = tokens_queryset.filter(user__in=users)
 
-        # Filter based on user preferences if notification_type is provided
-        if notification_type == 'upcoming_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_upcoming_fast_push_notifications=True
-            )
-        elif notification_type == 'ongoing_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_ongoing_fast_push_notifications=True
-            )
-        elif notification_type == 'daily_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_daily_fast_push_notifications=True
-            )
-        elif notification_type == 'weekly_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__include_weekly_fasts_in_notifications=True
-            )
+        if notification_type:
+            notification_type_filters = {
+                'upcoming_fast': 'receive_upcoming_fast_push_notifications',
+                'ongoing_fast': 'receive_ongoing_fast_push_notifications',
+                'daily_fast': 'receive_daily_fast_push_notifications',
+            }
 
-        if notification_type != 'weekly_fast' and not data.get('weekly_fast', False):
-            tokens_queryset = tokens_queryset.exclude(
-                Q(user__profile__fasts__name__icontains='friday') |
-                Q(user__profile__fasts__name__icontains='wednesday')
-            )
+            if notification_type in notification_type_filters:
+                filter_field = notification_type_filters[notification_type]
+                tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
+
+            if not tokens_queryset.filter(user__profile__include_weekly_fasts_in_notifications=True).exists():
+                tokens_queryset = tokens_queryset.exclude(
+                    Q(user__profile__fasts__name__icontains='friday') |
+                    Q(user__profile__fasts__name__icontains='wednesday')
+                )
 
         tokens = list(tokens_queryset.values_list('token', flat=True))
 
