@@ -75,7 +75,6 @@ def send_ongoing_fast_push_notification_task():
 def send_daily_fast_push_notification_task():
     # query today's fast
     today_fast = Day.objects.filter(date=timezone.now().date()).first()
-    print(today_fast)
     if today_fast:
         # filter users who are joined to today's fast
         users_to_notify = User.objects.filter(profile__church=today_fast.fast.church).distinct()
