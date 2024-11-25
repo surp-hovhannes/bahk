@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from django.utils import timezone
 from django.db.models import Q
+from .constants import NOTIFICATION_TYPE_FILTERS, WEEKLY_FAST_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -40,20 +41,14 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
             tokens_queryset = tokens_queryset.filter(user__in=users)
 
         if notification_type:
-            notification_type_filters = {
-                'upcoming_fast': 'receive_upcoming_fast_push_notifications',
-                'ongoing_fast': 'receive_ongoing_fast_push_notifications',
-                'daily_fast': 'receive_daily_fast_push_notifications',
-            }
-
-            if notification_type in notification_type_filters:
-                filter_field = notification_type_filters[notification_type]
+            if notification_type in NOTIFICATION_TYPE_FILTERS:
+                filter_field = NOTIFICATION_TYPE_FILTERS[notification_type]
                 tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
 
             if not tokens_queryset.filter(user__profile__include_weekly_fasts_in_notifications=True).exists():
                 tokens_queryset = tokens_queryset.exclude(
-                    Q(user__profile__fasts__name__icontains='friday') |
-                    Q(user__profile__fasts__name__icontains='wednesday')
+                    Q(user__profile__fasts__name__icontains=WEEKLY_FAST_NAMES[0]) |
+                    Q(user__profile__fasts__name__icontains=WEEKLY_FAST_NAMES[1])
                 )
 
         tokens = list(tokens_queryset.values_list('token', flat=True))

@@ -8,6 +8,7 @@ from datetime import timedelta
 from hub.models import User
 from django.db.models import OuterRef, Subquery, Q
 import logging
+from .constants import DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def send_upcoming_fast_push_notification_task():
         # Get the users associated with the upcoming fasts
         users_to_notify = User.objects.filter(profile__in=profiles)
 
-        message = "You have joined a fast starting soon!"
+        message = UPCOMING_FAST_MESSAGE
         data = {
             "fast_id": upcoming_fasts[0].id,
             "fast_name": upcoming_fasts[0].name,
@@ -61,7 +62,7 @@ def send_ongoing_fast_push_notification_task():
         # filter users who are joined to ongoing fasts
         users_to_notify = User.objects.filter(profile__fasts__in=ongoing_fasts).distinct()
         # send push notification to each user
-        message = "You have joined a fast that is currently ongoing! Lets fast and pray together!"
+        message = ONGOING_FAST_MESSAGE
         data = {
             "fast_id": ongoing_fasts[0].id,
             "fast_name": ongoing_fasts[0].name,
@@ -79,7 +80,7 @@ def send_daily_fast_push_notification_task():
         # filter users who are joined to today's fast
         users_to_notify = User.objects.filter(profile__church=today_fast.fast.church).distinct()
         # send push notification to each user
-        message = "Today is a fast day! Join us in fasting and praying together!"
+        message = DAILY_FAST_MESSAGE
         data = {
             "fast_id": today_fast.fast.id,
             "fast_name": today_fast.fast.name,
