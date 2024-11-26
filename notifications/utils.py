@@ -18,7 +18,8 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         message (str): The notification message to send
         data (dict, optional): Additional data to send with the notification
         users (list, optional): List of specific users to send to. If None, sends to all registered users.
-        notification_type (str, optional): Type of notification ('upcoming_fast', 'ongoing_fast', 'daily_fast', 'weekly_fast')
+        notification_type (str, optional): Type of notification. If not specified, will send to all users regardless of
+            preferences. Defaults to None. Other options: ('upcoming_fast', 'ongoing_fast', 'daily_fast', 'weekly_fast')
     
     Returns:
         dict: Contains success status and details about sent/failed notifications
