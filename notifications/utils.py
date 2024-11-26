@@ -32,7 +32,7 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
     }
 
     try:
-        logger.info(f"Starting push notification with users: {users}")
+        logger.info(f"Starting push notification with users: {users or 'all'}")
         
         # Get all active tokens for the specified users
         tokens_queryset = DeviceToken.objects.filter(is_active=True)
