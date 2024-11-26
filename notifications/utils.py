@@ -3,12 +3,26 @@ from requests.exceptions import ConnectionError, HTTPError
 from .models import DeviceToken
 import logging
 import json
+import re
 from datetime import datetime
 from django.utils import timezone
 from django.db.models import Q
 from .constants import NOTIFICATION_TYPE_FILTERS, WEEKLY_FAST_NAMES
 
 logger = logging.getLogger(__name__)
+
+
+def is_weekly_fast(fast):
+    """Checks if fast is weekly (e.g., Wednesday or Friday fast) or not.
+    
+    Args:
+        fast (models.Fast): fast to check if weekly
+
+    Results:
+        bool: True if fast is weekly; else False
+    """
+    return bool(re.match("wednesday|friday", fast.name, re.I))
+
 
 def send_push_notification(message, data=None, users=None, notification_type=None):
     """
@@ -41,16 +55,9 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         if users:
             tokens_queryset = tokens_queryset.filter(user__in=users)
 
-        if notification_type:
-            if notification_type in NOTIFICATION_TYPE_FILTERS:
-                filter_field = NOTIFICATION_TYPE_FILTERS[notification_type]
-                tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
-
-            if not tokens_queryset.filter(user__profile__include_weekly_fasts_in_notifications=True).exists():
-                tokens_queryset = tokens_queryset.exclude(
-                    Q(user__profile__fasts__name__icontains=WEEKLY_FAST_NAMES[0]) |
-                    Q(user__profile__fasts__name__icontains=WEEKLY_FAST_NAMES[1])
-                )
+        if notification_type in NOTIFICATION_TYPE_FILTERS:
+            filter_field = NOTIFICATION_TYPE_FILTERS[notification_type]
+            tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
 
         tokens = list(tokens_queryset.values_list('token', flat=True))
 
