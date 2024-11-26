@@ -73,7 +73,7 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         # Send notifications
         for token in tokens:
             try:
-                response = client.publish(
+                client.publish(
                     PushMessage(
                         to=token,
                         body=message,
