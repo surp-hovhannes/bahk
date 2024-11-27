@@ -3,11 +3,26 @@ from requests.exceptions import ConnectionError, HTTPError
 from .models import DeviceToken
 import logging
 import json
+import re
 from datetime import datetime
 from django.utils import timezone
 from django.db.models import Q
+from .constants import NOTIFICATION_TYPE_FILTERS, WEEKLY_FAST_NAMES
 
 logger = logging.getLogger(__name__)
+
+
+def is_weekly_fast(fast):
+    """Checks if fast is weekly (e.g., Wednesday or Friday fast) or not.
+    
+    Args:
+        fast (models.Fast): fast to check if weekly
+
+    Results:
+        bool: True if fast is weekly; else False
+    """
+    return bool(re.match("wednesday|friday", fast.name, re.I))
+
 
 def send_push_notification(message, data=None, users=None, notification_type=None):
     """
@@ -17,7 +32,8 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         message (str): The notification message to send
         data (dict, optional): Additional data to send with the notification
         users (list, optional): List of specific users to send to. If None, sends to all registered users.
-        notification_type (str, optional): Type of notification ('upcoming_fast', 'ongoing_fast', 'daily_fast', 'weekly_fast')
+        notification_type (str, optional): Type of notification. If not specified, will send to all users regardless of
+            preferences. Defaults to None. Other options: ('upcoming_fast', 'ongoing_fast', 'daily_fast', 'weekly_fast')
     
     Returns:
         dict: Contains success status and details about sent/failed notifications
@@ -31,7 +47,7 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
     }
 
     try:
-        logger.info(f"Starting push notification with users: {users}")
+        logger.info(f"Starting push notification with users: {users or 'all'}")
         
         # Get all active tokens for the specified users
         tokens_queryset = DeviceToken.objects.filter(is_active=True)
@@ -39,29 +55,9 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         if users:
             tokens_queryset = tokens_queryset.filter(user__in=users)
 
-        # Filter based on user preferences if notification_type is provided
-        if notification_type == 'upcoming_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_upcoming_fast_push_notifications=True
-            )
-        elif notification_type == 'ongoing_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_ongoing_fast_push_notifications=True
-            )
-        elif notification_type == 'daily_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__receive_daily_fast_push_notifications=True
-            )
-        elif notification_type == 'weekly_fast':
-            tokens_queryset = tokens_queryset.filter(
-                user__profile__include_weekly_fasts_in_notifications=True
-            )
-
-        if notification_type != 'weekly_fast' and not data.get('weekly_fast', False):
-            tokens_queryset = tokens_queryset.exclude(
-                Q(user__profile__fasts__name__icontains='friday') |
-                Q(user__profile__fasts__name__icontains='wednesday')
-            )
+        if notification_type in NOTIFICATION_TYPE_FILTERS:
+            filter_field = NOTIFICATION_TYPE_FILTERS[notification_type]
+            tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
 
         tokens = list(tokens_queryset.values_list('token', flat=True))
 
@@ -84,7 +80,7 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         # Send notifications
         for token in tokens:
             try:
-                response = client.publish(
+                client.publish(
                     PushMessage(
                         to=token,
                         body=message,
