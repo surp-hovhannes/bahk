@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
+import datetime
 import os
 import sys
 import dj_database_url
@@ -164,6 +165,11 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ),
     'PAGE_SIZE': 10
+}
+
+# extend lifetime of JWT refresh tokens
+SIMPLE_JWT = {
+    'REFRESH_TOKEN_LIFETIME': datetime.datetime.timedelta(days=100*365)  # set to expire in 100 years (~forever)
 }
 
 # path to backend for authenticating users by email or username (instead of only username)
