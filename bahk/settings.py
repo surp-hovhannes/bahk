@@ -169,7 +169,7 @@ REST_FRAMEWORK = {
 
 # extend lifetime of JWT refresh tokens
 SIMPLE_JWT = {
-    'REFRESH_TOKEN_LIFETIME': datetime.datetime.timedelta(days=100*365)  # set to expire in 100 years (~forever)
+    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(days=100*365)  # set to expire in 100 years (~forever)
 }
 
 # path to backend for authenticating users by email or username (instead of only username)
