@@ -69,7 +69,7 @@ class Command(BaseCommand):
     def _create_users(self, emails, church, fasts=None):
         users = []
         profiles = []
-        for email in zip(emails):
+        for email in emails:
             user = models.User.objects.create_user(username=email, email=email, password=PASSWORD)
             users.append(user)
             profile = models.Profile.objects.create(user=user, church=church)
