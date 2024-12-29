@@ -88,6 +88,7 @@ CATENA_ABBREV_FOR_BOOK = {
     "St. Paul's Epistle to the Hebrews": "heb",
     "James": "jas",
     "St. James' Epistle General": "jas",
+    "St. James General Epistle": "jas",
     "1 Peter": "1pt",
     "St. Peter's First Epistle General": "1pt",
     "2 Peter": "2pt",
