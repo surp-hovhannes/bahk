@@ -2,6 +2,7 @@
 NUMBER_PARTICIPANTS_TO_SHOW_WEB = 6  # number of participant thumbnails to show on fast card on web version
 DATE_FORMAT_STRING = "%m/%d/%Y"  # format string for dates (month, day, year)
 
+CATENA_HOME_PAGE_URL = "https://catenabible.com/"
 CATENA_ABBREV_FOR_BOOK = {
     # Old Testament
     "Genesis": "gn",
@@ -88,6 +89,7 @@ CATENA_ABBREV_FOR_BOOK = {
     "St. Paul's Epistle to the Hebrews": "heb",
     "James": "jas",
     "St. James' Epistle General": "jas",
+    "St. James General Epistle": "jas",
     "1 Peter": "1pt",
     "St. Peter's First Epistle General": "1pt",
     "2 Peter": "2pt",

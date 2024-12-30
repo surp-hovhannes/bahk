@@ -1,4 +1,6 @@
 """Models for bahk hub."""
+import logging
+
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -7,7 +9,7 @@ from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
 from imagekit.processors import Transpose
 
-from hub.constants import CATENA_ABBREV_FOR_BOOK
+from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL
 import bahk.settings as settings
 
 
@@ -126,9 +128,12 @@ class Reading(models.Model):
 
     def create_url(self):
         """Creates URL to read the reading."""
-        book_abbrev = CATENA_ABBREV_FOR_BOOK[self.book]
+        book_abbrev = CATENA_ABBREV_FOR_BOOK.get(self.book)
+        if book_abbrev is None:
+            logging.error("Missing Catena URL abbreviation for %s. Returning home page", self.book)
+            return CATENA_HOME_PAGE_URL
         verse_ref = "" if self.start_verse <= 2 else f"#{book_abbrev}{self.start_chapter:03d}{self.start_verse - 2:03d}"
-        return f"https://catenabible.com/{book_abbrev}/{self.start_chapter:d}/{verse_ref}"
+        return f"{CATENA_HOME_PAGE_URL}{book_abbrev}/{self.start_chapter:d}/{verse_ref}"
 
 
     def __str__(self):
