@@ -146,7 +146,7 @@ class FastSerializer(serializers.ModelSerializer):
         return obj.profiles.count()
     
     def get_countdown(self, obj):
-        current_date = timezone.localdate(timezone=self.context['tz'])
+        current_date = timezone.localdate(timezone=self.context.get('tz'))
         if obj.culmination_feast and obj.culmination_feast_date:
             days_to_feast = (obj.culmination_feast_date - current_date).days
             if days_to_feast < 0:
@@ -164,7 +164,7 @@ class FastSerializer(serializers.ModelSerializer):
         return f"<span class='days_to_finish'>{days_to_finish}</span> day{'' if days_to_finish == 1 else 's'} until the end of {obj.name}"
     
     def get_days_to_feast(self, obj):
-        current_date = timezone.localdate(timezone=self.context['tz'])
+        current_date = timezone.localdate(timezone=self.context.get('tz'))
         if obj.culmination_feast and obj.culmination_feast_date:
             days_to_feast = (obj.culmination_feast_date - current_date).days
             if days_to_feast < 0:
@@ -183,13 +183,13 @@ class FastSerializer(serializers.ModelSerializer):
         return obj.days.order_by('date').last().date
     
     def get_has_passed(self, obj):
-        current_date = timezone.localdate(timezone=self.context['tz'])
+        current_date = timezone.localdate(timezone=self.context.get('tz'))
         if obj.days.count() == 0:
             return False
         return self.get_end_date(obj) < current_date
     
     def get_next_fast_date(self, obj):
-        current_date = timezone.localdate(timezone=self.context['tz'])
+        current_date = timezone.localdate(timezone=self.context.get('tz'))
         if obj.days.count() == 0:
             return None
         next_day = obj.days.filter(date__gte=current_date).order_by('date').first()
@@ -202,7 +202,7 @@ class FastSerializer(serializers.ModelSerializer):
     
     def get_current_day_number(self, obj):
         try:
-            current_date = timezone.localdate(timezone=self.context['tz'])
+            current_date = timezone.localdate(timezone=self.context.get('tz'))
             
             # Get the days for the fast that are less than or equal to the current date
             days = obj.days.filter(date__lte=current_date).order_by('date')
