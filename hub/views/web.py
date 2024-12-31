@@ -97,14 +97,14 @@ def register(request):
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            username = form.cleaned_data["username"]
+            email = form.cleaned_data["email"]
             church_name = form.cleaned_data["church"]
             form.save()
-            Profile.objects.get_or_create(user=User.objects.get(username=username), 
+            Profile.objects.get_or_create(user=User.objects.get(email=email), 
                                           church=Church.objects.get(name=church_name))
 
             password = form.cleaned_data["password1"]
-            user = authenticate(request, username=username, password=password)
+            user = authenticate(request, username=email, password=password)
             if user is not None:
                 login(request, user)
                 

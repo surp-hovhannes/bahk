@@ -172,8 +172,8 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': datetime.timedelta(days=100*365)  # set to expire in 100 years (~forever)
 }
 
-# path to backend for authenticating users by email or username (instead of only username)
-AUTHENTICATION_BACKENDS = ["hub.auth.EmailOrUsernameBackend"]
+# path to backend for authenticating users by email
+AUTHENTICATION_BACKENDS = ["hub.auth.EmailBackend"]
 
 # Redirect to home URL after login (Default redirects to /accounts/profile/)
 LOGIN_REDIRECT_URL = '/hub/web/'
