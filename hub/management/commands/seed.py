@@ -35,9 +35,9 @@ class Command(BaseCommand):
 
     def populate_db(self):
         churches = [
-            models.Church.objects.create(name="Armenian Apostolic Church"),
-            models.Church.objects.create(name="Church2"),
-            models.Church.objects.create(name="Church3"),
+            models.Church.objects.create(name="Armenian Apostolic Church", pk=1),
+            models.Church.objects.create(name="Church2", pk=2),
+            models.Church.objects.create(name="Church3", pk=3),
         ]
 
         fasts = [
