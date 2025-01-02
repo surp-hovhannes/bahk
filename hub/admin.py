@@ -205,7 +205,9 @@ class FastAdmin(admin.ModelAdmin):
 
 @admin.register(Profile, site=admin.site)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "church_link", "fast_links", "location", "receive_upcoming_fast_reminders", "profile_image", )
+    list_display = (
+        "user", "church_link", "fast_links", "name", "location", "receive_upcoming_fast_reminders", "profile_image",
+    )
     list_display_links = ("user", "church_link", "fast_links",)
     ordering = ("church", "user",)
 

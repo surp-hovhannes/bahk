@@ -1,6 +1,8 @@
 """Serializers for handling API requests."""
 import datetime
+import re
 
+from better_profanity import profanity
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
@@ -9,11 +11,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_str
+from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 
 from hub import models
+
 
 class ProfileSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
@@ -30,12 +34,26 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Profile
-        fields = ['user_id', 'email', 'profile_image', 'thumbnail', 
+        fields = ['user_id', 'email', 'name', 'profile_image', 'thumbnail',
                  'location', 'church', 'receive_upcoming_fast_reminders', 
                  'receive_upcoming_fast_push_notifications', 
                  'receive_ongoing_fast_push_notifications',
                  'receive_daily_fast_push_notifications',
                  'include_weekly_fasts_in_notifications']
+
+
+class ProfileRegistrationSerializer(serializers.ModelSerializer):
+    church = serializers.PrimaryKeyRelatedField(queryset=models.Church.objects.all(), required=True)
+
+    class Meta:
+        model = models.Profile
+        fields = ('name', 'church',)
+
+    def validate(self, attrs):
+        if profanity.contains_profanity(attrs['name']):
+            raise serializers.ValidationError({'name': f'{attrs["name"]} is suspected of containing profanity.'})
+        return attrs
+
 
 class ProfileImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -62,26 +80,30 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
-    church = serializers.PrimaryKeyRelatedField(source='profile.church', queryset=models.Church.objects.all(), required=True)
+    profile = ProfileRegistrationSerializer()
 
     class Meta:
         model = User
-        fields = ('password', 'password2', 'email', 'church')
+        fields = ('password', 'password2', 'email', 'profile',)
 
     def validate(self, attrs):
+        super().validate(attrs)
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
+
         return attrs
 
     def create(self, validated_data):
-        church = validated_data.pop('profile')['church']
         user = User.objects.create(
             username=validated_data['email'],
             email=validated_data['email'],
         )
         user.set_password(validated_data['password'])
         user.save()
-        models.Profile.objects.create(user=user, church=church)
+        profile = validated_data.pop('profile')
+        church = profile.pop('church')
+        name = profile.pop('name')
+        models.Profile.objects.create(user=user, name=name, church=church)
 
         # Generate tokens
         refresh = RefreshToken.for_user(user)
@@ -102,14 +124,14 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Include tokens in the response
         if hasattr(instance, 'tokens'):
             representation['tokens'] = instance.tokens
-        
+
         return representation
 
 
 class ChurchSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Church
-        fields = ["id","name"]
+        fields = ["id", "name"]
 
 
 class FastSerializer(serializers.ModelSerializer):
