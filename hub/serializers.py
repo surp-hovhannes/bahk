@@ -50,7 +50,8 @@ class ProfileRegistrationSerializer(serializers.ModelSerializer):
         fields = ('name', 'church',)
 
     def validate(self, attrs):
-        if profanity.contains_profanity(attrs['name']):
+        name = attrs.get('name')
+        if name is not None and profanity.contains_profanity(name):
             raise serializers.ValidationError({'name': f'{attrs["name"]} is suspected of containing profanity.'})
         return attrs
 
