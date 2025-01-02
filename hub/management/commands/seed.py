@@ -7,12 +7,12 @@ from django.db import transaction
 import hub.models as models
 
 
-USERNAMES1 = ["user1a", "user1b"]
 EMAILS1 = ["user1a@email.com", "user1b@email.com"]
-USERNAMES2 = ["user2"]
+NAMES1 = ["User", "User"]
 EMAILS2 = ["user2@email.com"]
-USERNAMES3 = ["user3"]
+NAMES2 = ["user O'Usersen-McUser"]
 EMAILS3 = ["user3@email.com"]
+NAMES3 = [None]
 PASSWORD = "default123"
 
 
@@ -64,18 +64,18 @@ class Command(BaseCommand):
                 day = models.Day.objects.create(date=date.today() + timedelta(days=i), fast=fast, church=fast.church)
                 fast.save(update_fields=["year"])  # saving fast with day(s) updates the year field
 
-        self._create_users(USERNAMES1, EMAILS1, churches[0], [fasts[0]])
-        self._create_users(USERNAMES2, EMAILS2, churches[1], [fasts[1]])
-        self._create_users(USERNAMES3, EMAILS3, churches[2])
+        self._create_users(EMAILS1, NAMES1, churches[0], fasts=[fasts[0]])
+        self._create_users(EMAILS2, NAMES2, churches[1], fasts=[fasts[1]])
+        self._create_users(EMAILS3, NAMES3, churches[2])
 
     @transaction.atomic        
-    def _create_users(self, usernames, emails, church, fasts=None):
+    def _create_users(self, emails, names, church, fasts=None):
         users = []
         profiles = []
-        for username, email in zip(usernames, emails):
-            user = models.User.objects.create_user(username=username, email=email, password=PASSWORD)
+        for email, name in zip(emails, names):
+            user = models.User.objects.create_user(username=email, email=email, password=PASSWORD)
             users.append(user)
-            profile = models.Profile.objects.create(user=user, church=church)
+            profile = models.Profile.objects.create(user=user, name=name, church=church)
             profiles.append(profile)
 
         if fasts is not None:

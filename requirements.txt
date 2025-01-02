@@ -18,6 +18,7 @@ redis
 celery
 django-anymail
 django-markdownx
+better-profanity==0.7.0
 
 django-cors-headers
 django-push-notifications

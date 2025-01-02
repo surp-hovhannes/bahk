@@ -13,6 +13,9 @@
             <div>
                 <h3>{{ user.get_username }}</h3>
                 <p>{{ user.email }}</p>
+                {% if user.profile.name %}
+                <p>{{ user.profile.name }}</p>
+                {% endif %}
             </div>
         </div>
         <form method="post" enctype="multipart/form-data"  class="form-group">

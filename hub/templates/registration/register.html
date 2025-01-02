@@ -12,8 +12,8 @@
       <form class="register-form" method="POST" action="">
         {% csrf_token %}
         <h2 class="register-title">REGISTER</h3>
-        <h4>{{form.username.label}}</h4>
-        {{form.username}}
+        <h4>{{form.email.label}}</h4>
+        {{form.email}}
         <h4>{{form.email.label}}</h4>
         {{form.email}}
         <h4>{{form.password1.label}}</h4>
