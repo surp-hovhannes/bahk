@@ -80,6 +80,8 @@ class Fast(models.Model):
 class Profile(models.Model):
     """Model for a user profile."""
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=64, null=True, blank=True,
+                            help_text="Name (first, last, whatever you want to be known as)")
     church = models.ForeignKey(Church, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles")
     fasts = models.ManyToManyField(Fast, related_name="profiles")
     location = models.CharField(max_length=100, blank=True, null=True) 
