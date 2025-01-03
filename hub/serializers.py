@@ -90,8 +90,10 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         super().validate(attrs)
         email = attrs['email']
-        if profanity.contains_profanity(email):
-            raise serializers.ValidationError({'email': f'The email provided is suspected of containing profanity.'})
+        s1, s2 = email.split('@')
+        s2, s3 = s2.split('.')
+        if any(profanity.contains_profanity(s) for s in [s1, s2, s3]):
+            raise serializers.ValidationError({'email': f'The email entered is suspected of profanity.'})
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
 
