@@ -95,7 +95,7 @@ class Profile(models.Model):
     include_weekly_fasts_in_notifications = models.BooleanField(default=False)
 
     def __str__(self):
-        return self.user.username
+        return self.user.email
 
 
 class Day(models.Model):

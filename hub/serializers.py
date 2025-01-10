@@ -17,7 +17,6 @@ from hub import models
 
 class ProfileSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
-    username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     thumbnail = serializers.SerializerMethodField()
 
@@ -31,7 +30,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Profile
-        fields = ['user_id', 'username', 'email', 'profile_image', 'thumbnail', 
+        fields = ['user_id', 'email', 'profile_image', 'thumbnail', 
                  'location', 'church', 'receive_upcoming_fast_reminders', 
                  'receive_upcoming_fast_push_notifications', 
                  'receive_ongoing_fast_push_notifications',
@@ -48,7 +47,7 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = User
-        fields = ["url", "username", "email", "groups", "profile"]
+        fields = ["url", "email", "groups", "profile"]
 
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -67,7 +66,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('username', 'password', 'password2', 'email', 'church')
+        fields = ('password', 'password2', 'email', 'church')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -77,7 +76,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         church = validated_data.pop('profile')['church']
         user = User.objects.create(
-            username=validated_data['username'],
+            username=validated_data['email'],
             email=validated_data['email'],
         )
         user.set_password(validated_data['password'])
@@ -270,7 +269,7 @@ class ParticipantSerializer(serializers.ModelSerializer):
         model = models.Profile
         fields = ['id', 'user', 'profile_image', 'thumbnail', 'location'] 
 
-    user = serializers.CharField(source='user.username')  # If you want to include the username instead of the user object
+    user = serializers.CharField(source='user.email')  # If you want to include the email instead of the user object
 
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
