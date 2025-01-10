@@ -65,14 +65,13 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
             raise ValidationError(
                 f"Last day ({last_day}) must be before culmination feast ({culmination_feast_date})"
             )
-
         # also checks that does not overlap with other fasts from the same church
-        days = Day.objects.filter(date__range=[first_day, last_day])
         church_name = self.cleaned_data["church"].name
-        names_of_churches_with_overlapping_fasts = sum([[f.church.name for f in day.fasts.all()] for day in days], [])
-        if church_name in names_of_churches_with_overlapping_fasts:
-            raise ValidationError("Fast overlaps with another fast from the same church (not permitted).")
-        
+        days = Day.objects.filter(date__range=[first_day, last_day], church__name=church_name)
+        if any(day.fast is not None for day in days):
+            raise ValidationError(f"Fast overlaps with another fast from the {church_name} (not permitted).")
+
+
         return last_day
 
 

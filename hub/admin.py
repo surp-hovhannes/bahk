@@ -135,11 +135,11 @@ class FastAdmin(admin.ModelAdmin):
                 fast = form.save()
                 data = form.cleaned_data
 
-                # days
+                # create days for fast
                 dates = [data["first_day"] + datetime.timedelta(days=num_days) 
                          for num_days in range(data["length_of_fast"])]
-                days = [Day.objects.get_or_create(date=date)[0] for date in dates]
-                fast.days.set(days)
+                for date in dates:
+                    Day.objects.create(date=date, fast=fast, church=data["church"])
 
                 # go back to fast admin page
                 obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
