@@ -13,7 +13,7 @@ from hub.serializers import PasswordResetSerializer, PasswordResetConfirmSeriali
 class PasswordResetTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            username='testuser',
+            username='test@example.com',
             email='test@example.com',
             password='oldpassword123'
         )
