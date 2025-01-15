@@ -97,3 +97,22 @@ class PasswordResetConfirmView(APIView):
                 )
                 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class DeleteAccountView(APIView):
+    """API endpoint that allows users to delete their own account."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        try:
+            # Delete the user account
+            user.delete()
+            return Response(
+                {"detail": "Account successfully deleted."},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except Exception as e:
+            return Response(
+                {"detail": "Failed to delete account."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
