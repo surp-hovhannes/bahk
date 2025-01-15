@@ -5,7 +5,7 @@ from rest_framework import routers
 from .views.profile import ProfileDetailView, ProfileImageUploadView
 from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser, FastParticipantsView, LeaveFastView, FastStatsView
 from .views.day import FastDaysListView, UserDaysView
-from .views.user import UserViewSet, GroupViewSet, RegisterView, PasswordResetView, PasswordResetConfirmView
+from .views.user import UserViewSet, GroupViewSet, RegisterView, PasswordResetView, PasswordResetConfirmView, DeleteAccountView
 from .views.church import ChurchListView, ChurchDetailView
 from .views.readings import GetDailyReadingsForDate
 from .views.web import home, test_email_view, add_fast_to_profile, remove_fast_from_profile, register, join_fasts, edit_profile, changelog
@@ -26,6 +26,7 @@ urlpatterns = [
     path('profile/image-upload/', ProfileImageUploadView.as_view(), name='profile-image-upload'),
     path('password/reset/', PasswordResetView.as_view(), name='password_reset'),
     path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('account/delete/', DeleteAccountView.as_view(), name='account-delete'),
    
 
     # Fast endpoints
