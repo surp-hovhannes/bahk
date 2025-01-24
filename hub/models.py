@@ -47,7 +47,7 @@ class Fast(models.Model):
     )
     image = models.ImageField(upload_to='fast_images/', null=True, blank=True)
     image_thumbnail = ImageSpecField(source='image',
-                                     processors=[ResizeToFill(500, 500)],
+                                     processors=[Transpose(), ResizeToFill(800, 800)],
                                      format='JPEG',
                                      options={'quality': 60})
     # 2048 chars is the maximum URL length on Google Chrome
