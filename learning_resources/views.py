@@ -2,9 +2,12 @@ from django.shortcuts import render
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from django.db.models import Q
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from .models import Video, Article
 from .serializers import VideoSerializer, ArticleSerializer
 
+@method_decorator(cache_page(60 * 15), name='list')  # Cache for 15 minutes
 class VideoListView(generics.ListAPIView):
     """
     API endpoint that allows videos to be viewed.
@@ -46,15 +49,22 @@ class VideoListView(generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
-        queryset = Video.objects.all()
+        queryset = Video.objects.only(
+            'id', 'title', 'thumbnail', 'video', 
+            'created_at', 'updated_at'
+        )  # Only fetch needed fields
         search = self.request.query_params.get('search', None)
         if search is not None:
             queryset = queryset.filter(
                 Q(title__icontains=search) |
                 Q(description__icontains=search)
-            )
-        return queryset.order_by('-created_at')
+            ).only(
+                'id', 'title', 'description', 'thumbnail', 
+                'video', 'created_at', 'updated_at'
+            )  # Include description when searching
+        return queryset.order_by('-created_at')[:10]
 
+@method_decorator(cache_page(60 * 15), name='list')  # Cache for 15 minutes
 class ArticleListView(generics.ListAPIView):
     """
     API endpoint that allows articles to be viewed.
@@ -95,11 +105,17 @@ class ArticleListView(generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
-        queryset = Article.objects.all()
+        queryset = Article.objects.only(
+            'id', 'title', 'image', 
+            'created_at', 'updated_at'
+        )  # Only fetch needed fields
         search = self.request.query_params.get('search', None)
         if search is not None:
             queryset = queryset.filter(
                 Q(title__icontains=search) |
                 Q(body__icontains=search)
-            )
-        return queryset.order_by('-created_at')
+            ).only(
+                'id', 'title', 'body', 'image', 
+                'created_at', 'updated_at'
+            )  # Include body when searching
+        return queryset.order_by('-created_at')[:10]

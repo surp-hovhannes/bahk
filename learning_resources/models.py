@@ -8,8 +8,8 @@ from imagekit.processors import ResizeToFill
 import os
 
 class Video(models.Model):
-    title = models.CharField(max_length=200)
-    description = models.TextField()
+    title = models.CharField(max_length=200, db_index=True)
+    description = models.TextField(db_index=True)
     thumbnail = models.ImageField(
         upload_to='videos/thumbnails/',
         help_text='Recommended size: 720x1280 pixels (portrait)'
@@ -36,9 +36,10 @@ class Video(models.Model):
         verbose_name_plural = 'Videos'
 
 class Article(models.Model):
-    title = models.CharField(max_length=200)
+    title = models.CharField(max_length=200, db_index=True)
     body = models.TextField(
-        help_text='Content in Markdown format'
+        help_text='Content in Markdown format',
+        db_index=True
     )
     image = models.ImageField(
         upload_to='articles/images/',
