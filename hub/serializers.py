@@ -287,6 +287,12 @@ class DaySerializer(serializers.ModelSerializer):
 
 class ParticipantSerializer(serializers.ModelSerializer):
     thumbnail = serializers.SerializerMethodField()
+    abbreviation = serializers.SerializerMethodField()
+    def get_abbreviation(self, obj):
+        if obj.name:
+            return obj.name[0]
+        else:
+            return obj.user.email[0]
 
     def get_thumbnail(self, obj):
         if obj.profile_image_thumbnail:
@@ -295,9 +301,7 @@ class ParticipantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Profile
-        fields = ['id', 'user', 'profile_image', 'thumbnail', 'location'] 
-
-    user = serializers.CharField(source='user.email')  # If you want to include the email instead of the user object
+        fields = ['id', 'name', 'profile_image', 'thumbnail', 'location', 'abbreviation']
 
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
