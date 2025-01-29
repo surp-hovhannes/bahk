@@ -246,7 +246,10 @@ class FastSerializer(serializers.ModelSerializer):
 
     def get_thumbnail(self, obj):
         if obj.image:
-            return obj.image.url
+            try:
+                return obj.image_thumbnail.url
+            except:
+                return None
         return None
 
     class Meta:
