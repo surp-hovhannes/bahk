@@ -1,22 +1,25 @@
 {
-  "name": "Bahk",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": "."
-  },
-  "features": {
-    "ghcr.io/devcontainers/features/common-utils:1": {},
-    "ghcr.io/devcontainers/features/redis:1": {}
-  },
-  "postCreateCommand": "pip install -r requirements.txt",
-  "forwardPorts": [8000],
+  "name": "Bahk Dev Container",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/app",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-azuretools.vscode-docker"
-      ]
+        "ms-python.black-formatter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      }
     }
+  },
+  "forwardPorts": [8000, 6379],
+  "postCreateCommand": "pip install --user -r requirements.txt",
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin"
   }
 }
