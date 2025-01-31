@@ -288,6 +288,13 @@ class DaySerializer(serializers.ModelSerializer):
 class ParticipantSerializer(serializers.ModelSerializer):
     thumbnail = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
+    user = serializers.SerializerMethodField()
+
+    def get_user(self, obj):
+        # user is returning name while frontend is transitioning to api change.
+        # this will be removed after frontend update is fully deployed.
+        return obj.name
+
     def get_abbreviation(self, obj):
         if obj.name:
             return obj.name[0]
@@ -301,7 +308,7 @@ class ParticipantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Profile
-        fields = ['id', 'name', 'profile_image', 'thumbnail', 'location', 'abbreviation']
+        fields = ['id', 'name', 'profile_image', 'thumbnail', 'location', 'abbreviation', 'user']
 
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
