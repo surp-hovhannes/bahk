@@ -233,6 +233,7 @@ class FastParticipantsView(views.APIView):
     
     URL Parameters:
         - fast_id: The ID of the fast for which to retrieve the participants.
+        - limit: Optional. A number to limit the number of participants to return. Defaults to 6.
 
     Returns:
         - A list of participant profiles for the specified fast.
@@ -246,8 +247,18 @@ class FastParticipantsView(views.APIView):
         if not current_fast:
             return response.Response({"detail": "Fast not found."}, status=404)
 
-        # Retrieve up to 6 participants for the specified fast
-        other_participants = current_fast.profiles.all()[:NUMBER_PARTICIPANTS_TO_SHOW_WEB]
+        # Get the limit parameter from query params, defaulting to NUMBER_PARTICIPANTS_TO_SHOW_WEB
+        # This controls how many participants to return in the response
+        limit = request.query_params.get('limit', NUMBER_PARTICIPANTS_TO_SHOW_WEB)
+
+        # Convert the limit parameter to an integer, defaulting to NUMBER_PARTICIPANTS_TO_SHOW_WEB if invalid
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = NUMBER_PARTICIPANTS_TO_SHOW_WEB
+
+        # Get all profiles (participants) associated with this fast, limited by the limit parameter
+        other_participants = current_fast.profiles.all()[:limit]            
 
         # Serialize the participant data
         serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
