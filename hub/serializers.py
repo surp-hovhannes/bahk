@@ -293,7 +293,10 @@ class ParticipantSerializer(serializers.ModelSerializer):
     def get_user(self, obj):
         # user is returning name while frontend is transitioning to api change.
         # this will be removed after frontend update is fully deployed.
-        return obj.name
+        if obj.name:
+            return obj.name
+        else:
+            return self.get_abbreviation(obj)
 
     def get_abbreviation(self, obj):
         if obj.name:
