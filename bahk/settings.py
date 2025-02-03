@@ -14,6 +14,7 @@ import os
 import sys
 import dj_database_url
 import django_heroku
+from urllib.parse import urlparse
 
 from pathlib import Path
 from decouple import config, Csv
@@ -113,7 +114,20 @@ else:
         }
     }
 
+# Helper function to get Redis connection kwargs from URL
+def get_redis_kwargs_from_url(url):
+    """Parse Redis URL and return connection kwargs"""
+    parsed_url = urlparse(url)
+    return {
+        'host': parsed_url.hostname,
+        'port': parsed_url.port,
+        'password': parsed_url.password,
+        'ssl': parsed_url.scheme == 'rediss',
+        'ssl_cert_reqs': None
+    }
+
 # Cache Configuration
+redis_kwargs = get_redis_kwargs_from_url(config('REDIS_URL', default='redis://redis:6379/1'))
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
@@ -124,15 +138,10 @@ CACHES = {
             'CONNECTION_POOL_CLASS_KWARGS': {
                 'max_connections': 50,
                 'timeout': 20,
+                **redis_kwargs  # Include the parsed connection settings
             },
             'MAX_CONNECTIONS': 1000,
             'PICKLE_VERSION': -1,
-            'SSL': {
-                'ssl_cert_reqs': None,  # Disable certificate verification for Heroku's self-signed certs
-                'ssl_ca_certs': None,
-                'ssl_certfile': None,
-                'ssl_keyfile': None,
-            }
         },
         'KEY_PREFIX': 'bahk',
         'TIMEOUT': 60 * 15,  # 15 minutes default timeout
@@ -227,33 +236,17 @@ else:
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 
-# Helper function to ensure Redis URL has proper scheme
-def get_redis_url(url):
-    """Ensure Redis URL has proper scheme"""
-    if not url:
-        return 'redis://redis:6379/1'  # Use 'redis' service name instead of localhost
-    if not any(url.startswith(scheme) for scheme in ['redis://', 'rediss://', 'unix://']):
-        return f'redis://{url}'
-    return url
-
 # Celery Configuration
-CELERY_BROKER_URL = get_redis_url(config('REDIS_URL', default='redis://redis:6379/0'))
-CELERY_RESULT_BACKEND = get_redis_url(config('REDIS_URL', default='redis://redis:6379/0'))
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 
-# Ensure consistent SSL settings for Celery Redis connections
+# Use the same Redis connection settings for Celery
+redis_kwargs = get_redis_kwargs_from_url(CELERY_BROKER_URL)
 CELERY_BROKER_USE_SSL = {
-    'ssl_cert_reqs': None,  # Disable certificate verification for Heroku's self-signed certs
-    'ssl_ca_certs': None,
-    'ssl_certfile': None,
-    'ssl_keyfile': None,
-}
+    'ssl_cert_reqs': None,
+} if redis_kwargs['ssl'] else None
 
-CELERY_REDIS_BACKEND_USE_SSL = {
-    'ssl_cert_reqs': None,  # Disable certificate verification for Heroku's self-signed certs
-    'ssl_ca_certs': None,
-    'ssl_certfile': None,
-    'ssl_keyfile': None,
-}
+CELERY_REDIS_BACKEND_USE_SSL = CELERY_BROKER_USE_SSL
 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
