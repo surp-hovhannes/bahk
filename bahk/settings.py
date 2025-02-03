@@ -138,10 +138,13 @@ CACHES = {
             'CONNECTION_POOL_CLASS_KWARGS': {
                 'max_connections': 50,
                 'timeout': 20,
-                **redis_kwargs  # Include the parsed connection settings
             },
             'MAX_CONNECTIONS': 1000,
             'PICKLE_VERSION': -1,
+            # SSL settings should be at root of OPTIONS
+            'SSL': {
+                'ssl_cert_reqs': None,
+            } if redis_kwargs['ssl'] else {},
         },
         'KEY_PREFIX': 'bahk',
         'TIMEOUT': 60 * 15,  # 15 minutes default timeout
