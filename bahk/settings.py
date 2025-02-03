@@ -14,7 +14,6 @@ import os
 import sys
 import dj_database_url
 import django_heroku
-from urllib.parse import urlparse
 
 from pathlib import Path
 from decouple import config, Csv
@@ -114,40 +113,24 @@ else:
         }
     }
 
-# Helper function to get Redis connection kwargs from URL
-def get_redis_kwargs_from_url(url):
-    """Parse Redis URL and return connection kwargs"""
-    parsed_url = urlparse(url)
-    return {
-        'host': parsed_url.hostname,
-        'port': parsed_url.port,
-        'password': parsed_url.password,
-        'ssl': parsed_url.scheme == 'rediss',
-        'ssl_cert_reqs': None
-    }
-
 # Cache Configuration
-redis_kwargs = get_redis_kwargs_from_url(config('REDIS_URL', default='redis://redis:6379/1'))
 CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://redis:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_CLASS': 'redis.BlockingConnectionPool',
-            'CONNECTION_POOL_CLASS_KWARGS': {
-                'max_connections': 50,
-                'timeout': 20,
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"{config('REDIS_URL', default='redis://redis:6379/1')}?ssl_cert_reqs=none",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
+            "CONNECTION_POOL_CLASS_KWARGS": {
+                "max_connections": 50,
+                "timeout": 20,
+                "ssl_cert_reqs": "CERT_NONE"
             },
-            'MAX_CONNECTIONS': 1000,
-            'PICKLE_VERSION': -1,
-            # SSL settings should be at root of OPTIONS
-            'SSL': {
-                'ssl_cert_reqs': None,
-            } if redis_kwargs['ssl'] else {},
+            "MAX_CONNECTIONS": 1000,
+            "PICKLE_VERSION": -1,
         },
-        'KEY_PREFIX': 'bahk',
-        'TIMEOUT': 60 * 15,  # 15 minutes default timeout
+        "KEY_PREFIX": "bahk",
+        "TIMEOUT": 60 * 15,  # 15 minutes default timeout
     }
 }
 
@@ -240,21 +223,13 @@ else:
 
 
 # Celery Configuration
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
+CELERY_BROKER_URL = f"{config('REDIS_URL', default='redis://redis:6379/0')}?ssl_cert_reqs=none"
+CELERY_RESULT_BACKEND = f"{config('REDIS_URL', default='redis://redis:6379/0')}?ssl_cert_reqs=none"
 
-# Use the same Redis connection settings for Celery
-redis_kwargs = get_redis_kwargs_from_url(CELERY_BROKER_URL)
-CELERY_BROKER_USE_SSL = {
-    'ssl_cert_reqs': None,
-} if redis_kwargs['ssl'] else None
-
-CELERY_REDIS_BACKEND_USE_SSL = CELERY_BROKER_USE_SSL
-
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'
+# Celery broker transport options
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "ssl_cert_reqs": "CERT_NONE",
+}
 
 # Use Redis for session cache
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
