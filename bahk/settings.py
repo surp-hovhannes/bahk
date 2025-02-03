@@ -127,6 +127,12 @@ CACHES = {
             },
             'MAX_CONNECTIONS': 1000,
             'PICKLE_VERSION': -1,
+            'SSL': {
+                'ssl_cert_reqs': None,  # Disable certificate verification for Heroku's self-signed certs
+                'ssl_ca_certs': None,
+                'ssl_certfile': None,
+                'ssl_keyfile': None,
+            }
         },
         'KEY_PREFIX': 'bahk',
         'TIMEOUT': 60 * 15,  # 15 minutes default timeout
@@ -234,19 +240,20 @@ def get_redis_url(url):
 CELERY_BROKER_URL = get_redis_url(config('REDIS_URL', default='redis://redis:6379/0'))
 CELERY_RESULT_BACKEND = get_redis_url(config('REDIS_URL', default='redis://redis:6379/0'))
 
-if CELERY_BROKER_URL.startswith('rediss://'):
-    CELERY_BROKER_USE_SSL = {
-        'ssl_cert_reqs': CERT_NONE,
-        'ssl_ca_certs': None,
-        'ssl_certfile': None,
-        'ssl_keyfile': None,
-    }
-    CELERY_REDIS_BACKEND_USE_SSL = {
-        'ssl_cert_reqs': CERT_NONE,
-        'ssl_ca_certs': None,
-        'ssl_certfile': None,
-        'ssl_keyfile': None,
-    }
+# Ensure consistent SSL settings for Celery Redis connections
+CELERY_BROKER_USE_SSL = {
+    'ssl_cert_reqs': None,  # Disable certificate verification for Heroku's self-signed certs
+    'ssl_ca_certs': None,
+    'ssl_certfile': None,
+    'ssl_keyfile': None,
+}
+
+CELERY_REDIS_BACKEND_USE_SSL = {
+    'ssl_cert_reqs': None,  # Disable certificate verification for Heroku's self-signed certs
+    'ssl_ca_certs': None,
+    'ssl_certfile': None,
+    'ssl_keyfile': None,
+}
 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
