@@ -113,22 +113,35 @@ else:
         }
     }
 
+# Helper function to check if Redis URL uses SSL
+def is_redis_ssl(url):
+    return url.startswith('rediss://')
+
+# Get Redis URL
+REDIS_URL = config('REDIS_URL', default='redis://redis:6379/1')
+
 # Cache Configuration
+CACHE_OPTIONS = {
+    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+    "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
+    "CONNECTION_POOL_CLASS_KWARGS": {
+        "max_connections": 50,
+        "timeout": 20,
+    },
+    "MAX_CONNECTIONS": 1000,
+    "PICKLE_VERSION": -1,
+}
+
+# Add SSL settings only if using SSL
+if is_redis_ssl(REDIS_URL):
+    REDIS_URL = f"{REDIS_URL}?ssl_cert_reqs=none"
+    CACHE_OPTIONS["CONNECTION_POOL_CLASS_KWARGS"]["ssl_cert_reqs"] = "CERT_NONE"
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"{config('REDIS_URL', default='redis://redis:6379/1')}?ssl_cert_reqs=none",
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
-            "CONNECTION_POOL_CLASS_KWARGS": {
-                "max_connections": 50,
-                "timeout": 20,
-                "ssl_cert_reqs": "CERT_NONE"
-            },
-            "MAX_CONNECTIONS": 1000,
-            "PICKLE_VERSION": -1,
-        },
+        "LOCATION": REDIS_URL,
+        "OPTIONS": CACHE_OPTIONS,
         "KEY_PREFIX": "bahk",
         "TIMEOUT": 60 * 15,  # 15 minutes default timeout
     }
@@ -223,13 +236,16 @@ else:
 
 
 # Celery Configuration
-CELERY_BROKER_URL = f"{config('REDIS_URL', default='redis://redis:6379/0')}?ssl_cert_reqs=none"
-CELERY_RESULT_BACKEND = f"{config('REDIS_URL', default='redis://redis:6379/0')}?ssl_cert_reqs=none"
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
-# Celery broker transport options
-CELERY_BROKER_TRANSPORT_OPTIONS = {
-    "ssl_cert_reqs": "CERT_NONE",
-}
+# Add SSL settings for Celery only if using SSL
+if is_redis_ssl(CELERY_BROKER_URL):
+    CELERY_BROKER_URL = f"{CELERY_BROKER_URL}?ssl_cert_reqs=none"
+    CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+    CELERY_BROKER_TRANSPORT_OPTIONS = {
+        "ssl_cert_reqs": "CERT_NONE",
+    }
 
 # Use Redis for session cache
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'

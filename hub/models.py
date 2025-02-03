@@ -8,7 +8,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import constraints
 from imagekit.models import ImageSpecField
-from imagekit.processors import ResizeToFill
+from imagekit.processors import ResizeToFill, ResizeToFit
 from imagekit.processors import Transpose
 
 from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL
@@ -49,7 +49,7 @@ class Fast(models.Model):
     )
     image = models.ImageField(upload_to='fast_images/', null=True, blank=True)
     image_thumbnail = ImageSpecField(source='image',
-                                     processors=[Transpose(), ResizeToFill(800, 800)],
+                                     processors=[Transpose(), ResizeToFit(800, None)],
                                      format='JPEG',
                                      options={'quality': 60})
     # Cache the thumbnail URL to avoid S3 calls
