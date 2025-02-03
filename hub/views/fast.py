@@ -9,8 +9,21 @@ import datetime
 from rest_framework import views, response, status
 import logging
 import pytz
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
+from django.conf import settings
+from django.core.cache import cache
+from django.utils.encoding import force_str
 
+CACHE_TTL = getattr(settings, 'CACHE_MIDDLEWARE_SECONDS', 60 * 15)  # 15 minutes default
 
+def get_cache_key(prefix, *args):
+    """Generate a cache key with the given prefix and arguments."""
+    return f"bahk:{prefix}:{'_'.join(force_str(arg) for arg in args)}"
+
+@method_decorator(cache_page(CACHE_TTL), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
     API view to list all fasts for a specific church within a configurable date range.
@@ -51,7 +64,6 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
         default_start = today - datetime.timedelta(days=180)
         default_end = today + datetime.timedelta(days=180)
 
-        # Get and validate date parameters
         start_date = default_start
         end_date = default_end
 
@@ -62,33 +74,52 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             try:
                 start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
             except ValueError:
-                pass  # Keep default if invalid
+                pass
 
         if end_date_str:
             try:
                 end_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").date()
             except ValueError:
-                pass  # Keep default if invalid
+                pass
 
+        # Optimize queryset with select_related and prefetch_related
         return Fast.objects.filter(
             church=church,
             days__date__gte=start_date,
             days__date__lte=end_date
+        ).select_related(
+            'church'
+        ).prefetch_related(
+            'days',
+            'profiles'
         ).distinct()
 
 
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class FastDetailView(TimezoneMixin, generics.RetrieveAPIView):
     """
     API view to retrieve detailed information about a specific fast.
 
     This view allows authenticated users to retrieve the details of a specific fast by its ID.
+    The response is cached for 15 minutes to improve performance, with separate cache entries
+    for authenticated and unauthenticated users to prevent data leakage.
+
+    Cache keys are generated based on:
+    - Fast ID
+    - User authentication status
+    - Timezone
+    
+    Cache invalidation should occur when:
+    - The fast is updated
+    - A user joins/leaves the fast
+    - The fast's church information changes
 
     Inherits:
         - TimezoneMixin: Provides the timezone context for serializers.
         - RetrieveAPIView: Standard DRF view for retrieving a single model instance by ID.
 
     Permissions:
-        - IsAuthenticated: Only authenticated users can access this view.
+        - AllowAny: Any user can access this view.
 
     Query Parameters:
         - tz: Optional. Timezone offset from UTC in the IANA format (e.g., America/New_York).
@@ -99,9 +130,39 @@ class FastDetailView(TimezoneMixin, generics.RetrieveAPIView):
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]
 
-    queryset = Fast.objects.all()
+    def get_queryset(self):
+        return Fast.objects.all().select_related('church').prefetch_related('days', 'profiles')
+
+    def get_object(self):
+        # Return the model instance as expected by DRF
+        return super().get_object()
+
+    def retrieve(self, request, *args, **kwargs):
+        # Generate cache key using the fast ID, auth status, and timezone
+        is_authenticated = request.user.is_authenticated
+        cache_key = get_cache_key(
+            'fast_detail',
+            self.kwargs['pk'],
+            'auth' if is_authenticated else 'anon',
+            self.get_timezone().zone
+        )
+        
+        # Try to get serialized data from cache
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return response.Response(cached_data)
+        
+        # If not in cache, get the response from the parent class
+        response_data = super().retrieve(request, *args, **kwargs)
+        
+        # Cache the serialized data
+        cache.set(cache_key, response_data.data, CACHE_TTL)
+        
+        return response_data
 
 
+@method_decorator(cache_page(CACHE_TTL), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class FastByDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
     API view to list fasts based on a specific date or the current date.
@@ -130,21 +191,42 @@ class FastByDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
 
     def get_queryset(self):
         church = self.get_church()
-        
         date_str = self.request.query_params.get('date')
         tz = self.get_timezone()
+        
+        # Generate cache key
+        cache_key = get_cache_key('fast_by_date', church.id, date_str, tz.zone)
+        
+        # Try to get serialized data from cache
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            # If found in cache, filter the queryset by the cached IDs
+            return Fast.objects.filter(id__in=cached_data)
 
         if date_str:
             try:
-                # Parse the date string (expected format: yyyy-mm-dd)
                 target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
                 raise ValidationError("Invalid date format. Expected format: yyyy-mm-dd.")
         else:
-            # Default to the current date
             target_date = timezone.localdate(timezone=tz)
 
-        return Fast.objects.filter(church=church, days__date=target_date)
+        # Optimize queryset with select_related and prefetch_related
+        queryset = Fast.objects.filter(
+            church=church,
+            days__date=target_date
+        ).select_related(
+            'church'
+        ).prefetch_related(
+            'days',
+            'profiles'
+        )
+        
+        # Cache the list of Fast IDs instead of the queryset
+        fast_ids = list(queryset.values_list('id', flat=True))
+        cache.set(cache_key, fast_ids, CACHE_TTL)
+        
+        return queryset
 
 
 class JoinFastView(generics.UpdateAPIView):
@@ -241,28 +323,19 @@ class FastParticipantsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, fast_id):
-        # Retrieve the fast based on the fast_id provided in the URL
         current_fast = Fast.objects.filter(id=fast_id).first()
 
         if not current_fast:
             return response.Response({"detail": "Fast not found."}, status=404)
 
-        # Get the limit parameter from query params, defaulting to NUMBER_PARTICIPANTS_TO_SHOW_WEB
-        # This controls how many participants to return in the response
         limit = request.query_params.get('limit', NUMBER_PARTICIPANTS_TO_SHOW_WEB)
-
-        # Convert the limit parameter to an integer, defaulting to NUMBER_PARTICIPANTS_TO_SHOW_WEB if invalid
         try:
             limit = int(limit)
         except (ValueError, TypeError):
             limit = NUMBER_PARTICIPANTS_TO_SHOW_WEB
 
-        # Get all profiles (participants) associated with this fast, limited by the limit parameter
         other_participants = current_fast.profiles.all()[:limit]            
-
-        # Serialize the participant data
         serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
-
         return response.Response(serialized_participants.data)
 
 
@@ -283,24 +356,12 @@ class FastStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Retrieve the user's profile
         user_profile = request.user.profile
-
-        # Serialize the user's fasting statistics
         serialized_stats = FastStatsSerializer(user_profile)
-
         return response.Response(serialized_stats.data)
 
 
-
-# legacy Fast views
-
 class FastOnDate(views.APIView):
-    """Returns fast data on the date specified in query params (`?date=<yyyymmdd>`) for the user.
-    
-    If no date provided, defaults to today. If there is no fast on the given date, or the date string provided is
-    invalid or malformed, the response will contain no fast information.
-    """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
@@ -310,7 +371,7 @@ class FastOnDate(views.APIView):
         else:
             fast = _get_fast_on_date(request)
             return response.Response(FastSerializer(fast).data)
-    
+
 
 class FastOnDateWithoutUser(views.APIView):
     """Returns fast data on the date specified in query params (`?date=<yyyymmdd>`).
@@ -340,13 +401,15 @@ def _get_fast_for_user_on_date(request):
 def _get_user_fast_on_date(user, date):
     """Given user, gets fast that the user is participating in on a given day."""
     # there should not be multiple fasts per day, but in case of bug, return last created
-    return Fast.objects.filter(profiles__user=user, days__date=date, church=user.profile.church).last()
+    return Fast.objects.filter(
+        profiles__user=user, 
+        days__date=date, 
+        church=user.profile.church
+    ).select_related('church').last()
 
 
 def _get_fast_on_date(request):
-    """Returns the fast for the user's church on a given day whether the user is participating in it or not.
-    check for params in the requet that define church and date"""
-
+    """Returns the fast for the user's church on a given day whether the user is participating in it or not."""
     date_str = request.query_params.get("date")
     if date_str is None:
         # get today by default
@@ -362,18 +425,14 @@ def _get_fast_on_date(request):
 
     # Filter the fasts based on the church
     # there should not be multiple fasts per day, but in case of bug, return last created
-    return Fast.objects.filter(church=church, days__date=date).last()
+    return Fast.objects.filter(
+        church=church, 
+        days__date=date
+    ).select_related('church').last()
 
 
 def _parse_date_str(date_str):
-    """Parses a date string in the format yyyymmdd into a date object.
-    
-    Args:
-        date_str (str): string to parse into a date. Expects the format yyyymmdd (e.g., 20240331 for March 31, 2024).
-
-    Returns:
-        datetime.date: date object corresponding to the date string. None if the date is invalid.
-    """
+    """Parses a date string in the format yyyymmdd into a date object."""
     try:
         date = datetime.datetime.strptime(date_str, "%Y%m%d").date()
     except ValueError as e:

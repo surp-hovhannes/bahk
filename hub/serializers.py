@@ -1,9 +1,13 @@
 """Serializers for handling API requests."""
 import datetime
 import re
+import logging
+from django.utils import timezone  # Add missing timezone import
 
 from better_profanity import profanity
 from django.contrib.auth.models import Group, User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
@@ -14,18 +18,24 @@ from django.utils.encoding import force_str
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.conf import settings
-from django.utils import timezone
 
 from hub import models
+from hub.mixins import ThumbnailCacheMixin
 
 
-class ProfileSerializer(serializers.ModelSerializer):
+class ProfileSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     thumbnail = serializers.SerializerMethodField()
 
     def get_thumbnail(self, obj):
-        if obj.profile_image_thumbnail:
+        if obj.profile_image:
+            # Try to get/update cached URL
+            cached_url = self.update_thumbnail_cache(obj, 'profile_image', 'profile_image_thumbnail')
+            if cached_url:
+                return cached_url
+            
+            # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.profile_image_thumbnail.url
             except:
@@ -140,7 +150,23 @@ class ChurchSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
-class FastSerializer(serializers.ModelSerializer):
+# Add signal to handle thumbnail caching
+@receiver(post_save, sender=models.Fast)
+def update_thumbnail_cache(sender, instance, **kwargs):
+    """Update thumbnail cache in the background after save."""
+    if instance.image and not instance.cached_thumbnail_url:
+        try:
+            url = instance.image_thumbnail.url
+            # Use update to avoid recursive signal triggering
+            models.Fast.objects.filter(id=instance.id).update(
+                cached_thumbnail_url=url,
+                cached_thumbnail_updated=timezone.now()
+            )
+        except Exception as e:
+            logging.error(f"Error caching thumbnail URL for Fast {instance.id}: {e}")
+
+
+class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     church = ChurchSerializer()
     participant_count = serializers.SerializerMethodField()
     countdown = serializers.SerializerMethodField()
@@ -154,7 +180,6 @@ class FastSerializer(serializers.ModelSerializer):
     current_day_number = serializers.SerializerMethodField()
     modal_id = serializers.ReadOnlyField()
     thumbnail = serializers.SerializerMethodField()
-
 
     def get_church(self, obj):
         return ChurchSerializer(obj.church, context=self.context).data if obj.church else None
@@ -245,16 +270,38 @@ class FastSerializer(serializers.ModelSerializer):
             return None
 
     def get_thumbnail(self, obj):
+        """Get the thumbnail URL, preferring cached version to avoid S3 calls"""
         if obj.image:
+            # Try to get/update cached URL
+            cached_url = self.update_thumbnail_cache(obj, 'image', 'image_thumbnail')
+            if cached_url:
+                return cached_url
+            
+            # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.image_thumbnail.url
-            except:
+            except Exception as e:
+                logging.error(f"Error getting thumbnail URL for Fast {obj.id}: {e}")
                 return None
         return None
 
     class Meta:
         model = models.Fast
-        fields = '__all__'
+        fields = ['id', 'name', 'church', 'description', 'culmination_feast', 
+                 'culmination_feast_date', 'year', 'image', 'thumbnail', 'url',
+                 'participant_count', 'countdown', 'days_to_feast', 'start_date',
+                 'end_date', 'joined', 'has_passed', 'next_fast_date',
+                 'total_number_of_days', 'current_day_number', 'modal_id']
+        
+    def to_representation(self, instance):
+        """Optimize the serialization by using select_related and prefetch_related"""
+        # Ensure church is pre-fetched
+        if not hasattr(instance, '_prefetched_objects_cache'):
+            instance = models.Fast.objects.select_related('church').prefetch_related(
+                'days', 'profiles'
+            ).get(id=instance.id)
+        
+        return super().to_representation(instance)
 
 class JoinFastSerializer(serializers.ModelSerializer):
     fast_id = serializers.IntegerField(write_only=True)
