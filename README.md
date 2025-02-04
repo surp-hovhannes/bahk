@@ -75,7 +75,14 @@ First, populate the database with the seed data by running
 python manage.py seed
 ```
 
-This creates 4 accounts: usernames `user1a`, `user1b`, `user2`, and `user3`. The password is `default123` for each. 
+This creates 4 accounts with the below emails:
+```
+user1a@email.com
+user1b@email.com
+user2@email.com
+user3@email.com
+```
+The password is `default123` for each. 
 You can now log into the home page with any of these accounts at http://localhost:8000/hub/web/.
 
 Users `user1a` and `user1b` are part of `Church1` and are participating in `Fast1`. User `user2` is part of `Church2`
