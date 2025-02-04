@@ -16,6 +16,7 @@ from hub.models import Church, Day, Fast, Profile
 from hub.serializers import FastSerializer
 
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 PARSER_REGEX = r"^([A-za-z1-4\'\. ]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
