@@ -59,6 +59,12 @@ python manage.py createsuperuser
 ```
 Note the username, email, and password that you enter.
 
+### Running the website
+Generate the html/css/js static content with
+```
+python manage.py collectstatic
+```
+
 Now you're ready to run the app! In the terminal, enter
 ```
 python manage.py runserver
