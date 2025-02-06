@@ -9,6 +9,9 @@ from django.utils import timezone
 import logging
 import os
 
+from learning_resources.constants import DAYS_TO_CACHE_THUMBNAIL
+
+
 class Video(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
@@ -48,7 +51,7 @@ class Video(models.Model):
                 not self.cached_thumbnail_url or
                 is_new_image or
                 (self.cached_thumbnail_updated and 
-                 (timezone.now() - self.cached_thumbnail_updated).days >= 7)
+                 (timezone.now() - self.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL)
             )
             
             if should_update_cache:
@@ -114,7 +117,7 @@ class Article(models.Model):
                 not self.cached_thumbnail_url or
                 is_new_image or
                 (self.cached_thumbnail_updated and 
-                 (timezone.now() - self.cached_thumbnail_updated).days >= 7)
+                 (timezone.now() - self.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL)
             )
             
             if should_update_cache:
