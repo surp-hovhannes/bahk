@@ -1,6 +1,8 @@
 from django.utils import timezone
 import logging
 
+from hub.constants import DAYS_TO_CACHE_THUMBNAIL
+
 class ThumbnailCacheMixin:
     """Mixin to handle thumbnail caching for models with ImageSpecField thumbnails."""
     
@@ -23,7 +25,7 @@ class ThumbnailCacheMixin:
         should_update_cache = (
             not obj.cached_thumbnail_url or
             not obj.cached_thumbnail_updated or
-            (timezone.now() - obj.cached_thumbnail_updated).days >= 7
+            (timezone.now() - obj.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL
         )
         
         if should_update_cache:

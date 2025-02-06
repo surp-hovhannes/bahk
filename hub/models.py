@@ -11,7 +11,7 @@ from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit
 from imagekit.processors import Transpose
 
-from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL
+from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL, DAYS_TO_CACHE_THUMBNAIL
 import bahk.settings as settings
 
 
@@ -82,7 +82,7 @@ class Fast(models.Model):
                 not self.cached_thumbnail_url or
                 is_new_image or
                 (self.cached_thumbnail_updated and 
-                 (timezone.now() - self.cached_thumbnail_updated).days >= 7)
+                 (timezone.now() - self.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL)
             )
             
             if should_update_cache:
@@ -171,7 +171,7 @@ class Profile(models.Model):
                 not self.cached_thumbnail_url or
                 is_new_image or
                 (self.cached_thumbnail_updated and 
-                 (timezone.now() - self.cached_thumbnail_updated).days >= 7)
+                 (timezone.now() - self.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL)
             )
             
             if should_update_cache:
