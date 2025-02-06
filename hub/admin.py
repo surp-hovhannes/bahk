@@ -6,6 +6,8 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
+from django.utils.text import Truncator
+from django.db import models
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Fast, Profile, Reading
@@ -52,15 +54,24 @@ class ChurchAdmin(admin.ModelAdmin):
 
 @admin.register(Fast, site=admin.site)
 class FastAdmin(admin.ModelAdmin):
-    list_display = ("get_name", "church_link", "get_days", "culmination_feast", "culmination_feast_date", "description", "image",
-                    "url_link",)
-    list_display_links = ("get_name", "church_link", "url_link",)
-    ordering = ("-year", "church", "name",)
+    list_display = (
+        "get_name", "church_link", "get_days", "culmination_feast_date", "get_description", "image_link", "participant_count"
+    )
+    list_display_links = ['get_name']
+    ordering = ("-year", "church", "name")
+    list_filter = ("church", "year")
+    sortable_by = ("get_name", "participant_count")
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.annotate(participant_count=models.Count('profiles'))
+        return queryset
 
     def get_name(self, fast):
-        return str(fast)
+        return fast
     
     get_name.short_description = "Fast Name"
+    get_name.admin_order_field = "name"
 
     def church_link(self, fast):
         if not fast.church:
@@ -71,16 +82,29 @@ class FastAdmin(admin.ModelAdmin):
     church_link.short_description = "Church"
     
     def get_days(self, fast):
-        return _concatenate_queryset(fast.days.all())
+        return _concatenate_queryset(fast.days.all(), ", ", 5)
         
     get_days.short_description = "Days"
 
-    def url_link(self, fast):
-        if not fast.url:
+    def get_description(self, fast):
+        if not fast.description:
             return ""
-        return format_html('<a href="{}">{}</a>', fast.url, fast.url)
+        t = Truncator(fast.description)
+        return t.chars(25)
     
-    url_link.short_description = "Link to Learn More"
+    get_description.short_description = "Description"
+
+    def image_link(self, fast):
+        if not fast.image:
+            return ""
+        url = fast.image.url
+        return format_html('<a href="{}">{}</a>', url, "Image Link")
+    
+    def participant_count(self, fast):
+        return fast.participant_count
+    
+    participant_count.short_description = "Participants"
+    participant_count.admin_order_field = 'participant_count'
 
     def get_urls(self):
         """Add endpoints to admin views."""
@@ -206,10 +230,14 @@ class FastAdmin(admin.ModelAdmin):
 @admin.register(Profile, site=admin.site)
 class ProfileAdmin(admin.ModelAdmin):
     list_display = (
-        "user", "church_link", "fast_links", "name", "location", "receive_upcoming_fast_reminders", "profile_image",
+        "user", "church_link", "fast_links", "name", "location", "profile_image_link", "joined_date"
     )
-    list_display_links = ("user", "church_link", "fast_links",)
-    ordering = ("church", "user",)
+    list_display_links = (
+        "user", "church_link", "fast_links","profile_image_link"
+    )
+    ordering = ("church", "user")
+    list_filter = ("church", "fasts", "user__date_joined")
+    sortable_by = ("user", "joined_date")
 
     def church_link(self, fast):
         if not fast.church:
@@ -224,11 +252,27 @@ class ProfileAdmin(admin.ModelAdmin):
     
     fast_links.short_description = "Fasts"
 
+    def joined_date(self, profile):
+        return profile.user.date_joined
+    
+    joined_date.short_description = "Joined"
+    joined_date.admin_order_field = "user__date_joined"
+
+    def profile_image_link(self, profile):
+        if not profile.profile_image:
+            return ""
+        url = profile.profile_image.url
+        return format_html('<a href="{}">Image Link</a>',url)
+    
+    profile_image_link.short_description = "Profile Image"
+
+
 
 @admin.register(Day, site=admin.site)
 class DayAdmin(admin.ModelAdmin):
     list_display = ("date", "church_link", "fast_link", "reading_links")
     ordering = ("church", "date",)
+    list_filter = ("church", "fast")
 
     def church_link(self, day):
         if not day.fast or not day.fast.church:
