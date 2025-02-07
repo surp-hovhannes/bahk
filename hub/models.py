@@ -205,7 +205,7 @@ class Day(models.Model):
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days", default=Church.get_default_pk)
 
     def __str__(self):
-        return self.date.strftime("%B-%d-%Y")
+        return self.date.strftime("%Y-%m-%d")
 
 
 class Reading(models.Model):

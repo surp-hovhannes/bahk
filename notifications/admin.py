@@ -9,11 +9,11 @@ from .utils import send_push_notification
 
 @admin.register(DeviceToken)
 class DeviceTokenAdmin(admin.ModelAdmin):
-    list_display = ('token', 'created_at', 'is_active')
-    search_fields = ('token',)
+    list_display = ('token', 'user', 'created_at', 'is_active', 'last_used')
+    search_fields = ('token', 'user__email')
     ordering = ('-created_at',)
-    actions = ['send_push_notification']
-    list_filter = ('is_active',)
+    actions = ['send_push_notification', 'send_test_notification']
+    list_filter = ('is_active', 'created_at', 'last_used')
 
     def get_urls(self):
         urls = super().get_urls()
