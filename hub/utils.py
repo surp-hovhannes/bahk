@@ -2,7 +2,6 @@
 from datetime import datetime, timedelta
 import logging
 import re
-
 import urllib
 
 from django.core.mail import EmailMultiAlternatives, send_mail
@@ -10,6 +9,7 @@ from django.conf import settings
 from django.db.models import OuterRef, Subquery, Q
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from django.utils import timezone
 
 import bahk.settings as settings
 from hub.models import Church, Day, Fast, Profile

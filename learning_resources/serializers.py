@@ -1,7 +1,9 @@
 from rest_framework import serializers
+from django.utils import timezone
+from hub.mixins import ThumbnailCacheMixin
 from .models import Video, Article
 
-class VideoSerializer(serializers.ModelSerializer):
+class VideoSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     thumbnail_small_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -14,11 +16,20 @@ class VideoSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
     def get_thumbnail_small_url(self, obj):
-        if obj.thumbnail_small:
-            return obj.thumbnail_small.url
+        if obj.thumbnail:
+            # Try to get/update cached URL
+            cached_url = self.update_thumbnail_cache(obj, 'thumbnail', 'thumbnail_small')
+            if cached_url:
+                return cached_url
+            
+            # Fall back to direct thumbnail URL if caching fails
+            try:
+                return obj.thumbnail_small.url
+            except:
+                return None
         return None
 
-class ArticleSerializer(serializers.ModelSerializer):
+class ArticleSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     thumbnail_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -30,6 +41,15 @@ class ArticleSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
     def get_thumbnail_url(self, obj):
-        if obj.thumbnail:
-            return obj.thumbnail.url
+        if obj.image:
+            # Try to get/update cached URL
+            cached_url = self.update_thumbnail_cache(obj, 'image', 'thumbnail')
+            if cached_url:
+                return cached_url
+            
+            # Fall back to direct thumbnail URL if caching fails
+            try:
+                return obj.thumbnail.url
+            except:
+                return None
         return None 

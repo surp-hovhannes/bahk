@@ -19,7 +19,10 @@ celery
 django-anymail
 django-markdownx
 better-profanity==0.7.0
+django-model-utils==4.4.0
 
 django-cors-headers
 django-push-notifications
 exponent_server_sdk
+django-redis==5.4.0
+hiredis==2.3.2

@@ -64,6 +64,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -71,7 +72,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'bahk.urls'
@@ -113,6 +113,43 @@ else:
         }
     }
 
+# Helper function to check if Redis URL uses SSL
+def is_redis_ssl(url):
+    return url.startswith('rediss://')
+
+# Get Redis URL
+REDIS_URL = config('REDIS_URL', default='redis://redis:6379/1')
+
+# Cache Configuration
+CACHE_OPTIONS = {
+    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+    "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
+    "CONNECTION_POOL_CLASS_KWARGS": {
+        "max_connections": 50,
+        "timeout": 20,
+    },
+    "MAX_CONNECTIONS": 1000,
+    "PICKLE_VERSION": -1,
+}
+
+# Add SSL settings only if using SSL
+if is_redis_ssl(REDIS_URL):
+    REDIS_URL = f"{REDIS_URL}?ssl_cert_reqs=none"
+    CACHE_OPTIONS["CONNECTION_POOL_CLASS_KWARGS"]["ssl_cert_reqs"] = "CERT_NONE"
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": CACHE_OPTIONS,
+        "KEY_PREFIX": "bahk",
+        "TIMEOUT": 60 * 15,  # 15 minutes default timeout
+    }
+}
+
+# Cache middleware settings
+CACHE_MIDDLEWARE_SECONDS = 60 * 15  # 15 minutes
+CACHE_MIDDLEWARE_KEY_PREFIX = 'bahk'
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -148,8 +185,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
-
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
@@ -198,32 +234,25 @@ else:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Celery Configuration
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
-if CELERY_BROKER_URL.startswith('rediss://'):
-    CELERY_BROKER_USE_SSL = {
-        'ssl_cert_reqs': CERT_NONE,
-        'ssl_ca_certs': None,
-        'ssl_certfile': None,
-        'ssl_keyfile': None,
-    }
-    CELERY_REDIS_BACKEND_USE_SSL = {
-        'ssl_cert_reqs': CERT_NONE,
-        'ssl_ca_certs': None,
-        'ssl_certfile': None,
-        'ssl_keyfile': None,
+# Add SSL settings for Celery only if using SSL
+if is_redis_ssl(CELERY_BROKER_URL):
+    CELERY_BROKER_URL = f"{CELERY_BROKER_URL}?ssl_cert_reqs=none"
+    CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+    CELERY_BROKER_TRANSPORT_OPTIONS = {
+        "ssl_cert_reqs": "CERT_NONE",
     }
 
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'
+# Use Redis for session cache
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+
+# Cache middleware settings
+CACHE_MIDDLEWARE_ALIAS = 'default'
 
 # Mailgun Configuration
 EMAIL_HOST = 'smtp.mailgun.org'
@@ -259,9 +288,13 @@ if 'test' in sys.argv:
 
 # test if is_production and print something to console
 if IS_PRODUCTION:
-    print("Running tests in production environment")
+    print("\033[91m" + "="*50)  # Red color
+    print("\033[91m🚀 RUNNING IN PRODUCTION ENVIRONMENT")
+    print("\033[91m" + "="*50 + "\033[0m")  # Reset color
 else:
-    print("Running tests in development environment")
+    print("\033[93m" + "="*50)  # Yellow color
+    print("\033[93m🔧 RUNNING IN DEVELOPMENT ENVIRONMENT")
+    print("\033[93m" + "="*50 + "\033[0m")  # Reset color
 
 # handling CORS headers
 CORS_ORIGIN_ALLOW_ALL = config('CORS_ORIGIN_ALLOW_ALL', default=False, cast=bool)
@@ -334,7 +367,7 @@ EXPO_PUSH_SETTINGS = {
     'DEFAULT_PRIORITY': 'high',
 }
 
-# APNS Certificate
+""" # APNS Certificate
 apns_cert_filename = config('APNS_CERTIFICATE_FILENAME', default='apns_certificate.pem')
 if apns_cert_filename:
     apns_cert_path = download_certificate(apns_cert_filename)
@@ -351,3 +384,33 @@ if fcm_cert_filename:
         EXPO_PUSH_SETTINGS['FCM_CREDENTIALS'] = fcm_cert_path
     else:
         print(f"Warning: Failed to load FCM certificate: {fcm_cert_filename}")
+ """
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+            'level': 'DEBUG' if DEBUG else 'WARNING',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}

@@ -1,15 +1,17 @@
 """Models for bahk hub."""
 import logging
+from django.utils import timezone
+from model_utils import FieldTracker
 
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import constraints
 from imagekit.models import ImageSpecField
-from imagekit.processors import ResizeToFill
+from imagekit.processors import ResizeToFill, ResizeToFit
 from imagekit.processors import Transpose
 
-from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL
+from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL, DAYS_TO_CACHE_THUMBNAIL
 import bahk.settings as settings
 
 
@@ -47,18 +49,66 @@ class Fast(models.Model):
     )
     image = models.ImageField(upload_to='fast_images/', null=True, blank=True)
     image_thumbnail = ImageSpecField(source='image',
-                                     processors=[Transpose(), ResizeToFill(800, 800)],
+                                     processors=[Transpose(), ResizeToFit(800, None)],
                                      format='JPEG',
                                      options={'quality': 60})
+    # Cache the thumbnail URL to avoid S3 calls
+    cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
+    cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
+    
     # 2048 chars is the maximum URL length on Google Chrome
     url = models.URLField(verbose_name="Link to learn more", null=True, blank=True, max_length=2048,
                           help_text="URL to a link to learn more--must include protocol (e.g. https://)")
 
+    # Track changes to the image field
+    tracker = FieldTracker(fields=['image'])
+
     def save(self, **kwargs):
-        super().save(**kwargs)  # save first to create a primary key (needed to access self.days)
+        # First check if this is a new instance or if the image field has changed
+        is_new_image = (
+            self._state.adding or
+            'image' in kwargs.get('update_fields', []) or
+            (not self._state.adding and self.tracker.has_changed('image'))
+        )
+        super().save(**kwargs)
+        
+        # Handle thumbnail URL caching after the instance and image are fully saved to S3
+        if self.image:
+            # Update cache if:
+            # 1. No cached URL exists
+            # 2. Image was changed/uploaded
+            # 3. Cache is older than 7 days
+            should_update_cache = (
+                not self.cached_thumbnail_url or
+                is_new_image or
+                (self.cached_thumbnail_updated and 
+                 (timezone.now() - self.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL)
+            )
+            
+            if should_update_cache:
+                try:
+                    # Force generation of the thumbnail and wait for S3 upload
+                    thumbnail = self.image_thumbnail.generate()
+                    
+                    # Get the S3 URL after the file has been uploaded
+                    self.cached_thumbnail_url = self.image_thumbnail.url
+                    self.cached_thumbnail_updated = timezone.now()
+                    
+                    # Save again to update the cache fields only
+                    super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+                except Exception as e:
+                    logging.error(f"Error caching S3 thumbnail URL for Fast {self.id}: {e}")
+        else:
+            # Clear cached URL if image is removed
+            if self.cached_thumbnail_url or self.cached_thumbnail_updated:
+                self.cached_thumbnail_url = None
+                self.cached_thumbnail_updated = None
+                super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+        
+        # Update year if days exist
         if self.days.exists():
             self.year = self.days.first().date.year
-        super().save(update_fields=["year"])
+            super().save(update_fields=["year"])
 
     class Meta:
         constraints = [
@@ -90,11 +140,59 @@ class Profile(models.Model):
                                              processors=[Transpose(), ResizeToFill(100, 100)],
                                              format='JPEG',
                                              options={'quality': 60})
+    # Cache the thumbnail URL to avoid S3 calls
+    cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
+    cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
     receive_upcoming_fast_reminders = models.BooleanField(default=False)
     receive_upcoming_fast_push_notifications = models.BooleanField(default=True)
     receive_ongoing_fast_push_notifications = models.BooleanField(default=True)
     receive_daily_fast_push_notifications = models.BooleanField(default=False)
     include_weekly_fasts_in_notifications = models.BooleanField(default=False)
+
+    # Track changes to the profile_image field
+    tracker = FieldTracker(fields=['profile_image'])
+
+    def save(self, **kwargs):
+        # First check if this is a new instance or if the profile image field has changed
+        is_new_image = (
+            self._state.adding or
+            'profile_image' in kwargs.get('update_fields', []) or
+            (not self._state.adding and self.tracker.has_changed('profile_image'))
+        )
+        super().save(**kwargs)
+        
+        # Handle thumbnail URL caching after the instance and image are fully saved to S3
+        if self.profile_image:
+            # Update cache if:
+            # 1. No cached URL exists
+            # 2. Image was changed/uploaded
+            # 3. Cache is older than 7 days
+            should_update_cache = (
+                not self.cached_thumbnail_url or
+                is_new_image or
+                (self.cached_thumbnail_updated and 
+                 (timezone.now() - self.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL)
+            )
+            
+            if should_update_cache:
+                try:
+                    # Force generation of the thumbnail and wait for S3 upload
+                    thumbnail = self.profile_image_thumbnail.generate()
+                    
+                    # Get the S3 URL after the file has been uploaded
+                    self.cached_thumbnail_url = self.profile_image_thumbnail.url
+                    self.cached_thumbnail_updated = timezone.now()
+                    
+                    # Save again to update the cache fields only
+                    super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+                except Exception as e:
+                    logging.error(f"Error caching S3 thumbnail URL for Profile {self.id}: {e}")
+        else:
+            # Clear cached URL if image is removed
+            if self.cached_thumbnail_url or self.cached_thumbnail_updated:
+                self.cached_thumbnail_url = None
+                self.cached_thumbnail_updated = None
+                super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
 
     def __str__(self):
         return self.user.email
