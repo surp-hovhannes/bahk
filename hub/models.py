@@ -11,6 +11,7 @@ from imagekit.processors import Transpose
 
 from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL
 import bahk.settings as settings
+from learning_resources.models import Video
 
 
 class Church(models.Model):
@@ -108,6 +109,32 @@ class Day(models.Model):
 
     def __str__(self):
         return self.date.strftime("%Y-%m-%d")
+    
+
+class DevotionalSet(models.Model):
+    """Model for an ordered collection of devotionals."""
+    title = models.CharField(max_length=128)
+
+    @property
+    def number_of_days(self):
+        return self.devotionals.count()
+
+    def __str__(self):
+        return f"{self.title} ({self.number_of_days} days)"
+
+
+class Devotional(models.Model):
+    """Stores content for a daily devotional."""
+    day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="devotionals")
+    text = models.TextField(null=True, blank=True)
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="devotionals")
+    devotional_set = models.ForeignKey(DevotionalSet, on_delete=models.CASCADE, related_name="devotionals", 
+                                     null=True, blank=True)
+    order = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['order']
+        unique_together = [['devotional_set', 'order']]
 
 
 class Reading(models.Model):

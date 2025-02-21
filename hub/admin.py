@@ -10,7 +10,7 @@ from django.utils.text import Truncator
 from django.db import models
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
-from hub.models import Church, Day, Fast, Profile, Reading
+from hub.models import Church, Day, Devotional, Fast, Profile, Reading
 
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
@@ -50,6 +50,11 @@ class ChurchAdmin(admin.ModelAdmin):
         return _get_fk_links_url(church.fasts.all(), "fast")
     
     fast_links.short_description = "Fasts"
+
+
+@admin.register(Devotional, site=admin.site)
+class DevotionalAdmin(admin.ModelAdmin):
+    list_display = ("day",)
 
 
 @admin.register(Fast, site=admin.site)

@@ -5,6 +5,7 @@ from rest_framework import routers
 from .views.profile import ProfileDetailView, ProfileImageUploadView
 from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser, FastParticipantsView, LeaveFastView, FastStatsView
 from .views.day import FastDaysListView, UserDaysView
+from .views.devotionals import DevotionalByDateView
 from .views.user import UserViewSet, GroupViewSet, RegisterView, PasswordResetView, PasswordResetConfirmView, DeleteAccountView
 from .views.church import ChurchListView, ChurchDetailView
 from .views.readings import GetDailyReadingsForDate
@@ -50,6 +51,9 @@ urlpatterns = [
     # Church endpoints
     path('churches/', ChurchListView.as_view(), name='church-list'),
     path('churches/<int:pk>/', ChurchDetailView.as_view(), name='church-detail'),
+
+    # Devotional endpoints
+    path('devotionals/', DevotionalByDateView.as_view(), name='devotional-on-date'),
 
     # Web endpoints
     path("web/", home, name="web_home"),

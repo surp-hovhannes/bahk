@@ -5,6 +5,7 @@ from django.db.models import Q
 from .models import Video, Article
 from .serializers import VideoSerializer, ArticleSerializer
 
+
 class VideoListView(generics.ListAPIView):
     """
     API endpoint that allows videos to be viewed.
