@@ -108,7 +108,7 @@ class Day(models.Model):
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days", default=Church.get_default_pk)
 
     def __str__(self):
-        return self.date.strftime("%Y-%m-%d")
+        return f'{self.date.strftime("%Y-%m-%d")} ({self.church.name})'
     
 
 class DevotionalSet(models.Model):
@@ -125,12 +125,27 @@ class DevotionalSet(models.Model):
 
 class Devotional(models.Model):
     """Stores content for a daily devotional."""
-    day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="devotionals")
-    text = models.TextField(null=True, blank=True)
+    day = models.ForeignKey(
+        Day, 
+        help_text="Day for devotional (ensure that it belongs to proper church calendar)",
+        on_delete=models.CASCADE, 
+        related_name="devotionals"
+    )
+    description = models.TextField(null=True, blank=True)
     video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="devotionals")
-    devotional_set = models.ForeignKey(DevotionalSet, on_delete=models.CASCADE, related_name="devotionals", 
-                                     null=True, blank=True)
-    order = models.PositiveIntegerField(null=True, blank=True)
+    devotional_set = models.ForeignKey(
+        DevotionalSet,
+        help_text="Set that this devotional belongs to. If none, it is a standalone devotional.",
+        on_delete=models.CASCADE, 
+        related_name="devotionals",
+        null=True, 
+        blank=True
+    )
+    order = models.PositiveIntegerField(
+        help_text="If part of a set, the order of the devotional in the set", 
+        null=True, 
+        blank=True
+    )
 
     class Meta:
         ordering = ['order']
