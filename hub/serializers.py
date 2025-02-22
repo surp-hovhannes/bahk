@@ -355,8 +355,8 @@ class DevotionalSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source='video.title')
     description = serializers.CharField(source='video.description')
     thumbnail = serializers.CharField(source='video.thumbnail')
-    thumbnail_small_url = serializers.CharField(source='video.thumbnail_small_url')
-    video = serializers.CharField(source='video.url')
+    thumbnail_small = serializers.CharField(source='video.thumbnail_small')
+    video = serializers.CharField(source='video.video')
     date = serializers.DateField(source='day.date')
     fast_id = serializers.IntegerField(source='day.fast.id')
     created_at = serializers.DateTimeField(source='video.created_at')
@@ -369,7 +369,7 @@ class DevotionalSerializer(serializers.ModelSerializer):
             'title',
             'description',
             'thumbnail',
-            'thumbnail_small_url',
+            'thumbnail_small',
             'video',
             'date',
             'fast_id',
