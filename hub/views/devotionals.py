@@ -1,6 +1,6 @@
 """Views for accessing and editing daily devotionals."""
 import datetime
-
+import logging
 from django.utils import timezone
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
@@ -43,4 +43,5 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
         try:
             return Devotional.objects.get(day__church=church, day__date=target_date)
         except Devotional.DoesNotExist:
+            logging.error(f"Devotional not found for {target_date} for church {church.name}")
             return None
