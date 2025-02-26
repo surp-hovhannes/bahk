@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('learning_resources', '0001_initial'),
+        ('learning_resources', '0002_article_cached_thumbnail_updated_and_more'),
     ]
 
     operations = [

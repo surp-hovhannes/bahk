@@ -40,4 +40,4 @@ class TimezoneMixin:
         tz_str = self.request.query_params.get('tz')
         if tz_str:
             return pytz.timezone(tz_str)
-        return timezone.utc
+        return pytz.UTC
