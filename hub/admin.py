@@ -8,9 +8,10 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import Truncator
 from django.db import models
+from markdownx.admin import MarkdownxModelAdmin
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
-from hub.models import Church, Day, Fast, Profile, Reading
+from hub.models import Church, Day, Devotional, Fast, Profile, Reading
 
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
@@ -50,6 +51,27 @@ class ChurchAdmin(admin.ModelAdmin):
         return _get_fk_links_url(church.fasts.all(), "fast")
     
     fast_links.short_description = "Fasts"
+
+
+@admin.register(Devotional, site=admin.site)
+class DevotionalAdmin(admin.ModelAdmin):
+    list_display = ('title', 'fast', 'date', 'order')
+    list_filter = ('day__fast', "day__date")
+    ordering = ('day__date',)
+    search_fields = ('video__title', 'description')
+    raw_id_fields = ('video', 'day')
+
+    def title(self, obj):
+        return obj.video.title if obj.video else ''
+    title.admin_order_field = 'video__title'
+
+    def fast(self, obj):
+        return obj.day.fast if obj.day else ''
+    fast.admin_order_field = 'day__fast__name'
+
+    def date(self, obj):
+        return obj.day.date if obj.day else ''
+    date.admin_order_field = 'day__date'
 
 
 @admin.register(Fast, site=admin.site)

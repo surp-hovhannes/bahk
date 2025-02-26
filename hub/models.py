@@ -13,6 +13,7 @@ from imagekit.processors import Transpose
 
 from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL, DAYS_TO_CACHE_THUMBNAIL
 import bahk.settings as settings
+from learning_resources.models import Video
 
 
 class Church(models.Model):
@@ -205,7 +206,55 @@ class Day(models.Model):
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days", default=Church.get_default_pk)
 
     def __str__(self):
-        return self.date.strftime("%Y-%m-%d")
+        return f'{self.date.strftime("%Y-%m-%d")} ({f"{self.fast.name}, " if self.fast else ""}{self.church.name})'
+    
+
+class DevotionalSet(models.Model):
+    """Model for an ordered collection of devotionals."""
+    title = models.CharField(max_length=128)
+
+    @property
+    def number_of_days(self):
+        return self.devotionals.count()
+
+    def __str__(self):
+        return f"{self.title} ({self.number_of_days} days)"
+
+
+class Devotional(models.Model):
+    """Stores content for a daily devotional."""
+    day = models.ForeignKey(
+        Day, 
+        help_text="Day for devotional (ensure that it belongs to proper church calendar)",
+        on_delete=models.CASCADE, 
+        related_name="devotionals"
+    )
+    description = models.TextField(null=True, blank=True)
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="devotionals")
+    devotional_set = models.ForeignKey(
+        DevotionalSet,
+        help_text="Set that this devotional belongs to. If none, it is a standalone devotional.",
+        on_delete=models.CASCADE, 
+        related_name="devotionals",
+        null=True, 
+        blank=True
+    )
+    order = models.PositiveIntegerField(
+        help_text="If part of a set, the order of the devotional in the set", 
+        null=True, 
+        blank=True
+    )
+
+    def save(self, *args, **kwargs):
+        # Set video category to 'devotional' before saving
+        if self.video and self.video.category != 'devotional':
+            self.video.category = 'devotional'
+            self.video.save()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['order']
+        unique_together = [['devotional_set', 'order']]
 
 
 class Reading(models.Model):

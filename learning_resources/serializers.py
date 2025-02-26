@@ -9,7 +9,7 @@ class VideoSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     class Meta:
         model = Video
         fields = [
-            'id', 'title', 'description', 'thumbnail', 
+            'id', 'title', 'description', 'category', 'thumbnail', 
             'thumbnail_small_url', 'video', 'created_at', 
             'updated_at'
         ]

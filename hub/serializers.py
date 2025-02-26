@@ -20,6 +20,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 
 from hub import models
+from learning_resources.serializers import VideoSerializer
 from hub.mixins import ThumbnailCacheMixin
 
 
@@ -395,3 +396,30 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid token.")
         
         return data
+    
+
+class DevotionalSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source='video.title')
+    description = serializers.CharField(source='video.description')
+    thumbnail = serializers.CharField(source='video.thumbnail')
+    thumbnail_small = serializers.CharField(source='video.thumbnail_small')
+    video = serializers.CharField(source='video.video')
+    date = serializers.DateField(source='day.date')
+    fast_id = serializers.IntegerField(source='day.fast.id')
+    created_at = serializers.DateTimeField(source='video.created_at')
+    updated_at = serializers.DateTimeField(source='video.updated_at')
+
+    class Meta:
+        model = models.Devotional
+        fields = [
+            'id',
+            'title',
+            'description',
+            'thumbnail',
+            'thumbnail_small',
+            'video',
+            'date',
+            'fast_id',
+            'created_at',
+            'updated_at',
+        ]

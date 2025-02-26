@@ -5,13 +5,13 @@ from .models import Video, Article
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
-    list_display = ('title', 'thumbnail_preview', 'created_at')
+    list_display = ('title', 'category', 'thumbnail_preview', 'created_at')
     search_fields = ('title', 'description')
-    list_filter = ('created_at', 'updated_at')
+    list_filter = ('category', 'created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'thumbnail_preview')
     fieldsets = (
         (None, {
-            'fields': ('title', 'description')
+            'fields': ('title', 'description', 'category')
         }),
         ('Media', {
             'fields': ('video', 'thumbnail', 'thumbnail_preview')
