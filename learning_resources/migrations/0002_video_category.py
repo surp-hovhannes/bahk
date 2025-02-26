@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='video',
             name='category',
-            field=models.CharField(choices=[('general', 'General'), ('devotional', 'Devotional'), ('tutorial', 'Tutorial')], db_index=True, default='general', max_length=20),
+            field=models.CharField(choices=[('general', 'General'), ('devotional', 'Devotional'), ('tutorial', 'Tutorial'), ('morning_prayers', 'Morning Prayers'), ('evening_prayers', 'Evening Prayers')], db_index=True, default='general', max_length=20),
         ),
     ]
