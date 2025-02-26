@@ -3,18 +3,44 @@ from rest_framework import routers
 
 
 from .views.profile import ProfileDetailView, ProfileImageUploadView
-from .views.fast import FastListView, FastDetailView, JoinFastView, FastByDateView, FastOnDate, FastOnDateWithoutUser, FastParticipantsView, LeaveFastView, FastStatsView
+from .views.fast import (
+    FastListView, 
+    FastDetailView, 
+    JoinFastView, 
+    FastByDateView, 
+    FastOnDate, 
+    FastOnDateWithoutUser, 
+    FastParticipantsView, 
+    LeaveFastView, 
+    FastStatsView,
+)
 from .views.day import FastDaysListView, UserDaysView
-from .views.devotionals import DevotionalByDateView
-from .views.user import UserViewSet, GroupViewSet, RegisterView, PasswordResetView, PasswordResetConfirmView, DeleteAccountView
+from .views.devotionals import DevotionalByDateView, DevotionalListView
+from .views.user import (
+    UserViewSet, 
+    GroupViewSet, 
+    RegisterView, 
+    PasswordResetView,
+    PasswordResetConfirmView,
+    DeleteAccountView,
+)
 from .views.church import ChurchListView, ChurchDetailView
 from .views.readings import GetDailyReadingsForDate
-from .views.web import home, test_email_view, add_fast_to_profile, remove_fast_from_profile, register, join_fasts, edit_profile, changelog
+from .views.web import (
+    home, 
+    test_email_view, 
+    add_fast_to_profile, 
+    remove_fast_from_profile, 
+    register, 
+    join_fasts, 
+    edit_profile, 
+    changelog,
+)
+
 
 router = routers.DefaultRouter()
 router.register(r"users", UserViewSet)
 router.register(r"groups", GroupViewSet)
-
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
@@ -28,7 +54,6 @@ urlpatterns = [
     path('password/reset/', PasswordResetView.as_view(), name='password_reset'),
     path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('account/delete/', DeleteAccountView.as_view(), name='account-delete'),
-   
 
     # Fast endpoints
     path('fasts/', FastListView.as_view(), name='fast-list'),
@@ -38,7 +63,6 @@ urlpatterns = [
     path('fasts/by-date/', FastByDateView.as_view(), name='fast-by-date'),
     path('fasts/<int:fast_id>/participants/', FastParticipantsView.as_view(), name='fast-participants'),
     path('fasts/stats/', FastStatsView.as_view(), name='fast-stats'),
-
 
     # TODO: Remove these legacy endpoints after frontend is updated
     path('user/fasts/', FastOnDate.as_view(), name="fast_on_date"),
@@ -53,7 +77,8 @@ urlpatterns = [
     path('churches/<int:pk>/', ChurchDetailView.as_view(), name='church-detail'),
 
     # Devotional endpoints
-    path('devotionals/', DevotionalByDateView.as_view(), name='devotional-on-date'),
+    path('devotionals/', DevotionalListView.as_view(), name='devotional-list'),
+    path('devotionals/by-date/', DevotionalByDateView.as_view(), name='devotional-on-date'),
 
     # Web endpoints
     path("web/", home, name="web_home"),

@@ -45,3 +45,20 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
         except Devotional.DoesNotExist:
             logging.error(f"Devotional not found for {target_date} for church {church.name}")
             return None
+
+
+class DevotionalListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
+    """
+    API endpoint that provides a list of devotionals for a given church.
+
+    Permissions:
+        - GET: Any user can view devotional
+        - POST/PUT/PATCH/DELETE: Not supported
+    """
+    serializer_class = DevotionalSerializer
+    permission_classes = [permissions.AllowAny]
+    queryset = Devotional.objects.all()
+
+    def get_queryset(self):
+        church = self.get_church()
+        return Devotional.objects.filter(day__church=church)
