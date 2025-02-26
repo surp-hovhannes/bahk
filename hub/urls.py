@@ -15,7 +15,7 @@ from .views.fast import (
     FastStatsView,
 )
 from .views.day import FastDaysListView, UserDaysView
-from .views.devotionals import DevotionalByDateView, DevotionalListView
+from .views.devotionals import DevotionalByDateView, DevotionalByFastView, DevotionalListView
 from .views.user import (
     UserViewSet, 
     GroupViewSet, 
@@ -78,6 +78,8 @@ urlpatterns = [
 
     # Devotional endpoints
     path('devotionals/', DevotionalListView.as_view(), name='devotional-list'),
+    path('devotionals/<int:pk>/', DevotionalDetailView.as_view(), name='devotional-detail'),
+    path('devotionals/by-fast/<int:fast_id>/', DevotionalByFastView.as_view(), name='devotional-by-fast'),
     path('devotionals/by-date/', DevotionalByDateView.as_view(), name='devotional-on-date'),
 
     # Web endpoints

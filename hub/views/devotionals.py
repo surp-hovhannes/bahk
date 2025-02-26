@@ -47,7 +47,40 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
             return None
 
 
-class DevotionalListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
+class DevotionalsByFastView(generics.ListAPIView):
+    """
+    API endpoint that provides a list of devotionals for a fast given its id.
+
+    URL Parameters:
+        - fast_id: The ID of the fast for which to retrieve the participants.
+
+    Permissions:
+        - GET: Any user can view devotional
+        - POST/PUT/PATCH/DELETE: Not supported
+    """
+    serializer_class = DevotionalSerializer
+    permission_classes = [permissions.AllowAny]
+    queryset = Devotional.objects.all()
+
+    def get_object(self):
+        fast = Fast.objects.get(id=self.kwargs['fast_id'])
+        return Devotional.objects.filter(day__fast=fast)
+
+
+class DevotionalDetailView(generics.RetrieveAPIView):
+    """
+    API endpoint that provides details of a single devotional.
+
+    Permissions:
+        - GET: Any user can view devotional
+        - POST/PUT/PATCH/DELETE: Not supported
+    """
+    serializer_class = DevotionalSerializer
+    permission_classes = [permissions.AllowAny]
+    queryset = Devotional.objects.all()
+
+
+class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
     """
     API endpoint that provides a list of devotionals for a given church.
 
