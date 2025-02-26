@@ -8,8 +8,22 @@ from imagekit.processors import ResizeToFill
 import os
 
 class Video(models.Model):
+    CATEGORY_CHOICES = [
+        ('general', 'General'),
+        ('devotional', 'Devotional'),
+        ('tutorial', 'Tutorial'),
+        ('morning_prayers', 'Morning Prayers'),
+        ('evening_prayers', 'Evening Prayers'),
+    ]
+
     title = models.CharField(max_length=200)
     description = models.TextField()
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='general',
+        db_index=True
+    )
     thumbnail = models.ImageField(
         upload_to='videos/thumbnails/',
         help_text='Recommended size: 720x1280 pixels (portrait)'

@@ -147,6 +147,13 @@ class Devotional(models.Model):
         blank=True
     )
 
+    def save(self, *args, **kwargs):
+        # Set video category to 'devotional' before saving
+        if self.video and self.video.category != 'devotional':
+            self.video.category = 'devotional'
+            self.video.save()
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ['order']
         unique_together = [['devotional_set', 'order']]

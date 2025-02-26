@@ -17,6 +17,8 @@ class VideoListView(generics.ListAPIView):
     Query Parameters:
         - search (str): Optional. Filter videos by matching text in title or description.
                        Case-insensitive partial matches are supported.
+        - category (str): Optional. Filter videos by category ('general', 'devotional', 'tutorial').
+                         Defaults to 'general' if not specified.
 
     Returns:
         A JSON response with the following structure:
@@ -29,6 +31,7 @@ class VideoListView(generics.ListAPIView):
                     "id": 1,
                     "title": "Video Title",
                     "description": "Video description text",
+                    "category": "general",
                     "thumbnail": "/media/videos/thumbnails/thumb.jpg",
                     "thumbnail_small_url": "/media/CACHE/images/videos/thumbnails/thumb/123.jpg",
                     "video": "/media/videos/video.mp4",
@@ -42,6 +45,7 @@ class VideoListView(generics.ListAPIView):
     Example Requests:
         GET /api/learning-resources/videos/
         GET /api/learning-resources/videos/?search=prayer
+        GET /api/learning-resources/videos/?category=tutorial
     """
     serializer_class = VideoSerializer
     permission_classes = [AllowAny]
@@ -49,6 +53,12 @@ class VideoListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = Video.objects.all()
         search = self.request.query_params.get('search', None)
+        category = self.request.query_params.get('category', 'general')
+        
+        # Filter by category
+        queryset = queryset.filter(category=category)
+        
+        # Apply search filter if provided
         if search is not None:
             queryset = queryset.filter(
                 Q(title__icontains=search) |
