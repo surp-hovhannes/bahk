@@ -108,7 +108,7 @@ class Day(models.Model):
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="days", default=Church.get_default_pk)
 
     def __str__(self):
-        return f'{self.date.strftime("%Y-%m-%d")} ({self.church.name})'
+        return f'{self.date.strftime("%Y-%m-%d")} ({f"{self.fast.name}, " if self.fast else ""}{self.church.name})'
     
 
 class DevotionalSet(models.Model):
