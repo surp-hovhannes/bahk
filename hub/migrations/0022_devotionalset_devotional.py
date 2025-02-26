@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('learning_resources', '0001_initial'),
-        ('hub', '0020_profile_name'),
+        ('hub', '0021_fast_and_profile_cached_thumbnail_fields'),
     ]
 
     operations = [
