@@ -6,7 +6,7 @@ from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
 
 from .mixins import ChurchContextMixin, TimezoneMixin
-from hub.models import Devotional
+from hub.models import Devotional, Fast
 from hub.serializers import DevotionalSerializer
 
 
@@ -60,9 +60,8 @@ class DevotionalsByFastView(generics.ListAPIView):
     """
     serializer_class = DevotionalSerializer
     permission_classes = [permissions.AllowAny]
-    queryset = Devotional.objects.all()
 
-    def get_object(self):
+    def get_queryset(self):
         fast = Fast.objects.get(id=self.kwargs['fast_id'])
         return Devotional.objects.filter(day__fast=fast)
 
