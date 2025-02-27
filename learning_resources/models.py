@@ -160,3 +160,17 @@ class Article(models.Model):
     class Meta:
         ordering = ['-created_at']
         verbose_name_plural = 'Articles'
+
+
+class Recipe(Article):
+    time_required = models.CharField("Time required to make recipe", max_length=64)
+    serves = models.CharField("Number of servings", max_length=32)
+    ingredients = models.TextField()
+    instructions = models.TextField(
+        help_text='Content in Markdown format',
+        verbose_name='Instructions'  # This overrides the label
+    )
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'Recipes'
+    
