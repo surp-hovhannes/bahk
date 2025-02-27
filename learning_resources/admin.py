@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from markdownx.admin import MarkdownxModelAdmin
-from .models import Video, Article
+from .models import Article, Recipe, Video
+
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
@@ -58,3 +59,8 @@ class ArticleAdmin(MarkdownxModelAdmin):
             )
         return "No image"
     image_preview.short_description = 'Image Preview'
+
+
+@admin.register(Recipe)
+class RecipeAdmin(ArticleAdmin):
+    search_fields = ('title', 'body', 'ingredients')

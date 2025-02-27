@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.utils import timezone
 from hub.mixins import ThumbnailCacheMixin
-from .models import Video, Article
+from .models import Article, Recipe, Video
+
 
 class VideoSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     thumbnail_small_url = serializers.SerializerMethodField()
@@ -53,3 +54,12 @@ class ArticleSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             except:
                 return None
         return None 
+    
+class RecipeSerializer(ArticleSerializer):
+    class Meta:
+        model = Recipe
+        fields = [
+            'id', 'title', 'image', 'thumbnail_url', 'created_at', 'updated_at',
+            'time_required', 'serves', 'ingredients', 'instructions',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
