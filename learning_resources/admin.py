@@ -62,5 +62,29 @@ class ArticleAdmin(MarkdownxModelAdmin):
 
 
 @admin.register(Recipe)
-class RecipeAdmin(ArticleAdmin):
-    search_fields = ('title', 'body', 'ingredients')
+class RecipeAdmin(MarkdownxModelAdmin):
+    list_display = ('title', 'image_preview', 'created_at')
+    search_fields = ('title', 'instructions', 'ingredients')
+    list_filter = ('created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at', 'image_preview')
+    fieldsets = (
+        (None, {
+            'fields': ('title', 'time_required', 'serves', 'instructions', 'ingredients',),
+        }),
+        ('Media', {
+            'fields': ('image', 'image_preview')
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="max-height: 50px;"/>',
+                obj.thumbnail.url
+            )
+        return "No image"
+    image_preview.short_description = 'Image Preview'
