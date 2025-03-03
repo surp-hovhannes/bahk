@@ -20,7 +20,6 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 import hub.views as views
 from learning_resources.views import VideoListView, ArticleListView
-from s3direct.fields import S3DirectField
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,

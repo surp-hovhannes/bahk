@@ -448,8 +448,6 @@ LOGGING = {
 # S3 File Field Configuration
 S3FF_UPLOAD_PREFIX = os.environ.get('AWS_LOCATION', 'uploads')
 
-# Remove any S3Direct specific settings
-
 # AWS settings
 AWS_S3_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_S3_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
