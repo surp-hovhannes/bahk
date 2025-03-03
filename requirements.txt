@@ -20,6 +20,7 @@ django-anymail
 django-markdownx
 better-profanity==0.7.0
 django-model-utils==4.4.0
+django-s3direct==2.0.3
 django-s3-file-field[s3]==1.0.1
 django-cors-headers
 django-push-notifications
