@@ -60,13 +60,14 @@ INSTALLED_APPS = [
     'corsheaders',
     'notifications',
     'learning_resources',
+    's3_file_field',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -183,14 +184,10 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
@@ -218,16 +215,48 @@ LOGIN_REDIRECT_URL = '/hub/web/'
 import django_heroku
 django_heroku.settings(locals())
 
-# AWS S3 settings for production
+# File Upload Settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB - Django default
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB - Django default
+
+# AWS S3 settings
 if IS_PRODUCTION:
+    # Configure AWS S3 
     AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
     AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
-    AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', 'us-east-1')  # Default region
+    AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', 'us-west-2')
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    AWS_S3_ENDPOINT_URL = f'https://s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+    
+    # Storage configuration
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    
+    # S3 configuration
+    AWS_DEFAULT_ACL = None  # Don't set ACL
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_S3_MAX_MEMORY_SIZE = 20971520000  # Match the max upload size
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=2592000',  # 30 days
+    }
+    
+    # S3FileField Configuration
+    S3FF_UPLOAD_PREFIX = 'uploads'
+
+    # CORS Settings
+    AWS_S3_CORS_RULES = [
+        {
+            'AllowedHeaders': [
+                '*'  # Allow all headers required for multipart uploads
+            ],
+            'AllowedMethods': ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
+            'AllowedOrigins': ['*'],  # For development. In production, specify your domain
+            'ExposeHeaders': ['ETag'],
+            'MaxAgeSeconds': 3000
+        }
+    ]
 else:
     MEDIA_URL = '/media/'
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -308,6 +337,7 @@ AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
 AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
 AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_S3_ENDPOINT_URL = f'https://s3.{AWS_S3_REGION_NAME}.amazonaws.com'
 
 # Define AWS_S3_CUSTOM_DOMAIN if we have the necessary AWS settings
 if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
@@ -414,3 +444,22 @@ LOGGING = {
         },
     },
 }
+
+# S3 File Field Configuration
+S3FF_UPLOAD_PREFIX = os.environ.get('AWS_LOCATION', 'uploads')
+
+# Remove any S3Direct specific settings
+
+# AWS settings
+AWS_S3_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_S3_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
+AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL')
+
+# Force version 4 signing for S3
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+AWS_S3_FILE_OVERWRITE = False
+
+# Best practice is to disable ACLs
+AWS_DEFAULT_ACL = None  # Disable ACLs
