@@ -3,9 +3,22 @@ from django.utils.html import format_html
 from markdownx.admin import MarkdownxModelAdmin
 from .models import Article, Recipe, Video
 
+from django import forms
+from s3_file_field.widgets import S3FileInput
+
+class VideoAdminForm(forms.ModelForm):
+    class Meta:
+        model = Video
+        fields = '__all__'
+        widgets = {
+            'video': S3FileInput(attrs={
+                'accept': 'video/*'
+            })
+        }
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
+    form = VideoAdminForm
     list_display = ('title', 'category', 'thumbnail_preview', 'created_at')
     search_fields = ('title', 'description')
     list_filter = ('category', 'created_at', 'updated_at')
@@ -15,7 +28,8 @@ class VideoAdmin(admin.ModelAdmin):
             'fields': ('title', 'description', 'category')
         }),
         ('Media', {
-            'fields': ('video', 'thumbnail', 'thumbnail_preview')
+            'fields': ('video', 'thumbnail', 'thumbnail_preview'),
+            'description': 'Large video files will be automatically uploaded in chunks. Please wait for the upload to complete.'
         }),
         ('Metadata', {
             'fields': ('created_at', 'updated_at'),
