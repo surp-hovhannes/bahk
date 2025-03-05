@@ -138,6 +138,7 @@ class RecipeListView(generics.ListAPIView):
                 {
                     "id": 1,
                     "title": "Recipe Title",
+                    "description": "Recipe Descriptioni Text",
                     "body": "Recipe instructions in markdown format",
                     "time_required": "30 minutes",
                     "serves": "4-6 people",

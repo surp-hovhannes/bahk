@@ -69,7 +69,7 @@ class RecipeAdmin(MarkdownxModelAdmin):
     readonly_fields = ('created_at', 'updated_at', 'image_preview')
     fieldsets = (
         (None, {
-            'fields': ('title', 'time_required', 'serves', 'instructions', 'ingredients',),
+            'fields': ('title', 'description', 'time_required', 'serves', 'instructions', 'ingredients',),
         }),
         ('Media', {
             'fields': ('image', 'image_preview')

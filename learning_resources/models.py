@@ -164,6 +164,7 @@ class Article(models.Model):
 
 class Recipe(models.Model):
     title = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
     image = models.ImageField(
         upload_to='recipes/images/',
         help_text='Main recipe image. Recommended size: 1600x1200 pixels (4:3)'
@@ -182,7 +183,10 @@ class Recipe(models.Model):
     # recipe-specific fields
     time_required = models.CharField("Time required to make recipe", max_length=64)
     serves = models.CharField("Number of servings", max_length=32)
-    ingredients = models.TextField()
+    ingredients = models.TextField(
+        help_text='Content in Markdown format',
+        verbose_name='Ingredients'  # This overrides the label
+    )
     instructions = models.TextField(
         help_text='Content in Markdown format',
         verbose_name='Instructions'  # This overrides the label
