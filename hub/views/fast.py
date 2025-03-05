@@ -15,6 +15,9 @@ from django.views.decorators.vary import vary_on_headers
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
+from django.shortcuts import get_object_or_404
+from django.db.models import Q
+from rest_framework.pagination import LimitOffsetPagination
 
 CACHE_TTL = getattr(settings, 'CACHE_MIDDLEWARE_SECONDS', 60 * 15)  # 15 minutes default
 
@@ -337,6 +340,57 @@ class FastParticipantsView(views.APIView):
         other_participants = current_fast.profiles.all()[:limit]            
         serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
         return response.Response(serialized_participants.data)
+
+
+class PaginatedFastParticipantsView(generics.ListAPIView):
+    """
+    API view to retrieve paginated participants of a specific fast.
+
+    This view returns a paginated list of participants in the fast identified by the `fast_id` 
+    provided in the URL. It includes participant profile data such as username, profile image, 
+    and location. Results are paginated using LimitOffsetPagination.
+
+    Inherits:
+        - ListAPIView: A DRF view that provides GET functionality with built-in pagination.
+
+    Permissions:
+        - IsAuthenticated: Only authenticated users can access this view.
+    
+    URL Parameters:
+        - fast_id: The ID of the fast for which to retrieve the participants.
+        - limit: Optional. Number of results to return per page. Defaults to settings.PAGE_SIZE (10).
+        - offset: Optional. The initial index from which to return the results. Defaults to 0.
+
+    Returns:
+        - A paginated response with:
+            - count: Total number of participants 
+            - next: URL to next page (if applicable)
+            - previous: URL to previous page (if applicable)
+            - results: List of participant profiles for the current page
+    """
+    serializer_class = ParticipantSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = LimitOffsetPagination
+    
+    def get_queryset(self):
+        fast_id = self.kwargs.get('fast_id')
+        current_fast = Fast.objects.filter(id=fast_id).first()
+        
+        if not current_fast:
+            return []
+            
+        return current_fast.profiles.all()
+        
+    def list(self, request, *args, **kwargs):
+        # Check if the fast exists first
+        fast_id = self.kwargs.get('fast_id')
+        current_fast = Fast.objects.filter(id=fast_id).first()
+        
+        if not current_fast:
+            return response.Response({"detail": "Fast not found."}, status=404)
+            
+        # Continue with standard list behavior if fast exists
+        return super().list(request, *args, **kwargs)
 
 
 class FastStatsView(views.APIView):
