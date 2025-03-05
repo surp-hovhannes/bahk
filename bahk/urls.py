@@ -57,6 +57,11 @@ urlpatterns += [
     path("api/learning-resources/recipes/", RecipeListView.as_view(), name="learning-resources-list"),
 ]
 
+# S3FileField URLs
+urlpatterns += [
+    path('api/s3-upload/', include('s3_file_field.urls')),
+]
+
 # for serving media files during development
 if not settings.IS_PRODUCTION:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

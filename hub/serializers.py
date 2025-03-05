@@ -401,9 +401,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 class DevotionalSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source='video.title')
     description = serializers.CharField(source='video.description')
-    thumbnail = serializers.CharField(source='video.thumbnail')
-    thumbnail_small = serializers.CharField(source='video.thumbnail_small')
-    video = serializers.CharField(source='video.video')
+    thumbnail = serializers.SerializerMethodField()
+    thumbnail_small = serializers.SerializerMethodField()
+    video = serializers.SerializerMethodField()
     date = serializers.DateField(source='day.date')
     fast_id = serializers.IntegerField(source='day.fast.id')
     created_at = serializers.DateTimeField(source='video.created_at')
@@ -423,3 +423,21 @@ class DevotionalSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+    def get_thumbnail(self, obj):
+        return obj.video.thumbnail.url if obj.video and obj.video.thumbnail else None
+
+    def get_thumbnail_small(self, obj):
+        if obj.video and obj.video.thumbnail:
+            # Try to get cached URL first
+            if obj.video.cached_thumbnail_url:
+                return obj.video.cached_thumbnail_url
+            # Fall back to generating URL
+            try:
+                return obj.video.thumbnail_small.url
+            except:
+                return None
+        return None
+
+    def get_video(self, obj):
+        return obj.video.video.url if obj.video and obj.video.video else None
