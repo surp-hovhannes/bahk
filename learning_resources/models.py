@@ -194,3 +194,80 @@ class Article(models.Model):
     class Meta:
         ordering = ['-created_at']
         verbose_name_plural = 'Articles'
+
+
+class Recipe(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
+    image = models.ImageField(
+        upload_to='recipes/images/',
+        help_text='Main recipe image. Recommended size: 1600x1200 pixels (4:3)'
+    )
+    thumbnail = ImageSpecField(
+        source='image',
+        processors=[ResizeToFill(400, 300)],  # 4:3 aspect ratio
+        format='JPEG',
+        options={'quality': 85}
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    # Cache the thumbnail URL to avoid S3 calls
+    cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
+    cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
+    # recipe-specific fields
+    time_required = models.CharField("Time required to make recipe", max_length=64)
+    serves = models.CharField("Number of servings", max_length=32)
+    ingredients = models.TextField(
+        help_text='Recipe ingredients in Markdown format',
+        verbose_name='Ingredients'  # This overrides the label
+    )
+    directions = models.TextField(
+        help_text='Recipe directions in Markdown format',
+        verbose_name='Directions'  # This overrides the label
+    )
+
+    def save(self, **kwargs):
+        # First save the model to ensure the image is properly saved and uploaded to S3
+        is_new_image = 'image' in kwargs.get('update_fields', []) if kwargs.get('update_fields') else self._state.adding
+        super().save(**kwargs)
+
+        # Handle thumbnail URL caching after the instance and image are fully saved to S3
+        if self.image:
+            # Update cache if:
+            # 1. No cached URL exists
+            # 2. New image was uploaded
+            # 3. Cache is older than 7 days
+            should_update_cache = (
+                not self.cached_thumbnail_url or
+                is_new_image or
+                (self.cached_thumbnail_updated and
+                 (timezone.now() - self.cached_thumbnail_updated).days >= DAYS_TO_CACHE_THUMBNAIL)
+            )
+
+            if should_update_cache:
+                try:
+                    # Force generation of the thumbnail and wait for S3 upload
+                    thumbnail = self.thumbnail.generate()
+
+                    # Get the S3 URL after the file has been uploaded
+                    self.cached_thumbnail_url = self.thumbnail.url
+                    self.cached_thumbnail_updated = timezone.now()
+
+                    # Save again to update the cache fields only
+                    super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+                except Exception as e:
+                    logging.error(f"Error caching S3 thumbnail URL for Recipe {self.id}: {e}")
+        else:
+            # Clear cached URL if image is removed
+            if self.cached_thumbnail_url or self.cached_thumbnail_updated:
+                self.cached_thumbnail_url = None
+                self.cached_thumbnail_updated = None
+                super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'Recipes'
+    
