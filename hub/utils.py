@@ -10,6 +10,7 @@ from django.db.models import OuterRef, Subquery, Q
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.utils import timezone
+from django.core.cache import cache
 
 import bahk.settings as settings
 from hub.models import Church, Day, Fast, Profile
@@ -21,6 +22,20 @@ logger = logging.getLogger(__name__)
 
 PARSER_REGEX = r"^([A-za-z1-4\'\. ]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
 SUPPORTED_CHURCHES = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME)
+
+def invalidate_fast_participants_cache(fast_id):
+    """
+    Invalidate cache for a specific fast's participant list.
+    This should be called whenever the participant list changes.
+    """
+    if hasattr(cache, 'delete_pattern'):
+        # Invalidate PaginatedFastParticipantsView cache
+        cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*fast.{fast_id}.participants.*")
+        # Invalidate FastParticipantsView cache
+        cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*{fast_id}/participants.*")
+    else:
+        # Fallback - less efficient
+        cache.clear()
 
 def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
     """Scrapes readings from sacredtradition.am""" 

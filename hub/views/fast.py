@@ -11,10 +11,15 @@ import logging
 import pytz
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from django.views.decorators.vary import vary_on_headers
+from django.views.decorators.vary import vary_on_headers, vary_on_cookie
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
+from django.shortcuts import get_object_or_404
+from django.db.models import Q
+from rest_framework.pagination import LimitOffsetPagination
+from ..utils import invalidate_fast_participants_cache
+from functools import wraps
 
 CACHE_TTL = getattr(settings, 'CACHE_MIDDLEWARE_SECONDS', 60 * 15)  # 15 minutes default
 
@@ -265,6 +270,9 @@ class JoinFastView(generics.UpdateAPIView):
         
         self.get_object().fasts.add(fast)
         serializer.save()
+        
+        # Invalidate the participant list cache for this fast
+        invalidate_fast_participants_cache(fast.id)
 
 
 class LeaveFastView(generics.UpdateAPIView):
@@ -300,7 +308,35 @@ class LeaveFastView(generics.UpdateAPIView):
             return response.Response({"detail": "You are not part of this fast."}, status=status.HTTP_400_BAD_REQUEST)
 
         self.get_object().fasts.remove(fast)
+        
+        # Invalidate the participant list cache for this fast
+        invalidate_fast_participants_cache(fast_id)
+        
         return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
+
+
+# Function to vary cache based on query parameters
+def vary_on_query_params(*params):
+    """
+    Decorator that varies the cache based on specific query parameters.
+    This ensures different cache entries for different parameter values.
+    """
+    def decorator(func):
+        @wraps(func)
+        def inner(self, request, *args, **kwargs):
+            query_params = []
+            for param in params:
+                value = request.query_params.get(param)
+                if value:
+                    query_params.append(f"{param}={value}")
+            
+            # Create a custom query string for the cache key
+            query_string = "&".join(query_params)
+            request.META['QUERY_STRING'] = query_string
+            
+            return func(self, request, *args, **kwargs)
+        return inner
+    return decorator
 
 
 class FastParticipantsView(views.APIView):
@@ -322,6 +358,9 @@ class FastParticipantsView(views.APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @method_decorator(cache_page(60 * 10))  # Cache for 10 minutes
+    @method_decorator(vary_on_headers('Authorization'))
+    @vary_on_query_params('limit') 
     def get(self, request, fast_id):
         current_fast = Fast.objects.filter(id=fast_id).first()
 
@@ -337,6 +376,59 @@ class FastParticipantsView(views.APIView):
         other_participants = current_fast.profiles.all()[:limit]            
         serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
         return response.Response(serialized_participants.data)
+
+
+@method_decorator(cache_page(60 * 10), name='dispatch')  # Cache for 10 minutes
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
+class PaginatedFastParticipantsView(generics.ListAPIView):
+    """
+    API view to retrieve paginated participants of a specific fast.
+
+    This view returns a paginated list of participants in the fast identified by the `fast_id` 
+    provided in the URL. It includes participant profile data such as username, profile image, 
+    and location. Results are paginated using LimitOffsetPagination.
+
+    Inherits:
+        - ListAPIView: A DRF view that provides GET functionality with built-in pagination.
+
+    Permissions:
+        - IsAuthenticated: Only authenticated users can access this view.
+    
+    URL Parameters:
+        - fast_id: The ID of the fast for which to retrieve the participants.
+        - limit: Optional. Number of results to return per page. Defaults to settings.PAGE_SIZE (10).
+        - offset: Optional. The initial index from which to return the results. Defaults to 0.
+
+    Returns:
+        - A paginated response with:
+            - count: Total number of participants 
+            - next: URL to next page (if applicable)
+            - previous: URL to previous page (if applicable)
+            - results: List of participant profiles for the current page
+    """
+    serializer_class = ParticipantSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = LimitOffsetPagination
+    
+    def get_queryset(self):
+        fast_id = self.kwargs.get('fast_id')
+        current_fast = Fast.objects.filter(id=fast_id).first()
+        
+        if not current_fast:
+            return []
+            
+        return current_fast.profiles.all()
+        
+    def list(self, request, *args, **kwargs):
+        # Check if the fast exists first
+        fast_id = self.kwargs.get('fast_id')
+        current_fast = Fast.objects.filter(id=fast_id).first()
+        
+        if not current_fast:
+            return response.Response({"detail": "Fast not found."}, status=404)
+            
+        # Continue with standard list behavior if fast exists
+        return super().list(request, *args, **kwargs)
 
 
 class FastStatsView(views.APIView):
