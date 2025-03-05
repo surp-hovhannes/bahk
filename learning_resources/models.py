@@ -184,12 +184,12 @@ class Recipe(models.Model):
     time_required = models.CharField("Time required to make recipe", max_length=64)
     serves = models.CharField("Number of servings", max_length=32)
     ingredients = models.TextField(
-        help_text='Content in Markdown format',
+        help_text='Recipe ingredients in Markdown format',
         verbose_name='Ingredients'  # This overrides the label
     )
-    instructions = models.TextField(
-        help_text='Content in Markdown format',
-        verbose_name='Instructions'  # This overrides the label
+    directions = models.TextField(
+        help_text='Recipe directions in Markdown format',
+        verbose_name='Directions'  # This overrides the label
     )
 
     def save(self, **kwargs):

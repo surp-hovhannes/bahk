@@ -64,12 +64,12 @@ class ArticleAdmin(MarkdownxModelAdmin):
 @admin.register(Recipe)
 class RecipeAdmin(MarkdownxModelAdmin):
     list_display = ('title', 'image_preview', 'created_at')
-    search_fields = ('title', 'instructions', 'ingredients')
+    search_fields = ('title', 'directions', 'ingredients')
     list_filter = ('created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'image_preview')
     fieldsets = (
         (None, {
-            'fields': ('title', 'description', 'time_required', 'serves', 'instructions', 'ingredients',),
+            'fields': ('title', 'description', 'time_required', 'serves', 'directions', 'ingredients',),
         }),
         ('Media', {
             'fields': ('image', 'image_preview')

@@ -139,14 +139,14 @@ class RecipeListView(generics.ListAPIView):
                     "id": 1,
                     "title": "Recipe Title",
                     "description": "Recipe Descriptioni Text",
-                    "body": "Recipe instructions in markdown format",
-                    "time_required": "30 minutes",
-                    "serves": "4-6 people",
-                    "ingredients": "List of ingredients",
                     "image": "/media/articles/images/main.jpg",
                     "thumbnail_url": "/media/CACHE/images/articles/images/main/123.jpg",
                     "created_at": "2024-03-14T12:00:00Z",
                     "updated_at": "2024-03-14T12:00:00Z"
+                    "time_required": "30 minutes",
+                    "serves": "4-6 people",
+                    "ingredients": "List of ingredients",
+                    "directions": "Directions for preparing the recipe"
                 },
                 ...
             ]
