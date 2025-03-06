@@ -2,8 +2,8 @@ from django.shortcuts import render
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from django.db.models import Q
-from .models import Video, Article
-from .serializers import VideoSerializer, ArticleSerializer
+from .models import Video, Article, Recipe
+from .serializers import VideoSerializer, ArticleSerializer, RecipeSerializer
 
 
 class VideoListView(generics.ListAPIView):
@@ -112,5 +112,60 @@ class ArticleListView(generics.ListAPIView):
             queryset = queryset.filter(
                 Q(title__icontains=search) |
                 Q(body__icontains=search)
+            )
+        return queryset.order_by('-created_at')
+
+
+class RecipeListView(generics.ListAPIView):
+    """
+    API endpoint that allows recipes to be viewed.
+
+    Permissions:
+        - GET: Any user can view recipes
+        - POST/PUT/PATCH/DELETE: Not supported
+
+    Query Parameters:
+        - search (str): Optional. Filter recipes by matching text in title, body, or ingredients.
+                       Case-insensitive partial matches are supported.
+
+    Returns:
+        A JSON response with the following structure:
+        {
+            "count": 123,
+            "next": "http://api.example.org/recipes/?page=4",
+            "previous": "http://api.example.org/recipes/?page=2",
+            "results": [
+                {
+                    "id": 1,
+                    "title": "Recipe Title",
+                    "description": "Recipe Descriptioni Text",
+                    "image": "/media/articles/images/main.jpg",
+                    "thumbnail_url": "/media/CACHE/images/articles/images/main/123.jpg",
+                    "created_at": "2024-03-14T12:00:00Z",
+                    "updated_at": "2024-03-14T12:00:00Z"
+                    "time_required": "30 minutes",
+                    "serves": "4-6 people",
+                    "ingredients": "List of ingredients",
+                    "directions": "Directions for preparing the recipe"
+                },
+                ...
+            ]
+        }
+
+    Example Requests:
+        GET /api/learning-resources/recipes/
+        GET /api/learning-resources/recipes/?search=garbanzo
+    """
+    serializer_class = RecipeSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        queryset = Recipe.objects.all()
+        search = self.request.query_params.get('search', None)
+        if search is not None:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(body__icontains=search) |
+                Q(ingredients__icontains=search)
             )
         return queryset.order_by('-created_at')
