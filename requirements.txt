@@ -26,3 +26,4 @@ django-push-notifications
 exponent_server_sdk
 django-redis==5.4.0
 hiredis==2.3.2
+newrelic
