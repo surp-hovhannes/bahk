@@ -391,27 +391,30 @@ class LeaveFastView(generics.UpdateAPIView):
         return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
 
 
-# Function to vary cache based on query parameters
 def vary_on_query_params(*params):
     """
     Decorator that varies the cache based on specific query parameters.
     This ensures different cache entries for different parameter values.
     """
-    def decorator(func):
-        @wraps(func)
-        def inner(self, request, *args, **kwargs):
-            query_params = []
-            for param in params:
-                value = request.query_params.get(param)
-                if value:
-                    query_params.append(f"{param}={value}")
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(self, request, *args, **kwargs):
+            # Extract query params and add them to QUERY_STRING 
+            # for cache middleware to use in cache key
+            if request and hasattr(request, 'query_params'):
+                query_params = []
+                for param in params:
+                    value = request.query_params.get(param)
+                    if value:
+                        query_params.append(f"{param}={value}")
+                
+                # Create a custom query string for the cache key
+                query_string = "&".join(query_params)
+                request.META['QUERY_STRING'] = query_string
             
-            # Create a custom query string for the cache key
-            query_string = "&".join(query_params)
-            request.META['QUERY_STRING'] = query_string
-            
-            return func(self, request, *args, **kwargs)
-        return inner
+            # Make sure to pass all arguments through correctly
+            return view_func(self, request, *args, **kwargs)
+        return _wrapped_view
     return decorator
 
 
@@ -468,7 +471,6 @@ class FastParticipantsView(views.APIView):
 
 @method_decorator(cache_page(60 * 10), name='dispatch')  # Cache for 10 minutes
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
-@method_decorator(vary_on_query_params('limit', 'offset'), name='dispatch')  # Vary cache on pagination params
 class PaginatedFastParticipantsView(generics.ListAPIView):
     """
     API view to retrieve paginated participants of a specific fast.
