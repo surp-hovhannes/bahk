@@ -547,6 +547,9 @@ class FastParticipantsMapView(views.APIView):
     
     URL Parameters:
         - fast_id: The ID of the fast for which to retrieve the map.
+        
+    Query Parameters:
+        - force_update: If set to 'true', forces regeneration of the map regardless of age.
 
     Returns:
         - Map metadata including URL, last updated timestamp, participant count, and format.
@@ -557,6 +560,17 @@ class FastParticipantsMapView(views.APIView):
     @method_decorator(cache_page(60 * 60))  # Cache for 1 hour
     @method_decorator(vary_on_headers('Authorization'))
     def get(self, request, fast_id):
+        # Check if force_update is requested
+        force_update = request.query_params.get('force_update', '').lower() == 'true'
+        
+        # If force_update is requested, bypass the cache
+        if force_update:
+            return self._get_map(request, fast_id, force_update=True)
+            
+        return self._get_map(request, fast_id)
+    
+    def _get_map(self, request, fast_id, force_update=False):
+        """Internal method to get or generate the map."""
         current_fast = Fast.objects.filter(id=fast_id).first()
 
         if not current_fast:
@@ -565,8 +579,8 @@ class FastParticipantsMapView(views.APIView):
         # Check if a map exists for this fast
         map_obj = FastParticipantMap.objects.filter(fast=current_fast).order_by('-last_updated').first()
         
-        # If no map exists or if it's older than a day, generate a new one asynchronously
-        if not map_obj or (timezone.now() - map_obj.last_updated).days >= 1:
+        # If no map exists, if it's older than a day, or if force_update is requested, generate a new one
+        if not map_obj or (timezone.now() - map_obj.last_updated).days >= 1 or force_update:
             # Trigger async task to generate the map
             generate_participant_map.delay(fast_id)
             
@@ -575,6 +589,14 @@ class FastParticipantsMapView(views.APIView):
                 return response.Response(
                     {"detail": "Map is being generated. Please try again in a few minutes."},
                     status=202
+                )
+            elif force_update:
+                # If force_update was requested, inform the user
+                return response.Response(
+                    {
+                        "detail": "Map update has been triggered. The current map is being returned, but a new one is being generated.",
+                        "map": FastParticipantMapSerializer(map_obj).data
+                    }
                 )
         
         # Return the map data
