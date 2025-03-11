@@ -362,10 +362,14 @@ class FastParticipantsView(views.APIView):
     @method_decorator(vary_on_headers('Authorization'))
     @vary_on_query_params('limit') 
     def get(self, request, fast_id):
-        current_fast = Fast.objects.filter(id=fast_id).first()
-
-        if not current_fast:
-            return response.Response({"detail": "Fast not found."}, status=404)
+        # Try to get fast from cache first
+        cache_key = get_cache_key('fast_participants_simple_view', fast_id)
+        fast = cache.get(cache_key)
+        
+        if not fast:
+            # If not in cache, get from database and cache it
+            fast = get_object_or_404(Fast, id=fast_id)
+            cache.set(cache_key, fast, CACHE_TTL)
 
         limit = request.query_params.get('limit', NUMBER_PARTICIPANTS_TO_SHOW_WEB)
         try:
@@ -373,13 +377,22 @@ class FastParticipantsView(views.APIView):
         except (ValueError, TypeError):
             limit = NUMBER_PARTICIPANTS_TO_SHOW_WEB
 
-        other_participants = current_fast.profiles.all()[:limit]            
-        serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
+        # Optimized query with select_related and prefetch_related
+        other_participants = fast.profiles.select_related(
+            'user'  # For email/username
+        ).order_by('user__date_joined')[:limit]
+            
+        serialized_participants = ParticipantSerializer(
+            other_participants, 
+            many=True, 
+            context={'request': request}
+        )
         return response.Response(serialized_participants.data)
 
 
 @method_decorator(cache_page(60 * 10), name='dispatch')  # Cache for 10 minutes
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
+@method_decorator(vary_on_query_params('limit', 'offset'), name='dispatch')  # Vary cache on pagination params
 class PaginatedFastParticipantsView(generics.ListAPIView):
     """
     API view to retrieve paginated participants of a specific fast.
@@ -411,24 +424,55 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
     pagination_class = LimitOffsetPagination
     
     def get_queryset(self):
+        """
+        Optimized queryset that:
+        1. Uses get_object_or_404 for cleaner 404 handling
+        2. Prefetches related fields needed by serializer
+        3. Orders results consistently
+        4. Caches the fast lookup
+        """
         fast_id = self.kwargs.get('fast_id')
-        current_fast = Fast.objects.filter(id=fast_id).first()
         
-        if not current_fast:
-            return []
-            
-        return current_fast.profiles.all()
+        # Try to get fast from cache first
+        cache_key = get_cache_key('fast_participants_view', fast_id)
+        fast = cache.get(cache_key)
         
-    def list(self, request, *args, **kwargs):
-        # Check if the fast exists first
+        if not fast:
+            # If not in cache, get from database and cache it
+            fast = get_object_or_404(Fast, id=fast_id)
+            cache.set(cache_key, fast, CACHE_TTL)
+        
+        return fast.profiles.select_related(
+            'user'  # For email/username
+        ).order_by('user__date_joined')  # Consistent ordering
+    
+    def get_serializer_context(self):
+        """Add request to serializer context for thumbnail URL generation"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def paginate_queryset(self, queryset):
+        """Override to add count caching for pagination performance"""
         fast_id = self.kwargs.get('fast_id')
-        current_fast = Fast.objects.filter(id=fast_id).first()
+        count_cache_key = get_cache_key('fast_participants_count', fast_id)
         
-        if not current_fast:
-            return response.Response({"detail": "Fast not found."}, status=404)
+        # Check if we have a cached count
+        cached_count = cache.get(count_cache_key)
+        
+        if cached_count is not None and hasattr(self.paginator, 'count'):
+            # If count is cached, use it directly to avoid COUNT(*) query
+            self.paginator.count = cached_count
+            return super().paginate_queryset(queryset)
+        
+        # Get paginated results normally (will perform COUNT(*))
+        result = super().paginate_queryset(queryset)
+        
+        # Cache the count for future requests if it was calculated
+        if hasattr(self.paginator, 'count'):
+            cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
             
-        # Continue with standard list behavior if fast exists
-        return super().list(request, *args, **kwargs)
+        return result
 
 
 class FastStatsView(views.APIView):
