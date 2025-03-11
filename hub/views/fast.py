@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
-from ..models import Fast, Church
-from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer
+from ..models import Fast, Church, Day, Profile, FastParticipantMap
+from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer, DaySerializer, FastParticipantMapSerializer
 from .mixins import ChurchContextMixin, TimezoneMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -16,10 +16,11 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Q, Count
 from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache
 from functools import wraps
+from hub.tasks import generate_participant_map
 
 CACHE_TTL = getattr(settings, 'CACHE_MIDDLEWARE_SECONDS', 60 * 15)  # 15 minutes default
 
@@ -532,3 +533,50 @@ def _parse_date_str(date_str):
         return None
 
     return date
+
+
+class FastParticipantsMapView(views.APIView):
+    """
+    API view to retrieve the participants map for a specific fast.
+
+    This view returns the URL to the most recent generated map for the fast identified by the `fast_id` in the URL.
+    If no map exists or if the map is older than a day, it triggers asynchronous generation of a new map.
+    
+    Permissions:
+        - IsAuthenticated: Only authenticated users can access this view.
+    
+    URL Parameters:
+        - fast_id: The ID of the fast for which to retrieve the map.
+
+    Returns:
+        - Map metadata including URL, last updated timestamp, participant count, and format.
+        - If no map exists yet, returns a 202 Accepted response indicating a map is being generated.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    @method_decorator(cache_page(60 * 60))  # Cache for 1 hour
+    @method_decorator(vary_on_headers('Authorization'))
+    def get(self, request, fast_id):
+        current_fast = Fast.objects.filter(id=fast_id).first()
+
+        if not current_fast:
+            return response.Response({"detail": "Fast not found."}, status=404)
+            
+        # Check if a map exists for this fast
+        map_obj = FastParticipantMap.objects.filter(fast=current_fast).order_by('-last_updated').first()
+        
+        # If no map exists or if it's older than a day, generate a new one asynchronously
+        if not map_obj or (timezone.now() - map_obj.last_updated).days >= 1:
+            # Trigger async task to generate the map
+            generate_participant_map.delay(fast_id)
+            
+            if not map_obj:
+                # If no map exists yet, return a 202 Accepted response
+                return response.Response(
+                    {"detail": "Map is being generated. Please try again in a few minutes."},
+                    status=202
+                )
+        
+        # Return the map data
+        serializer = FastParticipantMapSerializer(map_obj)
+        return response.Response(serializer.data)

@@ -441,3 +441,19 @@ class DevotionalSerializer(serializers.ModelSerializer):
 
     def get_video(self, obj):
         return obj.video.video.url if obj.video and obj.video.video else None
+
+class FastParticipantMapSerializer(serializers.ModelSerializer):
+    """Serializer for the FastParticipantMap model."""
+    
+    class Meta:
+        model = models.FastParticipantMap
+        fields = ('id', 'map_url', 'last_updated', 'participant_count', 'format')
+        
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # Calculate the age of the map in hours
+        if instance.last_updated:
+            now = timezone.now()
+            age_hours = (now - instance.last_updated).total_seconds() / 3600
+            representation['age_hours'] = round(age_hours, 1)
+        return representation

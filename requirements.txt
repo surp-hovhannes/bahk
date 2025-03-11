@@ -1,3 +1,4 @@
+# Django and extensions
 django==4.2.11
 djangorestframework==3.14.0
 pytest==8.1.1
@@ -27,3 +28,6 @@ exponent_server_sdk
 django-redis==5.4.0
 hiredis==2.3.2
 newrelic
+# Map generation packages - keeping only what's actually used
+matplotlib==3.10.1
+shapely==2.0.7

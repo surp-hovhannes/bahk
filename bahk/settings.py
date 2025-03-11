@@ -455,6 +455,10 @@ AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
 AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL')
 
+# AWS Location Service configuration
+AWS_LOCATION_PLACE_INDEX = os.environ.get('AWS_LOCATION_PLACE_INDEX', 'ExamplePlaceIndex')
+AWS_LOCATION_API_KEY = os.environ.get('AWS_LOCATION_SERVICES_KEY', None)
+
 # Force version 4 signing for S3
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_FILE_OVERWRITE = False
