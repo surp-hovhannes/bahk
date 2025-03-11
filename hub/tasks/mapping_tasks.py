@@ -28,6 +28,7 @@ from sklearn.cluster import DBSCAN
 import urllib.request
 import tempfile
 import os
+import math
 
 # Set up logging for Celery tasks
 logger = get_task_logger(__name__)
@@ -72,20 +73,19 @@ def generate_participant_map_svg(participant_locations, output_path,
                                 clustering_distance=0.5, min_cluster_size=3,
                                 map_width=10, map_height=6, dpi=150):
     """
-    Generate an SVG map with dots showing participant locations, with clustering.
-    This is a standalone function that can be called directly without Django models.
+    Generate an SVG map showing participant locations with clustering.
     
     Args:
-        participant_locations: List of tuples (longitude, latitude) for each participant
+        participant_locations: List of (longitude, latitude) tuples
         output_path: Path to save the SVG file
-        clustering_distance: Distance (in degrees) to consider points as part of the same cluster
-        min_cluster_size: Minimum points to form a cluster
+        clustering_distance: Distance (in degrees) for clustering points
+        min_cluster_size: Minimum number of points to form a cluster
         map_width: Width of the map in inches
         map_height: Height of the map in inches
-        dpi: Resolution in dots per inch
-        
+        dpi: Resolution of the map
+    
     Returns:
-        str: Path to the generated SVG file
+        Path to the generated SVG file
     """
     try:
         # Filter out invalid coordinates (0,0 or non-real numbers)
@@ -93,126 +93,173 @@ def generate_participant_map_svg(participant_locations, output_path,
         for lon, lat in participant_locations:
             # Check if coordinates are valid (not 0,0 and are real numbers)
             if (lon != 0 or lat != 0) and isinstance(lon, (int, float)) and isinstance(lat, (int, float)):
-                # Check if they're finite numbers (not NaN or infinity)
-                if np.isfinite(lon) and np.isfinite(lat):
+                if not (math.isnan(lon) or math.isnan(lat)):
                     valid_locations.append((lon, lat))
         
-        # Use filtered locations for the rest of the function
-        participant_locations = valid_locations
-        
-        # Load world map data using the latest GeoPandas approach
+        # Get the world map shapefile using our existing function
         world = download_world_map()
         
         # Create a GeoDataFrame from participant locations
-        if not participant_locations:
-            # Create empty dataframe if no participants
-            participant_points = gpd.GeoDataFrame(
-                {'geometry': []}, 
-                geometry='geometry',
-                crs="EPSG:4326"
-            )
-        else:
-            # Create points from longitude, latitude
-            geometries = [Point(lon, lat) for lon, lat in participant_locations]
-            participant_points = gpd.GeoDataFrame(
-                {'geometry': geometries}, 
-                geometry='geometry',
-                crs="EPSG:4326"
-            )
-        
-        # Perform clustering if we have enough points
-        if len(participant_locations) >= min_cluster_size:
-            # Convert to numpy array for DBSCAN
-            coords = np.array(participant_locations)
+        if valid_locations:
+            # Create a list of Point objects
+            points = [Point(lon, lat) for lon, lat in valid_locations]
             
-            # Perform clustering
-            db = DBSCAN(eps=clustering_distance, min_samples=min_cluster_size).fit(coords)
-            labels = db.labels_
+            # Create a GeoDataFrame
+            participant_points = gpd.GeoDataFrame({
+                'geometry': points
+            }, geometry='geometry', crs="EPSG:4326")
             
-            # Add cluster labels to the GeoDataFrame
-            participant_points['cluster'] = labels
+            # Check if all points are within the contiguous United States
+            us_only = False
+            if len(valid_locations) > 0:
+                # Define bounding box for contiguous US (approximate)
+                us_bounds = {
+                    'min_lon': -125.0,  # West coast
+                    'max_lon': -66.0,   # East coast
+                    'min_lat': 24.0,    # Southern tip of Florida
+                    'max_lat': 49.5     # Northern border
+                }
+                
+                # Check if all points are within the US bounds
+                all_in_us = all(
+                    us_bounds['min_lon'] <= lon <= us_bounds['max_lon'] and
+                    us_bounds['min_lat'] <= lat <= us_bounds['max_lat']
+                    for lon, lat in valid_locations
+                )
+                
+                us_only = all_in_us
             
-            # Count points in each cluster (excluding noise which is labeled -1)
-            cluster_counts = {}
-            for label in labels:
-                if label >= 0:  # Not noise
-                    if label in cluster_counts:
-                        cluster_counts[label] += 1
-                    else:
-                        cluster_counts[label] = 1
-            
-            # Create a GeoDataFrame for cluster centers with sizes
+            # Perform clustering if there are enough points
             cluster_centers = []
             cluster_sizes = []
             
-            for label, count in cluster_counts.items():
-                # Get points in this cluster
-                cluster_points = coords[labels == label]
-                # Calculate center of cluster
-                center_lon = cluster_points[:, 0].mean()
-                center_lat = cluster_points[:, 1].mean()
+            if len(valid_locations) >= min_cluster_size:
+                # Convert to numpy array for DBSCAN
+                coords = np.array(valid_locations)
                 
-                cluster_centers.append(Point(center_lon, center_lat))
-                cluster_sizes.append(count)
+                # Perform clustering
+                db = DBSCAN(eps=clustering_distance, min_samples=min_cluster_size, metric='haversine')
+                labels = db.fit_predict(coords)
+                
+                # Add cluster labels to GeoDataFrame
+                participant_points['cluster'] = labels
+                
+                # Get unique clusters (excluding noise points labeled as -1)
+                unique_clusters = set(labels)
+                if -1 in unique_clusters:
+                    unique_clusters.remove(-1)
+                
+                # Calculate cluster centers and sizes
+                for label in unique_clusters:
+                    # Count points in this cluster
+                    count = np.sum(labels == label)
+                    # Get points in this cluster
+                    cluster_points = coords[labels == label]
+                    # Calculate center of cluster
+                    center_lon = cluster_points[:, 0].mean()
+                    center_lat = cluster_points[:, 1].mean()
+                    
+                    cluster_centers.append(Point(center_lon, center_lat))
+                    cluster_sizes.append(count)
+                
+                if cluster_centers:
+                    cluster_gdf = gpd.GeoDataFrame({
+                        'geometry': cluster_centers,
+                        'size': cluster_sizes
+                    }, geometry='geometry', crs="EPSG:4326")
             
-            if cluster_centers:
-                cluster_gdf = gpd.GeoDataFrame({
-                    'geometry': cluster_centers,
-                    'size': cluster_sizes
-                }, geometry='geometry', crs="EPSG:4326")
-        
-        # Create the plot
-        fig, ax = plt.subplots(figsize=(map_width, map_height), dpi=dpi)
-        
-        # Plot the world map with filled interior and boundary
-        world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
-        
-        # Set map boundaries to exclude Arctic and Antarctic regions
-        ax.set_ylim(-60, 85)  # Latitude range from -60° (excludes Antarctica) to 85° (excludes North Pole)
-        
-        # Remove axes, background color, and simplify
-        ax.set_axis_off()
-        plt.tight_layout()
-        fig.patch.set_facecolor('#390714')
-        
-        # Plot individual points (those not in clusters, with label -1)
-        if len(participant_locations) > 0:
-            non_clustered = participant_points[participant_points['cluster'] == -1] if 'cluster' in participant_points.columns else participant_points
-            if len(non_clustered) > 0:
-                # Use red color for individual points to match cluster centers
-                non_clustered.plot(ax=ax, color='red', markersize=5, alpha=0.6)
-        
-        # Plot cluster centers with size reflecting the number of points
-        if len(participant_locations) >= min_cluster_size and 'cluster_gdf' in locals():
-            # Scale markers based on cluster size
-            min_size = 10
-            max_size = 100
-            if len(cluster_centers) > 0:
-                # Scale marker sizes based on the number of participants
-                sizes = [min_size + (max_size - min_size) * (size / max(cluster_sizes)) for size in cluster_sizes]
+            # Create the plot
+            fig, ax = plt.subplots(figsize=(map_width, map_height), dpi=dpi)
+            
+            if us_only:
+                # Filter to just the US for US-only map
+                # The Natural Earth dataset uses 'United States of America' or 'NAME_EN' field
+                us = world[world['NAME_EN'] == 'United States of America']
+                if us.empty:
+                    # Try alternative field names
+                    us = world[world['NAME'] == 'United States of America']
+                    if us.empty:
+                        # If still not found, try with partial match
+                        us = world[world.apply(lambda row: any('United States' in str(val) for val in row if isinstance(val, str)), axis=1)]
                 
-                # Plot cluster centers
-                cluster_gdf.plot(ax=ax, color='red', markersize=sizes, alpha=0.6)
+                if not us.empty:
+                    us.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
+                    
+                    # Set US-specific boundaries (contiguous US)
+                    ax.set_xlim(us_bounds['min_lon'] - 1, us_bounds['max_lon'] + 1)
+                    ax.set_ylim(us_bounds['min_lat'] - 1, us_bounds['max_lat'] + 1)
+                else:
+                    # Fallback to world map if US not found
+                    logger.warning("Could not find US in world map data, falling back to world map")
+                    world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
+                    ax.set_ylim(-60, 85)  # Exclude polar regions
+            else:
+                # Plot the world map with filled interior and boundary
+                world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
                 
-                # Add text labels with counts for larger clusters
-                for idx, row in cluster_gdf.iterrows():
-                    if row['size'] >= min_cluster_size * 2:  # Only label larger clusters
-                        ax.text(row.geometry.x, row.geometry.y, str(row['size']), 
-                               horizontalalignment='center', verticalalignment='center',
-                               fontsize=8, color='white')
-        
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        # Save as SVG
-        plt.savefig(output_path, format='svg', bbox_inches='tight', pad_inches=0.1)
-        plt.close()
-        
-        logger.info(f"Generated participant map at {output_path}")
-        return output_path
-    
+                # Set map boundaries to exclude Arctic and Antarctic regions
+                ax.set_ylim(-60, 85)  # Latitude range from -60° (excludes Antarctica) to 85° (excludes North Pole)
+            
+            # Remove axes, background color, and simplify
+            ax.set_axis_off()
+            plt.tight_layout()
+            fig.patch.set_facecolor('#390714')
+            
+            # Plot individual points (those not in clusters, with label -1)
+            if len(valid_locations) > 0:
+                non_clustered = participant_points[participant_points['cluster'] == -1] if 'cluster' in participant_points.columns else participant_points
+                if len(non_clustered) > 0:
+                    # Use red color for individual points to match cluster centers
+                    # Increase markersize from 5 to 8 for better visibility
+                    non_clustered.plot(ax=ax, color='red', markersize=20, alpha=0.6)
+            
+            # Plot cluster centers with size reflecting the number of points
+            if len(valid_locations) >= min_cluster_size and 'cluster_gdf' in locals():
+                # Scale markers based on cluster size
+                # Increase minimum size from 10 to 15
+                min_size = 35
+                # Increase maximum size from 100 to 120
+                max_size = 120
+                if len(cluster_centers) > 0:
+                    # Scale marker sizes based on the number of participants
+                    sizes = cluster_gdf['size'].values
+                    normalized_sizes = min_size + (sizes - min(sizes)) * (max_size - min_size) / max(1, (max(sizes) - min(sizes)))
+                    
+                    # Plot cluster centers with size reflecting the number of points
+                    # Increase alpha from 0.8 to 0.9 for better visibility
+                    cluster_gdf.plot(
+                        ax=ax,
+                        color='red',
+                        markersize=normalized_sizes,
+                        alpha=0.9
+                    )
+            
+            # Save the plot to SVG file
+            plt.savefig(output_path, format='svg', bbox_inches='tight', pad_inches=0.1)
+            plt.close(fig)
+            
+            logger.info(f"Generated participant map at {output_path}")
+            return output_path
+        else:
+            # No valid locations, create an empty map
+            fig, ax = plt.subplots(figsize=(map_width, map_height), dpi=dpi)
+            
+            # Plot the world map
+            world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
+            
+            # Set map boundaries to exclude Arctic and Antarctic regions
+            ax.set_ylim(-60, 85)  # Exclude polar regions
+            
+            ax.set_axis_off()
+            plt.tight_layout()
+            fig.patch.set_facecolor('#390714')
+            plt.savefig(output_path, format='svg', bbox_inches='tight', pad_inches=0.1)
+            plt.close(fig)
+            
+            logger.info(f"Generated empty participant map at {output_path} (no valid locations)")
+            return output_path
     except Exception as e:
-        logger.error(f"Error generating participant map: {e}")
+        logger.error(f"Error generating participant map: {str(e)}")
         raise
 
 

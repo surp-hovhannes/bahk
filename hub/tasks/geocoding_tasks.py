@@ -67,7 +67,7 @@ def geocode_profile_location(self, profile_id, location):
             }
         
         # Use AWS Location Service
-        coordinates = geocoder.get_coordinates(location)
+        coordinates = geocoder.geocode(location)
         
         if coordinates:
             # We got valid coordinates
