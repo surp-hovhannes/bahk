@@ -71,7 +71,8 @@ def download_world_map():
 
 def generate_participant_map_svg(participant_locations, output_path, 
                                 clustering_distance=0.5, min_cluster_size=3,
-                                map_width=10, map_height=6, dpi=150):
+                                map_width=10, map_height=6, dpi=150,
+                                location_names=None):
     """
     Generate an SVG map showing participant locations with clustering.
     
@@ -83,18 +84,31 @@ def generate_participant_map_svg(participant_locations, output_path,
         map_width: Width of the map in inches
         map_height: Height of the map in inches
         dpi: Resolution of the map
+        location_names: Optional list of location names corresponding to participant_locations
     
     Returns:
         Path to the generated SVG file
     """
     try:
+        # Initialize location_names if not provided (but we won't use them for labels)
+        if location_names is None:
+            location_names = [f"Point {i}" for i in range(len(participant_locations))]
+        
         # Filter out invalid coordinates (0,0 or non-real numbers)
         valid_locations = []
-        for lon, lat in participant_locations:
+        valid_names = []
+        for i, (lon, lat) in enumerate(participant_locations):
             # Check if coordinates are valid (not 0,0 and are real numbers)
             if (lon != 0 or lat != 0) and isinstance(lon, (int, float)) and isinstance(lat, (int, float)):
                 if not (math.isnan(lon) or math.isnan(lat)):
+                    # Ensure longitude is in the correct range (-180 to 180)
+                    # This ensures Asian coordinates (positive longitudes) are correctly placed
+                    if lon > 180:
+                        lon = lon - 360
+                    elif lon < -180:
+                        lon = lon + 360
                     valid_locations.append((lon, lat))
+                    valid_names.append(location_names[i] if i < len(location_names) else f"Point {i}")
         
         # Get the world map shapefile using our existing function
         world = download_world_map()
@@ -106,7 +120,8 @@ def generate_participant_map_svg(participant_locations, output_path,
             
             # Create a GeoDataFrame
             participant_points = gpd.GeoDataFrame({
-                'geometry': points
+                'geometry': points,
+                'name': valid_names
             }, geometry='geometry', crs="EPSG:4326")
             
             # Check if all points are within the contiguous United States
@@ -137,9 +152,14 @@ def generate_participant_map_svg(participant_locations, output_path,
                 # Convert to numpy array for DBSCAN
                 coords = np.array(valid_locations)
                 
+                # For haversine metric, we need to:
+                # 1. Convert to (latitude, longitude) order
+                # 2. Convert to radians
+                haversine_coords = np.radians(coords[:, [1, 0]])  # Swap lat/lon and convert to radians
+                
                 # Perform clustering
-                db = DBSCAN(eps=clustering_distance, min_samples=min_cluster_size, metric='haversine')
-                labels = db.fit_predict(coords)
+                db = DBSCAN(eps=np.radians(clustering_distance), min_samples=min_cluster_size, metric='haversine')
+                labels = db.fit_predict(haversine_coords)
                 
                 # Add cluster labels to GeoDataFrame
                 participant_points['cluster'] = labels
@@ -289,9 +309,12 @@ def create_map(fast_id, file_format='svg', dpi=100):
         
         # Filter profiles with valid coordinates
         locations = []
+        location_names = []
         for profile in profiles:
             if profile.latitude is not None and profile.longitude is not None:
+                # Remove debugging log for Asian locations
                 locations.append((profile.longitude, profile.latitude))
+                location_names.append(profile.location or f"User {profile.id}")
         
         participant_count = len(locations)
         logger.info(f"Found {participant_count} valid locations for fast '{fast}'")
@@ -314,7 +337,8 @@ def create_map(fast_id, file_format='svg', dpi=100):
                 min_cluster_size=3,
                 map_width=10,
                 map_height=6,
-                dpi=dpi
+                dpi=dpi,
+                location_names=location_names
             )
             
             # Read the generated SVG file
@@ -352,18 +376,23 @@ def generate_sample_map(output_path=None):
     
     # New York area cluster
     ny_cluster = [(np.random.normal(-74.0, 0.3), np.random.normal(40.7, 0.3)) for _ in range(25)]
+    ny_names = [f"New York User {i+1}" for i in range(25)]
     
     # London area cluster
     london_cluster = [(np.random.normal(0.1, 0.2), np.random.normal(51.5, 0.2)) for _ in range(20)]
+    london_names = [f"London User {i+1}" for i in range(20)]
     
     # Tokyo area cluster
     tokyo_cluster = [(np.random.normal(139.7, 0.3), np.random.normal(35.7, 0.3)) for _ in range(15)]
+    tokyo_names = [f"Tokyo User {i+1}" for i in range(15)]
     
     # Random individual points
     random_points = [(np.random.uniform(-180, 180), np.random.uniform(-60, 70)) for _ in range(30)]
+    random_names = [f"Random User {i+1}" for i in range(30)]
     
-    # Combine all points
+    # Combine all points and names
     all_points = ny_cluster + london_cluster + tokyo_cluster + random_points
+    all_names = ny_names + london_names + tokyo_names + random_names
     
     # Generate and return the map
     if output_path is None:
@@ -371,7 +400,7 @@ def generate_sample_map(output_path=None):
         output_dir.mkdir(exist_ok=True, parents=True)
         output_path = output_dir / "sample_participant_map.svg"
     
-    return generate_participant_map_svg(all_points, str(output_path))
+    return generate_participant_map_svg(all_points, str(output_path), location_names=all_names)
 
 
 @shared_task(bind=True, max_retries=3, name='hub.tasks.generate_participant_map')

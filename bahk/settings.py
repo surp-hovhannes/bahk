@@ -442,6 +442,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
+        'celery': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        }
     },
 }
 
