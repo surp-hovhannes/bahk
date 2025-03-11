@@ -163,56 +163,21 @@ class Profile(models.Model):
         
         Called when location is updated to maintain latitude/longitude.
         Uses AWS Location Service with fallback to cached locations.
+        
+        Note: This is now a simple wrapper that schedules an asynchronous task
+        to avoid blocking the user interface during geocoding.
         """
+        from hub.tasks import geocode_profile_location
+        
         if not self.location:
             self.latitude = None
             self.longitude = None
             return
             
-        try:
-            # First check the cache
-            normalized = self.location.lower().strip()
-            cache_entry = GeocodingCache.objects.filter(
-                location_text=normalized,
-                error_count__lt=5
-            ).first()
-            
-            if cache_entry and cache_entry.latitude and cache_entry.longitude:
-                # Use cached coordinates
-                self.latitude = cache_entry.latitude
-                self.longitude = cache_entry.longitude
-                return
-            
-            # Use AWS Location Service
-            coordinates = get_coordinates(self.location)
-            
-            if coordinates:
-                # We got valid coordinates
-                self.latitude, self.longitude = coordinates
-                
-                # Save to cache if not already there
-                if not cache_entry:
-                    GeocodingCache.objects.create(
-                        location_text=normalized,
-                        latitude=self.latitude,
-                        longitude=self.longitude
-                    )
-                # Update existing cache entry
-                elif cache_entry:
-                    cache_entry.latitude = self.latitude
-                    cache_entry.longitude = self.longitude
-                    cache_entry.error_count = 0  # Reset error count on success
-                    cache_entry.save()
-            elif cache_entry:
-                # Increment error counter for failed geocoding attempts
-                cache_entry.error_count += 1
-                cache_entry.save()
-
-        except Exception as e:
-            logging.error(f"Error geocoding location for Profile {self.id}: {e}")
-            # Set coordinates to None if geocoding fails
-            self.latitude = None
-            self.longitude = None
+        # Schedule the geocoding task asynchronously
+        # Only do this if the profile has been saved (has an ID)
+        if self.id is not None:
+            geocode_profile_location.delay(self.id, self.location)
     
     def save(self, **kwargs):
         # First check if this is a new instance or if the profile image field has changed
@@ -265,16 +230,9 @@ class Profile(models.Model):
                 self.cached_thumbnail_updated = None
                 super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
         
-        # If location changed, try to geocode it
+        # If location changed, trigger async geocoding
         if location_changed and self.location:
-            try:
-                self.geocode_location()
-                # If coordinates were updated, save them
-                if self.latitude is not None and self.longitude is not None:
-                    update_fields = ['latitude', 'longitude']
-                    super().save(update_fields=update_fields)
-            except Exception as e:
-                logging.error(f"Error geocoding location for Profile {self.id}: {e}")
+            self.geocode_location()
 
     def __str__(self):
         return self.user.email

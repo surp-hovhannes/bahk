@@ -13,6 +13,101 @@ from hub.services.aws_geocoding import geocoder
 logger = get_task_logger(__name__)
 
 @shared_task(bind=True, max_retries=3)
+def geocode_profile_location(self, profile_id, location):
+    """
+    Geocode a single profile's location and update its coordinates.
+    
+    This task is triggered when a profile's location is updated.
+    It handles the geocoding asynchronously to improve user experience.
+    
+    Args:
+        profile_id: ID of the Profile to update
+        location: Location string to geocode
+        
+    Returns:
+        Dict with status and result details
+    """
+    logger.info(f"Geocoding location for Profile ID: {profile_id}, Location: {location}")
+    
+    try:
+        # Skip empty locations
+        if not location:
+            logger.info(f"Empty location for Profile ID: {profile_id}, skipping")
+            return {"status": "skipped", "reason": "empty_location"}
+        
+        # Get the profile
+        try:
+            profile = Profile.objects.get(id=profile_id)
+        except Profile.DoesNotExist:
+            logger.error(f"Profile ID {profile_id} not found")
+            return {"status": "error", "reason": "profile_not_found"}
+        
+        # Check if we need to update (in case profile was updated again while task was pending)
+        if profile.location != location:
+            logger.info(f"Profile location changed since task was scheduled, using current value: {profile.location}")
+            location = profile.location
+        
+        # First check the cache
+        normalized = location.lower().strip()
+        cache_entry = GeocodingCache.objects.filter(
+            location_text=normalized,
+            error_count__lt=5
+        ).first()
+        
+        if cache_entry and cache_entry.latitude and cache_entry.longitude:
+            # Use cached coordinates
+            profile.latitude = cache_entry.latitude
+            profile.longitude = cache_entry.longitude
+            profile.save(update_fields=['latitude', 'longitude'])
+            logger.info(f"Updated Profile {profile_id} with cached coordinates: ({profile.latitude}, {profile.longitude})")
+            return {
+                "status": "success", 
+                "source": "cache",
+                "coordinates": (profile.latitude, profile.longitude)
+            }
+        
+        # Use AWS Location Service
+        coordinates = geocoder.get_coordinates(location)
+        
+        if coordinates:
+            # We got valid coordinates
+            profile.latitude, profile.longitude = coordinates
+            profile.save(update_fields=['latitude', 'longitude'])
+            
+            # Save to cache
+            if not cache_entry:
+                GeocodingCache.objects.create(
+                    location_text=normalized,
+                    latitude=coordinates[0],
+                    longitude=coordinates[1]
+                )
+            else:
+                cache_entry.latitude = coordinates[0]
+                cache_entry.longitude = coordinates[1]
+                cache_entry.error_count = 0  # Reset error count on success
+                cache_entry.save()
+                
+            logger.info(f"Updated Profile {profile_id} with coordinates: {coordinates}")
+            return {
+                "status": "success", 
+                "source": "aws",
+                "coordinates": coordinates
+            }
+        elif cache_entry:
+            # Increment error counter for failed geocoding attempts
+            cache_entry.error_count += 1
+            cache_entry.save()
+            
+        logger.warning(f"Failed to geocode location for Profile {profile_id}: {location}")
+        return {"status": "error", "reason": "geocoding_failed"}
+        
+    except Exception as e:
+        logger.error(f"Error geocoding location for Profile {profile_id}: {e}")
+        # Retry the task with exponential backoff
+        self.retry(exc=e, countdown=2 ** self.request.retries * 60)  # 1min, 2min, 4min, etc.
+        return {"status": "error", "reason": str(e)}
+
+@shared_task(bind=True, max_retries=3, name='hub.tasks.batch_geocode_profiles')
 def batch_geocode_profiles(self, update_all=False):
     """
     Batch geocode all profiles with locations that don't have coordinates.
