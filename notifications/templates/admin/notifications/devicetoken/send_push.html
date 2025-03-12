@@ -22,7 +22,7 @@
 
 {% block content %}
 <div id="content-main">
-    <form method="post" class="push-form">
+    <form method="post" class="push-form" action="{% url 'admin:notifications_devicetoken_send_push' %}">
         {% csrf_token %}
         <fieldset class="module aligned">
             <div class="form-row">
