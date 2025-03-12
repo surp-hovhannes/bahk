@@ -50,6 +50,7 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
 class DevotionalsByFastView(generics.ListAPIView):
     """
     API endpoint that provides a list of devotionals for a fast given its id.
+    Returns a maximum of 45 devotionals.
 
     URL Parameters:
         - fast_id: The ID of the fast for which to retrieve the participants.
@@ -63,7 +64,7 @@ class DevotionalsByFastView(generics.ListAPIView):
 
     def get_queryset(self):
         fast = Fast.objects.get(id=self.kwargs['fast_id'])
-        return Devotional.objects.filter(day__fast=fast)
+        return Devotional.objects.filter(day__fast=fast)[:45]  # Limit to 45 devotionals
 
 
 class DevotionalDetailView(generics.RetrieveAPIView):
