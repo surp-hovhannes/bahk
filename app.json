@@ -55,7 +55,7 @@
             ],
             "scripts": {
                 "test-setup": "python manage.py migrate",
-                "test": "true"
+                "test": "python manage.py test --keepdb"
             }
         }
     }
