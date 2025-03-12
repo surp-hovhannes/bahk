@@ -4,10 +4,17 @@ import logging
 from django.utils import timezone
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 
 from .mixins import ChurchContextMixin, TimezoneMixin
 from hub.models import Devotional, Fast
 from hub.serializers import DevotionalSerializer
+
+
+class LargeResultsSetPagination(PageNumberPagination):
+    page_size = 45
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveAPIView):
@@ -50,10 +57,10 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
 class DevotionalsByFastView(generics.ListAPIView):
     """
     API endpoint that provides a list of devotionals for a fast given its id.
-    Returns a maximum of 45 devotionals.
+    Results are paginated with a page size of 45 devotionals per page.
 
     URL Parameters:
-        - fast_id: The ID of the fast for which to retrieve the participants.
+        - fast_id: The ID of the fast for which to retrieve the devotionals.
 
     Permissions:
         - GET: Any user can view devotional
@@ -61,10 +68,17 @@ class DevotionalsByFastView(generics.ListAPIView):
     """
     serializer_class = DevotionalSerializer
     permission_classes = [permissions.AllowAny]
-
+    pagination_class = LargeResultsSetPagination
+    
     def get_queryset(self):
         fast = Fast.objects.get(id=self.kwargs['fast_id'])
-        return Devotional.objects.filter(day__fast=fast)[:45]  # Limit to 45 devotionals
+        return Devotional.objects.filter(day__fast=fast)
+        
+    def get_paginated_response(self, data):
+        """
+        Override to ensure we return the expected pagination structure even if there's only one page.
+        """
+        return super().get_paginated_response(data)
 
 
 class DevotionalDetailView(generics.RetrieveAPIView):
