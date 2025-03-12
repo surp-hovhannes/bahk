@@ -51,7 +51,8 @@
             "addons": [
                 "heroku-postgresql:essential-0",
                 "heroku-redis:mini",
-                "mailgun:starter"
+                "mailgun:starter",
+                "heroku-postgresql:in-dyno"
             ],
             "scripts": {
                 "test-setup": "python manage.py migrate",
