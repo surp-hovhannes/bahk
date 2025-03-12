@@ -39,7 +39,7 @@
                 "DEBUG": "True"
             },
             "scripts": {
-                "postdeploy": "python manage.py migrate && python manage.py seed"
+                "postdeploy": "python manage.py migrate && python manage.py createsuperuser --noinput --username admin --email admin@email.com && python manage.py seed"
             }
         },
         "test": {
@@ -51,11 +51,12 @@
             "addons": [
                 "heroku-postgresql:essential-0",
                 "heroku-redis:mini",
-                "mailgun:starter"
+                "mailgun:starter",
+                "heroku-postgresql:in-dyno"
             ],
             "scripts": {
                 "test-setup": "python manage.py migrate",
-                "test": "true"
+                "test": "python manage.py test --keepdb"
             }
         }
     }
