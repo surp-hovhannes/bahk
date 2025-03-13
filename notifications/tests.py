@@ -102,6 +102,42 @@ class DeviceTokenTests(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(DeviceToken.objects.count(), 0)
+    
+    def test_user_with_multiple_device_tokens(self):
+        """Test that a user can have multiple device tokens (multiple devices)"""
+        # Create first device token
+        first_token_data = self.valid_token_data.copy()
+        first_token_data['token'] = 'ExponentPushToken[device1xxxxxxxxxxx]'
+        first_token_data['device_type'] = 'ios'
+        
+        # Create second device token with different token value
+        second_token_data = self.valid_token_data.copy()
+        second_token_data['token'] = 'ExponentPushToken[device2xxxxxxxxxxx]'
+        second_token_data['device_type'] = 'android'
+        
+        # Register first device
+        response1 = self.client.post(
+            self.create_token_url,
+            first_token_data,
+            format='json'
+        )
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        
+        # Register second device
+        response2 = self.client.post(
+            self.create_token_url,
+            second_token_data,
+            format='json'
+        )
+        self.assertEqual(response2.status_code, status.HTTP_201_CREATED)
+        
+        # Verify the user has two device tokens
+        user_tokens = DeviceToken.objects.filter(user=self.user)
+        self.assertEqual(user_tokens.count(), 2)
+        
+        # Verify both tokens exist with their correct device types
+        self.assertTrue(user_tokens.filter(token=first_token_data['token'], device_type='ios').exists())
+        self.assertTrue(user_tokens.filter(token=second_token_data['token'], device_type='android').exists())
 
 
 class TestPushNotificationTests(APITestCase):
