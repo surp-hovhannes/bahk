@@ -112,6 +112,17 @@ class Fast(models.Model):
             self.year = self.days.first().date.year
             super().save(update_fields=["year"])
 
+        # Invalidate the cache for this church's fast list
+        from hub.views.fast import FastListView
+        FastListView().invalidate_cache(self.church_id)
+
+    def delete(self, *args, **kwargs):
+        church_id = self.church_id
+        super().delete(*args, **kwargs)
+        # Invalidate the cache after deletion
+        from hub.views.fast import FastListView
+        FastListView().invalidate_cache(church_id)
+
     class Meta:
         constraints = [
             constraints.UniqueConstraint(fields=["name", "church", "year"], name="unique_name_church_year"),

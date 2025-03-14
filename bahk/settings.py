@@ -211,9 +211,10 @@ AUTHENTICATION_BACKENDS = ["hub.auth.EmailBackend"]
 # Redirect to home URL after login (Default redirects to /accounts/profile/)
 LOGIN_REDIRECT_URL = '/hub/web/'
 
-# Activate Django-Heroku.
-import django_heroku
-django_heroku.settings(locals())
+if not config('CI', default=False, cast=bool):
+    # Activate Django-Heroku.
+    import django_heroku
+    django_heroku.settings(locals())
 
 # File Upload Settings
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB - Django default

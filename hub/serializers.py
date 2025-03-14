@@ -18,6 +18,7 @@ from django.utils.encoding import force_str
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.conf import settings
+from django.utils.functional import cached_property
 
 from hub import models
 from learning_resources.serializers import VideoSerializer
@@ -182,27 +183,26 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     modal_id = serializers.ReadOnlyField()
     thumbnail = serializers.SerializerMethodField()
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cache the current date to avoid recalculating it in multiple methods
+        self.current_date = timezone.localdate(timezone=self.context.get('tz'))
+
     def get_church(self, obj):
         return ChurchSerializer(obj.church, context=self.context).data if obj.church else None
 
     def get_joined(self, obj):
-        # Check if 'request' is present in the context
-        request = self.context.get('request')
-        
-        # If there's no request or the user is not authenticated, return False
-        if request is None or not request.user.is_authenticated:
-            return False
-        
-        # If the user is authenticated, check if they have joined the fast
-        return request.user.profile.fasts.filter(id=obj.id).exists()
+        """Use cached fast IDs to check if user has joined"""
+        return obj.id in self._user_fast_ids
 
     def get_participant_count(self, obj):
-        return obj.profiles.count()
+        """Use annotated count if available"""
+        return getattr(obj, 'participant_count', obj.profiles.count())
     
     def get_countdown(self, obj):
-        current_date = timezone.localdate(timezone=self.context.get('tz'))
+        """Use cached current_date"""
         if obj.culmination_feast and obj.culmination_feast_date:
-            days_to_feast = (obj.culmination_feast_date - current_date).days
+            days_to_feast = (obj.culmination_feast_date - self.current_date).days
             if days_to_feast < 0:
                 return f"{obj.culmination_feast} has passed"
             return f"<span class='days_to_finish'>{days_to_feast}</span> day{'' if days_to_feast == 1 else 's'} until {obj.culmination_feast}"
@@ -212,57 +212,60 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             return f"No days available for {obj.name}"
         
         finish_date = max(days)
-        days_to_finish = (finish_date - current_date).days + 1  # + 1 to get days until first day *after* fast
+        days_to_finish = (finish_date - self.current_date).days + 1  # + 1 to get days until first day *after* fast
         if days_to_finish < 0:
             return f"{obj.name} has passed"
         return f"<span class='days_to_finish'>{days_to_finish}</span> day{'' if days_to_finish == 1 else 's'} until the end of {obj.name}"
     
     def get_days_to_feast(self, obj):
-        current_date = timezone.localdate(timezone=self.context.get('tz'))
+        """Use cached current_date"""
         if obj.culmination_feast and obj.culmination_feast_date:
-            days_to_feast = (obj.culmination_feast_date - current_date).days
+            days_to_feast = (obj.culmination_feast_date - self.current_date).days
             if days_to_feast < 0:
                 return None
             return days_to_feast
         return None
 
     def get_start_date(self, obj):
-        if obj.days.count() == 0:
-            return None
-        return obj.days.order_by('date').first().date
+        """Use annotated value if available"""
+        return getattr(obj, 'start_date', 
+                     obj.days.order_by('date').first().date if obj.days.exists() else None)
     
     def get_end_date(self, obj):
-        if obj.days.count() == 0:
-            return None
-        return obj.days.order_by('date').last().date
+        """Use annotated value if available"""
+        return getattr(obj, 'end_date',
+                     obj.days.order_by('date').last().date if obj.days.exists() else None)
     
     def get_has_passed(self, obj):
-        current_date = timezone.localdate(timezone=self.context.get('tz'))
-        if obj.days.count() == 0:
+        """Use cached current_date and optimize end_date check"""
+        end_date = self.get_end_date(obj)
+        if end_date is None:
             return False
-        return self.get_end_date(obj) < current_date
+        return end_date < self.current_date
     
     def get_next_fast_date(self, obj):
-        current_date = timezone.localdate(timezone=self.context.get('tz'))
+        """Use cached current_date"""
         if obj.days.count() == 0:
             return None
-        next_day = obj.days.filter(date__gte=current_date).order_by('date').first()
+        next_day = obj.days.filter(date__gte=self.current_date).order_by('date').first()
         if next_day is not None:
             return next_day.date
         return None
     
     def get_total_number_of_days(self, obj):
-        return obj.days.count()
+        """Use annotated value if available"""
+        return getattr(obj, 'total_days', obj.days.count())
     
     def get_current_day_number(self, obj):
+        """Use annotated value if available"""
         try:
-            current_date = timezone.localdate(timezone=self.context.get('tz'))
+            # Use the annotation if available
+            if hasattr(obj, 'current_day_count'):
+                return obj.current_day_count
             
-            # Get the days for the fast that are less than or equal to the current date
-            days = obj.days.filter(date__lte=current_date).order_by('date')
-            
+            # Otherwise compute it
+            days = obj.days.filter(date__lte=self.current_date).order_by('date')
             if days.exists():
-                # Count the number of days from the first day until the current date
                 return days.count()
             else:
                 return None
@@ -295,14 +298,16 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
                  'total_number_of_days', 'current_day_number', 'modal_id']
         
     def to_representation(self, instance):
-        """Optimize the serialization by using select_related and prefetch_related"""
-        # Ensure church is pre-fetched
-        if not hasattr(instance, '_prefetched_objects_cache'):
-            instance = models.Fast.objects.select_related('church').prefetch_related(
-                'days', 'profiles'
-            ).get(id=instance.id)
-        
+        """Use prefetched data without making additional queries"""
         return super().to_representation(instance)
+
+    @cached_property
+    def _user_fast_ids(self):
+        """Cache the list of fast IDs the user has joined"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return set()
+        return set(request.user.profile.fasts.values_list('id', flat=True))
 
 class JoinFastSerializer(serializers.ModelSerializer):
     fast_id = serializers.IntegerField(write_only=True)

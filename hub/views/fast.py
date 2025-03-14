@@ -16,11 +16,12 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Min, Max, Sum
 from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache
 from functools import wraps
 from hub.tasks import generate_participant_map
+
 
 CACHE_TTL = getattr(settings, 'CACHE_MIDDLEWARE_SECONDS', 60 * 15)  # 15 minutes default
 
@@ -28,8 +29,6 @@ def get_cache_key(prefix, *args):
     """Generate a cache key with the given prefix and arguments."""
     return f"bahk:{prefix}:{'_'.join(force_str(arg) for arg in args)}"
 
-@method_decorator(cache_page(CACHE_TTL), name='dispatch')
-@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
     API view to list all fasts for a specific church within a configurable date range.
@@ -61,6 +60,34 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     pagination_class = None
 
+    def get_church_participant_count(self, church_id):
+        """Get the total number of participants across all fasts for this church."""
+        count_key = f'church_{church_id}_participant_count'
+        count = cache.get(count_key)
+        
+        if count is None:
+            # Calculate the sum of participants across all fasts for this church
+            count = Fast.objects.filter(
+                church_id=church_id
+            ).annotate(
+                participant_count=Count('profiles', distinct=True)
+            ).aggregate(
+                total=Sum('participant_count')
+            )['total'] or 0
+            
+            # Cache this count for 10 minutes
+            cache.set(count_key, count, timeout=600)
+            
+        return count
+
+    def get_cache_key(self, church_id, start_date, end_date, tz):
+        """Generate a cache key that includes the participant count."""
+        # Get current participant count
+        participant_count = self.get_church_participant_count(church_id)
+        
+        # Include the count in the cache key
+        return f'fast_list_qs:{church_id}:{start_date}:{end_date}:{tz}:{participant_count}'
+
     def get_queryset(self):
         church = self.get_church()
         tz = self.get_timezone()
@@ -70,6 +97,7 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
         default_start = today - datetime.timedelta(days=180)
         default_end = today + datetime.timedelta(days=180)
 
+        # Parse date strings properly
         start_date = default_start
         end_date = default_end
 
@@ -88,8 +116,31 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             except ValueError:
                 pass
 
-        # Optimize queryset with select_related and prefetch_related
-        return Fast.objects.filter(
+        # Generate cache key
+        cache_key = self.get_cache_key(
+            church.id,
+            start_date.isoformat(),
+            end_date.isoformat(),
+            str(tz)
+        )
+
+        # Try to get from cache
+        cached_queryset = cache.get(cache_key)
+        if cached_queryset is not None:
+            return cached_queryset
+
+        # If not in cache, generate queryset
+        queryset = Fast.objects.annotate(
+            participant_count=Count('profiles', distinct=True),
+            total_days=Count('days', distinct=True),
+            start_date=Min('days__date'),
+            end_date=Max('days__date'),
+            current_day_count=Count(
+                'days',
+                filter=Q(days__date__lte=today),
+                distinct=True
+            )
+        ).filter(
             church=church,
             days__date__gte=start_date,
             days__date__lte=end_date
@@ -99,6 +150,21 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             'days',
             'profiles'
         ).distinct()
+
+        # Cache the queryset for 10 minutes
+        cache.set(cache_key, queryset, timeout=600)  # 10 minutes
+        return queryset
+
+    def invalidate_cache(self, church_id):
+        """Invalidate all cached lists for a given church."""
+        # Invalidate the participant count cache
+        cache.delete(f'church_{church_id}_participant_count')
+        
+        # Then find and delete any queryset caches
+        pattern = f'fast_list_qs:{church_id}:*'
+        keys = cache.keys(pattern)
+        if keys:
+            cache.delete_many(keys)
 
 
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
@@ -218,7 +284,17 @@ class FastByDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             target_date = timezone.localdate(timezone=tz)
 
         # Optimize queryset with select_related and prefetch_related
-        queryset = Fast.objects.filter(
+        queryset = Fast.objects.annotate(
+            participant_count=Count('profiles', distinct=True),
+            total_days=Count('days', distinct=True),
+            start_date=Min('days__date'),
+            end_date=Max('days__date'),
+            current_day_count=Count(
+                'days',
+                filter=Q(days__date__lte=target_date),
+                distinct=True
+            )
+        ).filter(
             church=church,
             days__date=target_date
         ).select_related(
@@ -316,27 +392,30 @@ class LeaveFastView(generics.UpdateAPIView):
         return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
 
 
-# Function to vary cache based on query parameters
 def vary_on_query_params(*params):
     """
     Decorator that varies the cache based on specific query parameters.
     This ensures different cache entries for different parameter values.
     """
-    def decorator(func):
-        @wraps(func)
-        def inner(self, request, *args, **kwargs):
-            query_params = []
-            for param in params:
-                value = request.query_params.get(param)
-                if value:
-                    query_params.append(f"{param}={value}")
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(self, request, *args, **kwargs):
+            # Extract query params and add them to QUERY_STRING 
+            # for cache middleware to use in cache key
+            if request and hasattr(request, 'query_params'):
+                query_params = []
+                for param in params:
+                    value = request.query_params.get(param)
+                    if value:
+                        query_params.append(f"{param}={value}")
+                
+                # Create a custom query string for the cache key
+                query_string = "&".join(query_params)
+                request.META['QUERY_STRING'] = query_string
             
-            # Create a custom query string for the cache key
-            query_string = "&".join(query_params)
-            request.META['QUERY_STRING'] = query_string
-            
-            return func(self, request, *args, **kwargs)
-        return inner
+            # Make sure to pass all arguments through correctly
+            return view_func(self, request, *args, **kwargs)
+        return _wrapped_view
     return decorator
 
 
@@ -363,10 +442,14 @@ class FastParticipantsView(views.APIView):
     @method_decorator(vary_on_headers('Authorization'))
     @vary_on_query_params('limit') 
     def get(self, request, fast_id):
-        current_fast = Fast.objects.filter(id=fast_id).first()
-
-        if not current_fast:
-            return response.Response({"detail": "Fast not found."}, status=404)
+        # Try to get fast from cache first
+        cache_key = get_cache_key('fast_participants_simple_view', fast_id)
+        fast = cache.get(cache_key)
+        
+        if not fast:
+            # If not in cache, get from database and cache it
+            fast = get_object_or_404(Fast, id=fast_id)
+            cache.set(cache_key, fast, CACHE_TTL)
 
         limit = request.query_params.get('limit', NUMBER_PARTICIPANTS_TO_SHOW_WEB)
         try:
@@ -374,8 +457,16 @@ class FastParticipantsView(views.APIView):
         except (ValueError, TypeError):
             limit = NUMBER_PARTICIPANTS_TO_SHOW_WEB
 
-        other_participants = current_fast.profiles.all()[:limit]            
-        serialized_participants = ParticipantSerializer(other_participants, many=True, context={'request': request})
+        # Optimized query with select_related and prefetch_related
+        other_participants = fast.profiles.select_related(
+            'user'  # For email/username
+        ).order_by('user__date_joined')[:limit]
+            
+        serialized_participants = ParticipantSerializer(
+            other_participants, 
+            many=True, 
+            context={'request': request}
+        )
         return response.Response(serialized_participants.data)
 
 
@@ -412,24 +503,55 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
     pagination_class = LimitOffsetPagination
     
     def get_queryset(self):
+        """
+        Optimized queryset that:
+        1. Uses get_object_or_404 for cleaner 404 handling
+        2. Prefetches related fields needed by serializer
+        3. Orders results consistently
+        4. Caches the fast lookup
+        """
         fast_id = self.kwargs.get('fast_id')
-        current_fast = Fast.objects.filter(id=fast_id).first()
         
-        if not current_fast:
-            return []
-            
-        return current_fast.profiles.all()
+        # Try to get fast from cache first
+        cache_key = get_cache_key('fast_participants_view', fast_id)
+        fast = cache.get(cache_key)
         
-    def list(self, request, *args, **kwargs):
-        # Check if the fast exists first
+        if not fast:
+            # If not in cache, get from database and cache it
+            fast = get_object_or_404(Fast, id=fast_id)
+            cache.set(cache_key, fast, CACHE_TTL)
+        
+        return fast.profiles.select_related(
+            'user'  # For email/username
+        ).order_by('user__date_joined')  # Consistent ordering
+    
+    def get_serializer_context(self):
+        """Add request to serializer context for thumbnail URL generation"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def paginate_queryset(self, queryset):
+        """Override to add count caching for pagination performance"""
         fast_id = self.kwargs.get('fast_id')
-        current_fast = Fast.objects.filter(id=fast_id).first()
+        count_cache_key = get_cache_key('fast_participants_count', fast_id)
         
-        if not current_fast:
-            return response.Response({"detail": "Fast not found."}, status=404)
+        # Check if we have a cached count
+        cached_count = cache.get(count_cache_key)
+        
+        if cached_count is not None and hasattr(self.paginator, 'count'):
+            # If count is cached, use it directly to avoid COUNT(*) query
+            self.paginator.count = cached_count
+            return super().paginate_queryset(queryset)
+        
+        # Get paginated results normally (will perform COUNT(*))
+        result = super().paginate_queryset(queryset)
+        
+        # Cache the count for future requests if it was calculated
+        if hasattr(self.paginator, 'count'):
+            cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
             
-        # Continue with standard list behavior if fast exists
-        return super().list(request, *args, **kwargs)
+        return result
 
 
 class FastStatsView(views.APIView):

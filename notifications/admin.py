@@ -2,10 +2,58 @@ from django.contrib import admin
 from django.contrib import messages
 from django.template.response import TemplateResponse
 from django.urls import path
+from django.shortcuts import redirect
 from .models import DeviceToken
 from .utils import send_push_notification
+from .tasks import send_push_notification_task
+from django.contrib.admin import SimpleListFilter
+from hub.models import Fast
+from django.utils import timezone
+from django.db.models import Q
 
-# Register your models here.
+
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class UserWithNoFastsFilter(SimpleListFilter):
+    title = 'User Fast Status'  # Display name in admin
+    parameter_name = 'user_fast_status'  # URL parameter
+
+    def lookups(self, request, model_admin):
+        return (
+            ('no_fasts', 'Users with no fasts'),
+            ('has_fasts', 'Users with fasts'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'no_fasts':
+            return queryset.filter(user__profile__fasts__isnull=True).distinct()
+        if self.value() == 'has_fasts':
+            return queryset.filter(user__profile__fasts__isnull=False).distinct()
+        return queryset
+
+
+class UserFastFilter(SimpleListFilter):
+    title = 'Joined Fast'
+    parameter_name = 'joined_fast'
+
+    def lookups(self, request, model_admin):
+        # Get fasts that have future days
+        today = timezone.now().date()
+        fasts = Fast.objects.filter(
+            days__date__gte=today
+        ).distinct().order_by('name')
+        
+        return [(fast.id, f"{fast.name} ({fast.year})") for fast in fasts]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(user__profile__fasts__id=self.value()).distinct()
+        return queryset
+
 
 @admin.register(DeviceToken)
 class DeviceTokenAdmin(admin.ModelAdmin):
@@ -13,7 +61,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
     search_fields = ('token', 'user__email')
     ordering = ('-created_at',)
     actions = ['send_push_notification', 'send_test_notification']
-    list_filter = ('is_active', 'created_at', 'last_used')
+    list_filter = (UserWithNoFastsFilter, UserFastFilter, 'is_active', 'created_at', 'last_used')
 
     def get_urls(self):
         urls = super().get_urls()
@@ -44,7 +92,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
 
         if request.method == 'POST':
             message = request.POST.get('message')
-            data = request.POST.get('data', '{}')
+            data_str = request.POST.get('data', '{}')
             selected_ids = request.session.get('selected_tokens', [])
             
             if not message:
@@ -56,10 +104,21 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                 )
 
             try:
+                data = json.loads(data_str) if data_str else None
+            except json.JSONDecodeError:
+                messages.error(request, 'Invalid JSON data format')
+                return TemplateResponse(
+                    request,
+                    'admin/notifications/devicetoken/send_push.html',
+                    context
+                )
+
+            try:
+                # Get the users associated with the selected tokens
                 tokens = DeviceToken.objects.filter(
                     id__in=selected_ids,
                     is_active=True
-                ).values_list('token', flat=True)
+                )
                 
                 if not tokens:
                     messages.error(request, 'No active tokens selected')
@@ -69,28 +128,44 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                         context
                     )
 
+                users = list(tokens.values_list('user', flat=True).distinct())
+                
                 result = send_push_notification(
                     message=message,
-                    data=eval(data) if data else None,
-                    tokens=list(tokens)
+                    data=data,
+                    users=users
                 )
 
-                if result:
+                if result['success']:
                     messages.success(
                         request,
-                        f'Successfully sent push notification to {len(tokens)} devices'
+                        f"Successfully sent notifications to {result['sent']} devices. Failed: {result['failed']}"
                     )
+                    if result['invalid_tokens']:
+                        messages.warning(
+                            request,
+                            f'{len(result["invalid_tokens"])} devices were deactivated due to invalid tokens'
+                        )
                 else:
-                    messages.error(request, 'Failed to send push notification')
+                    error_msg = 'Failed to send push notification'
+                    if result['errors']:
+                        error_msg += f': {", ".join(result["errors"])}'
+                    messages.error(request, error_msg)
+
+                # Clear session
+                if 'selected_tokens' in request.session:
+                    del request.session['selected_tokens']
+
+                return redirect('admin:notifications_devicetoken_changelist')
 
             except Exception as e:
+                logger.exception('Error in send_push_view')
                 messages.error(request, f'Error sending push notification: {str(e)}')
-
-            # Clear session
-            if 'selected_tokens' in request.session:
-                del request.session['selected_tokens']
-
-            return self.response_post_save_change(request, None)
+                return TemplateResponse(
+                    request,
+                    'admin/notifications/devicetoken/send_push.html',
+                    context
+                )
 
         return TemplateResponse(
             request,
@@ -99,14 +174,11 @@ class DeviceTokenAdmin(admin.ModelAdmin):
         )
 
     def send_test_notification(self, request, queryset):
-        tokens = list(queryset.values_list('token', flat=True))
+        users = list(queryset.values_list('user', flat=True).distinct())
         result = send_push_notification(
             message="Test notification from admin",
-            tokens=tokens
+            users=users
         )
-        
-        # Log the result
-        print(f"Push notification result: {result}")  # Debug logging
         
         if result['success']:
             messages.success(
