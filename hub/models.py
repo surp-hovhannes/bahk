@@ -14,6 +14,7 @@ from imagekit.processors import Transpose
 from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL, DAYS_TO_CACHE_THUMBNAIL
 import bahk.settings as settings
 from learning_resources.models import Video
+from hub.services.aws_geocoding import get_coordinates
 
 
 class Church(models.Model):
@@ -146,7 +147,10 @@ class Profile(models.Model):
                             help_text="Name (first, last, whatever you want to be known as)")
     church = models.ForeignKey(Church, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles")
     fasts = models.ManyToManyField(Fast, related_name="profiles")
-    location = models.CharField(max_length=100, blank=True, null=True) 
+    location = models.CharField(max_length=100, blank=True, null=True)
+    # Store geocoded coordinates for performance
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     profile_image = models.ImageField(upload_to='profile_images/originals/', null=True, blank=True)
     profile_image_thumbnail = ImageSpecField(source='profile_image',
                                              processors=[Transpose(), ResizeToFill(100, 100)],
@@ -162,8 +166,30 @@ class Profile(models.Model):
     include_weekly_fasts_in_notifications = models.BooleanField(default=False)
 
     # Track changes to the profile_image field
-    tracker = FieldTracker(fields=['profile_image'])
-
+    tracker = FieldTracker(fields=['profile_image', 'location'])
+    
+    def geocode_location(self):
+        """
+        Geocode the location and store coordinates.
+        
+        Called when location is updated to maintain latitude/longitude.
+        Uses AWS Location Service with fallback to cached locations.
+        
+        Note: This is now a simple wrapper that schedules an asynchronous task
+        to avoid blocking the user interface during geocoding.
+        """
+        from hub.tasks import geocode_profile_location
+        
+        if not self.location:
+            self.latitude = None
+            self.longitude = None
+            return
+            
+        # Schedule the geocoding task asynchronously
+        # Only do this if the profile has been saved (has an ID)
+        if self.id is not None:
+            geocode_profile_location.delay(self.id, self.location)
+    
     def save(self, **kwargs):
         # First check if this is a new instance or if the profile image field has changed
         is_new_image = (
@@ -171,6 +197,15 @@ class Profile(models.Model):
             'profile_image' in kwargs.get('update_fields', []) or
             (not self._state.adding and self.tracker.has_changed('profile_image'))
         )
+        
+        # Check if location has changed
+        location_changed = (
+            self._state.adding or
+            'location' in kwargs.get('update_fields', []) or
+            self.tracker.has_changed('location')
+        )
+        
+        # Call the parent save method
         super().save(**kwargs)
         
         # Handle thumbnail URL caching after the instance and image are fully saved to S3
@@ -205,6 +240,10 @@ class Profile(models.Model):
                 self.cached_thumbnail_url = None
                 self.cached_thumbnail_updated = None
                 super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+        
+        # If location changed, trigger async geocoding
+        if location_changed and self.location:
+            self.geocode_location()
 
     def __str__(self):
         return self.user.email
@@ -305,3 +344,42 @@ class Reading(models.Model):
             if self.start_chapter != self.end_chapter:
                 s += f" - Chapter {self.end_chapter}, Verse {self.end_verse}"
         return s
+    
+class FastParticipantMap(models.Model):
+    """Stores metadata about the generated participant maps."""
+    fast = models.ForeignKey(Fast, on_delete=models.CASCADE, related_name="participant_maps")
+    map_file = models.FileField(upload_to='fast_maps/', null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    participant_count = models.IntegerField(default=0)
+    format = models.CharField(max_length=10, default='svg')  # 'png' or 'svg'
+    
+    @property
+    def map_url(self):
+        """Return the URL to the map file."""
+        if self.map_file:
+            return self.map_file.url
+        return None
+        
+    def __str__(self):
+        return f"Map for {self.fast} ({self.last_updated.strftime('%Y-%m-%d %H:%M')})"
+
+
+class GeocodingCache(models.Model):
+    """
+    Cache for geocoded locations to avoid repeated API calls.
+    
+    This stores the mapping between location text and coordinates,
+    significantly reducing the need for external geocoding API calls.
+    """
+    location_text = models.CharField(max_length=255, unique=True, db_index=True)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    last_updated = models.DateTimeField(auto_now=True)
+    error_count = models.IntegerField(default=0)
+    
+    class Meta:
+        verbose_name = 'Geocoding Cache'
+        verbose_name_plural = 'Geocoding Cache'
+    
+    def __str__(self):
+        return f"{self.location_text} ({self.latitude}, {self.longitude})"

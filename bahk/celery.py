@@ -27,6 +27,10 @@ app.conf.beat_schedule = {
         'task': 'hub.tasks.send_fast_notifications',
         'schedule': crontab(hour=0, minute=0),
     },
+    'update-current-fast-maps-every-hour': {
+        'task': 'hub.tasks.update_current_fast_maps',
+        'schedule': 60 * 60,  # Every hour
+    },
 }
 
 @app.task(bind=True, ignore_result=True)

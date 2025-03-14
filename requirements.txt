@@ -1,3 +1,4 @@
+# Django and extensions
 django==4.2.11
 djangorestframework==3.14.0
 pytest==8.1.1
@@ -27,3 +28,9 @@ exponent_server_sdk
 django-redis==5.4.0
 hiredis==2.3.2
 newrelic
+# Map generation packages
+matplotlib==3.10.1
+shapely==2.0.7
+geopandas==1.0.1
+folium==0.14.0    # Alternative for interactive maps using leaflet.js
+scikit-learn==1.5.0    # For DBSCAN clustering
