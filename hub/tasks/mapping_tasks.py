@@ -203,7 +203,7 @@ def generate_participant_map_svg(participant_locations, output_path,
                         us = world[world.apply(lambda row: any('United States' in str(val) for val in row if isinstance(val, str)), axis=1)]
                 
                 if not us.empty:
-                    us.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
+                    us.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.8, alpha=0.8)
                     
                     # Set US-specific boundaries (contiguous US)
                     ax.set_xlim(us_bounds['min_lon'] - 1, us_bounds['max_lon'] + 1)
@@ -211,11 +211,11 @@ def generate_participant_map_svg(participant_locations, output_path,
                 else:
                     # Fallback to world map if US not found
                     logger.warning("Could not find US in world map data, falling back to world map")
-                    world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
+                    world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.8, alpha=0.8)
                     ax.set_ylim(-60, 85)  # Exclude polar regions
             else:
                 # Plot the world map with filled interior and boundary
-                world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
+                world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.8, alpha=0.8)
                 
                 # Set map boundaries to exclude Arctic and Antarctic regions
                 ax.set_ylim(-60, 85)  # Latitude range from -60° (excludes Antarctica) to 85° (excludes North Pole)
@@ -223,7 +223,7 @@ def generate_participant_map_svg(participant_locations, output_path,
             # Remove axes, background color, and simplify
             ax.set_axis_off()
             plt.tight_layout()
-            fig.patch.set_facecolor('#390714')
+            fig.patch.set_facecolor('none')
             
             # Plot individual points (those not in clusters, with label -1)
             if len(valid_locations) > 0:
@@ -231,15 +231,15 @@ def generate_participant_map_svg(participant_locations, output_path,
                 if len(non_clustered) > 0:
                     # Use red color for individual points to match cluster centers
                     # Increase markersize from 5 to 8 for better visibility
-                    non_clustered.plot(ax=ax, color='red', markersize=20, alpha=0.6)
+                    non_clustered.plot(ax=ax, color='red', markersize=35, alpha=0.6)
             
             # Plot cluster centers with size reflecting the number of points
             if len(valid_locations) >= min_cluster_size and 'cluster_gdf' in locals():
                 # Scale markers based on cluster size
                 # Increase minimum size from 10 to 15
-                min_size = 35
+                min_size = 45
                 # Increase maximum size from 100 to 120
-                max_size = 120
+                max_size = 150
                 if len(cluster_centers) > 0:
                     # Scale marker sizes based on the number of participants
                     sizes = cluster_gdf['size'].values
@@ -265,14 +265,14 @@ def generate_participant_map_svg(participant_locations, output_path,
             fig, ax = plt.subplots(figsize=(map_width, map_height), dpi=dpi)
             
             # Plot the world map
-            world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.5, alpha=0.8)
+            world.plot(ax=ax, facecolor='#771831', edgecolor='#771831', linewidth=0.8, alpha=0.8)
             
             # Set map boundaries to exclude Arctic and Antarctic regions
             ax.set_ylim(-60, 85)  # Exclude polar regions
             
             ax.set_axis_off()
             plt.tight_layout()
-            fig.patch.set_facecolor('#390714')
+            fig.patch.set_facecolor('none')
             plt.savefig(output_path, format='svg', bbox_inches='tight', pad_inches=0.1)
             plt.close(fig)
             
