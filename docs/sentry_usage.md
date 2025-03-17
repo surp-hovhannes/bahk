@@ -12,6 +12,7 @@ Sentry is configured in `bahk/settings.py`. The integration includes:
 4. Integration with Redis for cache operations
 5. User context association for better debugging
 6. Heroku-specific dyno tracking
+7. Celery Crons monitoring
 
 ## Environment Variables
 
@@ -31,6 +32,23 @@ When running on Heroku, the following additional information is automatically ca
 - `heroku_app`: The Heroku application name if available
 
 These tags allow you to filter Sentry issues by dyno and determine if errors are specific to certain dyno types or instances.
+
+## Celery Crons Monitoring
+
+Sentry is configured to monitor our scheduled Celery tasks using Sentry's Crons feature. This provides:
+
+1. **Uptime Monitoring**: Alerts when scheduled tasks don't run when expected
+2. **Failure Detection**: Notifications when tasks fail or exceed time limits
+3. **Performance Tracking**: Monitoring of task duration and resource usage
+
+Key scheduled tasks being monitored:
+
+- `daily-fast-notifications`: Daily task that sends reminders about fasts
+- `hourly-fast-map-updates`: Hourly task that updates participant maps
+
+Crons are configured in two places:
+- `bahk/celery.py`: Sets up the Sentry monitoring for Celery beat tasks
+- Individual task functions: Use `@sentry_sdk.monitor` decorators for more detailed monitoring
 
 ## How to Use Sentry in Your Code
 
@@ -84,6 +102,17 @@ with sentry_sdk.start_transaction(op="task", name="Process Payment"):
     with sentry_sdk.start_span(op="http.request", description="Payment gateway call"):
         # API call to payment processor
         process_payment()
+```
+
+### Monitoring Scheduled Tasks
+
+```python
+@shared_task
+@sentry_sdk.monitor(monitor_slug='your-monitor-slug')
+def your_scheduled_task():
+    """Your task description"""
+    # Task code here
+    pass
 ```
 
 ## Real World Example

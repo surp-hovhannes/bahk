@@ -13,6 +13,7 @@ from django.utils import timezone
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from hub.models import FastParticipantMap, Fast, Profile
+import sentry_sdk
 
 # Configure matplotlib for non-interactive server environment
 import matplotlib
@@ -450,6 +451,7 @@ def generate_participant_map(self, fast_id, delay=0):
 
 
 @shared_task(name='hub.tasks.update_current_fast_maps')
+@sentry_sdk.monitor(monitor_slug='hourly-fast-map-updates')
 def update_current_fast_maps():
     """
     Update maps for current and upcoming fasts only.
@@ -458,6 +460,12 @@ def update_current_fast_maps():
     try:
         today = timezone.now().date()
         
+        # Add context for Sentry
+        sentry_sdk.set_context("map_update", {
+            "date": str(today),
+            "type": "scheduled_hourly"
+        })
+        
         # Find current and upcoming fasts by checking if they have any days today or in the future
         current_fasts = Fast.objects.filter(
             days__date__gte=today
@@ -465,13 +473,26 @@ def update_current_fast_maps():
         
         count = 0
         for fast in current_fasts:
+            # Add breadcrumb for each fast being processed
+            sentry_sdk.add_breadcrumb(
+                category="task",
+                message=f"Scheduling map generation for fast {fast.id}: {fast.name}",
+                level="info"
+            )
+            
             # Generate map for each current/upcoming fast
             generate_participant_map.delay(fast.id)
             count += 1
             
         logging.info(f"Scheduled map generation for {count} current/upcoming fasts")
+        
+        # Set metrics for Sentry
+        sentry_sdk.set_measurement("fasts_processed", count)
+        
         return count
     except Exception as e:
+        # Capture the exception with additional context
+        sentry_sdk.capture_exception(e)
         logging.error(f"Error updating current fast maps: {str(e)}")
         return 0
 

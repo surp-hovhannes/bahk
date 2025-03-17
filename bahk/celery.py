@@ -3,6 +3,10 @@ import os
 from celery import Celery
 from celery.schedules import crontab
 from ssl import CERT_NONE
+from celery.signals import celeryd_init, beat_init
+import sentry_sdk
+from sentry_sdk.integrations.celery import CeleryIntegration
+from decouple import config
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bahk.settings')
 
@@ -21,17 +25,63 @@ app.conf.broker_url = broker_url
 # Discover tasks automatically
 app.autodiscover_tasks()
 
-# Configure scheduled tasks
+# Configure scheduled tasks with Sentry Cron monitoring
 app.conf.beat_schedule = {
     'send-fast-notifications-every-day': {
-        'task': 'hub.tasks.send_fast_notifications',
+        'task': 'hub.tasks.send_fast_reminder_task',
         'schedule': crontab(hour=0, minute=0),
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-fast-notifications',
+            }
+        }
     },
     'update-current-fast-maps-every-hour': {
         'task': 'hub.tasks.update_current_fast_maps',
         'schedule': 60 * 60,  # Every hour
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'hourly-fast-map-updates',
+            }
+        }
     },
 }
+
+# Initialize Sentry for Celery worker processes
+@celeryd_init.connect
+def init_sentry_worker(**kwargs):
+    """Initialize Sentry for Celery worker processes."""
+    sentry_sdk.init(
+        dsn=config('SENTRY_DSN', default=os.environ.get("SENTRY_DSN", "")),
+        integrations=[
+            CeleryIntegration(
+                monitor_beat_tasks=True  # Enable Celery beat task monitoring for Sentry Crons
+            ),
+        ],
+        environment=config('SENTRY_ENVIRONMENT', default=os.environ.get("SENTRY_ENVIRONMENT", "development")),
+        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@1.0.0")),
+        traces_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
+    )
+    sentry_sdk.set_tag("process_type", "celery_worker")
+
+# Initialize Sentry for Celery beat process
+@beat_init.connect
+def init_sentry_beat(**kwargs):
+    """Initialize Sentry for Celery beat process."""
+    sentry_sdk.init(
+        dsn=config('SENTRY_DSN', default=os.environ.get("SENTRY_DSN", "")),
+        integrations=[
+            CeleryIntegration(
+                monitor_beat_tasks=True  # Enable Celery beat task monitoring for Sentry Crons
+            ),
+        ],
+        environment=config('SENTRY_ENVIRONMENT', default=os.environ.get("SENTRY_ENVIRONMENT", "development")),
+        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@1.0.0")),
+        traces_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
+    )
+    sentry_sdk.set_tag("process_type", "celery_beat")
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):

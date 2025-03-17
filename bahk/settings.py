@@ -33,7 +33,9 @@ sentry_sdk.init(
     dsn=config('SENTRY_DSN', default=os.environ.get("SENTRY_DSN", "")),  # Try both config and environ
     integrations=[
         DjangoIntegration(),
-        CeleryIntegration(),
+        CeleryIntegration(
+            monitor_beat_tasks=True  # Enable Celery beat task monitoring for Sentry Crons
+        ),
         RedisIntegration(),
     ],
     # Set traces_sample_rate to 1.0 for development, lower in production
