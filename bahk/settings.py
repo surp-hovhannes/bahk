@@ -40,6 +40,7 @@ sentry_sdk.init(
     ],
     # Set traces_sample_rate to 1.0 for development, lower in production
     traces_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
+    profiles_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
     # If you wish to associate users to errors (assuming you are using
     # django.contrib.auth) you may enable sending PII data
     send_default_pii=True,
@@ -54,6 +55,12 @@ sentry_sdk.init(
     environment=config('SENTRY_ENVIRONMENT', default=os.environ.get("SENTRY_ENVIRONMENT", "development")),
     # Add debug=True to help diagnose issues with Sentry setup
     debug=config('DEBUG', default=False, cast=bool),
+        _experiments={
+        # Set continuous_profiling_auto_start to True
+        # to automatically start the profiler on when
+        # possible.
+        "continuous_profiling_auto_start": True,
+    },
 )
 
 # Add Heroku-specific context to Sentry events
