@@ -231,7 +231,7 @@ def generate_participant_map_svg(participant_locations, output_path,
                 if len(non_clustered) > 0:
                     # Use red color for individual points to match cluster centers
                     # Increase markersize from 5 to 8 for better visibility
-                    non_clustered.plot(ax=ax, color='red', markersize=35, alpha=0.6)
+                    non_clustered.plot(ax=ax, color='#FFB700', markersize=30, alpha=0.8, linewidth=0.5)
             
             # Plot cluster centers with size reflecting the number of points
             if len(valid_locations) >= min_cluster_size and 'cluster_gdf' in locals():
@@ -249,9 +249,10 @@ def generate_participant_map_svg(participant_locations, output_path,
                     # Increase alpha from 0.8 to 0.9 for better visibility
                     cluster_gdf.plot(
                         ax=ax,
-                        color='red',
+                        color='#FFB700',
                         markersize=normalized_sizes,
-                        alpha=0.9
+                        alpha=0.8,
+                        linewidth=0.5
                     )
             
             # Save the plot to SVG file
