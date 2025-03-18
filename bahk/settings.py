@@ -19,6 +19,67 @@ from pathlib import Path
 from decouple import config, Csv
 from ssl import CERT_NONE
 
+# Sentry SDK for error and performance monitoring
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
+
+
+import sentry_sdk
+
+# Initialize Sentry SDK
+sentry_sdk.init(
+    dsn=config('SENTRY_DSN', default=os.environ.get("SENTRY_DSN", "")),  # Try both config and environ
+    integrations=[
+        DjangoIntegration(),
+        CeleryIntegration(
+            monitor_beat_tasks=True  # Enable Celery beat task monitoring for Sentry Crons
+        ),
+        RedisIntegration(),
+    ],
+    # Set traces_sample_rate to 1.0 for development, lower in production
+    traces_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
+    profiles_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
+    # If you wish to associate users to errors (assuming you are using
+    # django.contrib.auth) you may enable sending PII data
+    send_default_pii=True,
+    # By default the SDK will try to use the SENTRY_RELEASE
+    # environment variable, or infer a git commit
+    # SHA as release, however you may want to set
+    # something more human-readable.
+    release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@1.0.0")),
+    # Enable performance monitoring
+    enable_tracing=True,
+    # Only enable Sentry in production or when explicitly configured
+    environment=config('SENTRY_ENVIRONMENT', default=os.environ.get("SENTRY_ENVIRONMENT", "development")),
+    # Add debug=True to help diagnose issues with Sentry setup
+    debug=config('DEBUG', default=False, cast=bool),
+        _experiments={
+        # Set continuous_profiling_auto_start to True
+        # to automatically start the profiler on when
+        # possible.
+        "continuous_profiling_auto_start": True,
+    },
+)
+
+# Add Heroku-specific context to Sentry events
+if os.environ.get("DYNO"):
+    # Tag with full dyno name (e.g., web.1, worker.2)
+    sentry_sdk.set_tag("dyno", os.environ.get("DYNO"))
+    
+    # Extract and tag with dyno type (e.g., web, worker)
+    dyno_parts = os.environ.get("DYNO", "").split(".")
+    if len(dyno_parts) > 0:
+        sentry_sdk.set_tag("dyno_type", dyno_parts[0])
+    
+    # Add Heroku release information if available
+    if os.environ.get("HEROKU_RELEASE_VERSION"):
+        sentry_sdk.set_tag("heroku_release", os.environ.get("HEROKU_RELEASE_VERSION"))
+    
+    # Add Heroku app name
+    if os.environ.get("HEROKU_APP_NAME"):
+        sentry_sdk.set_tag("heroku_app", os.environ.get("HEROKU_APP_NAME"))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -447,7 +508,29 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': True,
-        }
+        },
+        # Add a logger for your application code
+        'hub': {  # Change this to match your app name
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        # Add other app-specific loggers as needed
+        'app_management': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'learning_resources': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'notifications': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
 }
 

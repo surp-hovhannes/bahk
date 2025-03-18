@@ -21,6 +21,7 @@ from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache
 from functools import wraps
 from hub.tasks import generate_participant_map
+import sentry_sdk
 
 
 CACHE_TTL = getattr(settings, 'CACHE_MIDDLEWARE_SECONDS', 60 * 15)  # 15 minutes default
@@ -682,45 +683,80 @@ class FastParticipantsMapView(views.APIView):
     @method_decorator(cache_page(60 * 60))  # Cache for 1 hour
     @method_decorator(vary_on_headers('Authorization'))
     def get(self, request, fast_id):
-        # Check if force_update is requested
-        force_update = request.query_params.get('force_update', '').lower() == 'true'
-        
-        # If force_update is requested, bypass the cache
-        if force_update:
-            return self._get_map(request, fast_id, force_update=True)
+        try:
+            # Set context for Sentry errors
+            sentry_sdk.set_context("request_info", {
+                "fast_id": fast_id,
+                "user_id": request.user.id,
+                "church_id": request.user.profile.church_id if hasattr(request.user, 'profile') else None
+            })
             
-        return self._get_map(request, fast_id)
+            # Add breadcrumb for better debugging
+            sentry_sdk.add_breadcrumb(
+                category="api",
+                message=f"Fetching participants map for fast {fast_id}",
+                level="info"
+            )
+            
+            # Check if force_update is requested
+            force_update = request.query_params.get('force_update', '').lower() == 'true'
+            
+            # If force_update is requested, bypass the cache
+            if force_update:
+                return self._get_map(request, fast_id, force_update=True)
+                
+            return self._get_map(request, fast_id)
+        except Exception as e:
+            # Capture the exception with additional context
+            sentry_sdk.capture_exception(e)
+            
+            # Log the error for local debugging
+            logging.error(f"Error retrieving participant map: {str(e)}")
+            
+            # Re-raise for Django's standard error handling
+            raise
     
     def _get_map(self, request, fast_id, force_update=False):
         """Internal method to get or generate the map."""
-        current_fast = Fast.objects.filter(id=fast_id).first()
+        # Use a custom Sentry transaction for performance monitoring
+        with sentry_sdk.start_transaction(op="api.get_map", name=f"Get Fast Map {fast_id}"):
+            current_fast = Fast.objects.filter(id=fast_id).first()
 
-        if not current_fast:
-            return response.Response({"detail": "Fast not found."}, status=404)
+            if not current_fast:
+                return response.Response({"detail": "Fast not found."}, status=404)
+                
+            # Check if a map exists for this fast
+            with sentry_sdk.start_span(op="db.query", description="Check for existing map"):
+                map_obj = FastParticipantMap.objects.filter(fast=current_fast).order_by('-last_updated').first()
             
-        # Check if a map exists for this fast
-        map_obj = FastParticipantMap.objects.filter(fast=current_fast).order_by('-last_updated').first()
-        
-        # If no map exists, if it's older than a day, or if force_update is requested, generate a new one
-        if not map_obj or (timezone.now() - map_obj.last_updated).days >= 1 or force_update:
-            # Trigger async task to generate the map
-            generate_participant_map.delay(fast_id)
+            # If no map exists, if it's older than a day, or if force_update is requested, generate a new one
+            if not map_obj or (timezone.now() - map_obj.last_updated).days >= 1 or force_update:
+                # Add context about map regeneration decision
+                sentry_sdk.set_context("map_generation", {
+                    "reason": "not_exists" if not map_obj else "outdated" if (timezone.now() - map_obj.last_updated).days >= 1 else "force_update",
+                    "map_age_days": (timezone.now() - map_obj.last_updated).days if map_obj else None,
+                    "force_update": force_update
+                })
+                
+                # Trigger async task to generate the map
+                with sentry_sdk.start_span(op="task.queue", description="Queue map generation task"):
+                    generate_participant_map.delay(fast_id)
+                
+                if not map_obj:
+                    # If no map exists yet, return a 202 Accepted response
+                    return response.Response(
+                        {"detail": "Map is being generated. Please try again in a few minutes."},
+                        status=202
+                    )
+                elif force_update:
+                    # If force_update was requested, inform the user
+                    return response.Response(
+                        {
+                            "detail": "Map update has been triggered. The current map is being returned, but a new one is being generated.",
+                            "map": FastParticipantMapSerializer(map_obj).data
+                        }
+                    )
             
-            if not map_obj:
-                # If no map exists yet, return a 202 Accepted response
-                return response.Response(
-                    {"detail": "Map is being generated. Please try again in a few minutes."},
-                    status=202
-                )
-            elif force_update:
-                # If force_update was requested, inform the user
-                return response.Response(
-                    {
-                        "detail": "Map update has been triggered. The current map is being returned, but a new one is being generated.",
-                        "map": FastParticipantMapSerializer(map_obj).data
-                    }
-                )
-        
-        # Return the map data
-        serializer = FastParticipantMapSerializer(map_obj)
-        return response.Response(serializer.data)
+            # Return the map data
+            serializer = FastParticipantMapSerializer(map_obj)
+            return response.Response(serializer.data)

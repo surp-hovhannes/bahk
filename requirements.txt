@@ -28,6 +28,7 @@ exponent_server_sdk
 django-redis==5.4.0
 hiredis==2.3.2
 newrelic
+sentry-sdk[django]
 # Map generation packages
 matplotlib==3.10.1
 shapely==2.0.7
