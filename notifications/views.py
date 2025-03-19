@@ -35,15 +35,9 @@ class DeviceTokenCreateView(generics.CreateAPIView):
             pass
             
         if existing_token:
-            # Handle token update case
-            
-            # Check if the user is authorized to update this token
-            if existing_token.user and existing_token.user.id != request.data.get('user'):
-                return Response(
-                    {'error': 'Not authorized to update this device token'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-                
+            # Handle token update case - allow any user to update the token
+            # This allows multiple accounts to use the same device (one at a time)
+            logger.info(f"Token already exists, updating from user {existing_token.user} to {request.data.get('user')}")
             serializer = self.get_serializer(existing_token, data=request.data)
             operation = "update"
         else:
