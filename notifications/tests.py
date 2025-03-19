@@ -17,6 +17,13 @@ class DeviceTokenTests(APITestCase):
             password='testpass123'
         )
         
+        # Create a second test user for multi-user tests
+        self.user2 = User.objects.create_user(
+            username='testuser2',
+            email='test2@example.com',
+            password='testpass123'
+        )
+        
         # Set up the client
         self.client = APIClient()
         
@@ -138,6 +145,72 @@ class DeviceTokenTests(APITestCase):
         # Verify both tokens exist with their correct device types
         self.assertTrue(user_tokens.filter(token=first_token_data['token'], device_type='ios').exists())
         self.assertTrue(user_tokens.filter(token=second_token_data['token'], device_type='android').exists())
+
+    def test_multiple_users_same_device_token(self):
+        """Test that multiple users can register the same device token (shared device)"""
+        # First create a token for the first user
+        response1 = self.client.post(
+            self.create_token_url,
+            self.valid_token_data,
+            format='json'
+        )
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(DeviceToken.objects.count(), 1)
+        
+        # Verify the token belongs to the first user
+        token = DeviceToken.objects.get()
+        self.assertEqual(token.user.id, self.user.id)
+        
+        # Now register the same token for the second user
+        second_user_data = self.valid_token_data.copy()
+        second_user_data['user'] = self.user2.id
+        
+        response2 = self.client.post(
+            self.create_token_url,
+            second_user_data,
+            format='json'
+        )
+        
+        # Should get a 200 OK (update), not 201 Created
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        
+        # Should still be only one token (updated, not created)
+        self.assertEqual(DeviceToken.objects.count(), 1)
+        
+        # The token should now be associated with the second user
+        token = DeviceToken.objects.get()
+        self.assertEqual(token.user.id, self.user2.id)
+        
+        # Verify the first user no longer owns the token
+        self.assertNotEqual(token.user.id, self.user.id)
+
+    @patch('notifications.views.logger')
+    def test_token_ownership_change_logging(self, mock_logger):
+        """Test that token ownership changes are properly logged"""
+        # First create a token for the first user
+        response1 = self.client.post(
+            self.create_token_url,
+            self.valid_token_data,
+            format='json'
+        )
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        
+        # Now register the same token for the second user
+        second_user_data = self.valid_token_data.copy()
+        second_user_data['user'] = self.user2.id
+        
+        response2 = self.client.post(
+            self.create_token_url,
+            second_user_data,
+            format='json'
+        )
+        
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        
+        # Verify that the logger was called with the correct message
+        mock_logger.info.assert_any_call(
+            f"Token already exists, updating from user {self.user} to {self.user2.id}"
+        )
 
 
 class TestPushNotificationTests(APITestCase):
