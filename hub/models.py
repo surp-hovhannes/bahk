@@ -128,6 +128,9 @@ class Fast(models.Model):
             constraints.UniqueConstraint(fields=["name", "church", "year"], name="unique_name_church_year"),
             constraints.UniqueConstraint(fields=["culmination_feast_date", "church"], name="unique_feast_date_church"),
         ]
+        indexes = [
+            models.Index(fields=['church']),
+        ]
 
     @property
     def modal_id(self):
@@ -258,6 +261,13 @@ class Day(models.Model):
     def __str__(self):
         return f'{self.date.strftime("%Y-%m-%d")} ({f"{self.fast.name}, " if self.fast else ""}{self.church.name})'
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['fast', 'date']),
+            models.Index(fields=['date']),
+            models.Index(fields=['church', 'date']),
+        ]
+
 
 class DevotionalSet(models.Model):
     """Model for an ordered collection of devotionals."""
@@ -362,6 +372,12 @@ class FastParticipantMap(models.Model):
         
     def __str__(self):
         return f"Map for {self.fast} ({self.last_updated.strftime('%Y-%m-%d %H:%M')})"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['fast']),
+            models.Index(fields=['last_updated']),
+        ]
 
 
 class GeocodingCache(models.Model):
