@@ -10,7 +10,7 @@ def test_email_task():
     """Send a test email to verify that the email configuration is working."""
     test_email()
 
-@shared_task
+@shared_task(name='hub.tasks.send_fast_reminder_task')
 @sentry_sdk.monitor(monitor_slug='daily-fast-notifications')
 def send_fast_reminder_task():
     """Send reminders about upcoming fasts."""

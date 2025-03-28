@@ -124,37 +124,50 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
 
 def send_fast_reminders():
     today = datetime.today().date()
+    tomorrow = today + timedelta(days=1)
     three_days_from_now = today + timedelta(days=3)
 
-    # Subquery to find the next fast for each profile, excluding those with "Friday Fasts" or "Wednesday Fasts" in the name
-    # TODO: Find a better way to handle weekly fasts
-    next_fast_subquery = Day.objects.filter(
-        fast__profiles__id=OuterRef('pk'),
-        date__gt=today,
-        date__lt=three_days_from_now
-    ).filter(
-        ~Q(fast__name__icontains="Friday Fasts") & ~Q(fast__name__icontains="Wednesday Fasts")
-    ).order_by('date').values('fast__id')[:1]
-
-    # Filter profiles based on the subquery
-    profiles = Profile.objects.filter(receive_upcoming_fast_reminders=True).annotate(
-        next_fast_id=Subquery(next_fast_subquery)
-    ).filter(next_fast_id__isnull=False)
+    # Get all profiles that want reminders
+    profiles = Profile.objects.filter(receive_upcoming_fast_reminders=True)
 
     for profile in profiles:
-        if profile.next_fast_id:
-            try:
-                next_fast = Fast.objects.get(id=profile.next_fast_id)
-            except Fast.DoesNotExist:
-                logger.warning(f"Reminder Email: No Fast found with ID {profile.next_fast_id} for profile {profile.user.email}")
+        # Get all fasts for this profile that:
+        # 1. Have days in our date range
+        # 2. Haven't started yet (earliest day is tomorrow or later)
+        # 3. Aren't weekly fasts
+        fasts = Fast.objects.filter(
+            profiles=profile,
+            days__date__gte=tomorrow,  # Only consider days from tomorrow onwards
+            days__date__lte=three_days_from_now  # Changed from lt to lte to include 3 days from now
+        ).filter(
+            ~Q(name__icontains="Friday Fasts") & ~Q(name__icontains="Wednesday Fasts")
+        ).distinct()
+
+        # Find the earliest fast
+        earliest_fast = None
+        earliest_start_date = None
+
+        for fast in fasts:
+            # Get the earliest day for this fast
+            earliest_day = Day.objects.filter(fast=fast).order_by('date').first()
+            
+            # Skip if no earliest day found or if the fast has already started
+            if not earliest_day or earliest_day.date <= today:
                 continue
 
-            subject = f'Upcoming Fast: {next_fast.name}'
+            # Update earliest_fast if this is the first valid fast or if it starts earlier
+            if earliest_fast is None or earliest_day.date < earliest_start_date:
+                earliest_fast = fast
+                earliest_start_date = earliest_day.date
+
+        # Send reminder only for the earliest fast
+        if earliest_fast:
+            subject = f'Upcoming Fast: {earliest_fast.name}'
             from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
-            serialized_next_fast = FastSerializer(next_fast).data
+            serialized_fast = FastSerializer(earliest_fast).data
             html_content = render_to_string('email/upcoming_fasts_reminder.html', {
                 'user': profile.user,
-                'fast': serialized_next_fast,
+                'fast': serialized_fast,
             })
             text_content = strip_tags(html_content)
 
@@ -164,9 +177,7 @@ def send_fast_reminders():
 
             email.attach_alternative(html_content, "text/html")
             email.send()
-            logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {next_fast.name}')
-        else:
-            logger.info(f"Reminder Email: No upcoming fasts found for profile {profile.user.email}")
+            logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {earliest_fast.name}')
 
 
 def test_email():
