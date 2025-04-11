@@ -62,6 +62,11 @@ urlpatterns += [
     path('api/s3-upload/', include('s3_file_field.urls')),
 ]
 
+# Notifications URLs
+urlpatterns += [
+    path('notifications/', include('notifications.urls')),
+]
+
 # for serving media files during development
 if not settings.IS_PRODUCTION:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

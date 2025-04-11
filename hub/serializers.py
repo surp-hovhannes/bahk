@@ -48,6 +48,7 @@ class ProfileSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         model = models.Profile
         fields = ['user_id', 'email', 'name', 'profile_image', 'thumbnail',
                  'location', 'church', 'receive_upcoming_fast_reminders', 
+                 'receive_promotional_emails',
                  'receive_upcoming_fast_push_notifications', 
                  'receive_ongoing_fast_push_notifications',
                  'receive_daily_fast_push_notifications',

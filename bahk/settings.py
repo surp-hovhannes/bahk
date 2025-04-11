@@ -392,7 +392,9 @@ CORS_ORIGIN_ALLOW_ALL = config('CORS_ORIGIN_ALLOW_ALL', default=False, cast=bool
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 
 # Frontend URL for password reset, if local development or production
-FRONTEND_URL = config('FRONTEND_URL', default='https://web.fastandpray.app')
+FRONTEND_URL = config('FRONTEND_URL', default='https://fastandpray.app')
+BACKEND_URL = 'https://api.fastandpray.app'
+SITE_URL = config('SITE_URL', default=FRONTEND_URL)  # Default to FRONTEND_URL if not specified
 
 # AWS S3 settings
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
