@@ -1,69 +1,350 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
+<html !DOCTYPE html>
+  <head>
+    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+    <style type="text/css">
+      @import url(https://themes.googleusercontent.com/fonts/css?kit=OUdT43qE98k1fLl98sLVVojV1OhFwesgIY0M_0n2fQ8);
+      ol {
+        margin: 0;
+        padding: 0;
+      }
+      table td,
+      table th {
+        padding: 0;
+      }
+      .c23 {
+        padding: 36pt 36pt 36pt 36pt;
+        vertical-align: middle;
+        background-color: #390714;
+        width: 504pt;
+      }
+      .c2 {
+        padding: 20pt 10pt 10pt 36pt;
+        width: 50pt;
+        background-color: #ffffff;
+        vertical-align: middle;
+      }
+      .c12 {
+        padding: 25pt 36pt 25pt 36pt;
+        vertical-align: top;
+        width: 504pt;
+        background-color: #390714;
+      }
+      .c19 {
+        padding: 25pt 36pt 25pt 36pt;
+        vertical-align: top;
+        background-color: #ffffff;
+        width: 504pt;
+      }
+      .c11 {
+        padding: 20pt 88pt 10pt 10pt;
+        width: 330.8pt;
+        vertical-align: middle;
+        background-color: #ffffff;
+      }
+      .c6 {
+        color: #000000;
+        font-weight: 400;
+        text-decoration: none;
+        vertical-align: baseline;
+        font-size: 12pt;
+        font-family: "Figtree", sans-serif;
+        font-style: normal;
+      }
+      .c25 {
+        color: #f3f3f3;
+        font-weight: 400;
+        text-decoration: none;
+        vertical-align: baseline;
+        font-size: 12pt;
+        font-family: "Figtree", sans-serif;
+        font-style: normal;
+      }
+      .c22 {
+        color: #000000;
+        font-weight: 400;
+        text-decoration: none;
+        vertical-align: baseline;
+        font-size: 14pt;
+        font-family: "Figtree", sans-serif;
+        font-style: normal;
+      }
+      .c10 {
+        color: #d52d57;
+        font-weight: 400;
+        text-decoration: none;
+        vertical-align: baseline;
+        font-size: 14pt;
+        font-family: "Figtree", sans-serif;
+        font-style: normal;
+        line-height: 2;
+      }
+      .c15 {
+        color: #d52d57;
+        font-weight: 400;
+        text-decoration: none;
+        vertical-align: baseline;
+        font-size: 10pt;
+        font-family: "Figtree", sans-serif;
+        font-style: normal;
+      }
+      .c4 {
+        color: #000000;
+        font-weight: 400;
+        text-decoration: none;
+        vertical-align: baseline;
+        font-size: 10pt;
+        font-family: "Figtree", sans-serif;
+        font-style: normal;
+      }
+      .c7 {
+        color: #d52d57;
+        font-weight: 500;
+        text-decoration: none;
+        vertical-align: baseline;
+        font-size: 27pt;
+        font-family: "Figtree", sans-serif;
+        font-style: normal;
+      }
+      .c8 {
+        padding-top: 0pt;
+        padding-bottom: 0pt;
+        line-height: 1.15;
+        text-align: center;
+      }
+      .c24 {
+        text-decoration-skip-ink: none;
+        -webkit-text-decoration-skip: none;
+        color: #d52d57;
+        text-decoration: underline;
+      }
+      .c9 {
+        padding-top: 0pt;
+        padding-bottom: 0pt;
+        line-height: 1.5;
+        text-align: left;
+      }
+      .c17 {
+        padding-top: 0pt;
+        padding-bottom: 0pt;
+        line-height: 1.2;
+        text-align: center;
+      }
+      .c20 {
+        font-size: 27pt;
+        font-family: "Figtree", sans-serif;
+        color: #f7dbdb;
+        font-weight: 500;
+      }
+      .c3 {
+        margin-left: auto;
+        border-spacing: 0;
+        border-collapse: collapse;
+        margin-right: auto;
+      }
+      .c18 {
+        background-color: #f3f3f3;
+        max-width: 537.7pt;
+        padding: 15pt;
+        margin: auto;
+      }
+      .c14 {
+        color: inherit;
+        text-decoration: inherit;
+        line-height: 1.5;
+      }
+      .c16 {
+        font-size: 12pt;
+        line-height: 1.5;
+      }
+      .c0 {
+        height: 73.5pt;
+      }
+      .c1 {
+        height: 257.1pt;
+      }
+      .c13 {
+        height: 10pt;
+      }
+      .c21 {
+        height: 0pt;
+      }
+      .title {
+        padding-top: 0pt;
+        color: #000000;
+        font-size: 26pt;
+        padding-bottom: 3pt;
+        font-family: "Figtree", sans-serif;
+        line-height: 1.15;
+        page-break-after: avoid;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+      .subtitle {
+        padding-top: 0pt;
+        color: #666666;
+        font-size: 15pt;
+        padding-bottom: 16pt;
+        font-family: "Arial";
+        line-height: 1.15;
+        page-break-after: avoid;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+      li {
+        color: #000000;
+        font-size: 10pt;
+        font-family: "Figtree", sans-serif;
+      }
+      p {
+        margin: 0;
+        color: #000000;
+        font-size: 10pt;
+        font-family: "Figtree", sans-serif;
+      }
+      h1 {
+        padding-top: 20pt;
+        color: #000000;
+        font-size: 20pt;
+        padding-bottom: 6pt;
+        font-family: "Figtree", sans-serif;
+        line-height: 1.15;
+        page-break-after: avoid;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+      h2 {
+        padding-top: 18pt;
+        color: #000000;
+        font-size: 16pt;
+        padding-bottom: 6pt;
+        font-family: "Figtree", sans-serif;
+        line-height: 1.15;
+        page-break-after: avoid;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+      h3 {
+        padding-top: 16pt;
+        color: #434343;
+        font-size: 14pt;
+        padding-bottom: 4pt;
+        font-family: "Figtree", sans-serif;
+        line-height: 1.15;
+        page-break-after: avoid;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+      h4 {
+        padding-top: 14pt;
+        color: #666666;
+        font-size: 12pt;
+        padding-bottom: 4pt;
+        font-family: "Figtree", sans-serif;
+        line-height: 1.15;
+        page-break-after: avoid;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+      h5 {
+        padding-top: 12pt;
+        color: #666666;
+        font-size: 11pt;
+        padding-bottom: 4pt;
+        font-family: "Figtree", sans-serif;
+        line-height: 1.15;
+        page-break-after: avoid;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+      h6 {
+        padding-top: 12pt;
+        color: #666666;
+        font-size: 11pt;
+        padding-bottom: 4pt;
+        font-family: "Figtree", sans-serif;
+        line-height: 1.15;
+        page-break-after: avoid;
+        font-style: italic;
+        orphans: 2;
+        widows: 2;
+        text-align: left;
+      }
+    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ email_content|striptags|truncatechars:50 }}</title>
-    {% load static %}
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .logo {
-            max-width: 150px;
-            margin-bottom: 10px;
-        }
-        .content {
-            margin-bottom: 20px;
-        }
-        .footer {
-            font-size: 12px;
-            color: #777;
-            text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-        }
-        .unsubscribe {
-            margin-top: 10px;
-            font-size: 11px;
-        }
-        .unsubscribe a {
-            color: #777;
-            text-decoration: underline;
-        }
-        @media only screen and (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <img src="{{ site_url }}/app-icon-1024.png" alt="Fast and Pray" class="logo">
-        <h1 style="color: #390714;">Fast & Pray</h1>
-    </div>
-    
-    <div class="content">
-        {{ email_content|safe }}
-    </div>
-    
-    <div class="footer">
-        <p>© {% now "Y" %} Fast and Pray. All rights reserved.</p>
-        <p class="unsubscribe">
+  </head>
+  <body class="c18 doc-content">
+    <table class="c3">
+      <tr class="c0">
+        <td class="c23" colspan="1" rowspan="1">
+          <p class="c17">
+            <img
+                alt="Fast & Pray Logo"
+                src="{{ site_url }}/email_images/image4.png"
+                width="300"
+                height="85"
+                style="display: block; border: 0; margin: 0 auto; margin-bottom: -20px;"
+                title="Fast & Pray Logo"
+            />
+          </p>
+          <p class="c17">
+            <span class="c20">We&rsquo;d love your feedback!</span>
+          </p>
+        </td>
+      </tr>
+    </table>
+    <table class="c3">
+      <tr class="c1">
+        <td class="c19" colspan="1" rowspan="1">
+
+            {{ email_content|safe }}
+
+        </td>
+      </tr>
+    </table>
+
+    <table class="c3">
+      <tr class="c21">
+        <td class="c12" colspan="1" rowspan="1">
+          <p class="c17">
+            <img
+                alt="Fast & Pray Icon"
+                src="{{ site_url }}/email_images/image1.png"
+                width="60"
+                height="60"
+                style="display: block; border: 0; margin: 0 auto;"
+                title="Fast & Pray Icon"
+            />
+          </p>
+          <p class="c8"><span class="c10">Fast &amp; Pray</span></p>
+          <p class="c8">
+            <span class="c24"
+              ><a class="c14" href="mailto:fastandprayhelp@gmail.com"
+                >fastandprayhelp@gmail.com</a
+              ></span
+            >
+          </p>
+          <p class="c8">
+            <span class="c24"
+              ><a class="c14" href="https://fastandpray.app"
+                >fastandpray.app</a
+              ></span
+            >
+          </p>
+          <p class="c9 c13"><span class="c6"></span></p>
+          <p class="c25 c8">
             You received this email because you're subscribed to Fast and Pray promotional emails.
             <a href="{{ unsubscribe_url }}">Unsubscribe</a> if you no longer wish to receive these emails.
         </p>
-    </div>
-</body>
-</html> 
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
