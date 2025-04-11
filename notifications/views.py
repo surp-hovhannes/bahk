@@ -1,11 +1,16 @@
-from django.shortcuts import render
-from rest_framework import generics, status
-from rest_framework.views import APIView
+import logging
+from django.shortcuts import render, redirect
+from django.views import View
+from django.contrib.auth.models import User
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
+from django.http import HttpResponseBadRequest
+from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import DeviceToken
 from .serializers import DeviceTokenSerializer
 from .utils import send_push_notification
-import logging
+from .tasks import send_push_notification_task
 from django.core.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -15,6 +20,10 @@ logger = logging.getLogger(__name__)
 class DeviceTokenCreateView(generics.CreateAPIView):
     queryset = DeviceToken.objects.all()
     serializer_class = DeviceTokenSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
         logger.info(f"Received request data: {request.data}")
@@ -73,19 +82,36 @@ class DeviceTokenCreateView(generics.CreateAPIView):
             )
 
 class TestPushNotificationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
-        token = request.data.get('token')
-        message = request.data.get('message', 'Test notification')
+        send_push_notification_task.delay(request.user.id)
+        return Response({"message": "Test notification sent"}, status=status.HTTP_200_OK)
+
+def unsubscribe(request):
+    """Handle unsubscribe requests"""
+    token = request.GET.get('token')
+    if not token:
+        return redirect('notifications:unsubscribe_error')
+    
+    try:
+        signer = TimestampSigner()
+        user_id = signer.unsign(token, max_age=60*60*24*7)  # 7 days
+        user = User.objects.get(id=user_id)
         
-        if not token:
-            return Response(
-                {'error': 'Token is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        result = send_push_notification(
-            message=message,
-            tokens=[token]
-        )
+        # Update profile setting
+        user.profile.receive_promotional_emails = False
+        user.profile.save()
         
-        return Response(result)
+        return redirect('notifications:unsubscribe_success')
+        
+    except (BadSignature, SignatureExpired, User.DoesNotExist):
+        return redirect('notifications:unsubscribe_error')
+
+def unsubscribe_success(request):
+    """Show success page after unsubscribing"""
+    return render(request, 'notifications/unsubscribe_success.html')
+
+def unsubscribe_error(request):
+    """Show error page if unsubscribe fails"""
+    return render(request, 'notifications/unsubscribe_error.html')

@@ -1,0 +1,70 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static "admin/css/forms.css" %}">
+<style>
+    .email-preview-container {
+        margin: 20px;
+        padding: 20px;
+        border: 1px solid #ccc;
+        background: white;
+        max-width: 800px;
+        margin: 20px auto;
+    }
+    .email-preview-frame {
+        width: 100%;
+        min-height: 500px;
+        border: none;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label='notifications' %}">{% trans 'Notifications' %}</a>
+&rsaquo; <a href="{% url 'admin:notifications_promoemail_changelist' %}">{% trans 'Promotional emails' %}</a>
+&rsaquo; {% trans 'Email Preview' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module">
+        <h2>{% trans "Email Details" %}</h2>
+        <div class="form-row">
+            <label>{% trans "Title" %}:</label>
+            <div>{{ promo.title }}</div>
+        </div>
+        <div class="form-row">
+            <label>{% trans "Subject" %}:</label>
+            <div>{{ promo.subject }}</div>
+        </div>
+        <div class="form-row">
+            <label>{% trans "Status" %}:</label>
+            <div>{{ promo.get_status_display }}</div>
+        </div>
+        {% if promo.scheduled_for %}
+        <div class="form-row">
+            <label>{% trans "Scheduled for" %}:</label>
+            <div>{{ promo.scheduled_for }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="module">
+        <h2>{% trans "Email Preview" %}</h2>
+        <div class="email-preview-container">
+            {{ rendered_email|safe }}
+        </div>
+    </div>
+
+    <div class="submit-row">
+        <a href="{% url 'admin:notifications_promoemail_change' promo.id %}" class="button">{% trans 'Back to email' %}</a>
+        <a href="{% url 'admin:notifications_promoemail_send_preview' promo.id %}" class="button">{% trans 'Send preview' %}</a>
+        <a href="{% url 'admin:notifications_promoemail_changelist' %}" class="button">{% trans 'Back to list' %}</a>
+    </div>
+</div>
+{% endblock %} 

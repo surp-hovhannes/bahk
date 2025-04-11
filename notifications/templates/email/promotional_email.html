@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ email_content|striptags|truncatechars:50 }}</title>
+    {% load static %}
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .content {
+            margin-bottom: 20px;
+        }
+        .footer {
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .unsubscribe {
+            margin-top: 10px;
+            font-size: 11px;
+        }
+        .unsubscribe a {
+            color: #777;
+            text-decoration: underline;
+        }
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ site_url }}/app-icon-1024.png" alt="Fast and Pray" class="logo">
+        <h1 style="color: #390714;">Fast & Pray</h1>
+    </div>
+    
+    <div class="content">
+        {{ email_content|safe }}
+    </div>
+    
+    <div class="footer">
+        <p>© {% now "Y" %} Fast and Pray. All rights reserved.</p>
+        <p class="unsubscribe">
+            You received this email because you're subscribed to Fast and Pray promotional emails.
+            <a href="{{ unsubscribe_url }}">Unsubscribe</a> if you no longer wish to receive these emails.
+        </p>
+    </div>
+</body>
+</html> 

@@ -10,6 +10,13 @@ from django.db.models import OuterRef, Subquery, Q
 import logging
 from .constants import DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE
 from .utils import is_weekly_fast
+from .models import PromoEmail
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.conf import settings
+from django.urls import reverse
+from django.core.signing import TimestampSigner
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +28,110 @@ logger = logging.getLogger(__name__)
 @shared_task
 def send_push_notification_task(message, data=None, tokens=None, notification_type=None):
     send_push_notification(message, data, tokens, notification_type)
+
+@shared_task
+def send_promo_email_task(promo_id):
+    """
+    Send a promotional email to all eligible recipients based on the email's targeting options.
+    
+    Args:
+        promo_id: ID of the PromoEmail to send
+    """
+    try:
+        promo = PromoEmail.objects.get(id=promo_id)
+        
+        # Update status to sending
+        promo.status = PromoEmail.SENDING
+        promo.save()
+        
+        # Get eligible recipients based on targeting options
+        profiles = Profile.objects.all()
+        
+        # Apply filters
+        if not promo.all_users:
+            if promo.church_filter:
+                profiles = profiles.filter(church=promo.church_filter)
+            
+            if promo.joined_fast:
+                profiles = profiles.filter(fasts=promo.joined_fast)
+        
+        if promo.exclude_unsubscribed:
+            profiles = profiles.filter(receive_promotional_emails=True)
+        
+        # Get users from profiles
+        users = User.objects.filter(profile__in=profiles).distinct()
+        
+        if not users:
+            logger.warning(f"No eligible recipients found for promotional email: {promo.title}")
+            promo.status = PromoEmail.FAILED
+            promo.save()
+            return
+        
+        # Prepare email content
+        from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
+        
+        # Track success and failure counts
+        success_count = 0
+        failure_count = 0
+        
+        # Create signer for unsubscribe tokens
+        signer = TimestampSigner()
+        
+        # Send to each user
+        for user in users:
+            try:
+                # Create unsubscribe URL for this user
+                unsubscribe_token = signer.sign(str(user.id))
+                unsubscribe_url = f"{settings.BACKEND_URL}{reverse('notifications:unsubscribe')}?token={unsubscribe_token}"
+                
+                # Prepare email content with user context
+                context = {
+                    'user': user,
+                    'email_content': promo.content_html,
+                    'unsubscribe_url': unsubscribe_url,
+                    'site_url': settings.FRONTEND_URL
+                }
+                
+                html_content = render_to_string('email/promotional_email.html', context)
+                text_content = promo.content_text or strip_tags(html_content)
+                
+                # Create and send email
+                email = EmailMultiAlternatives(
+                    promo.subject,
+                    text_content,
+                    from_email,
+                    [user.email]
+                )
+                email.attach_alternative(html_content, "text/html")
+                email.send()
+                
+                success_count += 1
+                
+            except Exception as e:
+                logger.error(f"Failed to send promotional email to {user.email}: {str(e)}")
+                failure_count += 1
+        
+        # Update promo status
+        if success_count > 0:
+            promo.status = PromoEmail.SENT
+            promo.sent_at = timezone.now()
+            promo.save()
+            logger.info(f"Successfully sent promotional email '{promo.title}' to {success_count} recipients. Failed: {failure_count}")
+        else:
+            promo.status = PromoEmail.FAILED
+            promo.save()
+            logger.error(f"Failed to send promotional email '{promo.title}' to any recipients")
+            
+    except PromoEmail.DoesNotExist:
+        logger.error(f"Promotional email with ID {promo_id} not found")
+    except Exception as e:
+        logger.error(f"Error in send_promo_email_task: {str(e)}")
+        try:
+            promo = PromoEmail.objects.get(id=promo_id)
+            promo.status = PromoEmail.FAILED
+            promo.save()
+        except:
+            pass
 
 @shared_task
 def send_upcoming_fast_push_notification_task():
