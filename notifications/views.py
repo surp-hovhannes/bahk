@@ -46,7 +46,19 @@ class DeviceTokenCreateView(generics.CreateAPIView):
         if existing_token:
             # Handle token update case - allow any user to update the token
             # This allows multiple accounts to use the same device (one at a time)
-            logger.info(f"Token already exists, updating from user {existing_token.user} to {request.data.get('user')}")
+            old_user_id = existing_token.user.id if existing_token.user else None
+            new_user_id = request.user.id
+            
+            if old_user_id != new_user_id:
+                logger.info(
+                    'Device token ownership changed',
+                    extra={
+                        'device_token': token_value,
+                        'old_user_id': old_user_id,
+                        'new_user_id': new_user_id
+                    }
+                )
+            
             serializer = self.get_serializer(existing_token, data=request.data)
             operation = "update"
         else:
@@ -64,12 +76,10 @@ class DeviceTokenCreateView(generics.CreateAPIView):
         # Try to save the token
         try:
             if operation == "create":
-                logger.info(f"Creating new device token with data: {serializer.validated_data}")
-                serializer.save()
+                self.perform_create(serializer)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             else:
-                logger.info(f"Updating existing device token with data: {serializer.validated_data}")
-                serializer.save()
+                serializer.save(user=request.user)
                 return Response(serializer.data)
         except ValidationError as e:
             # Handle model-level validation errors
