@@ -55,13 +55,35 @@ class UserFastFilter(SimpleListFilter):
         return queryset
 
 
+class UserNotJoinedFastFilter(SimpleListFilter):
+    title = 'Not Joined Fast'
+    parameter_name = 'not_joined_fast'
+
+    def lookups(self, request, model_admin):
+        # Get fasts that have future days
+        today = timezone.now().date()
+        fasts = Fast.objects.filter(
+            days__date__gte=today
+        ).distinct().order_by('name')
+        
+        return [(fast.id, f"{fast.name} ({fast.year})") for fast in fasts]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            # Get users who have joined the fast
+            users_joined = queryset.filter(user__profile__fasts__id=self.value()).values_list('user_id', flat=True)
+            # Return users who haven't joined the fast
+            return queryset.exclude(user_id__in=users_joined).distinct()
+        return queryset
+
+
 @admin.register(DeviceToken)
 class DeviceTokenAdmin(admin.ModelAdmin):
     list_display = ('token', 'user', 'created_at', 'is_active', 'last_used')
     search_fields = ('token', 'user__email')
     ordering = ('-created_at',)
     actions = ['send_push_notification', 'send_test_notification']
-    list_filter = (UserWithNoFastsFilter, UserFastFilter, 'is_active', 'created_at', 'last_used')
+    list_filter = (UserWithNoFastsFilter, UserFastFilter, UserNotJoinedFastFilter, 'is_active', 'created_at', 'last_used')
 
     def get_urls(self):
         urls = super().get_urls()
