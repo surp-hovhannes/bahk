@@ -59,7 +59,7 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(self.promo.content_html, rendered)
         self.assertIn(self.unsubscribe_url, rendered)
-        self.assertIn('http://testserver/app-icon-1024.png', rendered)
+        self.assertIn('http://testserver/email_images/image4.png', rendered)
     
     def test_promotional_email_template_with_complex_content(self):
         """Test that the promotional email template handles complex HTML content."""
@@ -83,7 +83,7 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(complex_html, rendered)
         self.assertIn(self.unsubscribe_url, rendered)
-        self.assertIn('http://testserver/app-icon-1024.png', rendered)
+        self.assertIn('http://testserver/email_images/image4.png', rendered)
     
     def test_promotional_email_template_with_special_characters(self):
         """Test that the promotional email template handles special characters."""
@@ -100,7 +100,7 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(special_content, rendered)
         self.assertIn(self.unsubscribe_url, rendered)
-        self.assertIn('http://testserver/app-icon-1024.png', rendered)
+        self.assertIn('http://testserver/email_images/image4.png', rendered)
     
     def test_promotional_email_template_with_missing_context(self):
         """Test that the promotional email template handles missing context variables."""
@@ -113,4 +113,4 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(self.unsubscribe_url, rendered)
         self.assertNotIn('None', rendered)
-        self.assertIn('http://testserver/app-icon-1024.png', rendered) 
+        self.assertIn('http://testserver/email_images/image4.png', rendered) 
