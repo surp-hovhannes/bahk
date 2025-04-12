@@ -5,16 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ email_content|striptags|truncatechars:50 }}</title>
     <style type="text/css">
+      @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500&display=swap');
+      
       body {
         margin: 0;
         padding: 0;
         background-color: #f3f3f3;
-        font-family: Arial, sans-serif;
+        font-family: "Figtree", Arial, sans-serif;
+      }
+      table {
+        border-spacing: 0;
+        border-collapse: collapse;
+      }
+      td {
+        padding: 0;
       }
       .container {
         max-width: 600px;
         margin: 0 auto;
-        background-color: #ffffff;
       }
       .header {
         background-color: #390714;
@@ -35,6 +43,7 @@
         margin: 20px 0;
         font-weight: 500;
         line-height: 1.2;
+        font-family: "Figtree", Arial, sans-serif;
       }
       h2 {
         color: #d52d57;
@@ -42,12 +51,15 @@
         margin: 20px 0;
         font-weight: 400;
         line-height: 1.2;
+        font-family: "Figtree", Arial, sans-serif;
       }
       .content {
         padding: 20px;
         color: #000000;
         font-size: 15px;
         line-height: 1.5;
+        background-color: #ffffff;
+        font-family: "Figtree", Arial, sans-serif;
       }
       .footer {
         background-color: #390714;
@@ -58,49 +70,109 @@
         color: #f7dbdb;
         font-size: 15px;
         margin: 10px 0;
+        font-family: "Figtree", Arial, sans-serif;
       }
       .footer-links a {
         color: #f7dbdb;
         text-decoration: none;
+        font-family: "Figtree", Arial, sans-serif;
       }
       .unsubscribe {
         padding: 20px;
         text-align: center;
         font-size: 12px;
         color: #666666;
+        background-color: #ffffff;
+        font-family: "Figtree", Arial, sans-serif;
       }
       .unsubscribe a {
         color: #d52d57;
         text-decoration: none;
+        font-family: "Figtree", Arial, sans-serif;
+      }
+      /* Button styles with fallback */
+      .button {
+        display: inline-block;
+        padding: 15px 30px;
+        background-color: #d52d57;
+        color: white;
+        text-decoration: none;
+        border-radius: 40px;
+        font-size: 16px;
+        font-weight: bold;
+        text-align: center;
+        min-width: 200px;
+        border: none;
+        cursor: pointer;
+        font-family: "Figtree", Arial, sans-serif;
+        mso-padding-alt: 15px 30px;
+        mso-text-raise: 0;
+      }
+      /* Outlook-specific button styles */
+      .button-a {
+        background: #d52d57;
+        border: 0px solid #d52d57;
+        border-radius: 40px;
+        color: #ffffff;
+        display: inline-block;
+        font-size: 16px;
+        font-weight: bold;
+        line-height: 1.2;
+        margin: 0;
+        padding: 15px 30px;
+        text-decoration: none;
+        text-transform: none;
+      }
+      /* Center alignment styles */
+      .centeredcontent {
+        text-align: center;
+        width: 100%;
+      }
+      .button-td {
+        background: #d52d57;
+        border-radius: 40px;
+        margin: 0 auto;
+        text-align: center;
+      }
+      /* Remove the gradient and active states as they're not well supported */
+      @media screen and (-webkit-min-device-pixel-ratio:0) {
+        .button {
+          background-color: #d52d57;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="header">
-        <img src="{{ site_url }}/email_images/logo.png" alt="Fast & Pray Logo" class="logo" />
-        <h1>We'd love your feedback!</h1>
-      </div>
-      
-      <div class="content">
-        {{ email_content|safe }}
-      </div>
-      
-      <div class="footer">
-        <img src="{{ site_url }}/email_images/logoicon.png" alt="Fast & Pray Logo" class="logo-icon" />
-        <h2>Fast & Pray</h2>
-        <div class="footer-links">
-          <a href="mailto:fastandprayhelp@gmail.com">fastandprayhelp@gmail.com</a>
-        </div>
-        <div class="footer-links">
-          <a href="https://fastandpray.app">fastandpray.app</a>
-        </div>
-      </div>
-      
-      <div class="unsubscribe">
-        You received this email because you're subscribed to Fast & Pray promotional emails.
-        <a href="{{ unsubscribe_url }}">Unsubscribe</a> if you no longer wish to receive these emails.
-      </div>
-    </div>
+    <table class="container" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td class="header">
+          <img src="{{ site_url }}/email_images/logo.png" alt="Fast & Pray Logo" class="logo" />
+          <h1>We'd love your feedback!</h1>
+        </td>
+      </tr>
+      <tr>
+        <td class="content">
+          {{ email_content|safe }}
+        </td>
+      </tr>
+      <tr>
+        <td class="footer">
+          <img src="{{ site_url }}/email_images/logoicon.png" alt="Fast & Pray Logo" class="logo-icon" />
+          <h2>Fast & Pray</h2>
+          <div class="footer-links">
+            <a href="mailto:fastandprayhelp@gmail.com">fastandprayhelp@gmail.com</a>
+          </div>
+          <div class="footer-links">
+            <a href="https://fastandpray.app">fastandpray.app</a>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="unsubscribe">
+          You received this email because you're subscribed to Fast & Pray promotional emails.
+          <a href="{{ unsubscribe_url }}">Unsubscribe</a> if you no longer wish to receive these emails.
+        </td>
+      </tr>
+    </table>
   </body>
 </html>
