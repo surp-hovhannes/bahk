@@ -87,6 +87,7 @@ def send_promo_email_task(promo_id):
                 # Prepare email content with user context
                 context = {
                     'user': user,
+                    'title': promo.title,
                     'email_content': promo.content_html,
                     'unsubscribe_url': unsubscribe_url,
                     'site_url': settings.FRONTEND_URL

@@ -99,7 +99,6 @@
         text-decoration: none;
         border-radius: 40px;
         font-size: 16px;
-        font-weight: bold;
         text-align: center;
         min-width: 200px;
         border: none;
@@ -113,14 +112,13 @@
         background: #d52d57;
         border: 0px solid #d52d57;
         border-radius: 40px;
-        color: #ffffff;
+        color: #ffffff !important;
         display: inline-block;
         font-size: 16px;
-        font-weight: bold;
         line-height: 1.2;
         margin: 0;
         padding: 15px 30px;
-        text-decoration: none;
+        text-decoration: none !important;
         text-transform: none;
       }
       /* Center alignment styles */
@@ -147,7 +145,7 @@
       <tr>
         <td class="header">
           <img src="{{ site_url }}/email_images/logo.png" alt="Fast & Pray Logo" class="logo" />
-          <h1>We'd love your feedback!</h1>
+          <h1>{{ title|safe }}</h1>
         </td>
       </tr>
       <tr>
