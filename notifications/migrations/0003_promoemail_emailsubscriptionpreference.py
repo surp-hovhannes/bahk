@@ -33,13 +33,4 @@ class Migration(migrations.Migration):
                 ('joined_fast', models.ForeignKey(blank=True, help_text='Send to users who joined this fast', null=True, on_delete=django.db.models.deletion.SET_NULL, to='hub.fast')),
             ],
         ),
-        migrations.CreateModel(
-            name='EmailSubscriptionPreference',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('unsubscribed_from_promos', models.BooleanField(default=False)),
-                ('last_updated', models.DateTimeField(auto_now=True)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='email_preferences', to=settings.AUTH_USER_MODEL)),
-            ],
-        ),
     ]
