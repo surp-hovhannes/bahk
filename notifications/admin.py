@@ -236,7 +236,6 @@ class PromoEmailAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at', 'sent_at')
     search_fields = ('title', 'subject', 'content_html', 'content_text')
     readonly_fields = ('created_at', 'updated_at', 'sent_at', 'status')
-    
 
     def get_urls(self):
         urls = super().get_urls()
@@ -258,7 +257,21 @@ class PromoEmailAdmin(admin.ModelAdmin):
             ),
         ]
         return custom_urls + urls
-    
+
+    def add_view(self, request, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_custom_buttons': False
+        })
+        return super().add_view(request, form_url, extra_context)
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_custom_buttons': True
+        })
+        return super().change_view(request, object_id, form_url, extra_context)
+
     def send_preview_view(self, request, id):
         """View for sending preview emails."""
         # First check if the request method is POST
