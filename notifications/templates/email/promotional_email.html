@@ -26,12 +26,12 @@
       }
       .header {
         background-color: #390714;
-        padding: 20px;
+        padding: 36px 20px;
         text-align: center;
       }
       .logo {
-        height: 40px;
-        width: auto;
+        height: 38px;
+        max-height: 38px;
       }
       .logo-icon {
         width: 58px;
@@ -45,11 +45,11 @@
         line-height: 1.2;
         font-family: "Figtree", Arial, sans-serif;
       }
-      h2 {
+      .footer-title {
         color: #d52d57;
-        font-size: 18px;
-        margin: 20px 0;
-        font-weight: 400;
+        font-size: 22px;
+        margin: 10px 0;
+        font-weight: 500;
         line-height: 1.2;
         font-family: "Figtree", Arial, sans-serif;
       }
@@ -65,6 +65,9 @@
         background-color: #390714;
         padding: 20px;
         text-align: center;
+      }
+      .footer-links {
+        margin: 8px 0;
       }
       .footer-links a {
         color: #f7dbdb;
@@ -91,7 +94,8 @@
       }
       /* Button styles with fallback */
       a.button {
-        display: inline-block;
+        display: block;
+        margin: 15px auto;
         padding: 15px 30px;
         background-color: #d52d57;
         background-image: linear-gradient(#E54670, #B5244A);
@@ -107,24 +111,31 @@
         font-family: "Figtree", Arial, sans-serif;
         mso-padding-alt: 15px 30px;
         mso-text-raise: 0;
-        margin: 10px 0;
       }
       a.button:visited {
         background-color: #d52d57;
         background-image: linear-gradient(#E54670, #B5244A);
-    }
-    a.button:active {
-      background-color: #B5244A;
-      background-image: linear-gradient(#B5244A , #E54670);
-    }
-    a.button:hover {
-      background-color: #B5244A;
-      background-image: linear-gradient(#B5244A , #E54670);
-    }
+      }
+      a.button:active {
+        background-color: #B5244A;
+        background-image: linear-gradient(#B5244A , #E54670);
+      }
+      a.button:hover {
+        background-color: #B5244A;
+        background-image: linear-gradient(#B5244A , #E54670);
+      }
       /* Center alignment styles */
       .centeredcontent {
         text-align: center;
         width: 100%;
+      }
+      .centeredcontent a.button {
+        display: inline-block;
+        margin: 10px auto;
+        text-align: center;
+      }
+      .spacer {
+        margin: 15px 0;
       }
     </style>
   </head>
@@ -144,7 +155,7 @@
       <tr>
         <td class="footer">
           <img src="{{ site_url }}/email_images/logoicon.png" alt="Fast & Pray Logo" class="logo-icon" />
-          <h2>Fast & Pray</h2>
+          <div class="footer-title">Fast & Pray</div>
           <div class="footer-links">
             <a href="mailto:fastandprayhelp@gmail.com">fastandprayhelp@gmail.com</a>
           </div>
