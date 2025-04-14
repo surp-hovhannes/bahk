@@ -30,7 +30,7 @@
         text-align: center;
       }
       .logo {
-        height: 45px;
+        height: 40px;
         width: auto;
       }
       .logo-icon {
@@ -39,8 +39,8 @@
       }
       h1 {
         color: #f7dbdb;
-        font-size: 24px;
-        margin: 20px 0;
+        font-size: 35px;
+        margin: 5px 0 0;
         font-weight: 500;
         line-height: 1.2;
         font-family: "Figtree", Arial, sans-serif;
@@ -56,7 +56,7 @@
       .content {
         padding: 20px;
         color: #000000;
-        font-size: 15px;
+        font-size: 17px;
         line-height: 1.5;
         background-color: #ffffff;
         font-family: "Figtree", Arial, sans-serif;
@@ -65,12 +65,6 @@
         background-color: #390714;
         padding: 20px;
         text-align: center;
-      }
-      .footer-links {
-        color: #f7dbdb;
-        font-size: 15px;
-        margin: 10px 0;
-        font-family: "Figtree", Arial, sans-serif;
       }
       .footer-links a {
         color: #f7dbdb;
@@ -90,53 +84,47 @@
         text-decoration: none;
         font-family: "Figtree", Arial, sans-serif;
       }
+      p a {
+        color: #d52d57;
+        text-decoration: none;
+        font-family: "Figtree", Arial, sans-serif;
+      }
       /* Button styles with fallback */
-      .button {
+      a.button {
         display: inline-block;
         padding: 15px 30px;
         background-color: #d52d57;
+        background-image: linear-gradient(#E54670, #B5244A);
         color: white;
-        text-decoration: none;
+        text-decoration: none !important;
+        text-transform: none;
         border-radius: 40px;
-        font-size: 16px;
+        font-size: 17px;
         text-align: center;
-        min-width: 200px;
+        min-width: 300px;
         border: none;
         cursor: pointer;
         font-family: "Figtree", Arial, sans-serif;
         mso-padding-alt: 15px 30px;
         mso-text-raise: 0;
+        margin: 10px 0;
       }
-      /* Outlook-specific button styles */
-      .button-a {
-        background: #d52d57;
-        border: 0px solid #d52d57;
-        border-radius: 40px;
-        color: #ffffff !important;
-        display: inline-block;
-        font-size: 16px;
-        line-height: 1.2;
-        margin: 0;
-        padding: 15px 30px;
-        text-decoration: none !important;
-        text-transform: none;
-      }
+      a.button:visited {
+        background-color: #d52d57;
+        background-image: linear-gradient(#E54670, #B5244A);
+    }
+    a.button:active {
+      background-color: #B5244A;
+      background-image: linear-gradient(#B5244A , #E54670);
+    }
+    a.button:hover {
+      background-color: #B5244A;
+      background-image: linear-gradient(#B5244A , #E54670);
+    }
       /* Center alignment styles */
       .centeredcontent {
         text-align: center;
         width: 100%;
-      }
-      .button-td {
-        background: #d52d57;
-        border-radius: 40px;
-        margin: 0 auto;
-        text-align: center;
-      }
-      /* Remove the gradient and active states as they're not well supported */
-      @media screen and (-webkit-min-device-pixel-ratio:0) {
-        .button {
-          background-color: #d52d57;
-        }
       }
     </style>
   </head>
