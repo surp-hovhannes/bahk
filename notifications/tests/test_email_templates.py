@@ -52,6 +52,7 @@ class PromoEmailTemplateTests(TestCase):
         """Test that the promotional email template renders correctly."""
         context = {
             **self.base_context,
+            'title': self.title,
             'email_content': self.promo.content_html,
         }
         

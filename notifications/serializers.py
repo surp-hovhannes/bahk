@@ -23,5 +23,5 @@ class DeviceTokenSerializer(serializers.ModelSerializer):
         """
         pattern = r'^ExponentPushToken\[[a-zA-Z0-9_-]+\]$'
         if not bool(re.match(pattern, value)):
-            raise serializers.ValidationError('Invalid Expo push token format')
+            raise serializers.ValidationError(f'Invalid Expo push token format. Expected: {pattern}')
         return value

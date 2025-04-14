@@ -333,6 +333,7 @@ class PromoEmailAdmin(admin.ModelAdmin):
         # Prepare email content with preview markers
         context = {
             'user': admin_user,
+            'title': promo.title,
             'email_content': f"[PREVIEW] {promo.content_html}",
             'unsubscribe_url': unsubscribe_url,
             'site_url': settings.FRONTEND_URL

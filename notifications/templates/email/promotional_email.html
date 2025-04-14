@@ -1,348 +1,173 @@
-<html !DOCTYPE html>
+<!DOCTYPE html>
+<html>
   <head>
-    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ email_content|striptags|truncatechars:50 }}</title>
     <style type="text/css">
-      @import url(https://themes.googleusercontent.com/fonts/css?kit=OUdT43qE98k1fLl98sLVVojV1OhFwesgIY0M_0n2fQ8);
-      ol {
+      @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500&display=swap');
+      
+      body {
         margin: 0;
         padding: 0;
+        background-color: #f3f3f3;
+        font-family: "Figtree", Arial, sans-serif;
       }
-      table td,
-      table th {
-        padding: 0;
-      }
-      .c23 {
-        padding: 36pt 36pt 36pt 36pt;
-        vertical-align: middle;
-        background-color: #390714;
-        width: 504pt;
-      }
-      .c2 {
-        padding: 20pt 10pt 10pt 36pt;
-        width: 50pt;
-        background-color: #ffffff;
-        vertical-align: middle;
-      }
-      .c12 {
-        padding: 25pt 36pt 25pt 36pt;
-        vertical-align: top;
-        width: 504pt;
-        background-color: #390714;
-      }
-      .c19 {
-        padding: 25pt 36pt 25pt 36pt;
-        vertical-align: top;
-        background-color: #ffffff;
-        width: 504pt;
-      }
-      .c11 {
-        padding: 20pt 88pt 10pt 10pt;
-        width: 330.8pt;
-        vertical-align: middle;
-        background-color: #ffffff;
-      }
-      .c6 {
-        color: #000000;
-        font-weight: 400;
-        text-decoration: none;
-        vertical-align: baseline;
-        font-size: 12pt;
-        font-family: "Figtree", sans-serif;
-        font-style: normal;
-      }
-      .c25 {
-        color: #f3f3f3;
-        font-weight: 400;
-        text-decoration: none;
-        vertical-align: baseline;
-        font-size: 12pt;
-        font-family: "Figtree", sans-serif;
-        font-style: normal;
-      }
-      .c22 {
-        color: #000000;
-        font-weight: 400;
-        text-decoration: none;
-        vertical-align: baseline;
-        font-size: 14pt;
-        font-family: "Figtree", sans-serif;
-        font-style: normal;
-      }
-      .c10 {
-        color: #d52d57;
-        font-weight: 400;
-        text-decoration: none;
-        vertical-align: baseline;
-        font-size: 14pt;
-        font-family: "Figtree", sans-serif;
-        font-style: normal;
-        line-height: 2;
-      }
-      .c15 {
-        color: #d52d57;
-        font-weight: 400;
-        text-decoration: none;
-        vertical-align: baseline;
-        font-size: 10pt;
-        font-family: "Figtree", sans-serif;
-        font-style: normal;
-      }
-      .c4 {
-        color: #000000;
-        font-weight: 400;
-        text-decoration: none;
-        vertical-align: baseline;
-        font-size: 10pt;
-        font-family: "Figtree", sans-serif;
-        font-style: normal;
-      }
-      .c7 {
-        color: #d52d57;
-        font-weight: 500;
-        text-decoration: none;
-        vertical-align: baseline;
-        font-size: 27pt;
-        font-family: "Figtree", sans-serif;
-        font-style: normal;
-      }
-      .c8 {
-        padding-top: 0pt;
-        padding-bottom: 0pt;
-        line-height: 1.15;
-        text-align: center;
-      }
-      .c24 {
-        text-decoration-skip-ink: none;
-        -webkit-text-decoration-skip: none;
-        color: #d52d57;
-        text-decoration: underline;
-      }
-      .c9 {
-        padding-top: 0pt;
-        padding-bottom: 0pt;
-        line-height: 1.5;
-        text-align: left;
-      }
-      .c17 {
-        padding-top: 0pt;
-        padding-bottom: 0pt;
-        line-height: 1.2;
-        text-align: center;
-      }
-      .c20 {
-        font-size: 27pt;
-        font-family: "Figtree", sans-serif;
-        color: #f7dbdb;
-        font-weight: 500;
-      }
-      .c3 {
-        margin-left: auto;
+      table {
         border-spacing: 0;
         border-collapse: collapse;
-        margin-right: auto;
       }
-      .c18 {
-        background-color: #f3f3f3;
-        max-width: 537.7pt;
-        padding: 15pt;
-        margin: auto;
+      td {
+        padding: 0;
       }
-      .c14 {
-        color: inherit;
-        text-decoration: inherit;
-        line-height: 1.5;
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
       }
-      .c16 {
-        font-size: 12pt;
-        line-height: 1.5;
+      .header {
+        background-color: #390714;
+        padding: 36px 20px;
+        text-align: center;
       }
-      .c0 {
-        height: 73.5pt;
+      .logo {
+        height: 38px;
+        max-height: 38px;
       }
-      .c1 {
-        height: 257.1pt;
-      }
-      .c13 {
-        height: 10pt;
-      }
-      .c21 {
-        height: 0pt;
-      }
-      .title {
-        padding-top: 0pt;
-        color: #000000;
-        font-size: 26pt;
-        padding-bottom: 3pt;
-        font-family: "Figtree", sans-serif;
-        line-height: 1.15;
-        page-break-after: avoid;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
-      }
-      .subtitle {
-        padding-top: 0pt;
-        color: #666666;
-        font-size: 15pt;
-        padding-bottom: 16pt;
-        font-family: "Arial";
-        line-height: 1.15;
-        page-break-after: avoid;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
-      }
-      li {
-        color: #000000;
-        font-size: 10pt;
-        font-family: "Figtree", sans-serif;
-      }
-      p {
-        margin: 0;
-        color: #000000;
-        font-size: 10pt;
-        font-family: "Figtree", sans-serif;
+      .logo-icon {
+        width: 58px;
+        height: 58px;
       }
       h1 {
-        padding-top: 20pt;
+        color: #f7dbdb;
+        font-size: 35px;
+        margin: 5px 0 0;
+        font-weight: 500;
+        line-height: 1.2;
+        font-family: "Figtree", Arial, sans-serif;
+      }
+      .footer-title {
+        color: #d52d57;
+        font-size: 22px;
+        margin: 10px 0;
+        font-weight: 500;
+        line-height: 1.2;
+        font-family: "Figtree", Arial, sans-serif;
+      }
+      .content {
+        padding: 20px;
         color: #000000;
-        font-size: 20pt;
-        padding-bottom: 6pt;
-        font-family: "Figtree", sans-serif;
-        line-height: 1.15;
-        page-break-after: avoid;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
+        font-size: 17px;
+        line-height: 1.5;
+        background-color: #ffffff;
+        font-family: "Figtree", Arial, sans-serif;
       }
-      h2 {
-        padding-top: 18pt;
-        color: #000000;
-        font-size: 16pt;
-        padding-bottom: 6pt;
-        font-family: "Figtree", sans-serif;
-        line-height: 1.15;
-        page-break-after: avoid;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
+      .footer {
+        background-color: #390714;
+        padding: 20px;
+        text-align: center;
       }
-      h3 {
-        padding-top: 16pt;
-        color: #434343;
-        font-size: 14pt;
-        padding-bottom: 4pt;
-        font-family: "Figtree", sans-serif;
-        line-height: 1.15;
-        page-break-after: avoid;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
+      .footer-links {
+        margin: 8px 0;
       }
-      h4 {
-        padding-top: 14pt;
+      .footer-links a {
+        color: #f7dbdb;
+        text-decoration: none;
+        font-family: "Figtree", Arial, sans-serif;
+      }
+      .unsubscribe {
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
         color: #666666;
-        font-size: 12pt;
-        padding-bottom: 4pt;
-        font-family: "Figtree", sans-serif;
-        line-height: 1.15;
-        page-break-after: avoid;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
+        background-color: #ffffff;
+        font-family: "Figtree", Arial, sans-serif;
       }
-      h5 {
-        padding-top: 12pt;
-        color: #666666;
-        font-size: 11pt;
-        padding-bottom: 4pt;
-        font-family: "Figtree", sans-serif;
-        line-height: 1.15;
-        page-break-after: avoid;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
+      .unsubscribe a {
+        color: #d52d57;
+        text-decoration: none;
+        font-family: "Figtree", Arial, sans-serif;
       }
-      h6 {
-        padding-top: 12pt;
-        color: #666666;
-        font-size: 11pt;
-        padding-bottom: 4pt;
-        font-family: "Figtree", sans-serif;
-        line-height: 1.15;
-        page-break-after: avoid;
-        font-style: italic;
-        orphans: 2;
-        widows: 2;
-        text-align: left;
+      p a {
+        color: #d52d57;
+        text-decoration: none;
+        font-family: "Figtree", Arial, sans-serif;
+      }
+      /* Button styles with fallback */
+      a.button {
+        display: block;
+        margin: 15px auto;
+        padding: 15px 30px;
+        background-color: #d52d57;
+        background-image: linear-gradient(#E54670, #B5244A);
+        color: white;
+        text-decoration: none !important;
+        text-transform: none;
+        border-radius: 40px;
+        font-size: 17px;
+        text-align: center;
+        min-width: 300px;
+        border: none;
+        cursor: pointer;
+        font-family: "Figtree", Arial, sans-serif;
+        mso-padding-alt: 15px 30px;
+        mso-text-raise: 0;
+      }
+      a.button:visited {
+        background-color: #d52d57;
+        background-image: linear-gradient(#E54670, #B5244A);
+      }
+      a.button:active {
+        background-color: #B5244A;
+        background-image: linear-gradient(#B5244A , #E54670);
+      }
+      a.button:hover {
+        background-color: #B5244A;
+        background-image: linear-gradient(#B5244A , #E54670);
+      }
+      /* Center alignment styles */
+      .centeredcontent {
+        text-align: center;
+        width: 100%;
+      }
+      .centeredcontent a.button {
+        display: inline-block;
+        margin: 10px auto;
+        text-align: center;
+      }
+      .spacer {
+        margin: 15px 0;
       }
     </style>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ email_content|striptags|truncatechars:50 }}</title>
   </head>
-  <body class="c18 doc-content">
-    <table class="c3">
-      <tr class="c0">
-        <td class="c23" colspan="1" rowspan="1">
-          <p class="c17">
-            <img
-                alt="Fast & Pray Logo"
-                src="{{ site_url }}/email_images/image4.png"
-                width="300"
-                height="85"
-                style="display: block; border: 0; margin: 0 auto; margin-bottom: -20px;"
-                title="Fast & Pray Logo"
-            />
-          </p>
-          <p class="c17">
-            <span class="c20">We&rsquo;d love your feedback!</span>
-          </p>
+  <body>
+    <table class="container" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td class="header">
+          <img src="{{ site_url }}/email_images/logo.png" alt="Fast & Pray Logo" class="logo" />
+          <h1>{{ title|safe }}</h1>
         </td>
       </tr>
-    </table>
-    <table class="c3">
-      <tr class="c1">
-        <td class="c19" colspan="1" rowspan="1">
-
-            {{ email_content|safe }}
-
+      <tr>
+        <td class="content">
+          {{ email_content|safe }}
         </td>
       </tr>
-    </table>
-
-    <table class="c3">
-      <tr class="c21">
-        <td class="c12" colspan="1" rowspan="1">
-          <p class="c17">
-            <img
-                alt="Fast & Pray Icon"
-                src="{{ site_url }}/email_images/image1.png"
-                width="60"
-                height="60"
-                style="display: block; border: 0; margin: 0 auto;"
-                title="Fast & Pray Icon"
-            />
-          </p>
-          <p class="c8"><span class="c10">Fast &amp; Pray</span></p>
-          <p class="c8">
-            <span class="c24"
-              ><a class="c14" href="mailto:fastandprayhelp@gmail.com"
-                >fastandprayhelp@gmail.com</a
-              ></span
-            >
-          </p>
-          <p class="c8">
-            <span class="c24"
-              ><a class="c14" href="https://fastandpray.app"
-                >fastandpray.app</a
-              ></span
-            >
-          </p>
-          <p class="c9 c13"><span class="c6"></span></p>
-          <p class="c25 c8">
-            You received this email because you're subscribed to Fast and Pray promotional emails.
-            <a href="{{ unsubscribe_url }}">Unsubscribe</a> if you no longer wish to receive these emails.
-        </p>
+      <tr>
+        <td class="footer">
+          <img src="{{ site_url }}/email_images/logoicon.png" alt="Fast & Pray Logo" class="logo-icon" />
+          <div class="footer-title">Fast & Pray</div>
+          <div class="footer-links">
+            <a href="mailto:fastandprayhelp@gmail.com">fastandprayhelp@gmail.com</a>
+          </div>
+          <div class="footer-links">
+            <a href="https://fastandpray.app">fastandpray.app</a>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="unsubscribe">
+          You received this email because you're subscribed to Fast & Pray promotional emails.
+          <a href="{{ unsubscribe_url }}">Unsubscribe</a> if you no longer wish to receive these emails.
         </td>
       </tr>
     </table>
