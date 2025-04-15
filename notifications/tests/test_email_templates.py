@@ -52,7 +52,6 @@ class PromoEmailTemplateTests(TestCase):
         """Test that the promotional email template renders correctly."""
         context = {
             **self.base_context,
-            'title': self.title,
             'email_content': self.promo.content_html,
         }
         
@@ -60,7 +59,7 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(self.promo.content_html, rendered)
         self.assertIn(self.unsubscribe_url, rendered)
-        self.assertIn('http://testserver/email_images/image4.png', rendered)
+        self.assertIn('http://testserver/email_images/logo.png', rendered)
     
     def test_promotional_email_template_with_complex_content(self):
         """Test that the promotional email template handles complex HTML content."""
@@ -84,7 +83,7 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(complex_html, rendered)
         self.assertIn(self.unsubscribe_url, rendered)
-        self.assertIn('http://testserver/email_images/image4.png', rendered)
+        self.assertIn('http://testserver/email_images/logo.png', rendered)
     
     def test_promotional_email_template_with_special_characters(self):
         """Test that the promotional email template handles special characters."""
@@ -101,7 +100,7 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(special_content, rendered)
         self.assertIn(self.unsubscribe_url, rendered)
-        self.assertIn('http://testserver/email_images/image4.png', rendered)
+        self.assertIn('http://testserver/email_images/logo.png', rendered)
     
     def test_promotional_email_template_with_missing_context(self):
         """Test that the promotional email template handles missing context variables."""
@@ -114,4 +113,4 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(self.unsubscribe_url, rendered)
         self.assertNotIn('None', rendered)
-        self.assertIn('http://testserver/email_images/image4.png', rendered) 
+        self.assertIn('http://testserver/email_images/logo.png', rendered) 
