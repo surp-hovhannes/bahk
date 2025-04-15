@@ -8,7 +8,6 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import Truncator
 from django.db import models
-from markdownx.admin import MarkdownxModelAdmin
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Devotional, Fast, Profile, Reading

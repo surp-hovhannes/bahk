@@ -1,7 +1,7 @@
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
 from django.core.cache import cache
-from hub.models import Profile, Fast
+from hub.models import Profile
 
 @receiver(m2m_changed, sender=Profile.fasts.through)
 def handle_fast_participant_change(sender, instance, action, **kwargs):

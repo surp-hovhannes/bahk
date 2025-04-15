@@ -1,13 +1,11 @@
-from exponent_server_sdk import DeviceNotRegisteredError, PushClient, PushMessage, PushServerError, PushTicketError
-from requests.exceptions import ConnectionError, HTTPError
+from exponent_server_sdk import DeviceNotRegisteredError, PushClient, PushMessage
 from .models import DeviceToken
 import logging
 import json
 import re
-from datetime import datetime
 from django.utils import timezone
 from django.db.models import Q
-from .constants import NOTIFICATION_TYPE_FILTERS, WEEKLY_FAST_NAMES
+from .constants import NOTIFICATION_TYPE_FILTERS
 
 logger = logging.getLogger(__name__)
 

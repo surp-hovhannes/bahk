@@ -5,19 +5,14 @@ from django.urls import path
 from django.shortcuts import redirect
 from .models import DeviceToken
 from .utils import send_push_notification
-from .tasks import send_push_notification_task, send_promo_email_task
+from .tasks import send_promo_email_task
 from django.contrib.admin import SimpleListFilter
 from hub.models import Fast
 from django.utils import timezone
-from django.db.models import Q
 from django import forms
-from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
-from django.http import HttpResponseRedirect, HttpResponse
-from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.template.loader import render_to_string
 from .models import PromoEmail
-from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
 
 

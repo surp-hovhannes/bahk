@@ -2,9 +2,6 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 import re
-from django.utils import timezone
-from hub.models import User as HubUser
-from django.contrib.postgres.fields import ArrayField
 
 # Create your models here.
 

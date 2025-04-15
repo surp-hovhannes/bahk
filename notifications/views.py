@@ -1,15 +1,12 @@
 import logging
 from django.shortcuts import render, redirect
-from django.views import View
 from django.contrib.auth.models import User
 from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
-from django.http import HttpResponseBadRequest
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import DeviceToken
 from .serializers import DeviceTokenSerializer
-from .utils import send_push_notification
 from .tasks import send_push_notification_task
 from django.core.exceptions import ValidationError
 
