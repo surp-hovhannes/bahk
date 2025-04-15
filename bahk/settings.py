@@ -29,10 +29,11 @@ from sentry_sdk.integrations.redis import RedisIntegration
 import sentry_sdk
 
 # Initialize Sentry SDK
-sentry_sdk.init(
-    dsn=config('SENTRY_DSN', default=os.environ.get("SENTRY_DSN", "")),  # Try both config and environ
-    integrations=[
-        DjangoIntegration(),
+if not (config('CI', default=False, cast=bool) or 'test' in sys.argv):
+    sentry_sdk.init(
+        dsn=config('SENTRY_DSN', default=os.environ.get("SENTRY_DSN", "")),  # Try both config and environ
+        integrations=[
+            DjangoIntegration(),
         CeleryIntegration(
             monitor_beat_tasks=True  # Enable Celery beat task monitoring for Sentry Crons
         ),
