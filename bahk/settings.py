@@ -394,6 +394,7 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 
 # Frontend URL for password reset, if local development or production
 FRONTEND_URL = config('FRONTEND_URL', default='https://fastandpray.app')
+APP_URL = config('APP_URL', default='https://web.fastandpray.app')
 BACKEND_URL = 'https://api.fastandpray.app'
 SITE_URL = config('SITE_URL', default=FRONTEND_URL)  # Default to FRONTEND_URL if not specified
 
