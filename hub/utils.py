@@ -6,10 +6,9 @@ import urllib
 
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
-from django.db.models import OuterRef, Subquery, Q
+from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
-from django.utils import timezone
 from django.core.cache import cache
 
 import bahk.settings as settings

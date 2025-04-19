@@ -1,16 +1,9 @@
 from django.db import models
-from django.utils.text import slugify
-from PIL import Image
-from io import BytesIO
-from django.core.files import File
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
 from django.utils import timezone
 import logging
-import os
-from django.conf import settings
 from s3_file_field import S3FileField
-from django.core.cache import cache
 
 from learning_resources.constants import DAYS_TO_CACHE_THUMBNAIL
 

@@ -14,7 +14,6 @@ from imagekit.processors import Transpose
 from hub.constants import CATENA_ABBREV_FOR_BOOK, CATENA_HOME_PAGE_URL, DAYS_TO_CACHE_THUMBNAIL
 import bahk.settings as settings
 from learning_resources.models import Video
-from hub.services.aws_geocoding import get_coordinates
 
 
 class Church(models.Model):
@@ -167,6 +166,8 @@ class Profile(models.Model):
     receive_ongoing_fast_push_notifications = models.BooleanField(default=True)
     receive_daily_fast_push_notifications = models.BooleanField(default=False)
     include_weekly_fasts_in_notifications = models.BooleanField(default=False)
+    # Email preferences
+    receive_promotional_emails = models.BooleanField(default=True, help_text="Receive promotional emails")
 
     # Track changes to the profile_image field
     tracker = FieldTracker(fields=['profile_image', 'location'])

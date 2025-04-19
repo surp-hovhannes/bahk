@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <h2>Unsubscribe Error</h2>
+            <p class="mt-4">Sorry, we couldn't process your unsubscribe request.</p>
+            <p>This could be because:</p>
+            <ul class="list-unstyled">
+                <li>The unsubscribe link has expired</li>
+                <li>The link is invalid or has been tampered with</li>
+                <li>You've already unsubscribed</li>
+            </ul>
+            <p>If you continue to have issues, please contact support.</p>
+            <a href="/" class="btn btn-primary mt-3">Return to Home</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

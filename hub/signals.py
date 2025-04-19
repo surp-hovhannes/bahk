@@ -1,7 +1,7 @@
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
 from django.core.cache import cache
-from hub.models import Profile, Fast
+from hub.models import Profile
 
 @receiver(m2m_changed, sender=Profile.fasts.through)
 def handle_fast_participant_change(sender, instance, action, **kwargs):
@@ -20,16 +20,13 @@ def handle_fast_participant_change(sender, instance, action, **kwargs):
         if isinstance(instance, Profile):
             # This is a Profile instance, get its church ID
             church_id = instance.church_id
-            print(f"Profile {instance.id} modified fasts, church_id: {church_id}")
         else:
             # This is a Fast instance, get its church ID
             church_id = instance.church_id
-            print(f"Fast {instance.id} modified profiles, church_id: {church_id}")
         
         if church_id:
             # Invalidate the participant count cache
             cache.delete(f'church_{church_id}_participant_count')
-            print(f"Invalidated participant count cache for church {church_id}")
             
             # Also clear all cached querysets for this church
             pattern = f'fast_list_qs:{church_id}:*'
@@ -37,5 +34,4 @@ def handle_fast_participant_change(sender, instance, action, **kwargs):
             # this will need a different approach
             keys = cache.keys(pattern) if hasattr(cache, 'keys') else []
             if keys:
-                print(f"Clearing {len(keys)} cached querysets for church {church_id}")
                 cache.delete_many(keys)

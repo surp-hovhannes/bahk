@@ -1,6 +1,4 @@
 """Serializers for handling API requests."""
-import datetime
-import re
 import logging
 from django.utils import timezone  # Add missing timezone import
 
@@ -13,15 +11,12 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
-from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
 from django.conf import settings
 from django.utils.functional import cached_property
 
 from hub import models
-from learning_resources.serializers import VideoSerializer
 from hub.mixins import ThumbnailCacheMixin
 
 
@@ -48,6 +43,7 @@ class ProfileSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         model = models.Profile
         fields = ['user_id', 'email', 'name', 'profile_image', 'thumbnail',
                  'location', 'church', 'receive_upcoming_fast_reminders', 
+                 'receive_promotional_emails',
                  'receive_upcoming_fast_push_notifications', 
                  'receive_ongoing_fast_push_notifications',
                  'receive_daily_fast_push_notifications',
