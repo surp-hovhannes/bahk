@@ -1,7 +1,11 @@
+"""Models for notifications app."""
+import logging
+import re
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-import re
+
 
 # Create your models here.
 
@@ -67,16 +71,78 @@ class PromoEmail(models.Model):
     # Targeting options
     all_users = models.BooleanField(default=False, help_text="Send to all users")
     church_filter = models.ForeignKey('hub.Church', null=True, blank=True, on_delete=models.SET_NULL)
-    joined_fast = models.ForeignKey('hub.Fast', null=True, blank=True, on_delete=models.SET_NULL, 
-                                   help_text="Send to users who joined this fast")
-    exclude_unsubscribed = models.BooleanField(default=True, help_text="Exclude users who have unsubscribed from promotional emails")
+    joined_fast = models.ForeignKey(
+        'hub.Fast', 
+        null=True, 
+        blank=True, 
+        on_delete=models.SET_NULL,
+        help_text="Send to users who joined this fast"
+    )
+    specific_emails = models.TextField(
+        null=True,
+        blank=True, 
+        help_text="Email addresses to send promotional email to (one address per line); overrides filters if provided"
+    )
+    exclude_unsubscribed = models.BooleanField(
+        default=True, 
+        help_text="Exclude users who have unsubscribed from promotional emails"
+    )
+    
+    @property
+    def valid_specific_emails(self):
+        """Property that returns the list of valid specific email addresses, with invalid ones skipped.
+        """
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError
+
+        logger = logging.getLogger(__name__)
+        
+        if not self.specific_emails:
+            return []
+            
+        # Split by newlines and strip whitespace
+        email_list = [email.strip() for email in self.specific_emails.split('\n')]
+        
+        # Remove empty lines
+        email_list = [email for email in email_list if email]
+        
+        valid_emails = []
+        for email in email_list:
+            try:
+                validate_email(email)
+                valid_emails.append(email)
+            except ValidationError:
+                logger.warning(f"Invalid email address skipped in promotional email {self.id}: {email}")
+                
+        return valid_emails
     
     def __str__(self):
         return self.title
     
+    def clean(self):
+        """Validate the model fields."""
+        super().clean()
+        
+        if self.specific_emails:
+            # Get valid emails
+            valid_emails = self.valid_specific_emails
+            
+            # Get all emails (including invalid ones)
+            all_emails = [email.strip() for email in self.specific_emails.split('\n') if email.strip()]
+            
+            # If the counts don't match, there were invalid emails
+            if len(valid_emails) != len(all_emails):
+                invalid_emails = set(all_emails) - set(valid_emails)
+                raise ValidationError({
+                    'specific_emails': f"Invalid email addresses found: {', '.join(invalid_emails)}"
+                })
+    
     def recipient_count(self):
         """Get count of recipients based on filters"""
         from hub.models import Profile
+
+        if self.specific_emails:
+            return len(self.valid_specific_emails)
         
         # Start with all profiles
         profiles = Profile.objects.all()
@@ -108,7 +174,6 @@ class PromoEmail(models.Model):
         from django.utils.html import strip_tags
         from django.conf import settings
         from django.urls import reverse
-        import logging
         
         logger = logging.getLogger(__name__)
         

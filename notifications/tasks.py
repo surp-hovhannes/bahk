@@ -6,7 +6,7 @@ from hub.models import Day
 from django.utils import timezone
 from datetime import timedelta
 from hub.models import User
-from django.db.models import OuterRef, Subquery, Q
+from django.db.models import OuterRef, Subquery
 import logging
 from .constants import DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE
 from .utils import is_weekly_fast
@@ -44,22 +44,27 @@ def send_promo_email_task(promo_id):
         promo.status = PromoEmail.SENDING
         promo.save()
         
-        # Get eligible recipients based on targeting options
-        profiles = Profile.objects.all()
-        
-        # Apply filters
-        if not promo.all_users:
-            if promo.church_filter:
-                profiles = profiles.filter(church=promo.church_filter)
+        # Get eligible recipients
+        if promo.specific_emails:
+            # If specific emails are provided, use those instead of filters
+            users = User.objects.filter(email__in=promo.valid_specific_emails)
+        else:
+            # Get eligible recipients based on targeting options
+            profiles = Profile.objects.all()
             
-            if promo.joined_fast:
-                profiles = profiles.filter(fasts=promo.joined_fast)
-        
-        if promo.exclude_unsubscribed:
-            profiles = profiles.filter(receive_promotional_emails=True)
-        
-        # Get users from profiles
-        users = User.objects.filter(profile__in=profiles).distinct()
+            # Apply filters
+            if not promo.all_users:
+                if promo.church_filter:
+                    profiles = profiles.filter(church=promo.church_filter)
+                
+                if promo.joined_fast:
+                    profiles = profiles.filter(fasts=promo.joined_fast)
+            
+            if promo.exclude_unsubscribed:
+                profiles = profiles.filter(receive_promotional_emails=True)
+            
+            # Get users from profiles
+            users = User.objects.filter(profile__in=profiles).distinct()
         
         if not users:
             logger.warning(f"No eligible recipients found for promotional email: {promo.title}")
