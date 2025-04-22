@@ -17,6 +17,8 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.urls import reverse
 from django.core.signing import TimestampSigner
+from django.core.cache import cache
+from celery.exceptions import RetryTaskError
 
 
 logger = logging.getLogger(__name__)
@@ -29,16 +31,42 @@ logger = logging.getLogger(__name__)
 def send_push_notification_task(message, data=None, tokens=None, notification_type=None):
     send_push_notification(message, data, tokens, notification_type)
 
-@shared_task
-def send_promo_email_task(promo_id):
+def get_email_count():
+    """Get the number of emails sent in the current rate limit window."""
+    return cache.get('email_count', 0)
+
+def increment_email_count():
+    """Increment the email count and set expiration if not already set."""
+    count = cache.get('email_count', 0)
+    if count == 0:
+        # Set expiration when first email is sent
+        cache.set('email_count', 1, settings.EMAIL_RATE_LIMIT_WINDOW)
+    else:
+        cache.incr('email_count')
+
+@shared_task(bind=True, max_retries=3)
+def send_promo_email_task(self, promo_id):
     """
     Send a promotional email to all eligible recipients based on the email's targeting options.
+    Implements rate limiting to ensure emails are sent within the configured hourly limit.
     
     Args:
         promo_id: ID of the PromoEmail to send
     """
     try:
         promo = PromoEmail.objects.get(id=promo_id)
+        
+        # Check rate limit
+        current_count = get_email_count()
+        if current_count >= settings.EMAIL_RATE_LIMIT:
+            logger.warning(f"Rate limit reached ({current_count}/{settings.EMAIL_RATE_LIMIT} emails per hour). Rescheduling task.")
+            # Calculate delay until next window
+            now = timezone.now()
+            next_window = (now + timedelta(seconds=settings.EMAIL_RATE_LIMIT_WINDOW))
+            delay = (next_window - now).total_seconds()
+            
+            # Retry the task with the calculated delay
+            raise self.retry(countdown=delay, max_retries=None)
         
         # Update status to sending
         promo.status = PromoEmail.SENDING
@@ -85,6 +113,20 @@ def send_promo_email_task(promo_id):
         # Send to each user
         for user in users:
             try:
+                # Check rate limit before each email
+                current_count = get_email_count()
+                if current_count >= settings.EMAIL_RATE_LIMIT:
+                    logger.warning(f"Rate limit reached while sending batch. Rescheduling remaining emails.")
+                    # Retry the task with remaining users
+                    remaining_users = list(users[current_count:].values_list('id', flat=True))
+                    if remaining_users:
+                        send_promo_email_task.apply_async(
+                            args=[promo_id],
+                            kwargs={'remaining_user_ids': remaining_users},
+                            countdown=settings.EMAIL_RATE_LIMIT_WINDOW
+                        )
+                    break
+                
                 # Create unsubscribe URL for this user
                 unsubscribe_token = signer.sign(str(user.id))
                 unsubscribe_url = f"{settings.BACKEND_URL}{reverse('notifications:unsubscribe')}?token={unsubscribe_token}"
@@ -111,6 +153,8 @@ def send_promo_email_task(promo_id):
                 email.attach_alternative(html_content, "text/html")
                 email.send()
                 
+                # Increment email count after successful send
+                increment_email_count()
                 success_count += 1
                 
             except Exception as e:
@@ -119,8 +163,11 @@ def send_promo_email_task(promo_id):
         
         # Update promo status
         if success_count > 0:
-            promo.status = PromoEmail.SENT
-            promo.sent_at = timezone.now()
+            if success_count == len(users):
+                promo.status = PromoEmail.SENT
+                promo.sent_at = timezone.now()
+            else:
+                promo.status = PromoEmail.SENDING  # Keep as sending if some emails were rescheduled
             promo.save()
             logger.info(f"Successfully sent promotional email '{promo.title}' to {success_count} recipients. Failed: {failure_count}")
         else:
@@ -130,6 +177,9 @@ def send_promo_email_task(promo_id):
             
     except PromoEmail.DoesNotExist:
         logger.error(f"Promotional email with ID {promo_id} not found")
+    except RetryTaskError:
+        # Let the retry mechanism handle rescheduling
+        raise
     except Exception as e:
         logger.error(f"Error in send_promo_email_task: {str(e)}")
         try:
