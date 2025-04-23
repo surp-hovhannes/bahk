@@ -11,6 +11,7 @@ from hub.models import User, Profile, Church, Fast
 @override_settings(
     SITE_URL='https://api.fastandpray.app',
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    EMAIL_RATE_LIMIT=100,
 )
 class PromoEmailTaskTests(TestCase):
     """Tests for the promotional email sending task."""
@@ -70,6 +71,8 @@ class PromoEmailTaskTests(TestCase):
             content_text="Test content",
             status=PromoEmail.DRAFT
         )
+
+        cache.delete("email_count")
 
     def test_send_promo_email_to_all_users(self):
         """Test sending a promotional email to all users."""
