@@ -56,50 +56,18 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
     """
     try:
         promo = PromoEmail.objects.get(id=promo_id)
-        
-        # Check rate limit
-        current_count = get_email_count()
-        if current_count >= settings.EMAIL_RATE_LIMIT:
-            logger.warning(
-                "Rate limit reached (%d/%d emails per %d seconds). Rescheduling task.", 
-                current_count, 
-                settings.EMAIL_RATE_LIMIT, 
-                settings.EMAIL_RATE_LIMIT_WINDOW
-            )
-            # Calculate delay until next window
-            now = timezone.now()
-            next_window = (now + timedelta(seconds=settings.EMAIL_RATE_LIMIT_WINDOW))
-            delay = (next_window - now).total_seconds()
-            
-            # Create a new task for the remaining users
-            if remaining_user_ids is None:
-                # If this is the first run, get all eligible users
-                users = get_target_users(promo)
-                remaining_user_ids = list(users.values_list('id', flat=True))
-            
-            # Schedule a new task for the remaining users
-            send_promo_email_task.apply_async(
-                args=[promo_id],
-                kwargs={'remaining_user_ids': remaining_user_ids},
-                countdown=delay
-            )
-            return
-        
+                
         # Update status to sending
         promo.status = PromoEmail.SENDING
         promo.save()
         
         # Get users to process
-        if remaining_user_ids:
-            users = User.objects.filter(id__in=remaining_user_ids)
-        else:
-            users = get_target_users(promo)
+        users = get_target_users(promo) if not remaining_user_ids else User.objects.filter(id__in=remaining_user_ids)
         
         if not users.exists(): # Use exists() for efficiency
             logger.warning(f"No eligible recipients found for promotional email ID {promo_id}: {promo.title}")
             # Set status to FAILED if no recipients are found, as per test requirements.
             promo.status = PromoEmail.FAILED 
-            # promo.sent_at = timezone.now() # Remove sent_at timestamp for failure
             promo.save()
             return
         
@@ -114,19 +82,23 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
         signer = TimestampSigner()
         
         # Send to each user
-        # Iterate over the queryset directly
         for user in users:
             # Ensure user has an email address and is active
             if not user.email or not user.is_active:
                 logger.warning(f"Skipping user {user.id} for promo {promo_id} due to missing email or inactive status.")
-                failure_count += 1 # Count inactive/no-email users as failures for this send attempt
+                failure_count += 1  # Count inactive/no-email users as failures for this send attempt
                 continue
                 
             try:
                 # Check rate limit before each email
                 current_count = get_email_count()
                 if current_count >= settings.EMAIL_RATE_LIMIT:
-                    logger.warning("Rate limit reached while sending batch. Rescheduling remaining users.")
+                    logger.warning(
+                        "Rate limit reached (%d / %d emails per %d seconds). Rescheduling remaining users.", 
+                        current_count, 
+                        settings.EMAIL_RATE_LIMIT, 
+                        settings.EMAIL_RATE_LIMIT_WINDOW
+                    )
                     # Get remaining user IDs
                     remaining_user_ids = list(users.values_list('id', flat=True))[current_count:]
                     if remaining_user_ids:
@@ -137,7 +109,7 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                             countdown=settings.EMAIL_RATE_LIMIT_WINDOW
                         )
                     break
-                
+
                 # Create unsubscribe URL for this user
                 unsubscribe_token = signer.sign(str(user.id))
                 unsubscribe_url = f"{settings.BACKEND_URL}{reverse('notifications:unsubscribe')}?token={unsubscribe_token}"
@@ -173,12 +145,9 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                 failure_count += 1
         
         # Update promo status
-        if success_count > 0:
-            if success_count == len(users):
-                promo.status = PromoEmail.SENT
-                promo.sent_at = timezone.now()
-            else:
-                promo.status = PromoEmail.SENDING  # Keep as sending if some emails were rescheduled
+        if success_count > 0 and current_count < settings.EMAIL_RATE_LIMIT:
+            promo.status = PromoEmail.SENT
+            promo.sent_at = timezone.now()
             # Optionally: store success/failure counts if needed
             # promo.success_count = success_count
             # promo.failure_count = failure_count
@@ -220,7 +189,7 @@ def get_target_users(promo):
     """Helper function to get eligible users for a promotional email."""
     if promo.selected_users.exists():
         # If specific users are selected, use them directly
-        logger.info(f"PromoEmail {promo.id}: Sending to {users.count()} specifically selected users.")
+        logger.info(f"PromoEmail {promo.id}: Sending to {promo.selected_users.count()} specifically selected users.")
         return promo.selected_users.all()
 
     profiles = Profile.objects.all()
