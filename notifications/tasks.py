@@ -145,14 +145,27 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                 failure_count += 1
         
         # Update promo status
-        if success_count > 0 and current_count < settings.EMAIL_RATE_LIMIT:
-            promo.status = PromoEmail.SENT
-            promo.sent_at = timezone.now()
-            # Optionally: store success/failure counts if needed
-            # promo.success_count = success_count
-            # promo.failure_count = failure_count
-            promo.save()
-            logger.info(f"Finished sending promotional email '{promo.title}' (ID: {promo_id}). Success: {success_count}, Failed: {failure_count}")
+        if success_count > 0:
+            if current_count < settings.EMAIL_RATE_LIMIT:
+                promo.status = PromoEmail.SENT
+                promo.sent_at = timezone.now()
+                # Optionally: store success/failure counts if needed
+                # promo.success_count = success_count
+                # promo.failure_count = failure_count
+                promo.save()
+            else:
+                logger.info(
+                    "Emails exceed rate limit (%d per %d seconds). Sending additional batch(es).",
+                    settings.EMAIL_RATE_LIMIT,
+                    settings.EMAIL_RATE_LIMIT_WINDOW
+                )
+            logger.info(
+                "Finished sending promotional email '%s' (ID: %d). Success: %d, Failed: %d",
+                promo.title,
+                promo_id,
+                success_count,
+                failure_count
+            )
         elif failure_count > 0:
              # If only failures occurred (e.g., all users inactive or send errors)
             promo.status = PromoEmail.FAILED
