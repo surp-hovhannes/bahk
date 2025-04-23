@@ -45,13 +45,14 @@ def increment_email_count():
         cache.incr('email_count')
 
 @shared_task(bind=True, max_retries=3)
-def send_promo_email_task(self, promo_id):
+def send_promo_email_task(self, promo_id, remaining_user_ids=None):
     """
     Send a promotional email to all eligible recipients based on the email's targeting options.
     Implements rate limiting to ensure emails are sent within the configured hourly limit.
     
     Args:
         promo_id: ID of the PromoEmail to send
+        remaining_user_ids: Optional list of user IDs to send to (used when resuming after rate limit)
     """
     try:
         promo = PromoEmail.objects.get(id=promo_id)
@@ -59,40 +60,40 @@ def send_promo_email_task(self, promo_id):
         # Check rate limit
         current_count = get_email_count()
         if current_count >= settings.EMAIL_RATE_LIMIT:
-            logger.warning(f"Rate limit reached ({current_count}/{settings.EMAIL_RATE_LIMIT} emails per hour). Rescheduling task.")
+            logger.warning(
+                "Rate limit reached (%d/%d emails per %d seconds). Rescheduling task.", 
+                current_count, 
+                settings.EMAIL_RATE_LIMIT, 
+                settings.EMAIL_RATE_LIMIT_WINDOW
+            )
             # Calculate delay until next window
             now = timezone.now()
             next_window = (now + timedelta(seconds=settings.EMAIL_RATE_LIMIT_WINDOW))
             delay = (next_window - now).total_seconds()
             
-            # Retry the task with the calculated delay
-            raise self.retry(countdown=delay, max_retries=None)
+            # Create a new task for the remaining users
+            if remaining_user_ids is None:
+                # If this is the first run, get all eligible users
+                users = get_eligible_users(promo)
+                remaining_user_ids = list(users.values_list('id', flat=True))
+            
+            # Schedule a new task for the remaining users
+            send_promo_email_task.apply_async(
+                args=[promo_id],
+                kwargs={'remaining_user_ids': remaining_user_ids},
+                countdown=delay
+            )
+            return
         
         # Update status to sending
         promo.status = PromoEmail.SENDING
         promo.save()
         
-        # Get eligible recipients
-        if promo.specific_emails:
-            # If specific emails are provided, use those instead of filters
-            users = User.objects.filter(email__in=promo.valid_specific_emails)
+        # Get users to process
+        if remaining_user_ids:
+            users = User.objects.filter(id__in=remaining_user_ids)
         else:
-            # Get eligible recipients based on targeting options
-            profiles = Profile.objects.all()
-            
-            # Apply filters
-            if not promo.all_users:
-                if promo.church_filter:
-                    profiles = profiles.filter(church=promo.church_filter)
-                
-                if promo.joined_fast:
-                    profiles = profiles.filter(fasts=promo.joined_fast)
-            
-            if promo.exclude_unsubscribed:
-                profiles = profiles.filter(receive_promotional_emails=True)
-            
-            # Get users from profiles
-            users = User.objects.filter(profile__in=profiles).distinct()
+            users = get_eligible_users(promo)
         
         if not users:
             logger.warning(f"No eligible recipients found for promotional email: {promo.title}")
@@ -116,13 +117,14 @@ def send_promo_email_task(self, promo_id):
                 # Check rate limit before each email
                 current_count = get_email_count()
                 if current_count >= settings.EMAIL_RATE_LIMIT:
-                    logger.warning(f"Rate limit reached while sending batch. Rescheduling remaining emails.")
-                    # Retry the task with remaining users
-                    remaining_users = list(users[current_count:].values_list('id', flat=True))
-                    if remaining_users:
+                    logger.warning("Rate limit reached while sending batch. Rescheduling remaining users.")
+                    # Get remaining user IDs
+                    remaining_user_ids = list(users.values_list('id', flat=True))[current_count:]
+                    if remaining_user_ids:
+                        # Schedule a new task for remaining users
                         send_promo_email_task.apply_async(
                             args=[promo_id],
-                            kwargs={'remaining_user_ids': remaining_users},
+                            kwargs={'remaining_user_ids': remaining_user_ids},
                             countdown=settings.EMAIL_RATE_LIMIT_WINDOW
                         )
                     break
@@ -188,6 +190,25 @@ def send_promo_email_task(self, promo_id):
             promo.save()
         except:
             pass
+
+def get_eligible_users(promo):
+    """Helper function to get eligible users for a promotional email."""
+    if promo.specific_emails:
+        return User.objects.filter(email__in=promo.valid_specific_emails)
+    
+    profiles = Profile.objects.all()
+    
+    if not promo.all_users:
+        if promo.church_filter:
+            profiles = profiles.filter(church=promo.church_filter)
+        
+        if promo.joined_fast:
+            profiles = profiles.filter(fasts=promo.joined_fast)
+    
+    if promo.exclude_unsubscribed:
+        profiles = profiles.filter(receive_promotional_emails=True)
+    
+    return User.objects.filter(profile__in=profiles).distinct()
 
 @shared_task
 def send_upcoming_fast_push_notification_task():
