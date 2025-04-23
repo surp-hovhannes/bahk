@@ -11,8 +11,6 @@ from hub.models import User, Profile, Church, Fast
 @override_settings(
     SITE_URL='https://api.fastandpray.app',
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-    EMAIL_RATE_LIMIT=2,
-    DEBUG=True,
 )
 class PromoEmailTaskTests(TestCase):
     """Tests for the promotional email sending task."""
@@ -327,6 +325,7 @@ class PromoEmailTaskTests(TestCase):
         self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
         self.assertEqual(self.promo.status, PromoEmail.SENT)
 
+    @override_settings(EMAIL_RATE_LIMIT=2)
     def test_send_promo_email_rate_limited(self):
         """Tests that sending more promo emails than allowed rate delays excess emails."""
         self.promo.selected_users.add(self.user1, self.user2, self.user3)
