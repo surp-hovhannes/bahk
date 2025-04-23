@@ -74,7 +74,7 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
             # Create a new task for the remaining users
             if remaining_user_ids is None:
                 # If this is the first run, get all eligible users
-                users = get_eligible_users(promo)
+                users = get_target_users(promo)
                 remaining_user_ids = list(users.values_list('id', flat=True))
             
             # Schedule a new task for the remaining users
@@ -93,11 +93,13 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
         if remaining_user_ids:
             users = User.objects.filter(id__in=remaining_user_ids)
         else:
-            users = get_eligible_users(promo)
+            users = get_target_users(promo)
         
-        if not users:
-            logger.warning(f"No eligible recipients found for promotional email: {promo.title}")
-            promo.status = PromoEmail.FAILED
+        if not users.exists(): # Use exists() for efficiency
+            logger.warning(f"No eligible recipients found for promotional email ID {promo_id}: {promo.title}")
+            # Set status to FAILED if no recipients are found, as per test requirements.
+            promo.status = PromoEmail.FAILED 
+            # promo.sent_at = timezone.now() # Remove sent_at timestamp for failure
             promo.save()
             return
         
@@ -112,7 +114,14 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
         signer = TimestampSigner()
         
         # Send to each user
+        # Iterate over the queryset directly
         for user in users:
+            # Ensure user has an email address and is active
+            if not user.email or not user.is_active:
+                logger.warning(f"Skipping user {user.id} for promo {promo_id} due to missing email or inactive status.")
+                failure_count += 1 # Count inactive/no-email users as failures for this send attempt
+                continue
+                
             try:
                 # Check rate limit before each email
                 current_count = get_email_count()
@@ -160,7 +169,7 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                 success_count += 1
                 
             except Exception as e:
-                logger.error(f"Failed to send promotional email to {user.email}: {str(e)}")
+                logger.error(f"Failed to send promotional email {promo_id} to user {user.id} ({user.email}): {str(e)}")
                 failure_count += 1
         
         # Update promo status
@@ -170,32 +179,50 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                 promo.sent_at = timezone.now()
             else:
                 promo.status = PromoEmail.SENDING  # Keep as sending if some emails were rescheduled
+            # Optionally: store success/failure counts if needed
+            # promo.success_count = success_count
+            # promo.failure_count = failure_count
             promo.save()
-            logger.info(f"Successfully sent promotional email '{promo.title}' to {success_count} recipients. Failed: {failure_count}")
-        else:
+            logger.info(f"Finished sending promotional email '{promo.title}' (ID: {promo_id}). Success: {success_count}, Failed: {failure_count}")
+        elif failure_count > 0:
+             # If only failures occurred (e.g., all users inactive or send errors)
             promo.status = PromoEmail.FAILED
+            # promo.failure_count = failure_count
             promo.save()
-            logger.error(f"Failed to send promotional email '{promo.title}' to any recipients")
+            logger.error(f"Failed to send promotional email '{promo.title}' (ID: {promo_id}) to any recipients successfully. Failures: {failure_count}")
+        else:
+             # This case should technically not happen if users queryset was not empty initially
+             # but handle it just in case.
+             promo.status = PromoEmail.SENT # Or FAILED? Let's use SENT.
+             promo.sent_at = timezone.now()
+             promo.save()
+             logger.warning(f"Promotional email '{promo.title}' (ID: {promo_id}) completed with 0 success and 0 failures, check user list.")
             
     except PromoEmail.DoesNotExist:
-        logger.error(f"Promotional email with ID {promo_id} not found")
+        logger.error(f"Promotional email with ID {promo_id} not found for sending")
     except RetryTaskError:
         # Let the retry mechanism handle rescheduling
         raise
     except Exception as e:
-        logger.error(f"Error in send_promo_email_task: {str(e)}")
+        logger.exception(f"Unhandled error in send_promo_email_task for promo_id {promo_id}: {str(e)}") # Use logger.exception
         try:
+            # Attempt to mark as failed if an unexpected error occurs
             promo = PromoEmail.objects.get(id=promo_id)
-            promo.status = PromoEmail.FAILED
-            promo.save()
-        except:
-            pass
+            if promo.status == PromoEmail.SENDING:
+                 promo.status = PromoEmail.FAILED
+                 promo.save()
+        except PromoEmail.DoesNotExist:
+             pass # Already logged above
+        except Exception as inner_e:
+             logger.error(f"Failed to mark promo {promo_id} as FAILED after outer exception: {inner_e}")
 
-def get_eligible_users(promo):
+def get_target_users(promo):
     """Helper function to get eligible users for a promotional email."""
-    if promo.specific_emails:
-        return User.objects.filter(email__in=promo.valid_specific_emails)
-    
+    if promo.selected_users.exists():
+        # If specific users are selected, use them directly
+        logger.info(f"PromoEmail {promo.id}: Sending to {users.count()} specifically selected users.")
+        return promo.selected_users.all()
+
     profiles = Profile.objects.all()
     
     if not promo.all_users:
@@ -207,8 +234,11 @@ def get_eligible_users(promo):
     
     if promo.exclude_unsubscribed:
         profiles = profiles.filter(receive_promotional_emails=True)
+
+    users = User.objects.filter(profile__in=profiles).distinct()
+    logger.info(f"PromoEmail {promo.id}: Sending to {users.count()} users based on filters.")
     
-    return User.objects.filter(profile__in=profiles).distinct()
+    return users
 
 @shared_task
 def send_upcoming_fast_push_notification_task():

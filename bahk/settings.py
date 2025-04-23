@@ -371,6 +371,10 @@ if 'test' in sys.argv:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
     
+    # Celery settings for testing
+    CELERY_TASK_ALWAYS_EAGER = True  # Run tasks synchronously in tests
+    CELERY_TASK_EAGER_PROPAGATES = True  # Raise task errors directly in tests
+    
     # Use the same database for tests with a test_ prefix
     if 'DATABASE_URL' in os.environ:
         db_config = dj_database_url.config(default=os.environ['DATABASE_URL'])
