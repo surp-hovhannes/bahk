@@ -1,10 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.core import mail
+from django.core.cache import cache
 from django.test import TestCase, override_settings
-from django.utils import timezone
-from django.urls import reverse
-from django.conf import settings
 
 from notifications.tasks import send_promo_email_task
 from notifications.models import PromoEmail
@@ -13,7 +10,9 @@ from hub.models import User, Profile, Church, Fast
 
 @override_settings(
     SITE_URL='https://api.fastandpray.app',
-    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    EMAIL_RATE_LIMIT=2,
+    DEBUG=True,
 )
 class PromoEmailTaskTests(TestCase):
     """Tests for the promotional email sending task."""
@@ -327,6 +326,29 @@ class PromoEmailTaskTests(TestCase):
         recipient_emails = sorted([email.to[0] for email in mail.outbox])
         self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
         self.assertEqual(self.promo.status, PromoEmail.SENT)
+
+    def test_send_promo_email_rate_limited(self):
+        """Tests that sending more promo emails than allowed rate delays excess emails."""
+        self.promo.selected_users.add(self.user1, self.user2, self.user3)
+        self.promo.save()
+
+        send_promo_email_task(self.promo.id)
+
+        self.promo.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 2, "Expected 2 emails due to rate limiting")
+        self.assertEqual(self.promo.status, PromoEmail.SENDING)
+
+        # clear mailbox and email count cache to simulate completion of first batch
+        mail.outbox.clear()
+        cache.delete("email_count")
+
+        # send promo to remaining user
+        send_promo_email_task(self.promo.id, remaining_user_ids=[self.user3.id])
+        
+        self.promo.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 1, "Expected 1 email in second batch due to rate limiting")
+        self.assertEqual(self.promo.status, PromoEmail.SENT)
+
 
     def test_celery_eager_setting_is_true(self):
         # This test is not provided in the original file or the new code block
