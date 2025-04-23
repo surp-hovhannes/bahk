@@ -356,7 +356,7 @@ EMAIL_TEST_ADDRESS = config('EMAIL_TEST_ADDRESS', default='test@test.com')
 
 # Email rate limiting
 EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=100, cast=int)  # emails per hour
-EMAIL_RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
+EMAIL_RATE_LIMIT_WINDOW = 3600 if not DEBUG else 60  # 1 hour in seconds; 1 minute in seconds for debugging
 
 ANYMAIL = {
     "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
