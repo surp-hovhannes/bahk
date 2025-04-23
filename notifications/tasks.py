@@ -56,11 +56,9 @@ def send_promo_email_task(promo_id):
         
         if not users.exists(): # Use exists() for efficiency
             logger.warning(f"No eligible recipients found for promotional email ID {promo_id}: {promo.title}")
-            # Changed status update to SENT if no recipients, as task completed successfully (sent to 0)
-            # Alternatively, keep FAILED if sending to 0 is considered a failure.
-            # Let's stick to SENT for now, assuming sending to 0 isn't an error state itself.
-            promo.status = PromoEmail.SENT 
-            promo.sent_at = timezone.now() # Mark as sent even if to 0 recipients
+            # Set status to FAILED if no recipients are found, as per test requirements.
+            promo.status = PromoEmail.FAILED 
+            # promo.sent_at = timezone.now() # Remove sent_at timestamp for failure
             promo.save()
             return
         
