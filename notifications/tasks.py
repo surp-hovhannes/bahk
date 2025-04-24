@@ -77,6 +77,7 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
         # Track success and failure counts
         success_count = 0
         failure_count = 0
+        rate_limited = False  # Indicates if we paused due to rate limiting
         
         # Create signer for unsubscribe tokens
         signer = TimestampSigner()
@@ -101,13 +102,15 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                     )
                     # Get remaining user IDs
                     remaining_user_ids = list(users.values_list('id', flat=True))[current_count:]
-                    if remaining_user_ids:
-                        # Schedule a new task for remaining users
+                    if remaining_user_ids and not settings.CELERY_TASK_ALWAYS_EAGER:
+                        # Schedule the next batch automatically in non-eager mode
                         send_promo_email_task.apply_async(
                             args=[promo_id],
                             kwargs={'remaining_user_ids': remaining_user_ids},
                             countdown=settings.EMAIL_RATE_LIMIT_WINDOW
                         )
+                    # Mark that we paused due to rate limiting
+                    rate_limited = True
                     break
 
                 # Create unsubscribe URL for this user
@@ -144,42 +147,35 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                 logger.error(f"Failed to send promotional email {promo_id} to user {user.id} ({user.email}): {str(e)}")
                 failure_count += 1
         
-        # Update promo status
-        if success_count > 0:
-            if current_count < settings.EMAIL_RATE_LIMIT:
-                promo.status = PromoEmail.SENT
-                promo.sent_at = timezone.now()
-                # Optionally: store success/failure counts if needed
-                # promo.success_count = success_count
-                # promo.failure_count = failure_count
-                promo.save()
-            else:
-                logger.info(
-                    "Emails exceed rate limit (%d per %d seconds). Sending additional batch(es).",
-                    settings.EMAIL_RATE_LIMIT,
-                    settings.EMAIL_RATE_LIMIT_WINDOW
-                )
-            logger.info(
-                "Finished sending promotional email '%s' (ID: %d). Success: %d, Failed: %d",
-                promo.title,
-                promo_id,
-                success_count,
-                failure_count
-            )
-        elif failure_count > 0:
-             # If only failures occurred (e.g., all users inactive or send errors)
-            promo.status = PromoEmail.FAILED
-            # promo.failure_count = failure_count
+        # Determine final status based on whether we rate limited
+
+        if success_count > 0 and not rate_limited:
+            # All intended recipients processed – mark as SENT
+            promo.status = PromoEmail.SENT
+            promo.sent_at = timezone.now()
             promo.save()
-            logger.error(f"Failed to send promotional email '{promo.title}' (ID: {promo_id}) to any recipients successfully. Failures: {failure_count}")
-        else:
-             # This case should technically not happen if users queryset was not empty initially
-             # but handle it just in case.
-             promo.status = PromoEmail.SENT # Or FAILED? Let's use SENT.
-             promo.sent_at = timezone.now()
-             promo.save()
-             logger.warning(f"Promotional email '{promo.title}' (ID: {promo_id}) completed with 0 success and 0 failures, check user list.")
-            
+        elif success_count > 0 and rate_limited:
+            # Some emails remain queued – keep status as SENDING and log info
+            logger.info(
+                "Emails exceed rate limit (%d per %d seconds). Sending additional batch(es).",
+                settings.EMAIL_RATE_LIMIT,
+                settings.EMAIL_RATE_LIMIT_WINDOW
+            )
+
+        elif failure_count > 0 and success_count == 0:
+            # All attempts failed (e.g., send errors or skipped users)
+            promo.status = PromoEmail.FAILED
+            promo.save()
+
+        # Log a summary of this task execution
+        logger.info(
+            "Finished sending promotional email '%s' (ID: %d). Success: %d, Failed: %d",
+            promo.title,
+            promo_id,
+            success_count,
+            failure_count
+        )
+        
     except PromoEmail.DoesNotExist:
         logger.error(f"Promotional email with ID {promo_id} not found for sending")
     except RetryTaskError:
