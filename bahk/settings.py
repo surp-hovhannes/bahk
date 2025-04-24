@@ -353,6 +353,11 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'postmaster@' + config('MAILGUN_DOMAIN')
 EMAIL_HOST_PASSWORD = config('MAILGUN_API_KEY')
 EMAIL_TEST_ADDRESS = config('EMAIL_TEST_ADDRESS', default='test@test.com')
+
+# Email rate limiting
+EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=100, cast=int)  # emails per hour
+EMAIL_RATE_LIMIT_WINDOW = 3600 if not DEBUG else 60  # 1 hour in seconds; 1 minute in seconds for debugging
+
 ANYMAIL = {
     "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
     "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')  
@@ -365,6 +370,10 @@ if 'test' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    
+    # Celery settings for testing
+    CELERY_TASK_ALWAYS_EAGER = True  # Run tasks synchronously in tests
+    CELERY_TASK_EAGER_PROPAGATES = True  # Raise task errors directly in tests
     
     # Use the same database for tests with a test_ prefix
     if 'DATABASE_URL' in os.environ:

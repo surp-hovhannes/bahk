@@ -14,12 +14,16 @@ from django.urls import reverse
 from django.template.loader import render_to_string
 from .models import PromoEmail
 from django.conf import settings
-
+from django_celery_beat.models import PeriodicTask, ClockedSchedule
+from django.contrib.admin.widgets import FilteredSelectMultiple
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class UserWithNoFastsFilter(SimpleListFilter):
@@ -223,6 +227,37 @@ class PromoEmailAdminForm(forms.ModelForm):
     class Meta:
         model = PromoEmail
         fields = '__all__'
+        widgets = {
+            'selected_users': FilteredSelectMultiple(
+                verbose_name='Selected Users', 
+                is_stacked=False
+            )
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # If editing an existing PromoEmail instance, populate 'selected_users' choices
+        if self.instance and self.instance.pk:
+            # Get the users matching the current filters
+            target_audience = self.instance.get_target_audience_users()
+            
+            # Get currently selected users (if any)
+            selected_user_ids = self.instance.selected_users.values_list('id', flat=True)
+            
+            # Combine the target audience with already selected users, 
+            # in case a selected user no longer matches the *current* filters
+            combined_queryset = User.objects.filter(
+                Q(pk__in=target_audience.values_list('id', flat=True)) | 
+                Q(pk__in=selected_user_ids)
+            ).distinct().order_by('email') # Or order by another field like username
+
+            # Set the queryset for the widget
+            self.fields['selected_users'].queryset = combined_queryset
+        else:
+             # For new instances, maybe show all users or no users by default?
+             # Showing no users might be safest until filters are set.
+             self.fields['selected_users'].queryset = User.objects.none()
+
 
 @admin.register(PromoEmail)
 class PromoEmailAdmin(admin.ModelAdmin):
@@ -230,6 +265,12 @@ class PromoEmailAdmin(admin.ModelAdmin):
     list_display = ('title', 'subject', 'status', 'created_at', 'scheduled_for', 'sent_at', 'recipient_count')
     list_filter = ('status', 'created_at', 'sent_at')
     search_fields = ('title', 'subject', 'content_html', 'content_text')
+    fieldsets = (
+        (None, {'fields': ('title', 'subject', 'content_html', 'content_text')}),
+        ('Targeting', {'fields': ('all_users', 'church_filter', 'joined_fast', 'exclude_unsubscribed', 'selected_users')}),
+        ('Status & Scheduling', {'fields': ('status', 'scheduled_for', 'sent_at')}),
+        ('Metadata', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+    )
     readonly_fields = ('created_at', 'updated_at', 'sent_at', 'status')
 
     def get_urls(self):
@@ -317,8 +358,6 @@ class PromoEmailAdmin(admin.ModelAdmin):
             return redirect('admin:notifications_promoemail_changelist')
         
         # Use admin as the preview user
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
         admin_user = User.objects.filter(is_staff=True).first()
         
         # Create unsubscribe URL for preview
@@ -355,16 +394,40 @@ class PromoEmailAdmin(admin.ModelAdmin):
         """View for scheduling emails."""
         promo = self.get_object(request, id)
         if promo is None:
-            # Handle case where object doesn't exist
             messages.error(request, "Promo email not found")
             return redirect('admin:notifications_promoemail_changelist')
         
         if request.method == 'POST':
             scheduled_for = request.POST.get('scheduled_for')
             try:
-                promo.scheduled_for = timezone.datetime.strptime(scheduled_for, '%Y-%m-%dT%H:%M')
+                # Parse the datetime and make it timezone-aware
+                naive_scheduled_time = timezone.datetime.strptime(scheduled_for, '%Y-%m-%dT%H:%M')
+                scheduled_time = timezone.make_aware(naive_scheduled_time)
+                
+                promo.scheduled_for = scheduled_time
                 promo.status = PromoEmail.SCHEDULED
                 promo.save()
+                
+                # Create or update the periodic task
+                task_name = f'send_promo_email_{promo.id}'
+                
+                # Delete any existing task for this promo
+                PeriodicTask.objects.filter(name=task_name).delete()
+                
+                # Create a clocked schedule for the one-time task
+                clocked, _ = ClockedSchedule.objects.get_or_create(
+                    clocked_time=scheduled_time
+                )
+                
+                # Create a one-time task
+                task = PeriodicTask.objects.create(
+                    name=task_name,
+                    task='notifications.tasks.send_promo_email_task',
+                    args=json.dumps([promo.id]),
+                    clocked=clocked,
+                    one_off=True,  # This makes it a one-time task
+                    enabled=True,
+                )
                 
                 messages.success(request, f"Email scheduled for {scheduled_for}")
                 return redirect('admin:notifications_promoemail_changelist')

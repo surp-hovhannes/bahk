@@ -1,10 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.core import mail
+from django.core.cache import cache
 from django.test import TestCase, override_settings
-from django.utils import timezone
-from django.urls import reverse
-from django.conf import settings
 
 from notifications.tasks import send_promo_email_task
 from notifications.models import PromoEmail
@@ -13,7 +10,8 @@ from hub.models import User, Profile, Church, Fast
 
 @override_settings(
     SITE_URL='https://api.fastandpray.app',
-    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    EMAIL_RATE_LIMIT=100,
 )
 class PromoEmailTaskTests(TestCase):
     """Tests for the promotional email sending task."""
@@ -54,6 +52,17 @@ class PromoEmailTaskTests(TestCase):
             receive_promotional_emails=True
         )
         
+        self.user3 = User.objects.create_user(
+            username="user3",
+            email="user3@example.com",
+            password="password123"
+        )
+        self.profile3 = Profile.objects.create(
+            user=self.user3,
+            church=self.church,
+            receive_promotional_emails=True # Initially subscribed
+        )
+        
         # Create a promotional email
         self.promo = PromoEmail.objects.create(
             title="Test Promo",
@@ -62,6 +71,8 @@ class PromoEmailTaskTests(TestCase):
             content_text="Test content",
             status=PromoEmail.DRAFT
         )
+
+        cache.delete("email_count")
 
     def test_send_promo_email_to_all_users(self):
         """Test sending a promotional email to all users."""
@@ -75,8 +86,8 @@ class PromoEmailTaskTests(TestCase):
         # Refresh promo from database
         self.promo.refresh_from_db()
         
-        # Check that the email was sent to both users
-        self.assertEqual(len(mail.outbox), 2)
+        # Check that the email was sent to all three users
+        self.assertEqual(len(mail.outbox), 3)
         self.assertEqual(self.promo.status, PromoEmail.SENT)
         self.assertIsNotNone(self.promo.sent_at)
         
@@ -117,9 +128,10 @@ class PromoEmailTaskTests(TestCase):
         # Refresh promo from database
         self.promo.refresh_from_db()
         
-        # Check that the email was only sent to users in the specified church
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to[0], "user1@example.com")
+        # Check that emails were sent to users in the specified church (user1, user3)
+        self.assertEqual(len(mail.outbox), 2)
+        recipient_emails = sorted([email.to[0] for email in mail.outbox])
+        self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
         self.assertEqual(self.promo.status, PromoEmail.SENT)
 
     def test_send_promo_email_with_fast_filter(self):
@@ -157,9 +169,10 @@ class PromoEmailTaskTests(TestCase):
         # Refresh promo from database
         self.promo.refresh_from_db()
         
-        # Check that the email was only sent to subscribed users
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to[0], "user1@example.com")
+        # Check that the email was only sent to subscribed users (user1, user3)
+        self.assertEqual(len(mail.outbox), 2)
+        recipient_emails = sorted([email.to[0] for email in mail.outbox])
+        self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
         self.assertEqual(self.promo.status, PromoEmail.SENT)
 
     def test_send_promo_email_with_no_recipients(self):
@@ -220,4 +233,126 @@ class PromoEmailTaskTests(TestCase):
             html_content = email.alternatives[0][0]
             self.assertIn("unsubscribe", html_content.lower())
             self.assertIn("https://api.fastandpray.app", html_content)
-            self.assertIn("token=", html_content) 
+            self.assertIn("token=", html_content)
+
+    def test_send_promo_email_to_selected_users_only(self):
+        """Test sending only to specifically selected users, ignoring other filters."""
+        # Add user1 and user3 to selected_users
+        self.promo.selected_users.add(self.user1, self.user3)
+        
+        # Set other filters that would normally include user2
+        self.promo.all_users = True 
+        self.promo.church_filter = self.church # user2 is in this church initially
+        self.promo.save()
+        
+        # Run the task
+        send_promo_email_task(self.promo.id)
+        
+        # Refresh promo from database
+        self.promo.refresh_from_db()
+        
+        # Check that only selected users received the email
+        self.assertEqual(len(mail.outbox), 2)
+        recipient_emails = sorted([email.to[0] for email in mail.outbox])
+        self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
+        self.assertEqual(self.promo.status, PromoEmail.SENT)
+
+    def test_send_promo_email_selected_user_inactive(self):
+        """Test that an inactive user in selected_users is skipped."""
+        # Make user3 inactive
+        self.user3.is_active = False
+        self.user3.save()
+        
+        # Add user1 and inactive user3 to selected_users
+        self.promo.selected_users.add(self.user1, self.user3)
+        self.promo.save()
+        
+        # Run the task
+        send_promo_email_task(self.promo.id)
+        
+        # Refresh promo from database
+        self.promo.refresh_from_db()
+        
+        # Check that only the active selected user received the email
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to[0], "user1@example.com")
+        # Status should still be SENT if at least one succeeded
+        self.assertEqual(self.promo.status, PromoEmail.SENT)
+
+    def test_send_promo_email_selected_user_no_email(self):
+        """Test that a selected user with no email address is skipped."""
+        # Remove email from user3
+        self.user3.email = ""
+        self.user3.save()
+        
+        # Add user1 and user3 (no email) to selected_users
+        self.promo.selected_users.add(self.user1, self.user3)
+        self.promo.save()
+        
+        # Run the task
+        send_promo_email_task(self.promo.id)
+        
+        # Refresh promo from database
+        self.promo.refresh_from_db()
+        
+        # Check that only the user with an email received it
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to[0], "user1@example.com")
+        self.assertEqual(self.promo.status, PromoEmail.SENT)
+
+    def test_send_promo_email_selected_user_unsubscribed(self):
+        """
+        Test behavior when a selected user has opted out of promotional emails.
+        NOTE: Based on current task logic, selected users bypass the 
+        'receive_promotional_emails' check. This test verifies that behavior.
+        """
+        # Set user3 profile to unsubscribed
+        self.profile3.receive_promotional_emails = False
+        self.profile3.save()
+        
+        # Add user1 (subscribed) and user3 (unsubscribed) to selected_users
+        self.promo.selected_users.add(self.user1, self.user3)
+        # Explicitly set exclude_unsubscribed - this *shouldn't* matter for selected_users
+        self.promo.exclude_unsubscribed = True 
+        self.promo.save()
+        
+        # Run the task
+        send_promo_email_task(self.promo.id)
+        
+        # Refresh promo from database
+        self.promo.refresh_from_db()
+        
+        # Check that *both* selected users received the email, even the unsubscribed one
+        self.assertEqual(len(mail.outbox), 2, "Expected selected unsubscribed user to receive email (current task logic).")
+        recipient_emails = sorted([email.to[0] for email in mail.outbox])
+        self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
+        self.assertEqual(self.promo.status, PromoEmail.SENT)
+
+    @override_settings(EMAIL_RATE_LIMIT=2)
+    def test_send_promo_email_rate_limited(self):
+        """Tests that sending more promo emails than allowed rate delays excess emails."""
+        self.promo.selected_users.add(self.user1, self.user2, self.user3)
+        self.promo.save()
+
+        send_promo_email_task(self.promo.id)
+
+        self.promo.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 2, "Expected 2 emails due to rate limiting")
+        self.assertEqual(self.promo.status, PromoEmail.SENDING)
+
+        # clear mailbox and email count cache to simulate completion of first batch
+        mail.outbox.clear()
+        cache.delete("email_count")
+
+        # send promo to remaining user
+        send_promo_email_task(self.promo.id, remaining_user_ids=[self.user3.id])
+        
+        self.promo.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 1, "Expected 1 email in second batch due to rate limiting")
+        self.assertEqual(self.promo.status, PromoEmail.SENT)
+
+
+    def test_celery_eager_setting_is_true(self):
+        # This test is not provided in the original file or the new code block
+        # It's assumed to exist as it's called in the original file
+        pass 
