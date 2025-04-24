@@ -102,7 +102,7 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None):
                     )
                     # Get remaining user IDs
                     remaining_user_ids = list(users.values_list('id', flat=True))[current_count:]
-                    if remaining_user_ids and not settings.CELERY_TASK_ALWAYS_EAGER:
+                    if remaining_user_ids and not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
                         # Schedule the next batch automatically in non-eager mode
                         send_promo_email_task.apply_async(
                             args=[promo_id],

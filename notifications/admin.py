@@ -455,4 +455,25 @@ class PromoEmailAdmin(admin.ModelAdmin):
             messages.success(request, f"Started sending '{promo.title}' to {promo.recipient_count()} recipients")
     send_now.short_description = "Send selected emails now"
     
-    actions = ['send_now']
+    def replicate_promo_emails(self, request, queryset):
+        """Action for replicating selected promo emails."""
+        for promo in queryset:
+            # Copy selected users list
+            users = list(promo.selected_users.all())
+            # Create a new PromoEmail draft with same properties
+            new_promo = PromoEmail.objects.create(
+                title=f"Copy of {promo.title}",
+                subject=promo.subject,
+                content_html=promo.content_html,
+                content_text=promo.content_text,
+                all_users=promo.all_users,
+                church_filter=promo.church_filter,
+                joined_fast=promo.joined_fast,
+                exclude_unsubscribed=promo.exclude_unsubscribed,
+            )
+            # Copy many-to-many selected users
+            new_promo.selected_users.set(users)
+        messages.success(request, f"Successfully replicated {queryset.count()} promo email(s).")
+    replicate_promo_emails.short_description = "Replicate selected promo emails"
+
+    actions = ['send_now', 'replicate_promo_emails']

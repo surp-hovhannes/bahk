@@ -302,3 +302,32 @@ class PromoEmailAdminTests(TestCase):
         response = self.client.get(reverse('admin:notifications_promoemail_changelist'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "2")  # Both users are in the fast 
+
+    def test_admin_replicate_action_replicates_selected_promos(self):
+        """Test that the admin replicate action creates copies of selected promos."""
+        original_count = PromoEmail.objects.count()
+        response = self.client.post(
+            reverse('admin:notifications_promoemail_changelist'),
+            {
+                'action': 'replicate_promo_emails',
+                '_selected_action': [self.promo.id],
+            }
+        )
+        self.assertRedirects(response, reverse('admin:notifications_promoemail_changelist'))
+        # One new promo created
+        self.assertEqual(PromoEmail.objects.count(), original_count + 1)
+        # Verify new promo attributes
+        new_promo = PromoEmail.objects.exclude(pk=self.promo.pk).first()
+        self.assertEqual(new_promo.title, f"Copy of {self.promo.title}")
+        self.assertEqual(new_promo.subject, self.promo.subject)
+        self.assertEqual(new_promo.content_html, self.promo.content_html)
+        self.assertEqual(new_promo.content_text, self.promo.content_text)
+        self.assertEqual(new_promo.all_users, self.promo.all_users)
+        self.assertEqual(new_promo.church_filter, self.promo.church_filter)
+        self.assertEqual(new_promo.joined_fast, self.promo.joined_fast)
+        self.assertEqual(new_promo.exclude_unsubscribed, self.promo.exclude_unsubscribed)
+        # Selected users should be replicated
+        self.assertEqual(
+            list(new_promo.selected_users.values_list('id', flat=True)),
+            list(self.promo.selected_users.values_list('id', flat=True))
+        ) 
