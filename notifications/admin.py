@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.template.loader import render_to_string
 from .models import PromoEmail
 from django.conf import settings
+from django_celery_beat.models import PeriodicTask, ClockedSchedule
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -393,16 +394,40 @@ class PromoEmailAdmin(admin.ModelAdmin):
         """View for scheduling emails."""
         promo = self.get_object(request, id)
         if promo is None:
-            # Handle case where object doesn't exist
             messages.error(request, "Promo email not found")
             return redirect('admin:notifications_promoemail_changelist')
         
         if request.method == 'POST':
             scheduled_for = request.POST.get('scheduled_for')
             try:
-                promo.scheduled_for = timezone.datetime.strptime(scheduled_for, '%Y-%m-%dT%H:%M')
+                # Parse the datetime and make it timezone-aware
+                naive_scheduled_time = timezone.datetime.strptime(scheduled_for, '%Y-%m-%dT%H:%M')
+                scheduled_time = timezone.make_aware(naive_scheduled_time)
+                
+                promo.scheduled_for = scheduled_time
                 promo.status = PromoEmail.SCHEDULED
                 promo.save()
+                
+                # Create or update the periodic task
+                task_name = f'send_promo_email_{promo.id}'
+                
+                # Delete any existing task for this promo
+                PeriodicTask.objects.filter(name=task_name).delete()
+                
+                # Create a clocked schedule for the one-time task
+                clocked, _ = ClockedSchedule.objects.get_or_create(
+                    clocked_time=scheduled_time
+                )
+                
+                # Create a one-time task
+                task = PeriodicTask.objects.create(
+                    name=task_name,
+                    task='notifications.tasks.send_promo_email_task',
+                    args=json.dumps([promo.id]),
+                    clocked=clocked,
+                    one_off=True,  # This makes it a one-time task
+                    enabled=True,
+                )
                 
                 messages.success(request, f"Email scheduled for {scheduled_for}")
                 return redirect('admin:notifications_promoemail_changelist')
