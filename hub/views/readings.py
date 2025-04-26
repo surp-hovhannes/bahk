@@ -34,12 +34,16 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             "date": "YYYY-MM-DD",
             "readings": [
                 {
+                    "id": 1,
                     "book": "Book Name",
                     "startChapter": 1,
                     "startVerse": 1,
                     "endChapter": 1,
                     "endVerse": 10,
-                    "url": https://link.to.read.this.passage/
+                    "url": https://link.to.read.this.passage/,
+                    "context": "AI-generated context text for the reading"
+                    "context_thumbs_up": 10,
+                    "context_thumbs_down": 2
                 }
             ]
         }
@@ -49,20 +53,28 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             "date": "2024-03-11",
             "readings": [
                 {
+                    "id": 1,
                     "book": "Matthew",
                     "startChapter": 5,
                     "startVerse": 1,
                     "endChapter": 5,
                     "endVerse": 12,
-                    "url": "https://catenabible.com/mt/5"
+                    "url": "https://catenabible.com/mt/5",
+                    "context": "AI-generated context text for the reading",
+                    "context_thumbs_up": 10,
+                    "context_thumbs_down": 2
                 },
                 {
+                    "id": 2,
                     "book": "Isaiah",
                     "startChapter": 55,
                     "startVerse": 1,
                     "endChapter": 55,
                     "endVerse": 13,
-                    "url": "https://catenabible.com/is/55"
+                    "url": "https://catenabible.com/is/55",
+                    "context": "AI-generated context text for the reading",
+                    "context_thumbs_up": 10,
+                    "context_thumbs_down": 2
                 }
             ]
         }
