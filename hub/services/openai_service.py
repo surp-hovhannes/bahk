@@ -37,7 +37,7 @@ def generate_context(passage_reference: str) -> Optional[str]:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant providing biblical context with historical and literary background only."
+                    "content": "You are a helpful assistant providing biblical context with historical and canonical background only."
                 },
                 {"role": "user", "content": prompt},
             ],
