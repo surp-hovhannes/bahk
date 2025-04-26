@@ -365,6 +365,10 @@ ANYMAIL = {
 EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend" 
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fastandprayhelp@gmail.com')
 
+# OPEN AI SETTINGS
+OPENAI_API_KEY = config('OPENAI_API_KEY')
+READING_CONTEXT_REGENERATION_THRESHOLD = config('READING_CONTEXT_REGENERATION_THRESHOLD', default=5, cast=int)
+
 # Test settings
 if 'test' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')

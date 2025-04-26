@@ -27,7 +27,7 @@ from .views.user import (
     DeleteAccountView,
 )
 from .views.church import ChurchListView, ChurchDetailView
-from .views.readings import GetDailyReadingsForDate
+from .views.readings import GetDailyReadingsForDate, ReadingContextFeedbackView
 from .views.web import (
     home, 
     test_email_view, 
@@ -98,6 +98,7 @@ urlpatterns = [
 
     # Readings endpoints
     path("readings/", GetDailyReadingsForDate.as_view(), name="daily-readings"),
+    path("readings/<int:pk>/feedback/", ReadingContextFeedbackView.as_view(), name="reading-context-feedback"),
 
     # Misc endpoints
     path('test_email/', test_email_view, name='test_email'),

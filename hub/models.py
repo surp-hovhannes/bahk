@@ -326,6 +326,10 @@ class Reading(models.Model):
     start_verse = models.IntegerField(verbose_name="Start Verse")
     end_chapter = models.IntegerField(verbose_name="End Chapter", help_text="May be same as start chapter")
     end_verse = models.IntegerField(verbose_name="End Verse", help_text="May be same as end verse")
+    context = models.TextField(null=True, blank=True, help_text="AI-generated contextual introduction")
+    context_thumbs_up = models.PositiveIntegerField(default=0, help_text="Number of thumbs-up votes for the context")
+    context_thumbs_down = models.PositiveIntegerField(default=0, help_text="Number of thumbs-down votes for the context")
+    context_last_generated = models.DateTimeField(null=True, blank=True, help_text="Timestamp of the last context generation")
 
     class Meta:
         constraints = [
@@ -345,6 +349,17 @@ class Reading(models.Model):
         verse_ref = "" if self.start_verse <= 2 else f"#{book_abbrev}{self.start_chapter:03d}{self.start_verse - 2:03d}"
         return f"{CATENA_HOME_PAGE_URL}{book_abbrev}/{self.start_chapter:d}/{verse_ref}"
 
+    # Add a helper property to easily reference the passage in a standard format
+    @property
+    def passage_reference(self) -> str:
+        """Return a string reference like 'John 3:16-18'."""
+        if self.start_chapter == self.end_chapter:
+            if self.start_verse == self.end_verse:
+                return f"{self.book} {self.start_chapter}:{self.start_verse}"
+            else:
+                return f"{self.book} {self.start_chapter}:{self.start_verse}-{self.end_verse}"
+        else:
+            return f"{self.book} {self.start_chapter}:{self.start_verse}-{self.end_chapter}:{self.end_verse}"
 
     def __str__(self):
         s = f"{self.book}: Chapter {self.start_chapter}, "
