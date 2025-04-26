@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def generate_reading_context_task(self, reading_id: int):
+def generate_reading_context_task(self, reading_id: int, force_regeneration: bool=False):
     """Generate and save AI context for a Reading instance."""
     try:
         reading = Reading.objects.get(pk=reading_id)
@@ -17,9 +17,10 @@ def generate_reading_context_task(self, reading_id: int):
         logger.error("Reading with id %s not found.", reading_id)
         return
 
-    if reading.context and reading.context_last_generated:
-        # Already generated, skip to prevent duplicates unless resetting counts triggers regeneration.
-        logger.info("Reading %s already has context, skipping generation.", reading_id)
+    # Skip if already generated and not forced
+    if reading.context and reading.context_last_generated and not force_regeneration:
+        logger.info("Reading %s already has context, skipping generation (force_regeneration=False).", reading_id)
+        return
 
     passage_ref = reading.passage_reference
     if not passage_ref:

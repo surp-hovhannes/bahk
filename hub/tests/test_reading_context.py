@@ -105,4 +105,55 @@ class FeedbackEndpointTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.reading.refresh_from_db()
         self.assertEqual(self.reading.context_thumbs_down, 2)
-        mock_delay.assert_called_once_with(self.reading.id) 
+        mock_delay.assert_called_once_with(self.reading.id, force_regeneration=True)
+
+
+class ReadingContextForceTests(TestCase):
+    """Tests for skipping or forcing context regeneration in the Celery task."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date.today(), church=self.church)
+        self.reading = Reading.objects.create(
+            day=self.day,
+            book="John",
+            start_chapter=3,
+            start_verse=16,
+            end_chapter=3,
+            end_verse=18,
+        )
+
+    @patch("hub.tasks.openai_tasks.generate_context")
+    def test_skip_without_force_regeneration(self, mock_generate):
+        # First generation sets context
+        mock_generate.return_value = "initial context"
+        generate_reading_context_task.run(self.reading.id)
+        self.reading.refresh_from_db()
+        first_context = self.reading.context
+        first_ts = self.reading.context_last_generated
+
+        # Attempt regeneration without force; should skip and not call OpenAI
+        mock_generate.return_value = "new context"
+        generate_reading_context_task.run(self.reading.id)
+        self.reading.refresh_from_db()
+        # Context and timestamp remain unchanged
+        self.assertEqual(self.reading.context, first_context)
+        self.assertEqual(self.reading.context_last_generated, first_ts)
+        # ensure OpenAI generate_context was not invoked second time
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @patch("hub.tasks.openai_tasks.generate_context")
+    def test_force_regeneration_overwrites_context(self, mock_generate):
+        # First generation
+        mock_generate.return_value = "initial context"
+        generate_reading_context_task.run(self.reading.id)
+        self.reading.refresh_from_db()
+        first_ts = self.reading.context_last_generated
+
+        # Force regeneration
+        mock_generate.return_value = "forced context"
+        generate_reading_context_task.run(self.reading.id, force_regeneration=True)
+        self.reading.refresh_from_db()
+        # Context updated and timestamp refreshed
+        self.assertEqual(self.reading.context, "forced context")
+        self.assertTrue(self.reading.context_last_generated > first_ts) 

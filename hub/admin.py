@@ -11,6 +11,7 @@ from django.db import models
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import Church, Day, Devotional, Fast, Profile, Reading
+from hub.tasks import generate_reading_context_task
 
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
@@ -340,7 +341,16 @@ class ReadingAdmin(admin.ModelAdmin):
     list_display_links = ("church_link", "day", "__str__",)
     list_filter = (ReadingYearFilter, "book", "start_chapter", "start_verse",)
     ordering = ("day", "book", "start_chapter", "start_verse",)
-    
+    actions = ['force_regenerate_context']
+
+    def force_regenerate_context(self, request, queryset):
+        """Force enqueues context regeneration for selected readings."""
+        count = queryset.count()
+        for reading in queryset:
+            generate_reading_context_task.delay(reading.id, force_regeneration=True)
+        self.message_user(request, f"Initiated forced regeneration for {count} readings.")
+    force_regenerate_context.short_description = "Force regenerate AI context for selected readings"
+
     def church_link(self, reading):
         if not reading.day and not reading.day.church:
             return ""

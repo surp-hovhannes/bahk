@@ -174,7 +174,8 @@ class ReadingContextFeedbackView(APIView):
             regenerate = False
             if reading.context_thumbs_down >= threshold:
                 regenerate = True
-                generate_reading_context_task.delay(reading.id)
+                # Force regeneration via Celery task
+                generate_reading_context_task.delay(reading.id, force_regeneration=True)
             reading.save(update_fields=['context_thumbs_down'])
             return Response({"status": "success", "regenerate": regenerate})
         else:
