@@ -12,12 +12,12 @@ openai.api_key = getattr(settings, "OPENAI_API_KEY", None)
 
 
 PROMPT_TEMPLATE = (
-    "Provide a concise (≤150-word) contextual introduction to {passage}.  "
+    "Provide a concise (≤100-word) contextual introduction to {passage}.  "
     "Cover: (1) where this passage sits in the book's narrative and in the overall biblical chronology;  "
-    "(2) key events immediately before and after;  "
-    "(3) the book's literary genre and original purpose.  "
-    "Offer only neutral historical-literary background—no interpretation, application, or opinions.  "
+    "(2) relevant key events immediately before;  "
+    "Offer only neutral biblical background—no interpretation, application, or opinions.  "
     "Ensure nothing conflicts with Oriental Orthodox doctrine."
+    "The audience is a layperson who is reading as part of their daily spiritual practice."
 )
 
 
@@ -33,7 +33,7 @@ def generate_context(passage_reference: str) -> Optional[str]:
     prompt = PROMPT_TEMPLATE.format(passage=passage_reference)
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             messages=[
                 {
                     "role": "system",
