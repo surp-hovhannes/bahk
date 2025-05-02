@@ -519,6 +519,8 @@ class LLMPrompt(models.Model):
 
     MODEL_CHOICES = [
         ("gpt-4.1-mini", "GPT 4.1 Mini"),
+        ("gpt-4.1-nano", "GPT 4.1 Nano"),
+        ("gpt-4o-mini", "GPT 4o Mini"),
     ]
 
     model = models.CharField(
