@@ -2,19 +2,19 @@
 
 Currently based on the Daily Worship app's website, sacredtradition.am
 """
-from datetime import datetime
-import logging
 
-from rest_framework.exceptions import ValidationError
-from rest_framework import generics
-from rest_framework.response import Response
+import logging
+from datetime import datetime
+
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from rest_framework import generics, status
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 from rest_framework.views import APIView
-from hub.tasks import generate_reading_context_task
 
 from hub.models import Church, Day, Reading
+from hub.tasks import generate_reading_context_task
 from hub.utils import scrape_readings
 
 
@@ -79,16 +79,21 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             ]
         }
     """
+
     queryset = Reading.objects.all()
 
     def get(self, request, *args, **kwargs):
         date_format = "%Y-%m-%d"
 
-        if date_str := self.request.query_params.get('date', datetime.today().strftime(date_format)):
+        if date_str := self.request.query_params.get(
+            "date", datetime.today().strftime(date_format)
+        ):
             try:
                 date_obj = datetime.strptime(date_str, date_format).date()
             except ValueError:
-                raise ValidationError("Invalid date format. Expected format: YYYY-MM-DD")
+                raise ValidationError(
+                    "Invalid date format. Expected format: YYYY-MM-DD"
+                )
         else:
             date_obj = datetime.today().date()
 
@@ -112,24 +117,27 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
 
         for reading in day.readings.all():
             # Trigger context generation if missing
-            if not reading.context:
+            if not reading.contexts.filter(active=True).exists():
                 logging.info("Enqueue context generation for reading %s", reading.id)
                 generate_reading_context_task.delay(reading.id)
 
         formatted_readings = []
         for reading in day.readings.all():
-            formatted_readings.append({
-                "id": reading.id,
-                "book": reading.book,
-                "startChapter": reading.start_chapter,
-                "startVerse": reading.start_verse,
-                "endChapter": reading.end_chapter,
-                "endVerse": reading.end_verse,
-                "url": reading.create_url(),
-                "context": reading.context,
-                "context_thumbs_up": reading.context_thumbs_up,
-                "context_thumbs_down": reading.context_thumbs_down,
-            })
+            context = reading.active_context
+            formatted_readings.append(
+                {
+                    "id": reading.id,
+                    "book": reading.book,
+                    "startChapter": reading.start_chapter,
+                    "startVerse": reading.start_verse,
+                    "endChapter": reading.end_chapter,
+                    "endVerse": reading.end_verse,
+                    "url": reading.create_url(),
+                    "context": context.text,
+                    "context_thumbs_up": context.thumbs_up,
+                    "context_thumbs_down": context.thumbs_down,
+                }
+            )
 
         response_data = {
             "date": date_str,
@@ -137,6 +145,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         }
 
         return Response(response_data)
+
 
 # New Feedback view
 class ReadingContextFeedbackView(APIView):
@@ -173,22 +182,27 @@ class ReadingContextFeedbackView(APIView):
         400 Bad Request – when an invalid `feedback_type` is supplied.
         404 Not Found – when the supplied `pk` does not correspond to a Reading.
     """
+
     def post(self, request, pk):
         reading = get_object_or_404(Reading, pk=pk)
-        feedback_type = request.data.get('feedback_type')
-        if feedback_type == 'up':
-            reading.context_thumbs_up += 1
-            reading.save(update_fields=['context_thumbs_up'])
+        active_context = reading.active_context
+        feedback_type = request.data.get("feedback_type")
+        if feedback_type == "up":
+            active_context.thumbs_up += 1
+            active_context.save(update_fields=["thumbs_up"])
             return Response({"status": "success", "regenerate": False})
-        elif feedback_type == 'down':
-            reading.context_thumbs_down += 1
-            threshold = getattr(settings, 'READING_CONTEXT_REGENERATION_THRESHOLD', 5)
+        elif feedback_type == "down":
+            active_context.thumbs_down += 1
+            threshold = getattr(settings, "READING_CONTEXT_REGENERATION_THRESHOLD", 5)
             regenerate = False
-            if reading.context_thumbs_down >= threshold:
+            if active_context.thumbs_down >= threshold:
                 regenerate = True
                 # Force regeneration via Celery task
                 generate_reading_context_task.delay(reading.id, force_regeneration=True)
-            reading.save(update_fields=['context_thumbs_down'])
+            active_context.save(update_fields=["thumbs_down"])
             return Response({"status": "success", "regenerate": regenerate})
         else:
-            return Response({"status": "error", "message": "Invalid feedback type"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"status": "error", "message": "Invalid feedback type"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )

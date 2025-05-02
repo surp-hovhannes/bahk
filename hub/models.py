@@ -445,6 +445,11 @@ class Reading(models.Model):
         else:
             return f"{self.book} {self.start_chapter}:{self.start_verse}-{self.end_chapter}:{self.end_verse}"
 
+    @property
+    def active_context(self):
+        """Return the active context for the reading."""
+        return self.contexts.filter(active=True).first()
+
     def __str__(self):
         s = f"{self.book}: Chapter {self.start_chapter}, "
         if (
@@ -573,9 +578,9 @@ class ReadingContext(models.Model):
     def save(self, *args, **kwargs):
         if self.active:
             # Deactivate any other active context for this reading
-            ReadingContext.objects.filter(reading=self.reading, active=True).update(
-                active=False
-            )
+            ReadingContext.objects.filter(reading=self.reading, active=True).exclude(
+                pk=self.pk
+            ).update(active=False)
         super().save(*args, **kwargs)
 
     def __str__(self):

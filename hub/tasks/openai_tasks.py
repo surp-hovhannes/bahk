@@ -21,7 +21,7 @@ def generate_reading_context_task(
         return
 
     # Skip if already generated and not forced
-    if reading.contexts.filter(active=True).exists() and not force_regeneration:
+    if reading.active_context is not None and not force_regeneration:
         logger.info(
             "Reading %s already has context, skipping generation (force_regeneration=False).",
             reading_id,
