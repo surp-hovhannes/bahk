@@ -33,9 +33,8 @@ def generate_reading_context_task(
     if context_text:
         ReadingContext.objects.create(
             reading=reading,
-            context=context_text,
+            text=context_text,
             prompt=llm_prompt,
-            active=True,
         )
         logger.info("Context generated and saved for Reading %s", reading_id)
     else:
