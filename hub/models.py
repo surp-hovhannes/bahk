@@ -534,7 +534,7 @@ class LLMPrompt(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.model} prompt: {self.prompt}"
+        return f"{self.model} prompt: {self.prompt[:20]}"
 
 
 class ReadingContext(models.Model):
