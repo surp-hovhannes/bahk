@@ -115,15 +115,25 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
 
-        for reading in day.readings.all():
-            # Trigger context generation if missing
-            if not reading.contexts.filter(active=True).exists():
-                logging.info("Enqueue context generation for reading %s", reading.id)
-                generate_reading_context_task.delay(reading.id)
-
         formatted_readings = []
         for reading in day.readings.all():
-            context = reading.active_context
+            # Trigger context generation if missing
+            if reading.active_context is None:
+                logging.warning("No context found for reading %s", str(reading))
+                logging.info("Enqueue context generation for reading %s", reading.id)
+                generate_reading_context_task.delay(reading.id)
+                context_dict = {
+                    "context": "",
+                    "context_thumbs_up": 0,
+                    "context_thumbs_down": 0,
+                }
+            else:
+                context_dict = {
+                    "context": reading.active_context.text,
+                    "context_thumbs_up": reading.active_context.thumbs_up,
+                    "context_thumbs_down": reading.active_context.thumbs_down,
+                }
+
             formatted_readings.append(
                 {
                     "id": reading.id,
@@ -133,9 +143,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
-                    "context": context.text,
-                    "context_thumbs_up": context.thumbs_up,
-                    "context_thumbs_down": context.thumbs_down,
+                    **context_dict,
                 }
             )
 
