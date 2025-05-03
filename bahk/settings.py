@@ -14,6 +14,7 @@ import os
 import sys
 import dj_database_url
 import django_heroku
+import ssl
 
 from pathlib import Path
 from decouple import config, Csv
@@ -335,15 +336,23 @@ else:
 
 # Celery Configuration
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/1') # Use a separate DB for results is good practice
 
 # Add SSL settings for Celery only if using SSL
 if is_redis_ssl(CELERY_BROKER_URL):
-    CELERY_BROKER_URL = f"{CELERY_BROKER_URL}?ssl_cert_reqs=none"
-    CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+    # Heroku Redis uses self-signed certs, disable verification
     CELERY_BROKER_TRANSPORT_OPTIONS = {
-        "ssl_cert_reqs": "CERT_NONE",
+        "ssl_cert_reqs": ssl.CERT_NONE, 
+        "ssl_check_hostname": False,
     }
+    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = { # Apply same options to result backend
+        "ssl_cert_reqs": ssl.CERT_NONE,
+        "ssl_check_hostname": False,
+    }
+else:
+    # Clear transport options if not using SSL
+    CELERY_BROKER_TRANSPORT_OPTIONS = {}
+    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {}
 
 # Use Redis for session cache
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
