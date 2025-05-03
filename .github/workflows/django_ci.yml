@@ -98,6 +98,7 @@ jobs:
         # Set other potentially required env vars to dummy values or disable features
         SENTRY_DSN: ""  # Explicitly disable Sentry DSN
         MAILGUN_PUBLIC_KEY: ${{ secrets.MAILGUN_PUBLIC_KEY }}
+        MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
         MAILGUN_SMTP_LOGIN: ${{ secrets.MAILGUN_SMTP_LOGIN }}
         MAILGUN_SMTP_PASSWORD: ${{ secrets.MAILGUN_SMTP_PASSWORD }}
         MAILGUN_SMTP_PORT: ${{ secrets.MAILGUN_SMTP_PORT }}
