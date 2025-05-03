@@ -197,8 +197,14 @@ CACHE_OPTIONS = {
 
 # Add SSL settings only if using SSL
 if is_redis_ssl(REDIS_URL):
-    REDIS_URL = f"{REDIS_URL}?ssl_cert_reqs=none"
-    CACHE_OPTIONS["CONNECTION_POOL_CLASS_KWARGS"]["ssl_cert_reqs"] = "CERT_NONE"
+    # REDIS_URL = f\"{REDIS_URL}?ssl_cert_reqs=none\" # Removed this line
+    # Instead, set SSL options directly in CACHE_OPTIONS
+    CACHE_OPTIONS["CONNECTION_POOL_KWARGS"] = CACHE_OPTIONS.get("CONNECTION_POOL_KWARGS", {})
+    CACHE_OPTIONS["CONNECTION_POOL_KWARGS"]["ssl_cert_reqs"] = None
+    # When disabling cert verification, must also disable hostname check
+    CACHE_OPTIONS["CONNECTION_POOL_KWARGS"]["ssl_check_hostname"] = False
+
+    # If Redis server uses a self-signed certificate, uncomment the following line
 
 CACHES = {
     "default": {
@@ -364,6 +370,10 @@ ANYMAIL = {
 }
 EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend" 
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fastandprayhelp@gmail.com')
+
+# OPEN AI SETTINGS
+OPENAI_API_KEY = config('OPENAI_API_KEY')
+READING_CONTEXT_REGENERATION_THRESHOLD = config('READING_CONTEXT_REGENERATION_THRESHOLD', default=5, cast=int)
 
 # Test settings
 if 'test' in sys.argv:

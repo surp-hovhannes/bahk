@@ -3,8 +3,10 @@ from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.core.exceptions import ObjectDoesNotExist
 
 import hub.models as models
+from hub.services.openai_service import PROMPT_TEMPLATE
 
 
 EMAILS1 = ["user1a@email.com", "user1b@email.com"]
@@ -67,6 +69,23 @@ class Command(BaseCommand):
         self._create_users(EMAILS1, NAMES1, churches[0], fasts=[fasts[0]])
         self._create_users(EMAILS2, NAMES2, churches[1], fasts=[fasts[1]])
         self._create_users(EMAILS3, NAMES3, churches[2])
+
+        # Seed a default LLMPrompt if none exists
+        try:
+            # Check if any LLMPrompt exists at all first
+            models.LLMPrompt.objects.first()
+            self.stdout.write("LLMPrompt(s) already exist, skipping seeding.")
+        except ObjectDoesNotExist:
+             # Or use filter(active=True).exists() if you only want to skip if an *active* one exists
+             # if not models.LLMPrompt.objects.filter(active=True).exists():
+             self.stdout.write("No LLMPrompt found, seeding a default active prompt.")
+             models.LLMPrompt.objects.create(
+                 model="gpt-4o-mini", # Or your preferred default model
+                 role="You are a helpful assistant providing concise biblical context.",
+                 prompt=PROMPT_TEMPLATE,
+                 active=True,
+                 description="Default prompt seeded by management command.",
+             )
 
     @transaction.atomic        
     def _create_users(self, emails, names, church, fasts=None):
