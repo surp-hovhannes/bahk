@@ -84,10 +84,10 @@ jobs:
     - name: Run Tests
       env:
         # Set environment variables needed by settings.py for tests
-        SECRET_KEY: 'dummy-secret-key-for-ci-tests-1234567890!@#$%^&*()' # Dummy key for tests
         CI: true                 # Indicate CI environment for settings.py
         DEBUG: true              # Enable Debug for more test output if needed
         PYTHONWARNINGS: "ignore" # Suppress common warnings if needed
+        MAILGUN_DOMAIN: ${{ vars.MAILGUN_DOMAIN }}
         
         # Point to the Redis service started above
         REDIS_URL: redis://localhost:6379/1 
@@ -97,12 +97,14 @@ jobs:
 
         # Set other potentially required env vars to dummy values or disable features
         SENTRY_DSN: ""  # Explicitly disable Sentry DSN
-        # MAILGUN_API_KEY: dummy
-        # MAILGUN_DOMAIN: ci.example.com
-        # OPENAI_API_KEY: dummy
-        # AWS_ACCESS_KEY_ID: dummy
-        # AWS_SECRET_ACCESS_KEY: dummy
-        # AWS_STORAGE_BUCKET_NAME: dummy-ci-bucket
+        MAILGUN_PUBLIC_KEY: ${{ secrets.MAILGUN_PUBLIC_KEY }}
+        MAILGUN_SMTP_LOGIN: ${{ secrets.MAILGUN_SMTP_LOGIN }}
+        MAILGUN_SMTP_PASSWORD: ${{ secrets.MAILGUN_SMTP_PASSWORD }}
+        MAILGUN_SMTP_PORT: ${{ secrets.MAILGUN_SMTP_PORT }}
+        MAILGUN_SMTP_SERVER: ${{ secrets.MAILGUN_SMTP_SERVER }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        AWS_LOCATION_PLACE_INDEX: ${{ secrets.AWS_LOCATION_PLACE_INDEX }}
+        AWS_LOCATION_SERVICES_KEY: ${{ secrets.AWS_LOCATION_SERVICES_KEY }}
         # Provide any other environment variables your settings.py or tests expect
 
       run: |
