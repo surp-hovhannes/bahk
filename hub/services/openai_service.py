@@ -4,6 +4,8 @@ from typing import Optional
 import openai
 from django.conf import settings
 
+from hub.models import LLMPrompt, Reading
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,7 +23,9 @@ PROMPT_TEMPLATE = (
 )
 
 
-def generate_context(passage_reference: str) -> Optional[str]:
+def generate_context(
+    reading: Reading, llm_prompt: Optional[LLMPrompt] = None
+) -> Optional[str]:
     """Generate a contextual introduction for the provided passage.
 
     Returns a string with context or None if the call fails.
@@ -30,16 +34,17 @@ def generate_context(passage_reference: str) -> Optional[str]:
         logger.error("OPENAI_API_KEY is not configured. Skipping context generation.")
         return None
 
-    prompt = PROMPT_TEMPLATE.format(passage=passage_reference)
+    llm_prompt = llm_prompt or LLMPrompt.objects.get(active=True)
+    llm_prompt_with_passage = f"{llm_prompt.prompt}\n\n# Final Instructions\nSummarize the passages preceding {reading.passage_reference}"
     try:
         response = openai.chat.completions.create(
-            model="gpt-4.1-mini",
+            model=llm_prompt.model,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant providing biblical context with historical and canonical background only."
+                    "content": llm_prompt.role,
                 },
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": llm_prompt_with_passage},
             ],
             max_tokens=250,
             temperature=0.5,
@@ -49,4 +54,4 @@ def generate_context(passage_reference: str) -> Optional[str]:
         logger.error("OpenAI response contained no choices")
     except Exception as exc:
         logger.exception("OpenAI API call failed: %s", exc)
-    return None 
+    return None

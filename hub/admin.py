@@ -1,18 +1,27 @@
 """Admin forms."""
+
 import datetime
 
 from django.contrib import admin
+from django.db import models
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import Truncator
-from django.db import models
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
-from hub.models import Church, Day, Devotional, Fast, Profile, Reading
+from hub.models import (
+    Church,
+    Day,
+    Devotional,
+    Fast,
+    LLMPrompt,
+    Profile,
+    Reading,
+    ReadingContext,
+)
 from hub.tasks import generate_reading_context_task
-
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
 
@@ -33,7 +42,7 @@ def _get_fk_links_url(fk_queryset, fk_name, max_num_to_show=_MAX_NUM_TO_SHOW):
             break
         url = reverse(f"admin:hub_{fk_name}_change", args=[fk.pk])
         args += [url, fk]
-    
+
     format_string = ", ".join(num_to_display * ['<a href="{}">{}</a>'])
     # add ellipsis if only partial list of fasts shown
     format_string += ",..." if is_partial_list else ""
@@ -43,55 +52,70 @@ def _get_fk_links_url(fk_queryset, fk_name, max_num_to_show=_MAX_NUM_TO_SHOW):
 
 @admin.register(Church, site=admin.site)
 class ChurchAdmin(admin.ModelAdmin):
-    list_display = ("name", "fast_links",)
+    list_display = (
+        "name",
+        "fast_links",
+    )
     ordering = ("name",)
-    list_display_links = ("name", "fast_links",)
+    list_display_links = (
+        "name",
+        "fast_links",
+    )
 
     def fast_links(self, church):
         return _get_fk_links_url(church.fasts.all(), "fast")
-    
+
     fast_links.short_description = "Fasts"
 
 
 @admin.register(Devotional, site=admin.site)
 class DevotionalAdmin(admin.ModelAdmin):
-    list_display = ('title', 'fast', 'date', 'order')
-    list_filter = ('day__fast', "day__date")
-    ordering = ('day__date',)
-    search_fields = ('video__title', 'description')
-    raw_id_fields = ('video', 'day')
+    list_display = ("title", "fast", "date", "order")
+    list_filter = ("day__fast", "day__date")
+    ordering = ("day__date",)
+    search_fields = ("video__title", "description")
+    raw_id_fields = ("video", "day")
 
     def title(self, obj):
-        return obj.video.title if obj.video else ''
-    title.admin_order_field = 'video__title'
+        return obj.video.title if obj.video else ""
+
+    title.admin_order_field = "video__title"
 
     def fast(self, obj):
-        return obj.day.fast if obj.day else ''
-    fast.admin_order_field = 'day__fast__name'
+        return obj.day.fast if obj.day else ""
+
+    fast.admin_order_field = "day__fast__name"
 
     def date(self, obj):
-        return obj.day.date if obj.day else ''
-    date.admin_order_field = 'day__date'
+        return obj.day.date if obj.day else ""
+
+    date.admin_order_field = "day__date"
 
 
 @admin.register(Fast, site=admin.site)
 class FastAdmin(admin.ModelAdmin):
     list_display = (
-        "get_name", "church_link", "get_days", "culmination_feast_date", "get_description", "image_link", "participant_count"
+        "get_name",
+        "church_link",
+        "get_days",
+        "culmination_feast_date",
+        "get_description",
+        "image_link",
+        "participant_count",
     )
-    list_display_links = ['get_name']
+    list_display_links = ["get_name"]
     ordering = ("-year", "church", "name")
     list_filter = ("church", "year")
     sortable_by = ("get_name", "participant_count")
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = queryset.annotate(participant_count=models.Count('profiles'))
+        queryset = queryset.annotate(participant_count=models.Count("profiles"))
         return queryset
 
     def get_name(self, fast):
         return fast
-    
+
     get_name.short_description = "Fast Name"
     get_name.admin_order_field = "name"
 
@@ -100,12 +124,12 @@ class FastAdmin(admin.ModelAdmin):
             return ""
         url = reverse("admin:hub_church_change", args=[fast.church.pk])
         return format_html('<a href="{}">{}</a>', url, fast.church.name)
-    
+
     church_link.short_description = "Church"
-    
+
     def get_days(self, fast):
         return _concatenate_queryset(fast.days.all(), ", ", 5)
-        
+
     get_days.short_description = "Days"
 
     def get_description(self, fast):
@@ -113,7 +137,7 @@ class FastAdmin(admin.ModelAdmin):
             return ""
         t = Truncator(fast.description)
         return t.chars(25)
-    
+
     get_description.short_description = "Description"
 
     def image_link(self, fast):
@@ -121,20 +145,23 @@ class FastAdmin(admin.ModelAdmin):
             return ""
         url = fast.image.url
         return format_html('<a href="{}">{}</a>', url, "Image Link")
-    
+
     def participant_count(self, fast):
         return fast.participant_count
-    
+
     participant_count.short_description = "Participants"
-    participant_count.admin_order_field = 'participant_count'
+    participant_count.admin_order_field = "participant_count"
 
     def get_urls(self):
         """Add endpoints to admin views."""
         return [
-            path("create_fast_with_dates/", self.admin_site.admin_view(self.create_fast_with_dates),
-                 name="create-fast-with-dates"),
             path(
-                "<int:pk>/change/duplicate_fast_with_new_dates/", 
+                "create_fast_with_dates/",
+                self.admin_site.admin_view(self.create_fast_with_dates),
+                name="create-fast-with-dates",
+            ),
+            path(
+                "<int:pk>/change/duplicate_fast_with_new_dates/",
                 self.admin_site.admin_view(self.duplicate_fast_with_new_dates),
                 name="duplicate-fast-with-new-dates",
             ),
@@ -144,7 +171,7 @@ class FastAdmin(admin.ModelAdmin):
                 name="add-days-to-fast",
             ),
         ] + super().get_urls()
-    
+
     def add_days_to_fast(self, request, pk):
         """View to add days to a fast."""
         fast = Fast.objects.get(pk=pk)
@@ -152,16 +179,21 @@ class FastAdmin(admin.ModelAdmin):
         if request.method == "POST":
             form = AddDaysToFastAdminForm(request.POST)
             if form.is_valid():
-                days = [Day.objects.get_or_create(date=date)[0] for date in form.cleaned_data["dates"]]
+                days = [
+                    Day.objects.get_or_create(date=date)[0]
+                    for date in form.cleaned_data["dates"]
+                ]
                 fast.days.add(*days)
 
-                obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
-                
+                obj_url = reverse(
+                    f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                )
+
                 return redirect(to=obj_url)
         else:
             form = AddDaysToFastAdminForm()
 
-        fast_name = Fast.objects.get(pk=pk).name 
+        fast_name = Fast.objects.get(pk=pk).name
         context = dict(
             self.admin_site.each_context(request),
             opts=Fast._meta,
@@ -182,14 +214,18 @@ class FastAdmin(admin.ModelAdmin):
                 data = form.cleaned_data
 
                 # create days for fast
-                dates = [data["first_day"] + datetime.timedelta(days=num_days) 
-                         for num_days in range(data["length_of_fast"])]
+                dates = [
+                    data["first_day"] + datetime.timedelta(days=num_days)
+                    for num_days in range(data["length_of_fast"])
+                ]
                 for date in dates:
                     Day.objects.create(date=date, fast=fast, church=data["church"])
 
                 # go back to fast admin page
-                obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
-                
+                obj_url = reverse(
+                    f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                )
+
                 return redirect(to=obj_url)
         else:
             form = CreateFastWithDatesAdminForm()
@@ -198,7 +234,7 @@ class FastAdmin(admin.ModelAdmin):
             self.admin_site.each_context(request),
             opts=Fast._meta,
             title="Create fast with dates",
-            form=form
+            form=form,
         )
 
         return TemplateResponse(request, "create_fast_with_dates.html", context)
@@ -218,26 +254,32 @@ class FastAdmin(admin.ModelAdmin):
                 duplicate_fast.image_thumbnail = old_fast.image_thumbnail
 
                 # days
-                dates = [data["first_day"] + datetime.timedelta(days=num_days) 
-                        for num_days in range(data["length_of_fast"])]
+                dates = [
+                    data["first_day"] + datetime.timedelta(days=num_days)
+                    for num_days in range(data["length_of_fast"])
+                ]
                 days = [Day.objects.get_or_create(date=date)[0] for date in dates]
                 duplicate_fast.days.set(days)
                 duplicate_fast.save()  # run save method to ensure year is set
 
                 # go back to fast admin page
-                obj_url = reverse(f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist")
-                
+                obj_url = reverse(
+                    f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                )
+
                 return redirect(to=obj_url)
         else:
-            form = CreateFastWithDatesAdminForm(initial={
-                "name": old_fast.name,
-                "church": old_fast.church,
-                "culmination_feast": old_fast.culmination_feast,
-                "description": old_fast.description,
-                "url": old_fast.url,
-            })
+            form = CreateFastWithDatesAdminForm(
+                initial={
+                    "name": old_fast.name,
+                    "church": old_fast.church,
+                    "culmination_feast": old_fast.culmination_feast,
+                    "description": old_fast.description,
+                    "url": old_fast.url,
+                }
+            )
 
-        fast_name = Fast.objects.get(pk=pk).name 
+        fast_name = Fast.objects.get(pk=pk).name
         context = dict(
             self.admin_site.each_context(request),
             opts=Fast._meta,
@@ -252,11 +294,15 @@ class FastAdmin(admin.ModelAdmin):
 @admin.register(Profile, site=admin.site)
 class ProfileAdmin(admin.ModelAdmin):
     list_display = (
-        "user", "church_link", "fast_links", "name", "location", "profile_image_link", "joined_date"
+        "user",
+        "church_link",
+        "fast_links",
+        "name",
+        "location",
+        "profile_image_link",
+        "joined_date",
     )
-    list_display_links = (
-        "user", "church_link", "fast_links","profile_image_link"
-    )
+    list_display_links = ("user", "church_link", "fast_links", "profile_image_link")
     ordering = ("church", "user")
     list_filter = ("church", "fasts", "user__date_joined")
     sortable_by = ("user", "joined_date")
@@ -266,17 +312,17 @@ class ProfileAdmin(admin.ModelAdmin):
             return ""
         url = reverse("admin:hub_church_change", args=[fast.church.pk])
         return format_html('<a href="{}">{}</a>', url, fast.church.name)
-    
+
     church_link.short_description = "Church"
 
     def fast_links(self, profile):
         return _get_fk_links_url(profile.fasts.all(), "fast")
-    
+
     fast_links.short_description = "Fasts"
 
     def joined_date(self, profile):
         return profile.user.date_joined
-    
+
     joined_date.short_description = "Joined"
     joined_date.admin_order_field = "user__date_joined"
 
@@ -284,16 +330,18 @@ class ProfileAdmin(admin.ModelAdmin):
         if not profile.profile_image:
             return ""
         url = profile.profile_image.url
-        return format_html('<a href="{}">Image Link</a>',url)
-    
-    profile_image_link.short_description = "Profile Image"
+        return format_html('<a href="{}">Image Link</a>', url)
 
+    profile_image_link.short_description = "Profile Image"
 
 
 @admin.register(Day, site=admin.site)
 class DayAdmin(admin.ModelAdmin):
     list_display = ("date", "church_link", "fast_link", "reading_links")
-    ordering = ("church", "date",)
+    ordering = (
+        "church",
+        "date",
+    )
     list_filter = ("church", "fast")
 
     def church_link(self, day):
@@ -309,19 +357,19 @@ class DayAdmin(admin.ModelAdmin):
             return ""
         url = reverse("admin:hub_fast_change", args=[day.fast.pk])
         return format_html('<a href="{}">{}</a>', url, day.fast.name)
-    
+
     fast_link.short_description = "Fast"
 
     def reading_links(self, day):
         return _get_fk_links_url(day.readings.all(), "reading")
-    
+
     reading_links.short_description = "Readings"
 
 
 class ReadingYearFilter(admin.SimpleListFilter):
     title = "year"
     parameter_name = "year"
-    
+
     def lookups(self, request, model_admin):
         all_years = set(r.day.date.year for r in model_admin.model.objects.all())
         return [(y, y) for y in all_years]
@@ -331,30 +379,95 @@ class ReadingYearFilter(admin.SimpleListFilter):
             year = int(self.value())
             return queryset.filter(
                 day__date__gte=datetime.date(year, 1, 1),
-                day__date__lte=datetime.date(year, 12, 31)
+                day__date__lte=datetime.date(year, 12, 31),
             )
-    
+
 
 @admin.register(Reading, site=admin.site)
 class ReadingAdmin(admin.ModelAdmin):
-    list_display = ("church_link", "day", "__str__", "book", "start_chapter", "start_verse",)
-    list_display_links = ("church_link", "day", "__str__",)
-    list_filter = (ReadingYearFilter, "book", "start_chapter", "start_verse",)
-    ordering = ("day", "book", "start_chapter", "start_verse",)
-    actions = ['force_regenerate_context']
+    list_display = (
+        "church_link",
+        "day",
+        "__str__",
+        "book",
+        "start_chapter",
+        "start_verse",
+    )
+    list_display_links = (
+        "church_link",
+        "day",
+        "__str__",
+    )
+    list_filter = (
+        ReadingYearFilter,
+        "book",
+        "start_chapter",
+        "start_verse",
+    )
+    ordering = (
+        "day",
+        "book",
+        "start_chapter",
+        "start_verse",
+    )
+    actions = ["force_regenerate_context"]
 
     def force_regenerate_context(self, request, queryset):
         """Force enqueues context regeneration for selected readings."""
         count = queryset.count()
         for reading in queryset:
             generate_reading_context_task.delay(reading.id, force_regeneration=True)
-        self.message_user(request, f"Initiated forced regeneration for {count} readings.")
-    force_regenerate_context.short_description = "Force regenerate AI context for selected readings"
+        self.message_user(
+            request, f"Initiated forced regeneration for {count} readings."
+        )
+
+    force_regenerate_context.short_description = (
+        "Force regenerate AI context for selected readings"
+    )
 
     def church_link(self, reading):
         if not reading.day and not reading.day.church:
             return ""
         url = reverse("admin:hub_church_change", args=[reading.day.church.pk])
         return format_html('<a href="{}">{}</a>', url, reading.day.church.name)
-    
+
     church_link.short_description = "Church"
+
+
+@admin.register(LLMPrompt, site=admin.site)
+class LLMPromptAdmin(admin.ModelAdmin):
+    list_display = ("model", "role", "active", "prompt_preview")
+    list_filter = ("model", "active")
+    search_fields = ("role", "prompt")
+    ordering = ("model", "-active")
+
+    def prompt_preview(self, obj):
+        return Truncator(obj.prompt).chars(100)
+
+    prompt_preview.short_description = "Prompt Preview"
+
+
+@admin.register(ReadingContext, site=admin.site)
+class ReadingContextAdmin(admin.ModelAdmin):
+    list_display = (
+        "reading",
+        "prompt",
+        "active",
+        "thumbs_up",
+        "thumbs_down",
+        "time_of_generation",
+        "text_preview",
+    )
+    list_display_links = (
+        "reading",
+        "prompt",
+    )
+    list_filter = ("active", "prompt__model", "reading__day__date")
+    search_fields = ("text", "reading__book")
+    ordering = ("-time_of_generation",)
+    raw_id_fields = ("reading", "prompt")
+
+    def text_preview(self, obj):
+        return Truncator(obj.text).chars(100)
+
+    text_preview.short_description = "Text Preview"
