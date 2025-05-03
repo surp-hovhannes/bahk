@@ -1,0 +1,123 @@
+name: Django CI/CD
+
+on:
+  push:
+    # Run on pushes to main branch
+    branches: [ "main" ] 
+  pull_request:
+    # Run on pull requests targeting main branch
+    branches: [ "main" ]
+
+jobs:
+  test: # Job name for running tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Don't cancel other matrix jobs if one fails
+      matrix:
+        # Test against relevant Python versions supported by Django 4.2
+        python-version: ["3.11"] 
+
+    services:
+      # Add a Redis service for cache/session testing
+      redis:
+        image: redis:7 # Use a recent Redis version
+        # Health check to ensure Redis is ready before tests run
+        options: >- 
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Map Redis port to the host (accessible via localhost)
+          - 6379:6379
+
+      # Optional: Add PostgreSQL service if your production DB is Postgres
+      # postgres:
+      #   image: postgres:14 # Match your production PostgreSQL version
+      #   env:
+      #     POSTGRES_DB: test_db_ci # Separate test DB name
+      #     POSTGRES_USER: test_user_ci
+      #     POSTGRES_PASSWORD: test_password_ci
+      #   options: >-
+      #     --health-cmd pg_isready
+      #     --health-interval 10s
+      #     --health-timeout 5s
+      #     --health-retries 5
+      #   ports:
+      #     - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5 # Use latest setup-python action
+      with:
+        python-version: ${{ matrix.python-version }}
+        # Cache pip dependencies for faster builds
+        cache: 'pip' 
+        # Invalidate cache if requirements files change
+        cache-dependency-path: '**/requirements*.txt' 
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Check for requirements-dev.txt first, fallback to requirements.txt
+        if [ -f requirements-dev.txt ]; then 
+          pip install -r requirements-dev.txt
+        elif [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        else
+          echo "Error: No requirements.txt or requirements-dev.txt found!"
+          exit 1
+        fi
+
+    # Optional but recommended: Add linting step
+    # - name: Lint with flake8 
+    #   run: |
+    #     pip install flake8
+    #     # Stop the build if there are Python syntax errors or undefined names
+    #     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    #     # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+    #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run Tests
+      env:
+        # Set environment variables needed by settings.py for tests
+        CI: true                 # Indicate CI environment for settings.py
+        DEBUG: true              # Enable Debug for more test output if needed
+        PYTHONWARNINGS: "ignore" # Suppress common warnings if needed
+        MAILGUN_DOMAIN: ${{ vars.MAILGUN_DOMAIN }}
+        
+        # Point to the Redis service started above
+        REDIS_URL: redis://localhost:6379/1 
+        
+        # If using PostgreSQL service (uncomment corresponding service above)
+        # DATABASE_URL: postgresql://test_user_ci:test_password_ci@localhost:5432/test_db_ci
+
+        # Set other potentially required env vars to dummy values or disable features
+        SENTRY_DSN: ""  # Explicitly disable Sentry DSN
+        MAILGUN_PUBLIC_KEY: ${{ secrets.MAILGUN_PUBLIC_KEY }}
+        MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+        MAILGUN_SMTP_LOGIN: ${{ secrets.MAILGUN_SMTP_LOGIN }}
+        MAILGUN_SMTP_PASSWORD: ${{ secrets.MAILGUN_SMTP_PASSWORD }}
+        MAILGUN_SMTP_PORT: ${{ secrets.MAILGUN_SMTP_PORT }}
+        MAILGUN_SMTP_SERVER: ${{ secrets.MAILGUN_SMTP_SERVER }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        AWS_LOCATION_PLACE_INDEX: ${{ secrets.AWS_LOCATION_PLACE_INDEX }}
+        AWS_LOCATION_SERVICES_KEY: ${{ secrets.AWS_LOCATION_SERVICES_KEY }}
+        # Provide any other environment variables your settings.py or tests expect
+
+      run: |
+        # Run Django tests, --noinput avoids interactive prompts
+        python manage.py test --noinput
+
+    # Example Deployment step (conditional on push to main branch and specific Python version)
+    # - name: Deploy to Hosting Provider (e.g., Heroku)
+    #   if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.python-version == '3.11' # Deploy only once
+    #   uses: akhileshns/heroku-deploy@v3.13.15 # Example Heroku deploy action
+    #   with:
+    #     heroku_api_key: ${{ secrets.HEROKU_API_KEY }} # Store API key in GitHub secrets
+    #     heroku_app_name: "your-app-name" # Replace with your Heroku app name
+    #     heroku_email: "your-email@example.com" # Replace with your Heroku email
+    #     # Add other options like buildpacks, healthchecks etc. as needed 
