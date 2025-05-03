@@ -344,34 +344,24 @@ CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {}
 
 # Add SSL settings for Celery only if using SSL
 if is_redis_ssl(CELERY_BROKER_URL):
-    # Add ssl_cert_reqs=none to the URL itself
+    # Add ssl_cert_reqs=none&ssl_check_hostname=false to the URL itself
     if '?' in CELERY_BROKER_URL:
-        CELERY_BROKER_URL = f"{CELERY_BROKER_URL}&ssl_cert_reqs=none"
+        CELERY_BROKER_URL = f"{CELERY_BROKER_URL}&ssl_cert_reqs=none&ssl_check_hostname=false"
     else:
-        CELERY_BROKER_URL = f"{CELERY_BROKER_URL}?ssl_cert_reqs=none"
-    
-    # Explicitly disable hostname check via transport options
-    CELERY_BROKER_TRANSPORT_OPTIONS = {
-        "ssl_check_hostname": False,
-    }
-    # Celery expects broker_use_ssl for SSL parameters at high level
+        CELERY_BROKER_URL = f"{CELERY_BROKER_URL}?ssl_cert_reqs=none&ssl_check_hostname=false"
+    # Explicitly disable hostname check via broker_use_ssl dict
     CELERY_BROKER_USE_SSL = {
         "ssl_cert_reqs": ssl.CERT_NONE,
         "ssl_check_hostname": False,
     }
 
 if is_redis_ssl(CELERY_RESULT_BACKEND):
-    # Add ssl_cert_reqs=none to the URL itself
+    # Add ssl_cert_reqs=none&ssl_check_hostname=false to the URL itself
     if '?' in CELERY_RESULT_BACKEND:
-        CELERY_RESULT_BACKEND = f"{CELERY_RESULT_BACKEND}&ssl_cert_reqs=none"
+        CELERY_RESULT_BACKEND = f"{CELERY_RESULT_BACKEND}&ssl_cert_reqs=none&ssl_check_hostname=false"
     else:
-        CELERY_RESULT_BACKEND = f"{CELERY_RESULT_BACKEND}?ssl_cert_reqs=none"
-        
-    # Explicitly disable hostname check via transport options
-    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
-        "ssl_check_hostname": False,
-    }
-    # Celery expects redis_backend_use_ssl for Redis result backend
+        CELERY_RESULT_BACKEND = f"{CELERY_RESULT_BACKEND}?ssl_cert_reqs=none&ssl_check_hostname=false"
+    # Explicitly disable hostname check via backend dict
     CELERY_REDIS_BACKEND_USE_SSL = {
         "ssl_cert_reqs": ssl.CERT_NONE,
         "ssl_check_hostname": False,
