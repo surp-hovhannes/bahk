@@ -354,6 +354,11 @@ if is_redis_ssl(CELERY_BROKER_URL):
     CELERY_BROKER_TRANSPORT_OPTIONS = {
         "ssl_check_hostname": False,
     }
+    # Celery expects broker_use_ssl for SSL parameters at high level
+    CELERY_BROKER_USE_SSL = {
+        "ssl_cert_reqs": ssl.CERT_NONE,
+        "ssl_check_hostname": False,
+    }
 
 if is_redis_ssl(CELERY_RESULT_BACKEND):
     # Add ssl_cert_reqs=none to the URL itself
@@ -364,6 +369,11 @@ if is_redis_ssl(CELERY_RESULT_BACKEND):
         
     # Explicitly disable hostname check via transport options
     CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
+        "ssl_check_hostname": False,
+    }
+    # Celery expects redis_backend_use_ssl for Redis result backend
+    CELERY_REDIS_BACKEND_USE_SSL = {
+        "ssl_cert_reqs": ssl.CERT_NONE,
         "ssl_check_hostname": False,
     }
 
