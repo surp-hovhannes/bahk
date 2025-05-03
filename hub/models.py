@@ -3,6 +3,7 @@
 import logging
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import constraints
@@ -10,7 +11,6 @@ from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit, Transpose
 from model_utils import FieldTracker
-from django.core.exceptions import ValidationError
 
 import bahk.settings as settings
 from hub.constants import (
@@ -532,14 +532,17 @@ class LLMPrompt(models.Model):
     role = models.TextField(help_text="The role/persona for the model")
     prompt = models.TextField(help_text="The actual prompt text")
     active = models.BooleanField(
-        default=False, help_text="If True, this prompt is the one currently used for generation",
+        default=False,
+        help_text="If True, this prompt is the one currently used for generation",
     )
 
     def save(self, *args, **kwargs):
         """Override save to ensure only one prompt can be active at a time."""
         if self.active:
             # Check if there are any other active prompts excluding the current one
-            other_active_prompts = LLMPrompt.objects.filter(active=True).exclude(pk=self.pk)
+            other_active_prompts = LLMPrompt.objects.filter(active=True).exclude(
+                pk=self.pk
+            )
             if other_active_prompts.exists():
                 raise ValidationError(
                     "Another LLM prompt is already marked as active. Please deactivate it first."
