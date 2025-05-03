@@ -338,21 +338,34 @@ else:
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/1') # Use a separate DB for results is good practice
 
+# Default transport options
+CELERY_BROKER_TRANSPORT_OPTIONS = {}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {}
+
 # Add SSL settings for Celery only if using SSL
 if is_redis_ssl(CELERY_BROKER_URL):
-    # Heroku Redis uses self-signed certs, disable verification
+    # Add ssl_cert_reqs=none to the URL itself
+    if '?' in CELERY_BROKER_URL:
+        CELERY_BROKER_URL = f"{CELERY_BROKER_URL}&ssl_cert_reqs=none"
+    else:
+        CELERY_BROKER_URL = f"{CELERY_BROKER_URL}?ssl_cert_reqs=none"
+    
+    # Explicitly disable hostname check via transport options
     CELERY_BROKER_TRANSPORT_OPTIONS = {
-        "ssl_cert_reqs": ssl.CERT_NONE, 
         "ssl_check_hostname": False,
     }
-    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = { # Apply same options to result backend
-        "ssl_cert_reqs": ssl.CERT_NONE,
+
+if is_redis_ssl(CELERY_RESULT_BACKEND):
+    # Add ssl_cert_reqs=none to the URL itself
+    if '?' in CELERY_RESULT_BACKEND:
+        CELERY_RESULT_BACKEND = f"{CELERY_RESULT_BACKEND}&ssl_cert_reqs=none"
+    else:
+        CELERY_RESULT_BACKEND = f"{CELERY_RESULT_BACKEND}?ssl_cert_reqs=none"
+        
+    # Explicitly disable hostname check via transport options
+    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
         "ssl_check_hostname": False,
     }
-else:
-    # Clear transport options if not using SSL
-    CELERY_BROKER_TRANSPORT_OPTIONS = {}
-    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {}
 
 # Use Redis for session cache
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
