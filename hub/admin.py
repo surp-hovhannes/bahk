@@ -460,21 +460,29 @@ class LLMPromptAdmin(admin.ModelAdmin):
     prompt_preview.short_description = "Prompt Preview"
 
     def duplicate_prompt(self, request, queryset):
-        """Create a copy of selected prompts and open them for editing."""
-        for prompt in queryset:
-            # Create a new prompt with the same data
-            new_prompt = LLMPrompt.objects.create(
-                model=prompt.model,
-                role=prompt.role,
-                prompt=prompt.prompt,
-                active=False  # Set as inactive by default
-            )
-            # Redirect to the change form for the new prompt
+        """Create a copy of selected prompt and open it for editing."""
+        if queryset.count() != 1:
             self.message_user(
                 request,
-                f"Successfully duplicated prompt '{prompt.role}' for model '{prompt.model}'.",
+                "Please select exactly one prompt to duplicate.",
+                level=messages.ERROR
             )
-            return redirect(reverse('admin:hub_llmprompt_change', args=[new_prompt.id]))
+            return
+
+        prompt = queryset.first()
+        # Create a new prompt with the same data
+        new_prompt = LLMPrompt.objects.create(
+            model=prompt.model,
+            role=prompt.role,
+            prompt=prompt.prompt,
+            active=False  # Set as inactive by default
+        )
+        # Redirect to the change form for the new prompt
+        self.message_user(
+            request,
+            f"Successfully duplicated prompt '{prompt.role}' for model '{prompt.model}'.",
+        )
+        return redirect(reverse('admin:hub_llmprompt_change', args=[new_prompt.id]))
     
     duplicate_prompt.short_description = "Duplicate selected prompt"
 
