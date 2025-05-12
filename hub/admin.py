@@ -437,11 +437,22 @@ class ReadingAdmin(admin.ModelAdmin):
 
 @admin.register(LLMPrompt, site=admin.site)
 class LLMPromptAdmin(admin.ModelAdmin):
-    list_display = ("id", "model", "role", "active", "prompt_preview")
+    list_display = ("id", "model", "active", "context_count", "role", "prompt_preview")
     list_filter = ("model", "active")
     search_fields = ("role", "prompt")
     ordering = ("id", "active")
     actions = ["duplicate_prompt", "make_active"]
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.annotate(
+            context_count=models.Count('readingcontext', distinct=True)
+        )
+
+    def context_count(self, obj):
+        return obj.context_count
+    context_count.short_description = "Contexts"
+    context_count.admin_order_field = 'context_count'
 
     def prompt_preview(self, obj):
         return Truncator(obj.prompt).chars(100)
