@@ -9,6 +9,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import Truncator
+from django.contrib import messages
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import (
@@ -436,15 +437,71 @@ class ReadingAdmin(admin.ModelAdmin):
 
 @admin.register(LLMPrompt, site=admin.site)
 class LLMPromptAdmin(admin.ModelAdmin):
-    list_display = ("model", "role", "active", "prompt_preview")
+    list_display = ("id", "model", "role", "active", "prompt_preview")
     list_filter = ("model", "active")
     search_fields = ("role", "prompt")
-    ordering = ("model", "-active")
+    ordering = ("id", "active")
+    actions = ["duplicate_prompt", "make_active"]
 
     def prompt_preview(self, obj):
         return Truncator(obj.prompt).chars(100)
 
     prompt_preview.short_description = "Prompt Preview"
+
+    def duplicate_prompt(self, request, queryset):
+        """Create a copy of selected prompts and open them for editing."""
+        for prompt in queryset:
+            # Create a new prompt with the same data
+            new_prompt = LLMPrompt.objects.create(
+                model=prompt.model,
+                role=prompt.role,
+                prompt=prompt.prompt,
+                active=False  # Set as inactive by default
+            )
+            # Redirect to the change form for the new prompt
+            self.message_user(
+                request,
+                f"Successfully duplicated prompt '{prompt.role}' for model '{prompt.model}'.",
+            )
+            return redirect(reverse('admin:hub_llmprompt_change', args=[new_prompt.id]))
+    
+    duplicate_prompt.short_description = "Duplicate selected prompt"
+
+    def make_active(self, request, queryset):
+        """Make the selected prompt active and deactivate others with same model and role."""
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                "Please select exactly one prompt to make active.",
+                level=messages.ERROR
+            )
+            return
+
+        prompt = queryset.first()
+        
+        # First, deactivate the current active prompt
+        current_active = LLMPrompt.objects.filter(
+            active=True
+        ).first()
+        
+        if current_active:
+            current_active.active = False
+            current_active.save()
+            self.message_user(
+                request,
+                f"Deactivated previous active prompt '{current_active.role}' for model '{current_active.model}'.",
+            )
+        
+        # Then activate the selected prompt
+        prompt.active = True
+        prompt.save()
+        
+        self.message_user(
+            request,
+            f"Successfully made prompt '{prompt.role}' for model '{prompt.model}' active.",
+        )
+    
+    make_active.short_description = "Make selected prompt active"
 
 
 @admin.register(ReadingContext, site=admin.site)
