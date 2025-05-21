@@ -411,7 +411,22 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_chapter",
         "start_verse",
     )
-    actions = ["force_regenerate_context"]
+    actions = ["force_regenerate_context", "compare_prompts"]
+
+    def compare_prompts(self, request, queryset):
+        """Redirect to a page to compare different LLM prompts for selected readings."""
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                "Please select exactly one reading to compare prompts.",
+                level=messages.ERROR
+            )
+            return
+        
+        reading = queryset.first()
+        return redirect(reverse('hub_reading_compare_prompts', args=[reading.id]))
+
+    compare_prompts.short_description = "Compare LLM prompts for selected reading"
 
     def force_regenerate_context(self, request, queryset):
         """Force enqueues context regeneration for selected readings."""
