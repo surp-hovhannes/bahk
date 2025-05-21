@@ -35,19 +35,22 @@ def generate_context(
         return None
 
     llm_prompt = llm_prompt or LLMPrompt.objects.get(active=True)
-    llm_prompt_with_passage = f"{llm_prompt.prompt}\n\n# Final Instructions\nSummarize the passages preceding {reading.passage_reference}"
+    llm_prompt_combined = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
+    user_prompt_with_passage = f"Contextualize the passage {reading.passage_reference}, by summarizing the passages preceding it."
     try:
         response = openai.chat.completions.create(
             model=llm_prompt.model,
             messages=[
                 {
                     "role": "system",
-                    "content": llm_prompt.role,
+                    "content": llm_prompt_combined,
                 },
-                {"role": "user", "content": llm_prompt_with_passage},
+                {"role": "user", "content": user_prompt_with_passage},
             ],
-            max_tokens=250,
-            temperature=0.5,
+            max_tokens=1000,
+            temperature=0.35,
+            top_p=1,
+            store=True
         )
         if response.choices:
             return response.choices[0].message.content.strip()
