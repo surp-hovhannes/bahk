@@ -553,6 +553,23 @@ class LLMPrompt(models.Model):
                 )
         super().save(*args, **kwargs)
 
+    def get_llm_service(self):
+        """
+        Get the appropriate LLM service based on the model type.
+        Returns:
+            LLMService: An instance of the appropriate service class.
+        Raises:
+            ValueError: If the model type is not supported.
+        """
+        from hub.services.llm_service import OpenAIService, AnthropicService
+
+        if "gpt" in self.model:
+            return OpenAIService()
+        elif "claude" in self.model:
+            return AnthropicService()
+        else:
+            raise ValueError(f"Unsupported model: {self.model}")
+
     def __str__(self):
         status = " (Active)" if self.active else ""
         return f"{self.model} prompt: {self.prompt[:20]}{status}"

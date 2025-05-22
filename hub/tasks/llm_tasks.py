@@ -4,7 +4,6 @@ from celery import shared_task
 from django.utils import timezone
 
 from hub.models import LLMPrompt, Reading, ReadingContext
-from hub.services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +30,8 @@ def generate_reading_context_task(
     llm_prompt = LLMPrompt.objects.get(active=True)
     
     try:
-        # Get the appropriate service for the model
-        service = get_llm_service(llm_prompt.model)
+        # Get the appropriate service using the prompt's method
+        service = llm_prompt.get_llm_service()
         context_text = service.generate_context(reading, llm_prompt)
         
         if context_text:

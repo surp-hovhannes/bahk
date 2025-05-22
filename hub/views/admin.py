@@ -4,7 +4,6 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from hub.models import Reading, LLMPrompt
-from hub.services.llm_service import get_llm_service
 
 @staff_member_required
 @require_http_methods(["GET", "POST"])
@@ -22,10 +21,10 @@ def compare_reading_prompts(request, reading_id):
             prompt1 = get_object_or_404(LLMPrompt, id=prompt1_id)
             prompt2 = get_object_or_404(LLMPrompt, id=prompt2_id)
 
-            # Generate contexts for both prompts using the appropriate service
             try:
-                service1 = get_llm_service(prompt1.model)
-                service2 = get_llm_service(prompt2.model)
+                # Get services using the prompts' methods
+                service1 = prompt1.get_llm_service()
+                service2 = prompt2.get_llm_service()
                 
                 context1 = service1.generate_context(reading, prompt1)
                 context2 = service2.generate_context(reading, prompt2)
