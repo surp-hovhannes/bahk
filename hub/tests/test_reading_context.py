@@ -1,5 +1,5 @@
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from django.conf import settings
 from django.test import TestCase
@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from hub.models import Church, Day, LLMPrompt, Reading, ReadingContext
 from hub.tasks.openai_tasks import generate_reading_context_task
+from hub.services.llm_service import OpenAIService, AnthropicService
 
 
 class ReadingContextTaskTests(TestCase):
@@ -29,12 +30,10 @@ class ReadingContextTaskTests(TestCase):
             model="gpt-4.1-mini",
             role="You are a helpful assistant that generates context for Bible readings.",
             prompt="Generate a context for the following Bible reading:",
+            active=True
         )
 
-    @patch(
-        "hub.tasks.openai_tasks.generate_context",
-        return_value="This is a generated context.",
-    )
+    @patch.object(OpenAIService, 'generate_context', return_value="This is a generated context.")
     def test_context_generation_task_success(self, mock_generate):
         # Execute the task synchronously
         generate_reading_context_task.run(self.reading.id)
@@ -144,9 +143,10 @@ class ReadingContextForceTests(TestCase):
             model="gpt-4.1-mini",
             role="You are a helpful assistant that generates context for Bible readings.",
             prompt="Generate a context for the following Bible reading:",
+            active=True
         )
 
-    @patch("hub.tasks.openai_tasks.generate_context")
+    @patch.object(OpenAIService, 'generate_context')
     def test_skip_without_force_regeneration(self, mock_generate):
         # First generation sets context
         mock_generate.return_value = "initial context"

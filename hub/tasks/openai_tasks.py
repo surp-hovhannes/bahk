@@ -4,8 +4,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from hub.models import LLMPrompt, Reading, ReadingContext
-from hub.services.openai_service import generate_context as generate_context_with_openai
-from hub.services.anthropic_service import generate_context as generate_context_with_anthropic
+from hub.services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +29,22 @@ def generate_reading_context_task(
         return
 
     llm_prompt = LLMPrompt.objects.get(active=True)
-    if "gpt" in llm_prompt.model:
-        context_text = generate_context_with_openai(reading, llm_prompt=llm_prompt)
-    elif "claude" in llm_prompt.model:
-        context_text = generate_context_with_anthropic(reading, llm_prompt=llm_prompt)
-    else:
-        raise ValueError(f"Unsupported model: {llm_prompt.model}")
+    
+    try:
+        # Get the appropriate service for the model
+        service = get_llm_service(llm_prompt.model)
+        context_text = service.generate_context(reading, llm_prompt)
         
-    if context_text:
-        ReadingContext.objects.create(
-            reading=reading,
-            text=context_text,
-            prompt=llm_prompt,
-        )
-        logger.info("Context generated and saved for Reading %s", reading_id)
-    else:
-        logger.error("Failed to generate context for Reading %s", reading_id)
-        raise self.retry(exc=Exception("Context generation failed"))
+        if context_text:
+            ReadingContext.objects.create(
+                reading=reading,
+                text=context_text,
+                prompt=llm_prompt,
+            )
+            logger.info("Context generated and saved for Reading %s", reading_id)
+        else:
+            logger.error("Failed to generate context for Reading %s", reading_id)
+            raise self.retry(exc=Exception("Context generation failed"))
+    except ValueError as e:
+        logger.error(f"Error selecting LLM service: {e}")
+        raise self.retry(exc=e)
