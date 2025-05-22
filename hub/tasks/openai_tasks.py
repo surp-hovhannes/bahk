@@ -4,7 +4,8 @@ from celery import shared_task
 from django.utils import timezone
 
 from hub.models import LLMPrompt, Reading, ReadingContext
-from hub.services.openai_service import generate_context
+from hub.services.openai_service import generate_context as generate_context_with_openai
+from hub.services.anthropic_service import generate_context as generate_context_with_anthropic
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,13 @@ def generate_reading_context_task(
         return
 
     llm_prompt = LLMPrompt.objects.get(active=True)
-    context_text = generate_context(reading, llm_prompt=llm_prompt)
+    if "gpt" in llm_prompt.model:
+        context_text = generate_context_with_openai(reading, llm_prompt=llm_prompt)
+    elif "claude" in llm_prompt.model:
+        context_text = generate_context_with_anthropic(reading, llm_prompt=llm_prompt)
+    else:
+        raise ValueError(f"Unsupported model: {llm_prompt.model}")
+        
     if context_text:
         ReadingContext.objects.create(
             reading=reading,
@@ -39,4 +46,4 @@ def generate_reading_context_task(
         logger.info("Context generated and saved for Reading %s", reading_id)
     else:
         logger.error("Failed to generate context for Reading %s", reading_id)
-        raise self.retry(exc=Exception("OpenAI generation failed"))
+        raise self.retry(exc=Exception("Context generation failed"))

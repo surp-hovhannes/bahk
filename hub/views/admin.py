@@ -4,7 +4,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from hub.models import Reading, LLMPrompt
-from hub.services.openai_service import generate_context
+from hub.services.openai_service import generate_context as generate_context_with_openai
+from hub.services.anthropic_service import generate_context as generate_context_with_anthropic
 
 @staff_member_required
 @require_http_methods(["GET", "POST"])
@@ -22,9 +23,17 @@ def compare_reading_prompts(request, reading_id):
             prompt1 = get_object_or_404(LLMPrompt, id=prompt1_id)
             prompt2 = get_object_or_404(LLMPrompt, id=prompt2_id)
 
-            # Generate contexts for both prompts
-            context1 = generate_context(reading, prompt1)
-            context2 = generate_context(reading, prompt2)
+            # Generate contexts for both prompts using the appropriate service
+            def get_context(prompt):
+                if "gpt" in prompt.model:
+                    return generate_context_with_openai(reading, prompt)
+                elif "claude" in prompt.model:
+                    return generate_context_with_anthropic(reading, prompt)
+                else:
+                    return None
+
+            context1 = get_context(prompt1)
+            context2 = get_context(prompt2)
 
             if context1 and context2:
                 outputs = [

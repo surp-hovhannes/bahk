@@ -522,8 +522,10 @@ class LLMPrompt(models.Model):
         ("gpt-4.1-mini", "GPT 4.1 Mini"),
         ("gpt-4.1-nano", "GPT 4.1 Nano"),
         ("gpt-4.1", "GPT 4.1"),
-        ("gpt-o4-mini", "GPT o4 Mini (Reasoning $)"),
+        ("gpt-o4-mini", "GPT o4 Mini (Reasoning $$$)"),
         ("gpt-4o-mini", "GPT 4o Mini"),
+        ("claude-3-7-sonnet-20250219", "Claude 3.7 Sonnet"),
+        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet")
     ]
 
     model = models.CharField(
