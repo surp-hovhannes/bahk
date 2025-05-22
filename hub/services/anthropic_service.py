@@ -44,7 +44,7 @@ def generate_context(reading: Reading, llm_prompt: Optional[LLMPrompt] = None) -
         logger.error("No content returned from Claude API.")
         return None
     except anthropic.NotFoundError as e:
-        logger.error(f"Model not found or not accessible: {model}. Error: {e}")
+        logger.error(f"Model not found or not accessible: {llm_prompt.model}. Error: {e}")
         return None
     except Exception as e:
         logger.error(f"Error generating context with Claude: {e}")
