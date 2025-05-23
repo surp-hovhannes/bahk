@@ -37,3 +37,4 @@ folium==0.14.0    # Alternative for interactive maps using leaflet.js
 scikit-learn==1.5.0    # For DBSCAN clustering
 # OpenAI
 openai
+anthropic

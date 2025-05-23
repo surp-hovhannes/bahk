@@ -4,7 +4,6 @@ from celery import shared_task
 from django.utils import timezone
 
 from hub.models import LLMPrompt, Reading, ReadingContext
-from hub.services.openai_service import generate_context
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +28,22 @@ def generate_reading_context_task(
         return
 
     llm_prompt = LLMPrompt.objects.get(active=True)
-    context_text = generate_context(reading, llm_prompt=llm_prompt)
-    if context_text:
-        ReadingContext.objects.create(
-            reading=reading,
-            text=context_text,
-            prompt=llm_prompt,
-        )
-        logger.info("Context generated and saved for Reading %s", reading_id)
-    else:
-        logger.error("Failed to generate context for Reading %s", reading_id)
-        raise self.retry(exc=Exception("OpenAI generation failed"))
+    
+    try:
+        # Get the appropriate service using the prompt's method
+        service = llm_prompt.get_llm_service()
+        context_text = service.generate_context(reading, llm_prompt)
+        
+        if context_text:
+            ReadingContext.objects.create(
+                reading=reading,
+                text=context_text,
+                prompt=llm_prompt,
+            )
+            logger.info("Context generated and saved for Reading %s", reading_id)
+        else:
+            logger.error("Failed to generate context for Reading %s", reading_id)
+            raise self.retry(exc=Exception("Context generation failed"))
+    except ValueError as e:
+        logger.error(f"Error selecting LLM service: {e}")
+        raise self.retry(exc=e)

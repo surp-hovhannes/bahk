@@ -38,6 +38,7 @@ from .views.web import (
     edit_profile, 
     changelog,
 )
+from hub.views.admin import compare_reading_prompts
 
 
 router = routers.DefaultRouter()
@@ -105,6 +106,13 @@ urlpatterns = [
 
     # Push Notifications endpoints
     path('notifications/', include('notifications.urls')),
+
+    # Admin endpoints
+    path(
+        "hub/reading/<int:reading_id>/compare-prompts/",
+        compare_reading_prompts,
+        name="hub_reading_compare_prompts",
+    ),
 ]
 
 urlpatterns += router.urls

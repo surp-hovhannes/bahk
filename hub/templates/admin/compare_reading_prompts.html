@@ -1,0 +1,84 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .prompt-comparison {
+      display: flex;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .prompt-output {
+      flex: 1;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #fff;
+    }
+    .prompt-output h3 {
+      margin-top: 0;
+      color: #417690;
+    }
+    .prompt-selection {
+      margin-bottom: 20px;
+    }
+    .prompt-selection select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Compare LLM Prompts for {{ reading }}</h1>
+  
+  <div class="prompt-selection">
+    <h2>Select Prompts to Compare</h2>
+    <form method="post" id="compare-form">
+      {% csrf_token %}
+      <div style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+          <label for="prompt1">First Prompt:</label>
+          <select name="prompt1" id="prompt1">
+            {% for prompt in prompts %}
+              <option value="{{ prompt.id }}">{{ prompt.model }} - {{ prompt.role|truncatechars:50 }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex: 1;">
+          <label for="prompt2">Second Prompt:</label>
+          <select name="prompt2" id="prompt2">
+            {% for prompt in prompts %}
+              <option value="{{ prompt.id }}">{{ prompt.model }} - {{ prompt.role|truncatechars:50 }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="margin-top: 20px;">
+        <input type="submit" value="Generate Comparison" class="default" />
+      </div>
+    </form>
+  </div>
+
+  {% if outputs %}
+  <div class="prompt-comparison">
+    <div class="prompt-output">
+      <h3>{{ outputs.0.prompt.model }} - {{ outputs.0.prompt.role|truncatechars:50 }}</h3>
+      <div>{{ outputs.0.text|linebreaks }}</div>
+    </div>
+    <div class="prompt-output">
+      <h3>{{ outputs.1.prompt.model }} - {{ outputs.1.prompt.role|truncatechars:50 }}</h3>
+      <div>{{ outputs.1.text|linebreaks }}</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %} 

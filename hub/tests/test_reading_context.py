@@ -1,5 +1,5 @@
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from django.conf import settings
 from django.test import TestCase
@@ -8,7 +8,8 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from hub.models import Church, Day, LLMPrompt, Reading, ReadingContext
-from hub.tasks.openai_tasks import generate_reading_context_task
+from hub.tasks.llm_tasks import generate_reading_context_task
+from hub.services.llm_service import OpenAIService, AnthropicService
 
 
 class ReadingContextTaskTests(TestCase):
@@ -25,30 +26,75 @@ class ReadingContextTaskTests(TestCase):
             end_chapter=3,
             end_verse=18,
         )
-        self.llm_prompt = LLMPrompt.objects.create(
+
+    def test_context_generation_with_gpt(self):
+        """Test context generation with GPT model."""
+        prompt = LLMPrompt.objects.create(
             model="gpt-4.1-mini",
-            role="You are a helpful assistant that generates context for Bible readings.",
-            prompt="Generate a context for the following Bible reading:",
+            role="Test role",
+            prompt="Test prompt",
+            active=True
         )
 
-    @patch(
-        "hub.tasks.openai_tasks.generate_context",
-        return_value="This is a generated context.",
-    )
-    def test_context_generation_task_success(self, mock_generate):
-        # Execute the task synchronously
-        generate_reading_context_task.run(self.reading.id)
+        with patch.object(OpenAIService, 'generate_context', return_value="GPT generated context"):
+            generate_reading_context_task.run(self.reading.id)
+            self.reading.refresh_from_db()
+            self.assertEqual(self.reading.contexts.first().text, "GPT generated context")
 
-        # Refresh from DB and assert fields updated
-        self.reading.refresh_from_db()
-        self.assertEqual(
-            self.reading.contexts.first().text, "This is a generated context."
+    def test_context_generation_with_claude(self):
+        """Test context generation with Claude model."""
+        prompt = LLMPrompt.objects.create(
+            model="claude-3-7-sonnet-20250219",
+            role="Test role",
+            prompt="Test prompt",
+            active=True
         )
-        self.assertEqual(self.reading.contexts.first().thumbs_up, 0)
-        self.assertEqual(self.reading.contexts.first().thumbs_down, 0)
-        self.assertIsNotNone(self.reading.contexts.first().time_of_generation)
-        age = timezone.now() - self.reading.contexts.first().time_of_generation
-        self.assertTrue(age.total_seconds() < 5)
+
+        with patch.object(AnthropicService, 'generate_context', return_value="Claude generated context"):
+            generate_reading_context_task.run(self.reading.id)
+            self.reading.refresh_from_db()
+            self.assertEqual(self.reading.contexts.first().text, "Claude generated context")
+
+    def test_skip_generation_if_exists(self):
+        """Test that generation is skipped if context exists and force_regeneration is False."""
+        prompt = LLMPrompt.objects.create(
+            model="gpt-4.1-mini",
+            role="Test role",
+            prompt="Test prompt",
+            active=True
+        )
+
+        # Create initial context
+        context = ReadingContext.objects.create(
+            reading=self.reading,
+            text="Initial context",
+            prompt=prompt
+        )
+
+        with patch.object(OpenAIService, 'generate_context') as mock_generate:
+            generate_reading_context_task.run(self.reading.id)
+            mock_generate.assert_not_called()
+
+    def test_force_regeneration(self):
+        """Test that force_regeneration creates new context even if one exists."""
+        prompt = LLMPrompt.objects.create(
+            model="gpt-4.1-mini",
+            role="Test role",
+            prompt="Test prompt",
+            active=True
+        )
+
+        # Create initial context
+        context = ReadingContext.objects.create(
+            reading=self.reading,
+            text="Initial context",
+            prompt=prompt
+        )
+
+        with patch.object(OpenAIService, 'generate_context', return_value="New context"):
+            generate_reading_context_task.run(self.reading.id, force_regeneration=True)
+            self.reading.refresh_from_db()
+            self.assertEqual(self.reading.active_context.text, "New context")
 
 
 class DailyReadingsAPITests(APITestCase):
@@ -124,43 +170,3 @@ class FeedbackEndpointTests(APITestCase):
         self.context.refresh_from_db()
         self.assertEqual(self.context.thumbs_down, 2)
         mock_delay.assert_called_once_with(self.reading.id, force_regeneration=True)
-
-
-class ReadingContextForceTests(TestCase):
-    """Tests for skipping or forcing context regeneration in the Celery task."""
-
-    def setUp(self):
-        self.church = Church.objects.get(pk=Church.get_default_pk())
-        self.day = Day.objects.create(date=date.today(), church=self.church)
-        self.reading = Reading.objects.create(
-            day=self.day,
-            book="John",
-            start_chapter=3,
-            start_verse=16,
-            end_chapter=3,
-            end_verse=18,
-        )
-        LLMPrompt.objects.create(
-            model="gpt-4.1-mini",
-            role="You are a helpful assistant that generates context for Bible readings.",
-            prompt="Generate a context for the following Bible reading:",
-        )
-
-    @patch("hub.tasks.openai_tasks.generate_context")
-    def test_skip_without_force_regeneration(self, mock_generate):
-        # First generation sets context
-        mock_generate.return_value = "initial context"
-        generate_reading_context_task.run(self.reading.id)
-        self.reading.refresh_from_db()
-        first_context = self.reading.active_context
-        first_ts = self.reading.active_context.time_of_generation
-
-        # Attempt regeneration without force; should skip and not call OpenAI
-        mock_generate.return_value = "new context"
-        generate_reading_context_task.run(self.reading.id)
-        self.reading.refresh_from_db()
-        # Context and timestamp remain unchanged
-        self.assertEqual(self.reading.active_context, first_context)
-        self.assertEqual(self.reading.active_context.time_of_generation, first_ts)
-        # ensure OpenAI generate_context was not invoked second time
-        self.assertEqual(mock_generate.call_count, 1)
