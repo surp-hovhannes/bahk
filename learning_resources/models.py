@@ -263,4 +263,69 @@ class Recipe(models.Model):
     class Meta:
         ordering = ['-created_at']
         verbose_name_plural = 'Recipes'
+
+
+# Translation models for internationalization
+class VideoTranslation(models.Model):
+    video = models.ForeignKey(Video, related_name='translations', on_delete=models.CASCADE)
+    language_code = models.CharField(max_length=10, help_text='Language code (e.g., en, am)')
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('video', 'language_code')
+        ordering = ['-created_at']
+        verbose_name_plural = 'Video Translations'
+    
+    def __str__(self):
+        return f"{self.video.title} ({self.language_code})"
+
+
+class ArticleTranslation(models.Model):
+    article = models.ForeignKey(Article, related_name='translations', on_delete=models.CASCADE)
+    language_code = models.CharField(max_length=10, help_text='Language code (e.g., en, am)')
+    title = models.CharField(max_length=200)
+    body = models.TextField(help_text='Content in Markdown format')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('article', 'language_code')
+        ordering = ['-created_at']
+        verbose_name_plural = 'Article Translations'
+    
+    def __str__(self):
+        return f"{self.article.title} ({self.language_code})"
+
+
+class RecipeTranslation(models.Model):
+    recipe = models.ForeignKey(Recipe, related_name='translations', on_delete=models.CASCADE)
+    language_code = models.CharField(max_length=10, help_text='Language code (e.g., en, am)')
+    title = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
+    time_required = models.CharField("Time required to make recipe", max_length=64)
+    serves = models.CharField("Number of servings", max_length=32)
+    ingredients = models.TextField(
+        help_text='Recipe ingredients in Markdown format',
+        verbose_name='Ingredients'
+    )
+    directions = models.TextField(
+        help_text='Recipe directions in Markdown format',
+        verbose_name='Directions'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('recipe', 'language_code')
+        ordering = ['-created_at']
+        verbose_name_plural = 'Recipe Translations'
+    
+    def __str__(self):
+        return f"{self.recipe.title} ({self.language_code})"
     

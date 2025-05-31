@@ -19,6 +19,9 @@ class VideoListView(generics.ListAPIView):
                        Case-insensitive partial matches are supported.
         - category (str): Optional. Filter videos by category ('general', 'devotional', 'tutorial').
                          Defaults to 'general' if not specified.
+        - language (str): Optional. Language code for translations (e.g., 'en', 'am').
+                         Defaults to 'en' if not specified. Only returns videos that have 
+                         translations in the specified language.
 
     Returns:
         A JSON response with the following structure:
@@ -46,6 +49,8 @@ class VideoListView(generics.ListAPIView):
         GET /api/learning-resources/videos/
         GET /api/learning-resources/videos/?search=prayer
         GET /api/learning-resources/videos/?category=tutorial
+        GET /api/learning-resources/videos/?language=am
+        GET /api/learning-resources/videos/?category=devotional&language=am
     """
     serializer_class = VideoSerializer
     permission_classes = [AllowAny]
@@ -54,17 +59,39 @@ class VideoListView(generics.ListAPIView):
         queryset = Video.objects.all()
         search = self.request.query_params.get('search', None)
         category = self.request.query_params.get('category', 'general')
+        language = self.request.query_params.get('language', 'en')
         
         # Filter by category
         queryset = queryset.filter(category=category)
         
+        # Filter by language availability
+        if language != 'en':
+            # For non-English languages, only return items that have translations
+            queryset = queryset.filter(translations__language_code=language).distinct()
+        
         # Apply search filter if provided
         if search is not None:
-            queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(description__icontains=search)
-            )
+            if language == 'en':
+                # Search in default fields for English
+                queryset = queryset.filter(
+                    Q(title__icontains=search) |
+                    Q(description__icontains=search)
+                )
+            else:
+                # Search in translated fields for other languages
+                queryset = queryset.filter(
+                    Q(translations__title__icontains=search) |
+                    Q(translations__description__icontains=search)
+                ).filter(translations__language_code=language).distinct()
+        
         return queryset.order_by('-created_at')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        language = self.request.query_params.get('language', 'en')
+        context['language'] = language
+        return context
+
 
 class ArticleListView(generics.ListAPIView):
     """
@@ -77,6 +104,9 @@ class ArticleListView(generics.ListAPIView):
     Query Parameters:
         - search (str): Optional. Filter articles by matching text in title or body.
                        Case-insensitive partial matches are supported.
+        - language (str): Optional. Language code for translations (e.g., 'en', 'am').
+                         Defaults to 'en' if not specified. Only returns articles that have 
+                         translations in the specified language.
 
     Returns:
         A JSON response with the following structure:
@@ -101,6 +131,7 @@ class ArticleListView(generics.ListAPIView):
     Example Requests:
         GET /api/learning-resources/articles/
         GET /api/learning-resources/articles/?search=fasting
+        GET /api/learning-resources/articles/?language=am
     """
     serializer_class = ArticleSerializer
     permission_classes = [AllowAny]
@@ -108,12 +139,35 @@ class ArticleListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = Article.objects.all()
         search = self.request.query_params.get('search', None)
+        language = self.request.query_params.get('language', 'en')
+        
+        # Filter by language availability
+        if language != 'en':
+            # For non-English languages, only return items that have translations
+            queryset = queryset.filter(translations__language_code=language).distinct()
+        
+        # Apply search filter if provided
         if search is not None:
-            queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(body__icontains=search)
-            )
+            if language == 'en':
+                # Search in default fields for English
+                queryset = queryset.filter(
+                    Q(title__icontains=search) |
+                    Q(body__icontains=search)
+                )
+            else:
+                # Search in translated fields for other languages
+                queryset = queryset.filter(
+                    Q(translations__title__icontains=search) |
+                    Q(translations__body__icontains=search)
+                ).filter(translations__language_code=language).distinct()
+        
         return queryset.order_by('-created_at')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        language = self.request.query_params.get('language', 'en')
+        context['language'] = language
+        return context
 
 
 class RecipeListView(generics.ListAPIView):
@@ -125,8 +179,11 @@ class RecipeListView(generics.ListAPIView):
         - POST/PUT/PATCH/DELETE: Not supported
 
     Query Parameters:
-        - search (str): Optional. Filter recipes by matching text in title, body, or ingredients.
+        - search (str): Optional. Filter recipes by matching text in title, description, or ingredients.
                        Case-insensitive partial matches are supported.
+        - language (str): Optional. Language code for translations (e.g., 'en', 'am').
+                         Defaults to 'en' if not specified. Only returns recipes that have 
+                         translations in the specified language.
 
     Returns:
         A JSON response with the following structure:
@@ -138,7 +195,7 @@ class RecipeListView(generics.ListAPIView):
                 {
                     "id": 1,
                     "title": "Recipe Title",
-                    "description": "Recipe Descriptioni Text",
+                    "description": "Recipe Description Text",
                     "image": "/media/articles/images/main.jpg",
                     "thumbnail_url": "/media/CACHE/images/articles/images/main/123.jpg",
                     "created_at": "2024-03-14T12:00:00Z",
@@ -155,6 +212,7 @@ class RecipeListView(generics.ListAPIView):
     Example Requests:
         GET /api/learning-resources/recipes/
         GET /api/learning-resources/recipes/?search=garbanzo
+        GET /api/learning-resources/recipes/?language=am
     """
     serializer_class = RecipeSerializer
     permission_classes = [AllowAny]
@@ -162,10 +220,34 @@ class RecipeListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = Recipe.objects.all()
         search = self.request.query_params.get('search', None)
+        language = self.request.query_params.get('language', 'en')
+        
+        # Filter by language availability
+        if language != 'en':
+            # For non-English languages, only return items that have translations
+            queryset = queryset.filter(translations__language_code=language).distinct()
+        
+        # Apply search filter if provided
         if search is not None:
-            queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(body__icontains=search) |
-                Q(ingredients__icontains=search)
-            )
+            if language == 'en':
+                # Search in default fields for English
+                queryset = queryset.filter(
+                    Q(title__icontains=search) |
+                    Q(description__icontains=search) |
+                    Q(ingredients__icontains=search)
+                )
+            else:
+                # Search in translated fields for other languages
+                queryset = queryset.filter(
+                    Q(translations__title__icontains=search) |
+                    Q(translations__description__icontains=search) |
+                    Q(translations__ingredients__icontains=search)
+                ).filter(translations__language_code=language).distinct()
+        
         return queryset.order_by('-created_at')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        language = self.request.query_params.get('language', 'en')
+        context['language'] = language
+        return context
