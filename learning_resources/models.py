@@ -5,6 +5,7 @@ from django.utils import timezone
 import logging
 from s3_file_field import S3FileField
 
+from hub.constants import LANGUAGE_CHOICES
 from learning_resources.constants import DAYS_TO_CACHE_THUMBNAIL
 
 class Video(models.Model):
@@ -268,7 +269,7 @@ class Recipe(models.Model):
 # Translation models for internationalization
 class VideoTranslation(models.Model):
     video = models.ForeignKey(Video, related_name='translations', on_delete=models.CASCADE)
-    language_code = models.CharField(max_length=10, help_text='Language code (e.g., en, am)')
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, help_text='Language code (e.g., en, am)')
     title = models.CharField(max_length=200)
     description = models.TextField()
     
@@ -276,17 +277,17 @@ class VideoTranslation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ('video', 'language_code')
+        unique_together = ('video', 'language')
         ordering = ['-created_at']
         verbose_name_plural = 'Video Translations'
     
     def __str__(self):
-        return f"{self.video.title} ({self.language_code})"
+        return f"{self.video.title} ({self.language})"
 
 
 class ArticleTranslation(models.Model):
     article = models.ForeignKey(Article, related_name='translations', on_delete=models.CASCADE)
-    language_code = models.CharField(max_length=10, help_text='Language code (e.g., en, am)')
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, help_text='Language code (e.g., en, am)')
     title = models.CharField(max_length=200)
     body = models.TextField(help_text='Content in Markdown format')
     
@@ -294,17 +295,17 @@ class ArticleTranslation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ('article', 'language_code')
+        unique_together = ('article', 'language')
         ordering = ['-created_at']
         verbose_name_plural = 'Article Translations'
     
     def __str__(self):
-        return f"{self.article.title} ({self.language_code})"
+        return f"{self.article.title} ({self.language})"
 
 
 class RecipeTranslation(models.Model):
     recipe = models.ForeignKey(Recipe, related_name='translations', on_delete=models.CASCADE)
-    language_code = models.CharField(max_length=10, help_text='Language code (e.g., en, am)')
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, help_text='Language code (e.g., en, am)')
     title = models.CharField(max_length=200)
     description = models.TextField(null=True, blank=True)
     time_required = models.CharField("Time required to make recipe", max_length=64)
@@ -322,10 +323,10 @@ class RecipeTranslation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ('recipe', 'language_code')
+        unique_together = ('recipe', 'language')
         ordering = ['-created_at']
         verbose_name_plural = 'Recipe Translations'
     
     def __str__(self):
-        return f"{self.recipe.title} ({self.language_code})"
+        return f"{self.recipe.title} ({self.language})"
     
