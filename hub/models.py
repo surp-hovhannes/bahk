@@ -17,6 +17,7 @@ from hub.constants import (
     CATENA_ABBREV_FOR_BOOK,
     CATENA_HOME_PAGE_URL,
     DAYS_TO_CACHE_THUMBNAIL,
+    LANGUAGE_CHOICES,
 )
 from learning_resources.models import Video
 
@@ -195,6 +196,12 @@ class Profile(models.Model):
     # Store geocoded coordinates for performance
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    language = models.CharField(
+        max_length=2,
+        choices=LANGUAGE_CHOICES,
+        default='en',
+        help_text="Preferred language for notifications and content"
+    )
     profile_image = models.ImageField(
         upload_to="profile_images/originals/", null=True, blank=True
     )

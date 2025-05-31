@@ -5,6 +5,7 @@ from django.utils import timezone
 import logging
 from s3_file_field import S3FileField
 
+from hub.constants import LANGUAGE_CHOICES
 from learning_resources.constants import DAYS_TO_CACHE_THUMBNAIL
 
 class Video(models.Model):
@@ -263,4 +264,69 @@ class Recipe(models.Model):
     class Meta:
         ordering = ['-created_at']
         verbose_name_plural = 'Recipes'
+
+
+# Translation models for internationalization
+class VideoTranslation(models.Model):
+    video = models.ForeignKey(Video, related_name='translations', on_delete=models.CASCADE)
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, help_text='Language code (e.g., en, am)')
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('video', 'language')
+        ordering = ['-created_at']
+        verbose_name_plural = 'Video Translations'
+    
+    def __str__(self):
+        return f"{self.video.title} ({self.language})"
+
+
+class ArticleTranslation(models.Model):
+    article = models.ForeignKey(Article, related_name='translations', on_delete=models.CASCADE)
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, help_text='Language code (e.g., en, am)')
+    title = models.CharField(max_length=200)
+    body = models.TextField(help_text='Content in Markdown format')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('article', 'language')
+        ordering = ['-created_at']
+        verbose_name_plural = 'Article Translations'
+    
+    def __str__(self):
+        return f"{self.article.title} ({self.language})"
+
+
+class RecipeTranslation(models.Model):
+    recipe = models.ForeignKey(Recipe, related_name='translations', on_delete=models.CASCADE)
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, help_text='Language code (e.g., en, am)')
+    title = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
+    time_required = models.CharField("Time required to make recipe", max_length=64)
+    serves = models.CharField("Number of servings", max_length=32)
+    ingredients = models.TextField(
+        help_text='Recipe ingredients in Markdown format',
+        verbose_name='Ingredients'
+    )
+    directions = models.TextField(
+        help_text='Recipe directions in Markdown format',
+        verbose_name='Directions'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('recipe', 'language')
+        ordering = ['-created_at']
+        verbose_name_plural = 'Recipe Translations'
+    
+    def __str__(self):
+        return f"{self.recipe.title} ({self.language})"
     
