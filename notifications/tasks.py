@@ -292,25 +292,32 @@ def send_ongoing_fast_push_notification_task():
 def send_daily_fast_push_notification_task():
     # query today's fast
     today = Day.objects.filter(date=timezone.now().date()).first()
-    if today:
-        today_fast = today.fast
-        # filter users who are joined to today's fast
-        users_to_notify = User.objects.filter(profile__church=today_fast.church).distinct()
-        # if fast is a weekly fast, only include users who have turned on weekly fast notifications
-        if is_weekly_fast(today_fast):
-            users_to_notify = users_to_notify.filter(profile__include_weekly_fasts_in_notifications=True)
+    if not today:
+        # Log and return
+        logger.info("Push Notification: No Day entry found for today")
+        return
+        
+    today_fast = today.fast
+    if not today_fast:
+        # Log and return
+        logger.info("Push Notification: Day exists but has no associated Fast")
+        return
+        
+    # filter users who are joined to today's fast
+    users_to_notify = User.objects.filter(profile__church=today_fast.church).distinct()
+    # if fast is a weekly fast, only include users who have turned on weekly fast notifications
+    if is_weekly_fast(today_fast):
+        users_to_notify = users_to_notify.filter(profile__include_weekly_fasts_in_notifications=True)
 
-        # send push notification to each user
-        message = DAILY_FAST_MESSAGE
-        data = {
-            "fast_id": today_fast.id,
-            "fast_name": today_fast.name,
-        }
+    # send push notification to each user
+    message = DAILY_FAST_MESSAGE
+    data = {
+        "fast_id": today_fast.id,
+        "fast_name": today_fast.name,
+    }
 
-        if len(users_to_notify) > 0:
-            send_push_notification_task(message, data, users_to_notify, 'daily_fast')
-            logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for daily fasts')
-        else:
-            logger.info("Push Notification: No users to notify for daily fasts")
+    if len(users_to_notify) > 0:
+        send_push_notification_task(message, data, users_to_notify, 'daily_fast')
+        logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for daily fasts')
     else:
-        logger.info("Push Notification: No daily fasts found")
+        logger.info("Push Notification: No users to notify for daily fasts")
