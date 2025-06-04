@@ -98,10 +98,24 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         super().validate(attrs)
         email = attrs['email']
-        s1, s2 = email.split('@')
-        s2, s3 = s2.split('.')
-        if any(profanity.contains_profanity(s) for s in [s1, s2, s3]):
+        
+        # Split email into username and domain parts
+        try:
+            username_part, domain_part = email.split('@', 1)
+        except ValueError:
+            # Should not happen with EmailField validation, but added as safeguard
+            raise serializers.ValidationError({'email': 'Invalid email format.'})
+
+        # Split the domain part by '.' to get all its components
+        domain_sub_parts = domain_part.split('.')
+
+        # Combine username and all domain parts for profanity check
+        all_email_parts = [username_part] + domain_sub_parts
+
+        # Check each part for profanity, skipping empty strings
+        if any(profanity.contains_profanity(part) for part in all_email_parts if part):
             raise serializers.ValidationError({'email': f'The email entered is suspected of profanity.'})
+            
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
 
