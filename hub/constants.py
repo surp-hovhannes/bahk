@@ -101,6 +101,7 @@ CATENA_ABBREV_FOR_BOOK = {
     "St. John's Second Epistle General": "2jn",
     "3 John": "3jn",
     "St. John's Third Epistle General": "3jn",
+    "St. John's Third Epistle": "3jn",
     "Jude": "jude",
     "St. Jude's General Epistle": "jude",
     "Revelation": "rv"
