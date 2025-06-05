@@ -6,7 +6,17 @@ from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 
 import hub.models as models
-from hub.services.openai_service import PROMPT_TEMPLATE
+
+# Default prompt template for LLM context generation
+PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings. 
+
+When provided with a biblical passage reference, provide concise but meaningful context by:
+1. Summarizing the key themes and events leading up to the passage
+2. Explaining the historical and cultural context
+3. Identifying important theological concepts or themes
+4. Connecting the passage to broader biblical narratives when relevant
+
+Keep your response focused, informative, and appropriate for both new and experienced readers of scripture. Limit responses to 2-3 paragraphs."""
 
 
 EMAILS1 = ["user1a@email.com", "user1b@email.com"]
