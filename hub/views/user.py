@@ -4,7 +4,9 @@ from hub import serializers
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 from django.conf import settings
 from rest_framework.response import Response
 from rest_framework import status
@@ -47,14 +49,27 @@ class PasswordResetView(APIView):
                 # Create reset link - App URL
                 reset_url = f"{settings.APP_URL}/reset-password/{uidb64}/{token}"
 
+                # Prepare email content
+                context = {
+                    'user': user,
+                    'reset_url': reset_url,
+                    'site_url': settings.FRONTEND_URL
+                }
+                
+                # Render email content
+                html_content = render_to_string('email/password_reset.html', context)
+                text_content = strip_tags(html_content)
+                
                 # Send email
-                send_mail(
+                from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
+                email = EmailMultiAlternatives(
                     'Password Reset Request',
-                    f'Please click the following link to reset your password: {reset_url}',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [email],
-                    fail_silently=False,
+                    text_content,
+                    from_email,
+                    [email]
                 )
+                email.attach_alternative(html_content, "text/html")
+                email.send()
             
                 return Response(
                     {"detail": "Password reset email has been sent."},
