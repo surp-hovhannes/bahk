@@ -182,4 +182,3 @@ certificates/
 *.pem
 *.p12
 *.key
-*.json

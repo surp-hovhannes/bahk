@@ -1,0 +1,8 @@
+{
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
+  "start": "python manage.py runserver",
+  "install": "python manage.py seed"
+}
