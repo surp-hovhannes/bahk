@@ -11,5 +11,9 @@ done
 
 echo "Redis is ready!"
 
-# Keep container running
-tail -f /var/log/redis/redis-server.log 
+# Run Django commands
+python manage.py migrate
+python manage.py seed
+
+# Start Django server
+python manage.py runserver 0.0.0.0:8000 
