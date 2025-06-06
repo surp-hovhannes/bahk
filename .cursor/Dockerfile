@@ -39,7 +39,7 @@ RUN mkdir -p /var/run/redis \
     && chown -R vscode:vscode /var/log/redis
 
 # Copy Redis configuration
-COPY redis.conf /etc/redis/redis.conf
+COPY .cursor/redis.conf /etc/redis/redis.conf
 RUN chown vscode:vscode /etc/redis/redis.conf
 
 # Install Python dependencies
@@ -58,7 +58,7 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
 
 # Create startup script
-COPY start.sh /home/vscode/start.sh
+COPY .cursor/start.sh /home/vscode/start.sh
 RUN chmod +x /home/vscode/start.sh
 
 # Use startup script as entrypoint
