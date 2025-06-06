@@ -4,7 +4,9 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    REDIS_HOST=localhost \
+    REDIS_PORT=6379
 
 # Create a non-root user with explicit UID/GID
 RUN groupadd --gid 1000 vscode \
@@ -17,7 +19,7 @@ RUN groupadd --gid 1000 vscode \
 # Set work directory to user's home
 WORKDIR /home/vscode
 
-# Install system dependencies
+# Install system dependencies and Redis
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -26,8 +28,19 @@ RUN apt-get update && apt-get install -y \
     vim \
     htop \
     procps \
+    redis-server \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Configure Redis
+RUN mkdir -p /var/run/redis \
+    && chown -R vscode:vscode /var/run/redis \
+    && chown -R vscode:vscode /var/lib/redis \
+    && chown -R vscode:vscode /var/log/redis
+
+# Copy Redis configuration
+COPY redis.conf /etc/redis/redis.conf
+RUN chown vscode:vscode /etc/redis/redis.conf
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -40,9 +53,13 @@ RUN chown -R vscode:vscode /home/vscode
 # Switch to non-root user
 USER vscode
 
-# Add healthcheck
+# Add healthcheck for both application and Redis
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
 
-# Keep container running
-CMD ["sleep", "infinity"]
+# Create startup script
+COPY start.sh /home/vscode/start.sh
+RUN chmod +x /home/vscode/start.sh
+
+# Use startup script as entrypoint
+CMD ["/home/vscode/start.sh"]
