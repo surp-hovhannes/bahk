@@ -5,7 +5,7 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     DEBIAN_FRONTEND=noninteractive \
-    REDIS_HOST=localhost \
+    REDIS_HOST=redis \
     REDIS_PORT=6379
 
 # Create a non-root user with explicit UID/GID
@@ -41,6 +41,9 @@ RUN mkdir -p /var/run/redis \
 # Copy Redis configuration
 COPY .cursor/redis.conf /etc/redis/redis.conf
 RUN chown vscode:vscode /etc/redis/redis.conf
+
+# Add redis to hosts file
+RUN echo "127.0.0.1 redis" >> /etc/hosts
 
 # Install Python dependencies
 COPY requirements.txt .
