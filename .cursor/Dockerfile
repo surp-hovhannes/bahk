@@ -50,16 +50,16 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Set ownership and permissions
 RUN chown -R vscode:vscode /home/vscode
 
+# Create startup script and set permissions
+COPY .cursor/start.sh /home/vscode/start.sh
+RUN chmod +x /home/vscode/start.sh
+
 # Switch to non-root user
 USER vscode
 
 # Add healthcheck for both application and Redis
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
-
-# Create startup script
-COPY .cursor/start.sh /home/vscode/start.sh
-RUN chmod +x /home/vscode/start.sh
 
 # Use startup script as entrypoint
 CMD ["/home/vscode/start.sh"]
