@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from notifications.tasks import send_promo_email_task
 from notifications.models import PromoEmail
 from hub.models import User, Profile, Church, Fast
+from tests.fixtures.test_data import TestDataFactory
 
 
 @override_settings(
@@ -18,49 +19,49 @@ class PromoEmailTaskTests(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        # Create test church
-        self.church = Church.objects.create(name="Test Church")
+        # Create test church using TestDataFactory
+        self.church = TestDataFactory.create_church(name="Test Church")
         
-        # Create test fast
-        self.fast = Fast.objects.create(
+        # Create test fast using TestDataFactory
+        self.fast = TestDataFactory.create_fast(
             name="Test Fast",
             church=self.church,
             description="A test fast"
         )
         
-        # Create test users with different profiles
-        self.user1 = User.objects.create_user(
-            username="user1",
+        # Create test users with different profiles using TestDataFactory
+        self.user1 = TestDataFactory.create_user(
+            username="user1@example.com",
             email="user1@example.com",
             password="password123"
         )
-        self.profile1 = Profile.objects.create(
+        self.profile1 = TestDataFactory.create_profile(
             user=self.user1,
             church=self.church,
             receive_promotional_emails=True
         )
         self.profile1.fasts.add(self.fast)
         
-        self.user2 = User.objects.create_user(
-            username="user2",
+        self.user2 = TestDataFactory.create_user(
+            username="user2@example.com",
             email="user2@example.com",
             password="password123"
         )
-        self.profile2 = Profile.objects.create(
+        self.profile2 = TestDataFactory.create_profile(
             user=self.user2,
             church=self.church,
             receive_promotional_emails=True
         )
         
-        self.user3 = User.objects.create_user(
-            username="user3",
+        self.user3 = TestDataFactory.create_user(
+            username="user3@example.com",
             email="user3@example.com",
             password="password123"
         )
-        self.profile3 = Profile.objects.create(
+        self.profile3 = TestDataFactory.create_profile(
             user=self.user3,
             church=self.church,
-            receive_promotional_emails=True # Initially subscribed
+            receive_promotional_emails=True  # Initially subscribed
         )
         
         # Create a promotional email
@@ -105,14 +106,14 @@ class PromoEmailTaskTests(TestCase):
         self.promo.church_filter = self.church
         self.promo.save()
         
-        # Create a user in a different church
-        other_church = Church.objects.create(name="Other Church")
-        other_user = User.objects.create_user(
-            username="other_user",
+        # Create a user in a different church using TestDataFactory
+        other_church = TestDataFactory.create_church(name="Other Church")
+        other_user = TestDataFactory.create_user(
+            username="other_user@example.com",
             email="other@example.com",
             password="password123"
         )
-        Profile.objects.create(
+        TestDataFactory.create_profile(
             user=other_user,
             church=other_church,
             receive_promotional_emails=True

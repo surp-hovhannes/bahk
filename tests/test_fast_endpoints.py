@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from hub.models import Fast, Church, Profile, Day
+from tests.fixtures.test_data import TestDataFactory
 from datetime import datetime, timedelta
 import time
 import json
@@ -16,40 +17,38 @@ class FastEndpointTests(APITestCase):
     
     def setUp(self):
         """Set up test data needed for all test methods."""
-        # Create a test church (only has name field)
-        self.church = Church.objects.create(
-            name="Test Church"
-        )
+        # Create a test church using TestDataFactory
+        self.church = TestDataFactory.create_church(name="Test Church")
         
-        # Create test users
-        self.user1 = User.objects.create_user(
-            username="testuser1",
+        # Create test users using TestDataFactory (email-compatible)
+        self.user1 = TestDataFactory.create_user(
+            username="testuser1@example.com",
             email="test1@example.com",
             password="testpassword"
         )
-        self.user2 = User.objects.create_user(
-            username="testuser2", 
+        self.user2 = TestDataFactory.create_user(
+            username="testuser2@example.com", 
             email="test2@example.com", 
             password="testpassword"
         )
         
-        # Create profiles for the users explicitly
-        self.profile1 = Profile.objects.create(
+        # Create profiles for the users using TestDataFactory
+        self.profile1 = TestDataFactory.create_profile(
             user=self.user1,
             church=self.church
         )
         
-        self.profile2 = Profile.objects.create(
+        self.profile2 = TestDataFactory.create_profile(
             user=self.user2,
             church=self.church
         )
         
-        # Create a test fast with days
+        # Create a test fast with days using TestDataFactory
         today = datetime.now().date()
-        self.fast = Fast.objects.create(
+        self.fast = TestDataFactory.create_fast(
             name="Test Fast",
-            description="A test fast",
-            church=self.church
+            church=self.church,
+            description="A test fast"
         )
         
         # Create days for the fast (past, present, future)

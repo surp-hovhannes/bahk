@@ -34,13 +34,27 @@ class TestDataFactory:
         )
     
     @staticmethod
-    def create_church(name="Test Church"):
+    def create_church(name=None):
         """Create a test church."""
+        if name is None:
+            # Generate a unique name if none provided
+            import time
+            import random
+            timestamp = int(time.time() * 1000000)  # More granular timestamp (microseconds)
+            random_suffix = random.randint(1000, 9999)
+            name = f"Test Church {timestamp}_{random_suffix}"
         return Church.objects.create(name=name)
     
     @staticmethod
-    def create_fast(name="Test Fast", church=None, description="A test fast"):
+    def create_fast(name=None, church=None, description="A test fast"):
         """Create a test fast."""
+        if name is None:
+            # Generate a unique name if none provided
+            import time
+            import random
+            timestamp = int(time.time() * 1000000)  # More granular timestamp (microseconds) 
+            random_suffix = random.randint(1000, 9999)
+            name = f"Test Fast {timestamp}_{random_suffix}"
         if church is None:
             church = TestDataFactory.create_church()
         return Fast.objects.create(

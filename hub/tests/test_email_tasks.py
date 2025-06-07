@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 
 from hub.models import Fast, Profile, Day, Church
 from hub.utils import send_fast_reminders
+from tests.fixtures.test_data import TestDataFactory
 
 User = get_user_model()
 
@@ -14,22 +15,22 @@ User = get_user_model()
 )
 class TestSendFastReminders(TestCase):
     def setUp(self):
-        # Create test user and profile
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
+        # Create test user and profile using TestDataFactory
+        self.user = TestDataFactory.create_user(
+            username='testuser@example.com',
+            email='testuser@example.com',
             password='testpass123'
         )
-        self.profile = Profile.objects.create(
+        self.profile = TestDataFactory.create_profile(
             user=self.user,
             receive_upcoming_fast_reminders=True
         )
 
-        # Create a church
-        self.church = Church.objects.create(name='Test Church')
+        # Use the church from the profile created by TestDataFactory
+        self.church = self.profile.church
 
-        # Create a test fast
-        self.fast = Fast.objects.create(
+        # Create a test fast using TestDataFactory
+        self.fast = TestDataFactory.create_fast(
             name='Test Fast',
             church=self.church
         )
@@ -38,14 +39,15 @@ class TestSendFastReminders(TestCase):
         self.start_date = timezone.now().date() + timedelta(days=2)
         self.end_date = timezone.now().date() + timedelta(days=4)
         
-        # Create days for the fast period
+        # Create days for the fast period using TestDataFactory
         current_date = self.start_date
         while current_date <= self.end_date:
-            Day.objects.create(
+            day = TestDataFactory.create_day(
                 date=current_date,
-                fast=self.fast,
                 church=self.church
             )
+            day.fast = self.fast
+            day.save()
             current_date += timedelta(days=1)
         
         # Add profile to fast
@@ -76,11 +78,12 @@ class TestSendFastReminders(TestCase):
         
         current_date = start_date
         while current_date <= end_date:
-            Day.objects.create(
+            day = TestDataFactory.create_day(
                 date=current_date,
-                fast=self.fast,
                 church=self.church
             )
+            day.fast = self.fast
+            day.save()
             current_date += timedelta(days=1)
 
         # Execute the function
@@ -115,8 +118,8 @@ class TestSendFastReminders(TestCase):
 
     def test_reminder_for_multiple_fasts(self):
         """Test that reminders are sent for multiple upcoming fasts."""
-        # Create another fast
-        another_fast = Fast.objects.create(
+        # Create another fast using TestDataFactory
+        another_fast = TestDataFactory.create_fast(
             name='Another Test Fast',
             church=self.church
         )
@@ -127,11 +130,12 @@ class TestSendFastReminders(TestCase):
         
         current_date = start_date
         while current_date <= end_date:
-            Day.objects.create(
+            day = TestDataFactory.create_day(
                 date=current_date,
-                fast=another_fast,
                 church=self.church
             )
+            day.fast = another_fast
+            day.save()
             current_date += timedelta(days=1)
         
         # Add profile to the new fast

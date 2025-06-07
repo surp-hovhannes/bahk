@@ -8,46 +8,48 @@ from rest_framework.test import APIRequestFactory
 from rest_framework.test import force_authenticate
 from datetime import datetime, timedelta
 from django.core.cache import cache
+from tests.fixtures.test_data import TestDataFactory
 import pytz
 
 User = get_user_model()
 
 class FastListViewTest(TestCase):
     def setUp(self):
-        # Create a church
-        self.church = Church.objects.create(name="Test Church")
+        # Create a church using TestDataFactory
+        self.church = TestDataFactory.create_church(name="Test Church")
         
-        # Create a user with profile
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
+        # Create a user with profile using TestDataFactory
+        self.user = TestDataFactory.create_user(
+            username='testuser@example.com',
+            email='testuser@example.com',
             password='testpass123'
         )
-        self.profile = Profile.objects.create(
+        self.profile = TestDataFactory.create_profile(
             user=self.user,
             church=self.church
         )
         
-        # Create 3 fasts
+        # Create 3 fasts using TestDataFactory
         self.fasts = []
         today = timezone.now().date()
         
         for i in range(3):
-            fast = Fast.objects.create(
+            fast = TestDataFactory.create_fast(
                 church=self.church,
                 name=f"Test Fast {i}",
                 description=f"Test Description {i}"
             )
             self.fasts.append(fast)
             
-            # Create days for each fast (30 days before and after today)
+            # Create days for each fast (30 days before and after today) using TestDataFactory
             for j in range(-30, 31):
                 date = today + timedelta(days=j)
-                Day.objects.create(
-                    fast=fast,
+                day = TestDataFactory.create_day(
                     date=date,
                     church=self.church
                 )
+                day.fast = fast
+                day.save()
         
         # Associate user with first two fasts
         self.profile.fasts.add(self.fasts[0], self.fasts[1])
@@ -200,19 +202,19 @@ class FastListViewTest(TestCase):
     def test_list_fasts_with_different_church(self):
         """Test listing fasts for a different church."""
         # Create another church and user
-        other_church = Church.objects.create(name="Other Church")
-        other_user = User.objects.create_user(
-            username='otheruser',
-            email='other@example.com',
+        other_church = TestDataFactory.create_church(name="Other Church")
+        other_user = TestDataFactory.create_user(
+            username='otheruser@example.com',
+            email='otheruser@example.com',
             password='testpass123'
         )
-        other_profile = Profile.objects.create(
+        other_profile = TestDataFactory.create_profile(
             user=other_user,
             church=other_church
         )
         
         # Create a fast for the other church
-        other_fast = Fast.objects.create(
+        other_fast = TestDataFactory.create_fast(
             church=other_church,
             name="Other Church Fast",
             description="Other Description"
@@ -222,11 +224,12 @@ class FastListViewTest(TestCase):
         today = timezone.now().date()
         for j in range(-30, 31):
             date = today + timedelta(days=j)
-            Day.objects.create(
-                fast=other_fast,
+            day = TestDataFactory.create_day(
                 date=date,
                 church=other_church
             )
+            day.fast = other_fast
+            day.save()
         
         # Create request
         request = self._create_request(user=other_user)
