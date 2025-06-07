@@ -3,6 +3,15 @@ Tests for memory leaks and performance issues in profile-related endpoints.
 
 This module tests profile endpoints under load conditions with users that have
 many fasts associated with them to identify N+1 query problems and memory leaks.
+
+Test Tags:
+- @tag('performance'): Tests that check performance metrics but run relatively quickly
+- @tag('performance', 'slow'): Tests that create large datasets and take longer to run
+
+Usage:
+- Run all tests: python manage.py test tests.test_profile_memory_leaks
+- Run only fast performance tests: python manage.py test tests.test_profile_memory_leaks --tag=performance --exclude-tag=slow
+- Skip all slow tests: python manage.py test tests.test_profile_memory_leaks --exclude-tag=slow
 """
 
 import time
@@ -14,7 +23,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from django.db import connection
-from django.test.utils import override_settings
+from django.test.utils import override_settings, tag
 from hub.models import Church, Fast, Day, Profile
 from tests.fixtures.test_data import TestDataFactory
 
@@ -100,6 +109,7 @@ class ProfileMemoryLeakTestCase(APITestCase):
         tracemalloc.stop()
         return current, peak
     
+    @tag('performance')
     def test_fast_stats_n_plus_one_query_problem(self):
         """Test that FastStatsView has N+1 query problems with many fasts."""
         # Test with small number of fasts first
@@ -131,6 +141,7 @@ class ProfileMemoryLeakTestCase(APITestCase):
         self.assertLess(query_growth, 15, 
                        "FastStatsView has N+1 query problem - queries grow linearly with fasts")
     
+    @tag('performance', 'slow')
     def test_fast_stats_memory_usage_with_many_fasts(self):
         """Test memory usage of FastStatsView with many fasts."""
         # Create user with many fasts
@@ -158,6 +169,7 @@ class ProfileMemoryLeakTestCase(APITestCase):
         self.assertLess(peak / 1024 / 1024, 10, 
                        "Memory usage is too high for FastStatsView")
     
+    @tag('performance')
     def test_fast_stats_response_time_with_many_fasts(self):
         """Test response time of FastStatsView with many fasts."""
         # Create user with many fasts
@@ -175,6 +187,7 @@ class ProfileMemoryLeakTestCase(APITestCase):
         self.assertLess(response_time, 1.0, 
                        "FastStatsView response time is too slow")
     
+    @tag('performance')
     def test_profile_detail_view_performance(self):
         """Test ProfileDetailView performance with user having many fasts."""
         # Create user with many fasts
@@ -202,6 +215,7 @@ class ProfileMemoryLeakTestCase(APITestCase):
         self.assertLess(response_time, 0.5, 
                        "ProfileDetailView response time should be fast")
     
+    @tag('performance', 'slow')
     def test_fast_participants_view_with_many_participants(self):
         """Test FastParticipantsView with a fast having many participants."""
         # Create a fast
@@ -260,6 +274,7 @@ class ProfileMemoryLeakTestCase(APITestCase):
         self.assertLess(response_time, 1.0, 
                        "FastParticipantsView should respond quickly")
     
+    @tag('performance', 'slow')
     def test_paginated_participants_view_performance(self):
         """Test PaginatedFastParticipantsView performance."""
         # Create a fast with many participants (reuse from previous test setup)
@@ -332,6 +347,7 @@ class ProfileStressTestCase(APITestCase):
         
         self.fast_stats_url = reverse('fast-stats')
     
+    @tag('performance', 'slow')
     def test_extreme_fast_stats_load(self):
         """Test FastStatsView with extreme number of fasts."""
         # Create user with extreme number of fasts

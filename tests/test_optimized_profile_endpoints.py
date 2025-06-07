@@ -3,6 +3,15 @@ Tests to verify the performance improvements in optimized profile endpoints.
 
 This module tests the optimized profile endpoints to ensure they perform better
 than the original implementations and don't have memory leaks or N+1 query problems.
+
+Test Tags:
+- @tag('performance'): Tests that check performance metrics but run relatively quickly
+- @tag('performance', 'slow'): Tests that create large datasets and take longer to run
+
+Usage:
+- Run all tests: python manage.py test tests.test_optimized_profile_endpoints
+- Run only fast performance tests: python manage.py test tests.test_optimized_profile_endpoints --tag=performance --exclude-tag=slow
+- Skip all slow tests: python manage.py test tests.test_optimized_profile_endpoints --exclude-tag=slow
 """
 
 import time
@@ -14,7 +23,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from django.db import connection
-from django.test.utils import override_settings
+from django.test.utils import override_settings, tag
 from hub.models import Church, Fast, Day, Profile
 from tests.fixtures.test_data import TestDataFactory
 
@@ -92,6 +101,7 @@ class OptimizedProfileEndpointTests(APITestCase):
             
         return query_count
     
+    @tag('performance')
     def test_optimized_fast_stats_query_efficiency(self):
         """Test that optimized FastStatsView has constant query count regardless of number of fasts."""
         # Test with few fasts
@@ -110,6 +120,7 @@ class OptimizedProfileEndpointTests(APITestCase):
         
         # Count queries with 25 fasts total
         queries_25_fasts = self.count_queries(get_fast_stats)
+        response_25_fasts = self.client.get(self.fast_stats_url)
         
         # The query count should remain relatively constant (not grow linearly)
         query_growth = queries_25_fasts - queries_5_fasts
@@ -123,10 +134,15 @@ class OptimizedProfileEndpointTests(APITestCase):
                        "Optimized FastStatsView should have minimal query growth")
         
         # Verify response correctness
-        data = response.data
+        self.assertEqual(response_25_fasts.status_code, status.HTTP_200_OK)
+        data = response_25_fasts.data
         self.assertEqual(data['total_fasts'], 25)
-        self.assertEqual(data['total_fast_days'], 25 * 15)  # Should still calculate correctly
+        # First batch: 5 fasts * 10 days = 50 days
+        # Second batch: 20 fasts * 15 days = 300 days
+        # Total: 350 days
+        self.assertEqual(data['total_fast_days'], 5 * 10 + 20 * 15)
     
+    @tag('performance', 'slow')
     def test_optimized_fast_stats_performance(self):
         """Test that optimized FastStatsView has excellent performance with many fasts."""
         # Create many fasts
@@ -163,6 +179,7 @@ class OptimizedProfileEndpointTests(APITestCase):
         self.assertEqual(data['total_fasts'], 100)
         self.assertEqual(data['total_fast_days'], 100 * 25)
     
+    @tag('performance')
     def test_optimized_profile_detail_performance(self):
         """Test that optimized ProfileDetailView has good performance."""
         # Create user with many fasts
@@ -191,6 +208,7 @@ class OptimizedProfileEndpointTests(APITestCase):
         self.assertLess(response_time, 0.2, 
                        "Optimized ProfileDetailView should be very fast")
     
+    @tag('performance', 'slow')
     def test_optimized_vs_baseline_comparison(self):
         """Compare optimized performance against baseline metrics."""
         # Create substantial test data
@@ -229,14 +247,17 @@ class OptimizedProfileEndpointTests(APITestCase):
         self.assertEqual(stats_data['total_fasts'], num_fasts)
         self.assertEqual(stats_data['total_fast_days'], num_fasts * days_per_fast)
     
+    @tag('performance', 'slow')
     def test_memory_usage_stability(self):
         """Test that memory usage remains stable with large datasets."""
         # Create increasingly large datasets and verify memory doesn't grow excessively
         memory_measurements = []
+        total_fasts = 0
         
         for batch_size in [25, 50, 75]:
             # Add more fasts
             self.create_fasts_with_days(num_fasts=batch_size, days_per_fast=20)
+            total_fasts += batch_size
             
             # Measure memory for this batch
             tracemalloc.start()
@@ -245,7 +266,7 @@ class OptimizedProfileEndpointTests(APITestCase):
             tracemalloc.stop()
             
             memory_measurements.append({
-                'fasts': batch_size,
+                'fasts': total_fasts,  # Track cumulative total
                 'peak_mb': peak / 1024 / 1024,
                 'current_mb': current / 1024 / 1024
             })
@@ -286,6 +307,7 @@ class OptimizedEndpointStressTest(APITestCase):
         
         self.fast_stats_url = reverse('fast-stats')
     
+    @tag('performance', 'slow')
     def test_extreme_load_optimized_fast_stats(self):
         """Test optimized FastStatsView under extreme load."""
         # Create extreme dataset
