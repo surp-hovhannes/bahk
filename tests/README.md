@@ -36,50 +36,91 @@ tests/
 - Test admin interfaces
 - Example: Testing complete fast creation workflow
 
+### Performance Tests
+Tests that measure response times and check performance criteria. These are tagged for selective execution:
+
+#### `@tag('performance')`
+- Basic performance tests that measure response times
+- Check that endpoints respond within acceptable time limits
+- Examples: Fast list/detail endpoint timing, join/leave operations
+
+#### `@tag('performance', 'slow')`
+- Load tests with multiple requests
+- Stress testing with various parameters
+- Examples: Multiple sequential requests, pagination performance testing
+
+## Test Counts
+
+- **All tests**: 121 tests
+- **Performance tests**: 8 tests (includes 2 slow tests)
+- **Slow tests**: 2 tests  
+- **Regular tests only** (excluding all performance): 113 tests
+
 ## Running Tests
 
 ### Run All Tests
 ```bash
-python manage.py test
+python manage.py test --settings=tests.test_settings
 ```
 
-### Run Specific Test Modules
+### Run Tests by Type
 ```bash
 # Run all unit tests
-python manage.py test tests.unit
+python manage.py test tests.unit --settings=tests.test_settings
 
 # Run hub unit tests
-python manage.py test tests.unit.hub
+python manage.py test tests.unit.hub --settings=tests.test_settings
 
 # Run integration tests
-python manage.py test tests.integration
+python manage.py test tests.integration --settings=tests.test_settings
 
 # Run functional tests
-python manage.py test tests.functional
+python manage.py test tests.functional --settings=tests.test_settings
+```
+
+### Run Performance Tests
+```bash
+# Run ONLY performance tests
+python manage.py test --tag=performance --settings=tests.test_settings
+
+# Run ONLY slow/load tests
+python manage.py test --tag=slow --settings=tests.test_settings
+
+# Run regular tests WITHOUT performance tests
+python manage.py test --exclude-tag=performance --settings=tests.test_settings
+
+# Run regular tests WITHOUT slow tests
+python manage.py test --exclude-tag=slow --settings=tests.test_settings
+
+# Run regular tests WITHOUT performance AND slow tests
+python manage.py test --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
+
+# Combine tags (tests tagged with BOTH performance AND slow)
+python manage.py test --tag=performance --tag=slow --settings=tests.test_settings
 ```
 
 ### Run Specific Test Classes or Methods
 ```bash
 # Run specific test class
-python manage.py test tests.unit.hub.test_models.ModelCreationTests
+python manage.py test tests.unit.hub.test_models.ModelCreationTests --settings=tests.test_settings
 
 # Run specific test method
-python manage.py test tests.unit.hub.test_models.ModelCreationTests.test_create_church
+python manage.py test tests.unit.hub.test_models.ModelCreationTests.test_create_church --settings=tests.test_settings
 ```
 
 ### Run Tests with Options
 ```bash
 # Verbose output
-python manage.py test --verbosity=2
+python manage.py test --verbosity=2 --settings=tests.test_settings
 
 # Keep test database between runs (faster)
-python manage.py test --keepdb
+python manage.py test --keepdb --settings=tests.test_settings
 
 # Parallel execution (faster for large test suites)
-python manage.py test --parallel
+python manage.py test --parallel --settings=tests.test_settings
 
 # Run tests matching a pattern
-python manage.py test -k test_create
+python manage.py test -k test_create --settings=tests.test_settings
 ```
 
 ## Writing Tests
@@ -112,18 +153,60 @@ class MyTests(TestCase):
         self.fast = TestDataFactory.create_complete_fast()
 ```
 
+### Writing Performance Tests
+
+To tag a test as a performance test:
+
+```python
+from django.test.utils import tag
+from django.test import TestCase
+import time
+
+class MyPerformanceTests(TestCase):
+    
+    @tag('performance')
+    def test_my_performance_test(self):
+        """Basic performance test."""
+        start_time = time.time()
+        # ... test logic
+        end_time = time.time()
+        self.assertLess(end_time - start_time, 1.0)  # Should complete in < 1 second
+    
+    @tag('performance', 'slow')  
+    def test_my_load_test(self):
+        """Load/stress test."""
+        # Multiple requests or heavy operations
+        for i in range(10):
+            # ... test logic
+        pass
+```
+
 ### Test Naming Conventions
 
 - Test files: `test_<feature>.py`
 - Test classes: `<Feature>Tests` (e.g., `ModelCreationTests`)
 - Test methods: `test_<what_is_being_tested>` (e.g., `test_create_user_with_profile`)
 
+## Performance Test Categories
+
+### Basic Performance Tests (`@tag('performance')`)
+- `test_fast_list_returns_200` - Fast list endpoint timing
+- `test_fast_detail_returns_correct_data` - Fast detail endpoint timing  
+- `test_fast_by_date_returns_correct_data` - Fast by date endpoint timing
+- `test_join_and_leave_fast` - Join/leave operations timing
+- `test_fast_participants_endpoint` - Participants endpoint timing
+- `test_fast_stats_endpoint` - Stats endpoint timing
+
+### Load Tests (`@tag('performance', 'slow')`)
+- `test_endpoints_under_load` - Multiple sequential requests to endpoints
+- `test_performance_with_different_page_sizes` - Pagination performance with various page sizes
+
 ## Test Coverage
 
 ### Generate Coverage Report
 ```bash
 # Run tests with coverage
-coverage run --source='.' manage.py test
+coverage run --source='.' manage.py test --settings=tests.test_settings
 
 # View coverage report in terminal
 coverage report
@@ -147,22 +230,23 @@ coverage html
 5. **Use Fixtures Wisely**: Create reusable test data with the factory
 6. **Clean Up**: Ensure tests don't leave data that affects other tests
 7. **Test Edge Cases**: Include tests for error conditions and edge cases
+8. **Tag Performance Tests**: Use `@tag('performance')` for performance tests, `@tag('performance', 'slow')` for load tests
 
 ## Debugging Tests
 
 ### Run Specific Test with Debugging
 ```bash
 # Run with Python debugger
-python -m pdb manage.py test tests.unit.hub.test_models.ModelCreationTests.test_create_church
+python -m pdb manage.py test tests.unit.hub.test_models.ModelCreationTests.test_create_church --settings=tests.test_settings
 
 # Use print statements (visible with verbosity)
-python manage.py test --verbosity=2
+python manage.py test --verbosity=2 --settings=tests.test_settings
 ```
 
 ### Keep Test Database for Inspection
 ```bash
 # Preserve test database after test run
-python manage.py test --keepdb --debug-mode
+python manage.py test --keepdb --debug-mode --settings=tests.test_settings
 ```
 
 ## Continuous Integration
@@ -171,6 +255,30 @@ Tests are automatically run on:
 - Every pull request
 - Every commit to main branch
 - Can be run manually via GitHub Actions
+
+### CI/CD Performance Test Strategy
+
+For continuous integration, consider different test execution strategies:
+
+1. **Regular CI runs**: Exclude all performance tests (fastest)
+   ```bash
+   python manage.py test --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
+   ```
+
+2. **Quick CI runs**: Exclude only slow tests
+   ```bash
+   python manage.py test --exclude-tag=slow --settings=tests.test_settings
+   ```
+
+3. **Nightly performance runs**: Include all performance tests
+   ```bash
+   python manage.py test --tag=performance --settings=tests.test_settings
+   ```
+
+4. **Pre-deployment**: Run basic performance tests only
+   ```bash
+   python manage.py test --tag=performance --exclude-tag=slow --settings=tests.test_settings
+   ```
 
 ## Common Issues
 
@@ -186,3 +294,8 @@ Tests are automatically run on:
 - Test files must start with `test_`
 - Test methods must start with `test_`
 - Test classes should end with `Tests` or `TestCase`
+
+### Performance Test Issues
+- Performance tests may be sensitive to system load
+- Consider running performance tests in isolation
+- Use consistent test environments for reliable results
