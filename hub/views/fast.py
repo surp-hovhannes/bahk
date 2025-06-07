@@ -163,9 +163,15 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
         
         # Then find and delete any queryset caches
         pattern = f'fast_list_qs:{church_id}:*'
-        keys = cache.keys(pattern)
-        if keys:
-            cache.delete_many(keys)
+        if hasattr(cache, 'keys'):
+            # Redis backend supports pattern matching
+            keys = cache.keys(pattern)
+            if keys:
+                cache.delete_many(keys)
+        else:
+            # LocMemCache doesn't support pattern matching, so we'll clear all cache
+            # This is less efficient but works for testing
+            cache.clear()
 
 
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')

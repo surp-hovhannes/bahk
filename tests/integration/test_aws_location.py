@@ -9,7 +9,8 @@ import sys
 import time
 import logging
 from django.conf import settings
-from django.test import TestCase, skipIf
+from django.test import TestCase
+from unittest import skipIf
 
 # Configure logging
 logging.basicConfig(

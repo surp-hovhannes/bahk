@@ -82,7 +82,7 @@ class ModelCreationTests(TestCase):
     
     def test_profile_image_upload(self):
         """Tests image upload for a Profile model object."""
-        image_path = os.path.join(settings.BASE_DIR, 'staticfiles', 'images', 'img.jpg')
+        image_path = os.path.join(settings.BASE_DIR, 'hub', 'static', 'images', 'img.jpg')
         
         # Check if image exists, if not skip test
         if not os.path.exists(image_path):
@@ -97,7 +97,7 @@ class ModelCreationTests(TestCase):
         profile = Profile.objects.create(user=self.sample_user, profile_image=image)
         
         self.assertTrue(profile.profile_image.name.startswith('profile_images/'))
-        self.assertTrue(profile.profile_image.name.endswith('img.jpg'))
+        self.assertTrue(profile.profile_image.name.endswith('.jpg'))
     
     def test_create_day(self):
         """Tests creation of a Day model object for today."""

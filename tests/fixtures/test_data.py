@@ -8,10 +8,25 @@ class TestDataFactory:
     """Factory class for creating test data."""
     
     @staticmethod
-    def create_user(username="testuser", email=None, password="testpass123"):
-        """Create a test user."""
-        if email is None:
-            email = f"{username}@example.com"
+    def create_user(username=None, email=None, password="testpass123"):
+        """Create a test user compatible with EmailBackend authentication."""
+        # For EmailBackend compatibility, username should be an email
+        if email is None and username is None:
+            # Generate a unique email if neither is provided
+            import time
+            email = f"testuser_{int(time.time()*1000)}@example.com"
+            username = email
+        elif email is None:
+            # If only username provided, use it as email if it's email format
+            if "@" in username:
+                email = username
+            else:
+                email = f"{username}@example.com"
+                username = email  # Use email as username for EmailBackend
+        elif username is None:
+            # If only email provided, use email as username
+            username = email
+        
         return User.objects.create_user(
             username=username,
             email=email,

@@ -1,5 +1,8 @@
 """Test-specific settings to override production settings."""
 from bahk.settings import *  # Import all default settings
+from datetime import timedelta
+import os
+import tempfile
 
 # Override cache to use local memory instead of Redis for tests
 CACHES = {
@@ -20,6 +23,10 @@ DATABASES = {
         'NAME': ':memory:',
     }
 }
+
+# Test media settings
+MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
+MEDIA_URL = '/test_media/'
 
 # Disable email sending during tests
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
@@ -61,3 +68,30 @@ SECRET_KEY = 'test-secret-key-for-testing-only'
 # Disable external service integrations for tests
 AWS_LOCATION_API_KEY = None  # Disable AWS Location Service
 SEND_PUSH_NOTIFICATIONS = False  # Disable push notifications
+
+# JWT Settings for testing
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 10,
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
+
+# Use custom test runner that cleans up media files
+TEST_RUNNER = 'tests.test_runner.MediaCleanupTestRunner'
