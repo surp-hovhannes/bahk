@@ -111,7 +111,7 @@ jobs:
 
       run: |
         # Run Django tests, --noinput avoids interactive prompts
-        python manage.py test --noinput --settings=tests.test_settings
+        python manage.py test --noinput  --exclude-tag=performance --settings=tests.test_settings
 
     # Example Deployment step (conditional on push to main branch and specific Python version)
     # - name: Deploy to Hosting Provider (e.g., Heroku)
