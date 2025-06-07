@@ -210,19 +210,24 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return getattr(obj, 'participant_count', obj.profiles.count())
     
     def get_countdown(self, obj):
-        """Use cached current_date"""
+        """Use cached current_date and optimize database queries"""
         if obj.culmination_feast and obj.culmination_feast_date:
             days_to_feast = (obj.culmination_feast_date - self.current_date).days
             if days_to_feast < 0:
                 return f"{obj.culmination_feast} has passed"
             return f"<span class='days_to_finish'>{days_to_feast}</span> day{'' if days_to_feast == 1 else 's'} until {obj.culmination_feast}"
         
-        days = [day.date for day in obj.days.all()]
-        if not days:
+        # Optimized version: Use database aggregation instead of loading all days into memory
+        # This replaces the inefficient [day.date for day in obj.days.all()]
+        from django.db.models import Max
+        
+        # Use database aggregation to get the latest date without loading all objects
+        latest_day = obj.days.aggregate(max_date=Max('date'))['max_date']
+        
+        if not latest_day:
             return f"No days available for {obj.name}"
         
-        finish_date = max(days)
-        days_to_finish = (finish_date - self.current_date).days + 1  # + 1 to get days until first day *after* fast
+        days_to_finish = (latest_day - self.current_date).days + 1  # + 1 to get days until first day *after* fast
         if days_to_finish < 0:
             return f"{obj.name} has passed"
         return f"<span class='days_to_finish'>{days_to_finish}</span> day{'' if days_to_finish == 1 else 's'} until the end of {obj.name}"
@@ -339,8 +344,15 @@ class FastStatsSerializer(serializers.Serializer):
         return obj.fasts.count()
     
     def get_total_fast_days(self, obj):
-        # returns the total number of days the user has fasted
-        return sum(fast.days.count() for fast in obj.fasts.all())
+        # Optimized version: Use database aggregation instead of N+1 queries
+        # This replaces the inefficient sum(fast.days.count() for fast in obj.fasts.all())
+        from django.db.models import Count
+        
+        # Single query with aggregation - much more efficient
+        result = obj.fasts.aggregate(
+            total_days=Count('days', distinct=True)
+        )
+        return result['total_days'] or 0
     
     class Meta:
         fields = ['joined_fasts', 'total_fasts', 'total_fast_days']

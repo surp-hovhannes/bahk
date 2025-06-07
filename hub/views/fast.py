@@ -16,7 +16,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Count, Min, Max, Sum
+from django.db.models import Q, Count, Min, Max, Sum, Prefetch
 from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache
 from functools import wraps
@@ -578,8 +578,17 @@ class FastStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Optimized: Prefetch related data to avoid N+1 queries
+        # This ensures that when the serializer calls obj.fasts.aggregate(),
+        # it has efficient access to the related data
         user_profile = request.user.profile
-        serialized_stats = FastStatsSerializer(user_profile)
+        
+        # Prefetch the fasts and their days to optimize the serializer queries
+        optimized_profile = Profile.objects.select_related('user', 'church').prefetch_related(
+            Prefetch('fasts', queryset=Fast.objects.prefetch_related('days'))
+        ).get(id=user_profile.id)
+        
+        serialized_stats = FastStatsSerializer(optimized_profile)
         return response.Response(serialized_stats.data)
 
 

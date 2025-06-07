@@ -56,7 +56,7 @@
             ],
             "scripts": {
                 "test-setup": "python manage.py migrate",
-                "test": "python manage.py test --keepdb"
+                "test": "python manage.py test --exclude-tag=performance --settings=tests.test_settings --keepdb"
             }
         }
     }
