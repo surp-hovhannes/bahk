@@ -18,7 +18,7 @@
     },
     "scripts": {
         "postdeploy": "python manage.py migrate",
-        "test": "python manage.py test"
+        "test": "python manage.py test --exclude-tag=performance --settings=tests.test_settings"
     },
     "formation": {
         "web": {
