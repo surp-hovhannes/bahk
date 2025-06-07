@@ -8,6 +8,7 @@ import hmac
 import hashlib
 
 from hub.models import User, Profile, Church
+from tests.fixtures.test_data import TestDataFactory
 
 User = get_user_model()
 
@@ -21,18 +22,18 @@ class UnsubscribeTests(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        # Create church
-        self.church = Church.objects.create(name="Test Church")
+        # Create church using TestDataFactory
+        self.church = TestDataFactory.create_church(name="Test Church")
         
-        # Create user
-        self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
+        # Create user using TestDataFactory
+        self.user = TestDataFactory.create_user(
+            username="testuser@example.com",
+            email="testuser@example.com",
             password="testpass123"
         )
         
-        # Create profile with promotional emails enabled
-        self.profile = Profile.objects.create(
+        # Create profile with promotional emails enabled using TestDataFactory
+        self.profile = TestDataFactory.create_profile(
             user=self.user,
             church=self.church,
             receive_promotional_emails=True

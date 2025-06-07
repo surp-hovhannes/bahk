@@ -6,13 +6,15 @@ from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework.test import APITestCase
 from rest_framework import status
+from tests.fixtures.test_data import TestDataFactory
 
 from hub.serializers import PasswordResetSerializer, PasswordResetConfirmSerializer
 
 
 class PasswordResetTests(APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
+        # Use TestDataFactory for email-compatible user creation
+        self.user = TestDataFactory.create_user(
             username='test@example.com',
             email='test@example.com',
             password='oldpassword123'

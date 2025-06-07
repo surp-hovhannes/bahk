@@ -3,25 +3,47 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
+from hub.models import Church, Profile
+from tests.fixtures.test_data import TestDataFactory
+import datetime
 
 class AuthenticationTest(APITestCase):
     def setUp(self):
-        # Create a user for testing
-        self.user = User.objects.create_user(username='testuser', password='testpassword123')
+        # Create a church for testing using factory
+        self.church = TestDataFactory.create_church()
+        
+        # Create a user for testing using factory
+        self.user = TestDataFactory.create_user()
+        
+        # Create a profile for the user using factory
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church
+        )
 
     def test_create_token(self):
         """
         Ensure we can receive a token for a given user.
         """
-        url = reverse('token_obtain_pair')
-        data = {
-            'username': 'testuser',
-            'password': 'testpassword123',
-        }
-        response = self.client.post(url, data, format='json')
+        # Create a test user using factory (automatically email-compatible)
+        user = TestDataFactory.create_user(password='testpass123')
+        
+        # Create a profile for the user using factory
+        TestDataFactory.create_profile(user=user, church=self.church)
+        
+        # Get token using email as username (EmailBackend expects this)
+        response = self.client.post(
+            reverse('token_obtain_pair'),
+            {
+                'username': user.email,  # EmailBackend treats username as email
+                'password': 'testpass123'
+            },
+            format='json'
+        )
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue('access' in response.data)
-        self.assertTrue('refresh' in response.data)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
 
     def test_access_protected_view(self):
         """

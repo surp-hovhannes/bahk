@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.contrib.staticfiles.storage import StaticFilesStorage
 from django.core.files.storage import FileSystemStorage
+from tests.fixtures.test_data import TestDataFactory
 
 class TestStaticFilesStorage(FileSystemStorage):
     """Mock storage that returns a dummy URL for static files."""
@@ -22,10 +23,10 @@ class TestStaticFilesStorage(FileSystemStorage):
 class EmailTemplateTests(TestCase):
     def setUp(self):
         """Set up test data."""
-        # Create test user
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
+        # Create test user using TestDataFactory
+        self.user = TestDataFactory.create_user(
+            username='testuser@example.com',
+            email='testuser@example.com',
             password='testpass123'
         )
         

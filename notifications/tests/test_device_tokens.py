@@ -6,21 +6,22 @@ from rest_framework import status
 from unittest.mock import patch, MagicMock
 from ..models import DeviceToken
 from ..views import DeviceTokenCreateView, TestPushNotificationView
+from tests.fixtures.test_data import TestDataFactory
 import json
 
 class DeviceTokenTests(APITestCase):
     def setUp(self):
-        # Create a test user
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
+        # Create test users using TestDataFactory
+        self.user = TestDataFactory.create_user(
+            username='testuser@example.com',
+            email='testuser@example.com',
             password='testpass123'
         )
         
         # Create a second test user for multi-user tests
-        self.user2 = User.objects.create_user(
-            username='testuser2',
-            email='test2@example.com',
+        self.user2 = TestDataFactory.create_user(
+            username='testuser2@example.com',
+            email='testuser2@example.com',
             password='testpass123'
         )
         
@@ -159,10 +160,10 @@ class DeviceTokenTests(APITestCase):
 
 class TestPushNotificationTests(APITestCase):
     def setUp(self):
-        # Create a test user
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
+        # Create a test user using TestDataFactory
+        self.user = TestDataFactory.create_user(
+            username='testuser@example.com',
+            email='testuser@example.com',
             password='testpass123'
         )
         

@@ -10,6 +10,7 @@ import datetime
 
 from notifications.models import PromoEmail
 from hub.models import Church, Fast, Profile
+from tests.fixtures.test_data import TestDataFactory
 
 User = get_user_model()
 
@@ -30,39 +31,43 @@ class PromoEmailAdminTests(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        # Create admin user
-        self.admin_user = User.objects.create_superuser(
-            username='admin',
+        # Create admin user using TestDataFactory
+        self.admin_user = TestDataFactory.create_user(
+            username='admin@example.com',
             email='admin@example.com',
             password='adminpass123'
         )
+        # Make admin user superuser
+        self.admin_user.is_superuser = True
+        self.admin_user.is_staff = True
+        self.admin_user.save()
         
-        # Create regular user
-        self.regular_user = User.objects.create_user(
-            username='regular',
+        # Create regular user using TestDataFactory
+        self.regular_user = TestDataFactory.create_user(
+            username='regular@example.com',
             email='regular@example.com',
             password='regularpass123'
         )
         
-        # Create church
-        self.church = Church.objects.create(name="Test Church")
+        # Create church using TestDataFactory
+        self.church = TestDataFactory.create_church(name="Test Church")
         
-        # Create fast
-        self.fast = Fast.objects.create(
+        # Create fast using TestDataFactory
+        self.fast = TestDataFactory.create_fast(
             name="Test Fast",
             church=self.church,
             description="A test fast"
         )
         
-        # Create user profiles
-        self.admin_profile = Profile.objects.create(
+        # Create user profiles using TestDataFactory
+        self.admin_profile = TestDataFactory.create_profile(
             user=self.admin_user,
             church=self.church,
             receive_promotional_emails=True
         )
         self.admin_profile.fasts.add(self.fast)
         
-        self.regular_profile = Profile.objects.create(
+        self.regular_profile = TestDataFactory.create_profile(
             user=self.regular_user,
             church=self.church,
             receive_promotional_emails=True
@@ -80,11 +85,6 @@ class PromoEmailAdminTests(TestCase):
         
         # Create client
         self.client = Client()
-        
-        # Ensure admin user has staff status and superuser status
-        self.admin_user.is_staff = True
-        self.admin_user.is_superuser = True
-        self.admin_user.save()
         
         # Add all permissions for PromoEmail model to admin user
         content_type = ContentType.objects.get_for_model(PromoEmail)

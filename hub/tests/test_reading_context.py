@@ -10,6 +10,7 @@ from rest_framework.test import APITestCase
 from hub.models import Church, Day, LLMPrompt, Reading, ReadingContext
 from hub.tasks.llm_tasks import generate_reading_context_task
 from hub.services.llm_service import OpenAIService, AnthropicService
+from tests.fixtures.test_data import TestDataFactory
 
 
 class ReadingContextTaskTests(TestCase):
@@ -17,7 +18,7 @@ class ReadingContextTaskTests(TestCase):
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
-        self.day = Day.objects.create(date=date.today(), church=self.church)
+        self.day = TestDataFactory.create_day(date=date.today(), church=self.church)
         self.reading = Reading.objects.create(
             day=self.day,
             book="John",
@@ -102,7 +103,7 @@ class DailyReadingsAPITests(APITestCase):
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
-        self.day = Day.objects.create(date=date.today(), church=self.church)
+        self.day = TestDataFactory.create_day(date=date.today(), church=self.church)
         self.reading = Reading.objects.create(
             day=self.day,
             book="John",
@@ -135,7 +136,7 @@ class FeedbackEndpointTests(APITestCase):
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
-        self.day = Day.objects.create(date=date.today(), church=self.church)
+        self.day = TestDataFactory.create_day(date=date.today(), church=self.church)
         self.reading = Reading.objects.create(
             day=self.day,
             book="John",
