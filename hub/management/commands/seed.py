@@ -76,8 +76,6 @@ class Command(BaseCommand):
         # Create Churches
         churches = [
             models.Church.objects.create(name="Armenian Apostolic Church", pk=1),
-            models.Church.objects.create(name="Saint Mary Cathedral", pk=2),
-            models.Church.objects.create(name="Holy Trinity Parish", pk=3),
         ]
 
         # Create LLM Prompts
@@ -109,15 +107,15 @@ class Command(BaseCommand):
                 url="https://stjohnarmenianchurch.com/lent"
             ),
             models.Fast.objects.create(
-                name="Advent Fast", 
-                church=churches[1],
+                name="Fast of the Catechumens", 
+                church=churches[0],
                 description="Preparation for the Nativity of Christ",
                 culmination_feast="Christmas Day",
                 culmination_feast_date=date.today() + timedelta(days=28)
             ),
             models.Fast.objects.create(
                 name="Assumption Fast", 
-                church=churches[2],
+                church=churches[0],
                 description="Fast leading to the Assumption of the Virgin Mary",
                 culmination_feast="Feast of the Assumption",
                 culmination_feast_date=date.today() + timedelta(days=14)
@@ -141,8 +139,8 @@ class Command(BaseCommand):
         # Create Users and Profiles
         users_and_profiles = []
         users_and_profiles.extend(self._create_users(EMAILS1, NAMES1, churches[0], fasts=[fasts[0]]))
-        users_and_profiles.extend(self._create_users(EMAILS2, NAMES2, churches[1], fasts=[fasts[1]]))
-        users_and_profiles.extend(self._create_users(EMAILS3, NAMES3, churches[2]))
+        users_and_profiles.extend(self._create_users(EMAILS2, NAMES2, churches[0], fasts=[fasts[1]]))
+        users_and_profiles.extend(self._create_users(EMAILS3, NAMES3, churches[0]))
 
         # Create Learning Resources
         videos = self._create_videos()
@@ -374,14 +372,7 @@ class Command(BaseCommand):
                 church_filter=churches[0],
                 joined_fast=fasts[0],
                 scheduled_for=timezone.now() + timedelta(days=3),
-            ),
-            PromoEmail.objects.create(
-                title="Daily Reflection Newsletter",
-                subject="Your weekly spiritual reflection",
-                content_html="<h2>This Week's Reflection</h2><p>Consider the theme of hope...</p>",
-                content_text="This Week's Reflection: Consider the theme of hope...",
-                status=PromoEmail.DRAFT,
-            ),
+            )
         ]
 
         # Add selected users to the draft email
