@@ -3,21 +3,23 @@ from django.contrib import messages
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.shortcuts import redirect
-from .models import DeviceToken
+from .models import DeviceToken, PromoEmail, PromoEmailImage
 from .utils import send_push_notification
 from .tasks import send_promo_email_task
 from django.contrib.admin import SimpleListFilter
-from hub.models import Fast
+from hub.models import Fast, Profile, Church
 from django.utils import timezone
 from django import forms
 from django.urls import reverse
 from django.template.loader import render_to_string
-from .models import PromoEmail
 from django.conf import settings
 from django_celery_beat.models import PeriodicTask, ClockedSchedule
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.utils.html import format_html
+from django.utils.html import strip_tags
+from datetime import datetime
 
 import json
 import logging
@@ -87,12 +89,11 @@ class UserNotJoinedFastFilter(SimpleListFilter):
 
 @admin.register(DeviceToken)
 class DeviceTokenAdmin(admin.ModelAdmin):
-    list_display = ('token', 'user', 'device_type', 'is_active', 'created_at', 'last_used')
-    list_filter = ('device_type', 'is_active')
-    search_fields = ('token', 'user__email')
-    ordering = ('-created_at',)
+    list_display = ('user', 'device_type', 'token', 'is_active', 'created_at', 'last_used')
+    list_filter = (UserWithNoFastsFilter, UserFastFilter, UserNotJoinedFastFilter, 'device_type', 'is_active', 'created_at')
+    search_fields = ('user__username', 'user__email', 'token')
+    readonly_fields = ('created_at', 'last_used')
     actions = ['send_push_notification', 'send_test_notification']
-    list_filter = (UserWithNoFastsFilter, UserFastFilter, UserNotJoinedFastFilter, 'is_active', 'created_at', 'last_used')
 
     def get_urls(self):
         urls = super().get_urls()
@@ -223,40 +224,97 @@ class DeviceTokenAdmin(admin.ModelAdmin):
     
     send_test_notification.short_description = "Send test notification to selected devices"
 
+
+@admin.register(PromoEmailImage)
+class PromoEmailImageAdmin(admin.ModelAdmin):
+    list_display = ('name', 'image_preview', 'get_image_url', 'uploaded_by', 'created_at')
+    list_filter = ('created_at', 'uploaded_by')
+    search_fields = ('name', 'description')
+    readonly_fields = ('uploaded_by', 'created_at', 'updated_at', 'get_image_url', 'image_preview')
+    fields = ('name', 'image', 'description', 'uploaded_by', 'created_at', 'updated_at', 'image_preview', 'get_image_url')
+    
+    def save_model(self, request, obj, form, change):
+        """Automatically set the uploaded_by field to the current user."""
+        if not change:  # Only set on creation
+            obj.uploaded_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def image_preview(self, obj):
+        """Display a small preview of the image."""
+        if obj.image:
+            return format_html(
+                '<img src="{}" width="100" style="border-radius: 4px;" />',
+                obj.image.url
+            )
+        return "No image"
+    image_preview.short_description = "Preview"
+    
+    def get_image_url(self, obj):
+        """Display the full URL that can be copied for use in emails."""
+        if obj.image:
+            url = obj.get_absolute_url()
+            return format_html(
+                '<input type="text" value="{}" style="width: 400px; font-family: monospace;" '
+                'onclick="this.select(); document.execCommand(\'copy\'); '
+                'alert(\'URL copied to clipboard!\');" readonly />',
+                url
+            )
+        return "No image"
+    get_image_url.short_description = "Image URL (click to copy)"
+
+
 class PromoEmailAdminForm(forms.ModelForm):
     class Meta:
         model = PromoEmail
         fields = '__all__'
         widgets = {
-            'selected_users': FilteredSelectMultiple(
-                verbose_name='Selected Users', 
-                is_stacked=False
-            )
+            'content_html': forms.Textarea(attrs={'rows': 15, 'cols': 100}),
+            'content_text': forms.Textarea(attrs={'rows': 10, 'cols': 100}),
         }
-
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # If editing an existing PromoEmail instance, populate 'selected_users' choices
-        if self.instance and self.instance.pk:
-            # Get the users matching the current filters
-            target_audience = self.instance.get_target_audience_users()
+        
+        # Add help text with available images
+        available_images = PromoEmailImage.objects.all().order_by('-created_at')
+        if available_images.exists():
+            image_list = []
+            for img in available_images:
+                image_list.append(
+                    f'<div style="margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">'
+                    f'<strong>{img.name}</strong><br>'
+                    f'<img src="{img.image.url}" style="max-width: 150px; max-height: 100px; margin: 5px 0;" /><br>'
+                    f'<code style="background: #f5f5f5; padding: 2px 4px; font-size: 12px; word-break: break-all;">{img.get_absolute_url()}</code>'
+                    f'</div>'
+                )
             
-            # Get currently selected users (if any)
-            selected_user_ids = self.instance.selected_users.values_list('id', flat=True)
-            
-            # Combine the target audience with already selected users, 
-            # in case a selected user no longer matches the *current* filters
-            combined_queryset = User.objects.filter(
-                Q(pk__in=target_audience.values_list('id', flat=True)) | 
-                Q(pk__in=selected_user_ids)
-            ).distinct().order_by('email') # Or order by another field like username
-
-            # Set the queryset for the widget
-            self.fields['selected_users'].queryset = combined_queryset
+            images_html = ''.join(image_list)
+            self.fields['content_html'].help_text = format_html(
+                '<div style="margin-top: 10px;">'
+                '<strong>Available Images:</strong><br>'
+                '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-top: 5px;">'
+                '{}'
+                '</div>'
+                '<p style="margin-top: 10px;"><em>Copy the image URLs above to use in your email content. '
+                'You can also upload new images in the '
+                '<a href="{}" target="_blank">Promo Email Images section</a>.</em></p>'
+                '</div>',
+                images_html,
+                reverse('admin:notifications_promoemailimage_changelist')
+            )
         else:
-             # For new instances, maybe show all users or no users by default?
-             # Showing no users might be safest until filters are set.
-             self.fields['selected_users'].queryset = User.objects.none()
+            self.fields['content_html'].help_text = format_html(
+                '<p><em>No images available. You can upload images in the '
+                '<a href="{}" target="_blank">Promo Email Images section</a>.</em></p>',
+                reverse('admin:notifications_promoemailimage_changelist')
+            )
+
+        # Custom queryset for users - limit to reasonable amount for performance
+        if 'selected_users' in self.fields:
+            # Limit to first 1000 users, ordered by most recent
+            self.fields['selected_users'].queryset = User.objects.all().order_by('-date_joined')[:1000]
+        else:
+            self.fields['selected_users'].queryset = User.objects.none()
 
 
 @admin.register(PromoEmail)
