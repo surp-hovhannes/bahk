@@ -276,9 +276,10 @@ class PromoEmailAdminForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         
         # Add help text with available images
-        available_images = PromoEmailImage.objects.all().order_by('-created_at')
+        available_images = PromoEmailImage.objects.all().order_by('-created_at')[:20]
         if available_images.exists():
             image_list = []
+            help_text_note = '<p><em>Displaying the 20 most recent images. Upload new images in the Promo Email Images section if needed.</em></p>'
             for img in available_images:
                 image_list.append(
                     f'<div style="margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">'
