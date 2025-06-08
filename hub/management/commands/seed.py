@@ -85,14 +85,12 @@ class Command(BaseCommand):
                 role="You are a helpful assistant providing concise biblical context.",
                 prompt=PROMPT_TEMPLATE,
                 active=True,
-                description="Default active prompt for biblical context generation.",
             ),
             models.LLMPrompt.objects.create(
                 model="claude-3-5-sonnet-20241022",
                 role="You are a biblical scholar and theologian.",
                 prompt="Provide scholarly biblical context for the given passage.",
                 active=False,
-                description="Alternative Claude prompt for biblical context.",
             ),
         ]
 
@@ -375,9 +373,10 @@ class Command(BaseCommand):
             )
         ]
 
-        # Add selected users to the draft email
+        # Add selected users to promotional emails
         if users:
-            promo_emails[2].selected_users.set(users[:2])
+            # No longer have a third email to add users to
+            pass
 
     def _create_changelogs(self):
         """Create changelog entries."""
