@@ -3,13 +3,10 @@ import logging
 import re
 
 from django.db import models
-from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
-from django.core.signing import TimestampSigner
 from django.conf import settings
 from django.urls import reverse
-from django.utils import timezone
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -167,11 +164,7 @@ class PromoEmail(models.Model):
         Returns:
             dict: Result of the preview operation
         """
-        from django.core.mail import EmailMultiAlternatives
-        from django.template.loader import render_to_string
-        from django.utils.html import strip_tags
-        from django.conf import settings
-        from django.urls import reverse
+
         
         logger = logging.getLogger(__name__)
         
@@ -180,8 +173,6 @@ class PromoEmail(models.Model):
         
         try:
             # Use admin as the preview user
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
             admin_user = User.objects.filter(is_staff=True).first()
             
             # Create unsubscribe URL for preview
