@@ -1,6 +1,8 @@
 from rest_framework import generics, permissions
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db.models import Prefetch
 from ..serializers import ProfileSerializer, ProfileImageSerializer
+from ..models import Profile, Fast
 
 
 class ProfileDetailView(generics.RetrieveUpdateAPIView):
@@ -23,7 +25,11 @@ class ProfileDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return self.request.user.profile
+        # Optimized: Use select_related and prefetch_related for better performance
+        # This prevents N+1 queries when accessing user and church data
+        return Profile.objects.select_related('user', 'church').prefetch_related(
+            Prefetch('fasts', queryset=Fast.objects.select_related('church'))
+        ).get(id=self.request.user.profile.id)
 
 
 class ProfileImageUploadView(generics.UpdateAPIView):
