@@ -2,6 +2,7 @@
 import datetime
 from django.contrib.auth.models import User
 from hub.models import Church, Day, Fast, Profile
+from notifications.models import PromoEmail
 
 
 class TestDataFactory:
@@ -115,6 +116,19 @@ class TestDataFactory:
             profile.fasts.add(fast)
         
         return fast
+    
+    @staticmethod
+    def create_promo_email(fast=None):
+        """Create a test promotional email."""
+        return PromoEmail.objects.create(
+            fast=fast,
+            title="Test Promo Email",
+            subject="Test Promo Email",
+            content_html="<div>Test Promo Email</div>",
+            content_text="Test Promo Email",
+            all_users=True,
+            exclude_unsubscribed=False,
+        )
     
     @staticmethod
     def create_test_data_set():
