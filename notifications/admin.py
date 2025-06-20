@@ -233,6 +233,9 @@ class PromoEmailAdminForm(forms.ModelForm):
                 is_stacked=False
             )
         }
+        help_texts = {
+            'fast': 'When a fast is selected, automated promotional emails will be paused in favor of this email'
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
