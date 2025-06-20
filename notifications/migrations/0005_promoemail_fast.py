@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0029_alter_llmprompt_active_alter_llmprompt_model'),
+        ('hub', '0001_initial_models'),
         ('notifications', '0004_promoemail_selected_users'),
     ]
 
