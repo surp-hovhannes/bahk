@@ -6,14 +6,14 @@
     {% if show_custom_buttons %}
         <div class="submit-row">
             <input type="button" value="View Rendered Email" 
-                   onclick="window.location.href='{% url 'admin:notifications_promoemail_view_rendered' original.pk %}'"
+                   onclick="window.location.href='{% url "admin:notifications_promoemail_view_rendered" original.pk %}'"
                    style="background: #417690; color: white; border: none; padding: 10px 15px; cursor: pointer;">
             
             <input type="button" value="Send Preview Email" 
-                   onclick="window.location.href='{% url 'admin:notifications_promoemail_send_preview' original.pk %}'"
+                   onclick="window.location.href='{% url "admin:notifications_promoemail_send_preview" original.pk %}'"
                    style="background: #417690; color: white; border: none; padding: 10px 15px; cursor: pointer;">
             <input type="button" value="Schedule Email" 
-                   onclick="window.location.href='{% url 'admin:notifications_promoemail_schedule' original.pk %}'"
+                   onclick="window.location.href='{% url "admin:notifications_promoemail_schedule" original.pk %}'"
                    style="background: #417690; color: white; border: none; padding: 10px 15px; cursor: pointer;">
         </div>
     {% endif %}

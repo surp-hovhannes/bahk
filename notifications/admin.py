@@ -19,6 +19,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils.html import format_html
 from django.utils.html import strip_tags
+from django.utils.safestring import mark_safe
 from datetime import datetime
 
 import json
@@ -263,7 +264,56 @@ class PromoEmailImageAdmin(admin.ModelAdmin):
     get_image_url.short_description = "Image URL (click to copy)"
 
 
+class AvailableImagesWidget(forms.Widget):
+    """Custom widget that displays available promotional email images for reference."""
+    
+    def render(self, name, value, attrs=None, renderer=None):
+        """Render the available images display."""
+        available_images = PromoEmailImage.objects.all().order_by('-created_at')[:20]
+        
+        if available_images.exists():
+            # Generate structured HTML for images
+            image_items = []
+            for img in available_images:
+                image_items.append(
+                    f'<div class="image-item">'
+                    f'<div class="image-name">{img.name}</div>'
+                    f'<img src="{img.image.url}" style="max-width: 150px; max-height: 100px;" />'
+                    f'<code>{img.get_absolute_url()}</code>'
+                    f'</div>'
+                )
+            
+            # Create display HTML
+            images_html = ''.join(image_items)
+            return format_html(
+                '<div class="available-images-display">'
+                '{}'
+                '<p>Copy the image URLs above to use in your email content. '
+                'You can also upload new images in the '
+                '<a href="{}" target="_blank">Promo Email Images section</a>.</p>'
+                '</div>',
+                mark_safe(images_html),
+                reverse('admin:notifications_promoemailimage_changelist')
+            )
+        else:
+            return format_html(
+                '<div class="available-images-display">'
+                '<p><em>No images available. You can upload images in the '
+                '<a href="{}" target="_blank">Promo Email Images section</a>.</em></p>'
+                '</div>',
+                reverse('admin:notifications_promoemailimage_changelist')
+            )
+
+
 class PromoEmailAdminForm(forms.ModelForm):
+    # Add a custom field for displaying available images
+    available_images = forms.CharField(
+        label="Available Images",
+        required=False,
+        widget=AvailableImagesWidget(),
+        help_text="Reference images for use in your email content."
+    )
+    
     class Meta:
         model = PromoEmail
         fields = '__all__'
@@ -275,44 +325,19 @@ class PromoEmailAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Add help text with available images
-        available_images = PromoEmailImage.objects.all().order_by('-created_at')[:20]
-        if available_images.exists():
-            image_list = []
-            help_text_note = '<p><em>Displaying the 20 most recent images. Upload new images in the Promo Email Images section if needed.</em></p>'
-            for img in available_images:
-                image_list.append(
-                    f'<div style="margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">'
-                    f'<strong>{img.name}</strong><br>'
-                    f'<img src="{img.image.url}" style="max-width: 150px; max-height: 100px; margin: 5px 0;" /><br>'
-                    f'<code style="background: #f5f5f5; padding: 2px 4px; font-size: 12px; word-break: break-all;">{img.get_absolute_url()}</code>'
-                    f'</div>'
-                )
-            
-            images_html = ''.join(image_list)
-            self.fields['content_html'].help_text = format_html(
-                '<div style="margin-top: 10px;">'
-                '<strong>Available Images:</strong><br>'
-                '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-top: 5px;">'
-                '{}'
-                '</div>'
-                '<p style="margin-top: 10px;"><em>Copy the image URLs above to use in your email content. '
-                'You can also upload new images in the '
-                '<a href="{}" target="_blank">Promo Email Images section</a>.</em></p>'
-                '</div>',
-                images_html,
-                reverse('admin:notifications_promoemailimage_changelist')
-            )
-        else:
-            self.fields['content_html'].help_text = format_html(
-                '<p><em>No images available. You can upload images in the '
-                '<a href="{}" target="_blank">Promo Email Images section</a>.</em></p>',
-                reverse('admin:notifications_promoemailimage_changelist')
-            )
-
-        # Custom queryset for users - limit to reasonable amount for performance
+        # Optimize user queryset for performance
+        self._setup_user_queryset()
+    
+    def save(self, commit=True):
+        # Don't save the available_images field since it's just for display
+        if 'available_images' in self.cleaned_data:
+            del self.cleaned_data['available_images']
+        return super().save(commit)
+    
+    def _setup_user_queryset(self):
+        """Setup optimized user queryset for selected_users field."""
         if 'selected_users' in self.fields:
-            # Limit to first 1000 users, ordered by most recent
+            # Limit to first 1000 users, ordered by most recent for performance
             self.fields['selected_users'].queryset = User.objects.all().order_by('-date_joined')[:1000]
         else:
             self.fields['selected_users'].queryset = User.objects.none()
@@ -325,7 +350,7 @@ class PromoEmailAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at', 'sent_at')
     search_fields = ('title', 'subject', 'content_html', 'content_text')
     fieldsets = (
-        (None, {'fields': ('title', 'subject', 'content_html', 'content_text')}),
+        (None, {'fields': ('title', 'subject', 'content_html', 'content_text', 'available_images')}),
         ('Targeting', {'fields': ('all_users', 'church_filter', 'joined_fast', 'exclude_unsubscribed', 'selected_users')}),
         ('Status & Scheduling', {'fields': ('status', 'scheduled_for', 'sent_at')}),
         ('Metadata', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
