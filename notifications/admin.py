@@ -321,7 +321,10 @@ class PromoEmailAdminForm(forms.ModelForm):
             'content_html': forms.Textarea(attrs={'rows': 15, 'cols': 100}),
             'content_text': forms.Textarea(attrs={'rows': 10, 'cols': 100}),
         }
-    
+        help_texts = {
+            'fast': 'When a fast is selected, automated promotional emails will be paused in favor of this email'
+        }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -346,11 +349,11 @@ class PromoEmailAdminForm(forms.ModelForm):
 @admin.register(PromoEmail)
 class PromoEmailAdmin(admin.ModelAdmin):
     form = PromoEmailAdminForm
-    list_display = ('title', 'subject', 'status', 'created_at', 'scheduled_for', 'sent_at', 'recipient_count')
+    list_display = ('title', 'subject', 'fast', 'status', 'created_at', 'scheduled_for', 'sent_at', 'recipient_count')
     list_filter = ('status', 'created_at', 'sent_at')
     search_fields = ('title', 'subject', 'content_html', 'content_text')
     fieldsets = (
-        (None, {'fields': ('title', 'subject', 'content_html', 'content_text', 'available_images')}),
+        (None, {'fields': ('title', 'subject', 'content_html', 'content_text', 'available_images', 'fast')}),
         ('Targeting', {'fields': ('all_users', 'church_filter', 'joined_fast', 'exclude_unsubscribed', 'selected_users')}),
         ('Status & Scheduling', {'fields': ('status', 'scheduled_for', 'sent_at')}),
         ('Metadata', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),

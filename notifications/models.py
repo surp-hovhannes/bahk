@@ -73,6 +73,7 @@ class PromoEmail(models.Model):
     scheduled_for = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=DRAFT)
     sent_at = models.DateTimeField(null=True, blank=True)
+    fast = models.ForeignKey('hub.Fast', null=True, blank=True, on_delete=models.SET_NULL, related_name='promo_emails')
     
     # Targeting options
     all_users = models.BooleanField(default=False, help_text="Send to all users")

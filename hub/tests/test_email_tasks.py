@@ -150,3 +150,14 @@ class TestSendFastReminders(TestCase):
         # Verify the email is for the earliest fast
         email = mail.outbox[0]
         self.assertEqual(email.subject, f'Upcoming Fast: {another_fast.name}') 
+
+    def test_no_reminder_for_promo_email(self):
+        """Test that reminders are not sent for fasts that have promotional emails assigned to them."""
+        # Create a promotional email using TestDataFactory
+        TestDataFactory.create_promo_email(fast=self.fast)
+        
+        # Execute the function
+        send_fast_reminders()
+
+        # Check that no emails were sent
+        self.assertEqual(len(mail.outbox), 0)

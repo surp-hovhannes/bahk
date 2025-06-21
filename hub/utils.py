@@ -159,8 +159,8 @@ def send_fast_reminders():
                 earliest_fast = fast
                 earliest_start_date = earliest_day.date
 
-        # Send reminder only for the earliest fast
-        if earliest_fast:
+        # Send reminder only for the earliest fast if no promotional emails have been assigned to it
+        if earliest_fast and not earliest_fast.promo_emails.exists():
             subject = f'Upcoming Fast: {earliest_fast.name}'
             from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
             serialized_fast = FastSerializer(earliest_fast).data
