@@ -1,19 +1,120 @@
 {% extends "admin/change_form.html" %}
 {% load i18n admin_urls %}
 
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .available-images-display {
+            margin-top: 10px;
+            margin-bottom: 15px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            color: #222;
+            box-sizing: border-box;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: flex-start;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .available-images-display h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+            font-weight: bold;
+            width: 100%;
+            flex-basis: 100%;
+        }
+        .available-images-display p {
+            width: 100%;
+            flex-basis: 100%;
+            margin: 10px 0 0 0;
+            font-style: italic;
+            color: #333;
+        }
+        .available-images-display .image-item {
+            flex: 0 1 calc(33.333% - 10px);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fafafa;
+            box-sizing: border-box;
+            min-width: 200px;
+            max-width: calc(33.333% - 10px);
+        }
+        .available-images-display .image-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        .available-images-display img {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px 0;
+            display: block;
+        }
+        .available-images-display code {
+            background: #f5f5f5;
+            padding: 4px 6px;
+            font-size: 11px;
+            border-radius: 3px;
+            cursor: pointer;
+            display: block;
+            margin-top: 5px;
+            word-break: break-all;
+            border: 1px solid #e0e0e0;
+            color: #333;
+        }
+        .available-images-display code:hover {
+            background: #eee;
+            border-color: #ccc;
+        }
+    </style>
+    <script>
+        // Add click-to-copy functionality for image URLs
+        document.addEventListener('DOMContentLoaded', function() {
+            var availableImagesField = document.querySelector('.field-available_images');
+            if (availableImagesField) {
+                availableImagesField.querySelectorAll('code').forEach(function(codeEl) {
+                    codeEl.addEventListener('click', function() {
+                        var text = this.textContent;
+                        if (navigator.clipboard) {
+                            navigator.clipboard.writeText(text).then(function() {
+                                var originalText = codeEl.textContent;
+                                codeEl.textContent = 'Copied!';
+                                setTimeout(function() {
+                                    codeEl.textContent = originalText;
+                                }, 1000);
+                            });
+                        }
+                    });
+                    codeEl.title = 'Click to copy URL';
+                });
+            }
+        });
+    </script>
+{% endblock %}
+
 {% block submit_buttons_bottom %}
     {{ block.super }}
     {% if show_custom_buttons %}
+        {% url "admin:notifications_promoemail_view_rendered" original.pk as view_rendered_url %}
+        {% url "admin:notifications_promoemail_send_preview" original.pk as send_preview_url %}
+        {% url "admin:notifications_promoemail_schedule" original.pk as schedule_url %}
+        
         <div class="submit-row">
             <input type="button" value="View Rendered Email" 
-                   onclick="window.location.href='{% url 'admin:notifications_promoemail_view_rendered' original.pk %}'"
+                   onclick="window.location.href='{{ view_rendered_url }}'"
                    style="background: #417690; color: white; border: none; padding: 10px 15px; cursor: pointer;">
             
             <input type="button" value="Send Preview Email" 
-                   onclick="window.location.href='{% url 'admin:notifications_promoemail_send_preview' original.pk %}'"
+                   onclick="window.location.href='{{ send_preview_url }}'"
                    style="background: #417690; color: white; border: none; padding: 10px 15px; cursor: pointer;">
+            
             <input type="button" value="Schedule Email" 
-                   onclick="window.location.href='{% url 'admin:notifications_promoemail_schedule' original.pk %}'"
+                   onclick="window.location.href='{{ schedule_url }}'"
                    style="background: #417690; color: white; border: none; padding: 10px 15px; cursor: pointer;">
         </div>
     {% endif %}

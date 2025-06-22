@@ -3,9 +3,13 @@ import logging
 import re
 
 from django.db import models
-from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+from django.conf import settings
+from django.urls import reverse
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 
 User = get_user_model()
 
@@ -161,11 +165,7 @@ class PromoEmail(models.Model):
         Returns:
             dict: Result of the preview operation
         """
-        from django.core.mail import EmailMultiAlternatives
-        from django.template.loader import render_to_string
-        from django.utils.html import strip_tags
-        from django.conf import settings
-        from django.urls import reverse
+
         
         logger = logging.getLogger(__name__)
         
@@ -174,8 +174,6 @@ class PromoEmail(models.Model):
         
         try:
             # Use admin as the preview user
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
             admin_user = User.objects.filter(is_staff=True).first()
             
             # Create unsubscribe URL for preview
@@ -213,3 +211,43 @@ class PromoEmail(models.Model):
         except Exception as e:
             logger.error(f"Failed to send preview email: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+class PromoEmailImage(models.Model):
+    """Model for storing images used in promotional emails."""
+    name = models.CharField(max_length=200, help_text="Descriptive name for this image")
+    image = models.ImageField(
+        upload_to='promo_email_images/',
+        help_text="Upload image to use in promotional emails"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description of the image content"
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="User who uploaded this image"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Promo Email Image"
+        verbose_name_plural = "Promo Email Images"
+    
+    def __str__(self):
+        return self.name
+    
+    def get_absolute_url(self):
+        """Get the full URL to this image for use in emails."""
+        if self.image:
+            # For development, prepend BACKEND_URL
+            if hasattr(settings, 'BACKEND_URL') and not settings.IS_PRODUCTION:
+                return f"{settings.BACKEND_URL}{self.image.url}"
+            else:
+                # In production with S3, the URL is already absolute
+                return self.image.url
+        return ''
