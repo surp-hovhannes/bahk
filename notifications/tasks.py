@@ -287,9 +287,7 @@ def send_ongoing_fast_push_notification_task():
             )
             data = {
                 "fast_id": ongoing_fast_to_display.id,
-                "fast_name": ongoing_fast_to_display.name,
-                "devotional_title": today_devotional.video.title,
-                "devotional_id": today_devotional.id,
+                "fast_name": ongoing_fast_to_display.name
             }
         else:
             message = ONGOING_FAST_MESSAGE.format(fast_name=ongoing_fast_to_display.name)
