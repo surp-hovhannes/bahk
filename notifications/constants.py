@@ -6,7 +6,7 @@ NOTIFICATION_TYPE_FILTERS = {
 
 WEEKLY_FAST_NAMES = ['friday', 'wednesday']
 
-DAILY_FAST_MESSAGE = "Today is a {fast_name} fast day! Join us in fasting and praying together!"
+DAILY_FAST_MESSAGE = "Today is a fast day! Join us in fasting and praying together!"
 UPCOMING_FAST_MESSAGE = "The {fast_name} is starting soon!"
 ONGOING_FAST_MESSAGE = "The {fast_name} is currently ongoing! Let's fast and pray together!"
 ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE = "The {fast_name} is ongoing! Today's devotional is {devotional_title}. Let's fast and pray together!"
