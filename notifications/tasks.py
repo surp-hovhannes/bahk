@@ -1,6 +1,6 @@
 from celery import shared_task
 from notifications.utils import send_push_notification
-from hub.models import Fast
+from hub.models import Fast, Devotional
 from hub.models import Profile
 from hub.models import Day
 from django.utils import timezone
@@ -8,7 +8,7 @@ from datetime import timedelta
 from hub.models import User
 from django.db.models import OuterRef, Subquery
 import logging
-from .constants import DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE
+from .constants import DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE, ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE
 from .utils import is_weekly_fast
 from .models import PromoEmail
 from django.core.mail import EmailMultiAlternatives
@@ -246,7 +246,7 @@ def send_upcoming_fast_push_notification_task():
         if is_weekly_fast(upcoming_fast_to_display):
             users_to_notify = users_to_notify.filter(profile__include_weekly_fasts_in_notifications=True)
 
-        message = UPCOMING_FAST_MESSAGE
+        message = UPCOMING_FAST_MESSAGE.format(fast_name=upcoming_fast_to_display.name)
         data = {
             "fast_id": upcoming_fast_to_display.id,
             "fast_name": upcoming_fast_to_display.name,
@@ -273,12 +273,28 @@ def send_ongoing_fast_push_notification_task():
         if is_weekly_fast(ongoing_fast_to_display):
             users_to_notify = users_to_notify.filter(profile__include_weekly_fasts_in_notifications=True)
             
-        # send push notification to each user
-        message = ONGOING_FAST_MESSAGE
-        data = {
-            "fast_id": ongoing_fast_to_display.id,
-            "fast_name": ongoing_fast_to_display.name,
-        }
+        # Check if there's a devotional for today
+        today_devotional = Devotional.objects.filter(
+            day__date=timezone.now().date(),
+            day__fast=ongoing_fast_to_display
+        ).first()
+        
+        # Choose message based on whether there's a devotional
+        if today_devotional and today_devotional.video and today_devotional.video.title:
+            message = ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE.format(
+                fast_name=ongoing_fast_to_display.name,
+                devotional_title=today_devotional.video.title
+            )
+            data = {
+                "fast_id": ongoing_fast_to_display.id,
+                "fast_name": ongoing_fast_to_display.name
+            }
+        else:
+            message = ONGOING_FAST_MESSAGE.format(fast_name=ongoing_fast_to_display.name)
+            data = {
+                "fast_id": ongoing_fast_to_display.id,
+                "fast_name": ongoing_fast_to_display.name,
+            }
 
         if len(users_to_notify) > 0:    
             send_push_notification_task(message, data, users_to_notify, 'ongoing_fast')
@@ -310,7 +326,7 @@ def send_daily_fast_push_notification_task():
         users_to_notify = users_to_notify.filter(profile__include_weekly_fasts_in_notifications=True)
 
     # send push notification to each user
-    message = DAILY_FAST_MESSAGE
+    message = DAILY_FAST_MESSAGE.format(fast_name=today_fast.name)
     data = {
         "fast_id": today_fast.id,
         "fast_name": today_fast.name,
