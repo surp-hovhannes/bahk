@@ -374,24 +374,28 @@ SESSION_CACHE_ALIAS = 'default'
 # Cache middleware settings
 CACHE_MIDDLEWARE_ALIAS = 'default'
 
-# Mailgun Configuration
-EMAIL_HOST = 'smtp.mailgun.org'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'postmaster@' + config('MAILGUN_DOMAIN')
-EMAIL_HOST_PASSWORD = config('MAILGUN_API_KEY')
+# Mailgun API Configuration (via Django Anymail)
+# Note: We're using the API, not SMTP, so SMTP settings are not needed
+ANYMAIL = {
+    "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
+    "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN'),
+    "MAILGUN_API_URL": "https://api.mailgun.net/v3",  # US servers (default)
+    # For EU servers, uncomment the line below:
+    # "MAILGUN_API_URL": "https://api.eu.mailgun.net/v3",
+}
+
+# Use Mailgun API backend (not SMTP)
+EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+
+# Email settings
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fastandprayhelp@gmail.com')
+# For backward compatibility with existing code that references EMAIL_HOST_USER
+EMAIL_HOST_USER = DEFAULT_FROM_EMAIL
 EMAIL_TEST_ADDRESS = config('EMAIL_TEST_ADDRESS', default='test@test.com')
 
 # Email rate limiting
 EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=100, cast=int)  # emails per hour
 EMAIL_RATE_LIMIT_WINDOW = 3600 if not DEBUG else 60  # 1 hour in seconds; 1 minute in seconds for debugging
-
-ANYMAIL = {
-    "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
-    "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')  
-}
-EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend" 
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fastandprayhelp@gmail.com')
 
 # OPEN AI SETTINGS
 OPENAI_API_KEY = config('OPENAI_API_KEY')

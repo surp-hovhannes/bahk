@@ -192,3 +192,105 @@ def test_email():
     except Exception as e:
         logger.error(f'Failed to send email: {e}')
         raise e
+
+
+def test_mailgun_api():
+    """
+    Enhanced test function specifically for testing Mailgun API integration.
+    Uses EmailMultiAlternatives to test both text and HTML content.
+    Returns detailed information about the email sending process.
+    """
+    try:
+        from django.core.mail import EmailMultiAlternatives
+        
+        # Create a test email with both HTML and text content
+        subject = 'Mailgun API Test Email'
+        text_content = '''
+        This is a test email sent via Mailgun API through Django Anymail.
+        
+        If you receive this email, your Mailgun API integration is working correctly!
+        
+        Email Backend: {backend}
+        From Email: {from_email}
+        Test Address: {test_address}
+        
+        Best regards,
+        Fast & Pray Team
+        '''.format(
+            backend=settings.EMAIL_BACKEND,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            test_address=settings.EMAIL_TEST_ADDRESS
+        )
+        
+        html_content = '''
+        <html>
+        <body>
+            <h2>Mailgun API Test Email</h2>
+            <p>This is a test email sent via <strong>Mailgun API</strong> through Django Anymail.</p>
+            <p>If you receive this email, your Mailgun API integration is working correctly!</p>
+            
+            <h3>Configuration Details:</h3>
+            <ul>
+                <li><strong>Email Backend:</strong> {backend}</li>
+                <li><strong>From Email:</strong> {from_email}</li>
+                <li><strong>Test Address:</strong> {test_address}</li>
+            </ul>
+            
+            <p>Best regards,<br>
+            <strong>Fast &amp; Pray Team</strong></p>
+        </body>
+        </html>
+        '''.format(
+            backend=settings.EMAIL_BACKEND,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            test_address=settings.EMAIL_TEST_ADDRESS
+        )
+        
+        from_email = f"Fast and Pray <{settings.DEFAULT_FROM_EMAIL}>"
+        
+        # Create the email message
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=from_email,
+            to=[settings.EMAIL_TEST_ADDRESS]
+        )
+        
+        # Add HTML alternative
+        email.attach_alternative(html_content, "text/html")
+        
+        # Send the email and capture any response from Anymail
+        result = email.send()
+        
+        logger.info(f'Mailgun API test email sent successfully to {settings.EMAIL_TEST_ADDRESS}')
+        logger.info(f'Email backend: {settings.EMAIL_BACKEND}')
+        logger.info(f'Send result: {result}')
+        
+        # Try to get Anymail status information if available
+        anymail_status = getattr(email, 'anymail_status', None)
+        if anymail_status:
+            logger.info(f'Anymail status: {anymail_status}')
+            logger.info(f'Message ID: {getattr(anymail_status, "message_id", "N/A")}')
+            logger.info(f'Status: {getattr(anymail_status, "status", "N/A")}')
+        
+        return {
+            'success': True,
+            'message': 'Test email sent successfully via Mailgun API',
+            'backend': settings.EMAIL_BACKEND,
+            'from_email': from_email,
+            'to_email': settings.EMAIL_TEST_ADDRESS,
+            'result': result
+        }
+        
+    except Exception as e:
+        error_msg = f'Failed to send test email via Mailgun API: {str(e)}'
+        logger.error(error_msg)
+        logger.error(f'Email backend: {settings.EMAIL_BACKEND}')
+        logger.error(f'Anymail configuration: {getattr(settings, "ANYMAIL", {})}')
+        
+        return {
+            'success': False,
+            'error': error_msg,
+            'backend': settings.EMAIL_BACKEND,
+            'anymail_config': getattr(settings, 'ANYMAIL', {})
+        }
