@@ -55,7 +55,7 @@ class Command(BaseCommand):
                     style = self.style.SUCCESS
                     icon = "✅"
                 else:
-                    style = self.style.HTTP_INFO
+                    style = self.style.NOTICE
                     icon = "📝"
                     
                 self.stdout.write(style(f"  {icon} {status.title()}: {count}"))

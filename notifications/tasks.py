@@ -192,10 +192,16 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
         
         # Determine final status based on whether we rate limited
         if not rate_limited and (batch_start_index + processed_count) >= total_users:
-            # All intended recipients processed – mark as SENT
-            promo.status = PromoEmail.SENT
-            promo.sent_at = timezone.now()
-            promo.save()
+            # All intended recipients processed
+            if success_count == 0 and failure_count > 0:
+                # All attempts failed (e.g., send errors or skipped users)
+                promo.status = PromoEmail.FAILED
+                promo.save()
+            else:
+                # At least some succeeded - mark as SENT
+                promo.status = PromoEmail.SENT
+                promo.sent_at = timezone.now()
+                promo.save()
             logger.info(
                 "Completed sending promotional email '%s' (ID: %d). Total Success: %d, Total Failed: %d",
                 promo.title,
@@ -212,10 +218,6 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
                 processed_count + batch_start_index,
                 total_users
             )
-        elif failure_count > 0 and success_count == 0 and not rate_limited:
-            # All attempts failed (e.g., send errors or skipped users)
-            promo.status = PromoEmail.FAILED
-            promo.save()
 
         # Log a summary of this batch execution
         logger.info(
