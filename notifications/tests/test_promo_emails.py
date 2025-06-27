@@ -329,29 +329,79 @@ class PromoEmailTaskTests(TestCase):
         self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
         self.assertEqual(self.promo.status, PromoEmail.SENT)
 
-    @override_settings(EMAIL_RATE_LIMIT=2)
+    @override_settings(EMAIL_RATE_LIMIT=2, EMAIL_API_DELAY_SECONDS=0.01)  # Speed up test
     def test_send_promo_email_rate_limited(self):
-        """Tests that sending more promo emails than allowed rate delays excess emails."""
-        self.promo.selected_users.add(self.user1, self.user2, self.user3)
+        """Tests that sending more promo emails than allowed rate properly batches emails."""
+        # Create 4 users to test batching with rate limit of 2
+        user4 = TestDataFactory.create_user(email="user4@example.com")
+        user5 = TestDataFactory.create_user(email="user5@example.com")
+        
+        self.promo.selected_users.add(self.user1, self.user2, self.user3, user4, user5)
         self.promo.save()
 
+        # First call should send 2 emails and leave status as SENDING
         send_promo_email_task(self.promo.id)
 
         self.promo.refresh_from_db()
-        self.assertEqual(len(mail.outbox), 2, "Expected 2 emails due to rate limiting")
-        self.assertEqual(self.promo.status, PromoEmail.SENDING)
+        self.assertEqual(len(mail.outbox), 2, "Expected 2 emails in first batch due to rate limiting")
+        self.assertEqual(self.promo.status, PromoEmail.SENDING, "Status should be SENDING when batching")
+        
+        # Verify rate limit cache was set
+        current_count = cache.get('email_count', 0)
+        self.assertEqual(current_count, 2, "Email count cache should be set to 2")
 
-        # clear mailbox and email count cache to simulate completion of first batch
+        # Clear mailbox to simulate time passing and run next batch
         mail.outbox.clear()
         cache.delete("email_count")
 
-        # send promo to remaining user
-        send_promo_email_task(self.promo.id, remaining_user_ids=[self.user3.id])
+        # Simulate the next batch by calling with remaining users
+        # In real life, this would be scheduled automatically by Celery
+        remaining_users = self.promo.selected_users.all()[2:]  # Skip first 2 users
+        remaining_user_ids = [user.id for user in remaining_users]
+        
+        send_promo_email_task(self.promo.id, remaining_user_ids=remaining_user_ids)
         
         self.promo.refresh_from_db()
-        self.assertEqual(len(mail.outbox), 1, "Expected 1 email in second batch due to rate limiting")
-        self.assertEqual(self.promo.status, PromoEmail.SENT)
+        self.assertEqual(len(mail.outbox), 2, "Expected 2 emails in second batch")
+        self.assertEqual(self.promo.status, PromoEmail.SENDING, "Status should still be SENDING")
 
+        # Final batch - clear and send last user
+        mail.outbox.clear() 
+        cache.delete("email_count")
+        
+        send_promo_email_task(self.promo.id, remaining_user_ids=[user5.id])
+        
+        self.promo.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 1, "Expected 1 email in final batch")
+        self.assertEqual(self.promo.status, PromoEmail.SENT, "Status should be SENT when all batches complete")
+
+    @override_settings(EMAIL_RATE_LIMIT=2, EMAIL_API_DELAY_SECONDS=0.01)
+    def test_send_promo_email_batch_tracking(self):
+        """Tests that batch processing correctly tracks user positions."""
+        # Create a scenario where we can verify user order is maintained
+        users = [self.user1, self.user2, self.user3]
+        expected_first_batch = [self.user1.email, self.user2.email]
+        expected_second_batch = [self.user3.email]
+        
+        self.promo.selected_users.add(*users)
+        self.promo.save()
+
+        # First batch
+        send_promo_email_task(self.promo.id)
+        
+        # Verify first batch emails
+        first_batch_emails = [email.to[0] for email in mail.outbox]
+        self.assertEqual(sorted(first_batch_emails), sorted(expected_first_batch))
+        
+        # Clear and run second batch
+        mail.outbox.clear()
+        cache.delete("email_count")
+        
+        send_promo_email_task(self.promo.id, remaining_user_ids=[self.user3.id])
+        
+        # Verify second batch emails  
+        second_batch_emails = [email.to[0] for email in mail.outbox]
+        self.assertEqual(second_batch_emails, expected_second_batch)
 
     def test_celery_eager_setting_is_true(self):
         # This test is not provided in the original file or the new code block
