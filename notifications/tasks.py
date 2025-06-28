@@ -46,14 +46,13 @@ def increment_email_count():
         cache.incr('email_count')
 
 @shared_task(bind=True, max_retries=3)
-def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_index=0):
+def send_promo_email_task(self, promo_id, batch_start_index=0):
     """
     Send a promotional email to all eligible recipients based on the email's targeting options.
     Implements rate limiting to ensure emails are sent within the configured hourly limit.
     
     Args:
         promo_id: ID of the PromoEmail to send
-        remaining_user_ids: Optional list of user IDs to send to (used when resuming after rate limit)
         batch_start_index: Index to start processing from (for batch continuation)
     """
     try:
@@ -63,22 +62,28 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
         promo.status = PromoEmail.SENDING
         promo.save()
         
-        # Get users to process
-        if remaining_user_ids:
-            users = User.objects.filter(id__in=remaining_user_ids)
-        else:
-            users = get_target_users(promo)
+        # Implement caching for user IDs
+        cache_key = f'promo:{promo_id}:user_ids'
+        user_ids = cache.get(cache_key)
+        if user_ids is None:
+            target_users = get_target_users(promo)
+            if not target_users.exists():
+                logger.warning(f"No eligible recipients found for promotional email ID {promo_id}: {promo.title}")
+                # Set status to FAILED if no recipients are found, as per test requirements.
+                promo.status = PromoEmail.FAILED 
+                promo.save()
+                return
+            user_ids = list(target_users.values_list('id', flat=True))
+            cache.set(cache_key, user_ids, timeout=86400)  # Cache for 24 hours
         
-        if not users.exists(): # Use exists() for efficiency
-            logger.warning(f"No eligible recipients found for promotional email ID {promo_id}: {promo.title}")
-            # Set status to FAILED if no recipients are found, as per test requirements.
-            promo.status = PromoEmail.FAILED 
-            promo.save()
-            return
+        # Get total users count and slice user IDs for this batch
+        total_users = len(user_ids)
         
-        # Convert to list for indexed access and get total count
-        users_list = list(users)
-        total_users = len(users_list)
+        # Get users for the current batch based on batch_start_index
+        current_batch_user_ids = user_ids[batch_start_index:]
+        # Create user lookup to maintain order
+        users_dict = {user.id: user for user in User.objects.filter(id__in=current_batch_user_ids)}
+        users_list = [users_dict[user_id] for user_id in current_batch_user_ids if user_id in users_dict]
         
         # Prepare email content
         from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
@@ -93,7 +98,7 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
         signer = TimestampSigner()
         
         # Process users starting from batch_start_index
-        for i, user in enumerate(users_list[batch_start_index:], start=batch_start_index):
+        for i, user in enumerate(users_list, start=batch_start_index):
             # Ensure user has an email address and is active
             if not user.email or not user.is_active:
                 logger.warning(f"Skipping user {user.id} for promo {promo_id} due to missing email or inactive status.")
@@ -113,16 +118,12 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
                         processed_count + batch_start_index,
                         total_users
                     )
-                    # Get remaining user IDs starting from current position
-                    remaining_user_ids = [u.id for u in users_list[i:]]
-                    if remaining_user_ids and not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+                    # Schedule the next batch with only the batch_start_index
+                    if not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
                         # Schedule the next batch automatically in non-eager mode
                         send_promo_email_task.apply_async(
                             args=[promo_id],
-                            kwargs={
-                                'remaining_user_ids': remaining_user_ids,
-                                'batch_start_index': 0  # Reset start index for remaining users
-                            },
+                            kwargs={'batch_start_index': i},
                             countdown=settings.EMAIL_RATE_LIMIT_WINDOW
                         )
                     # Mark that we paused due to rate limiting
@@ -172,15 +173,12 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
                 if "420" in error_message or "429" in error_message or "rate limit" in error_message.lower():
                     logger.warning(f"Mailgun rate limit hit for user {user.id} ({user.email}): {error_message}")
                     # For rate limit errors, we should pause and reschedule the remaining users
-                    remaining_user_ids = [u.id for u in users_list[i:]]
-                    if remaining_user_ids and not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
-                        logger.info(f"Rescheduling {len(remaining_user_ids)} remaining users due to Mailgun rate limit")
+                    remaining_users_count = len(user_ids) - i
+                    if remaining_users_count > 0 and not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+                        logger.info(f"Rescheduling {remaining_users_count} remaining users due to Mailgun rate limit")
                         send_promo_email_task.apply_async(
                             args=[promo_id],
-                            kwargs={
-                                'remaining_user_ids': remaining_user_ids,
-                                'batch_start_index': 0
-                            },
+                            kwargs={'batch_start_index': i},
                             countdown=7200  # Wait 2 hours before retrying when hitting Mailgun limits
                         )
                     rate_limited = True
@@ -202,6 +200,8 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
                 promo.status = PromoEmail.SENT
                 promo.sent_at = timezone.now()
                 promo.save()
+            # Clean up cache after completion
+            cache.delete(cache_key)
             logger.info(
                 "Completed sending promotional email '%s' (ID: %d). Total Success: %d, Total Failed: %d",
                 promo.title,
@@ -237,6 +237,9 @@ def send_promo_email_task(self, promo_id, remaining_user_ids=None, batch_start_i
         raise
     except Exception as e:
         logger.exception(f"Unhandled error in send_promo_email_task for promo_id {promo_id}: {str(e)}") # Use logger.exception
+        # Clean up cache in exception handlers
+        cache_key = f'promo:{promo_id}:user_ids'
+        cache.delete(cache_key)
         try:
             # Attempt to mark as failed if an unexpected error occurs
             promo = PromoEmail.objects.get(id=promo_id)
