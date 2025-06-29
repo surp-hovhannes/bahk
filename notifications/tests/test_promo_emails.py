@@ -354,12 +354,9 @@ class PromoEmailTaskTests(TestCase):
         mail.outbox.clear()
         cache.delete("email_count")
 
-        # Simulate the next batch by calling with remaining users
+        # Simulate the next batch by calling with batch_start_index
         # In real life, this would be scheduled automatically by Celery
-        remaining_users = self.promo.selected_users.all()[2:]  # Skip first 2 users
-        remaining_user_ids = [user.id for user in remaining_users]
-        
-        send_promo_email_task(self.promo.id, remaining_user_ids=remaining_user_ids)
+        send_promo_email_task(self.promo.id, batch_start_index=2)
         
         self.promo.refresh_from_db()
         self.assertEqual(len(mail.outbox), 2, "Expected 2 emails in second batch")
@@ -369,7 +366,7 @@ class PromoEmailTaskTests(TestCase):
         mail.outbox.clear() 
         cache.delete("email_count")
         
-        send_promo_email_task(self.promo.id, remaining_user_ids=[user5.id])
+        send_promo_email_task(self.promo.id, batch_start_index=4)
         
         self.promo.refresh_from_db()
         self.assertEqual(len(mail.outbox), 1, "Expected 1 email in final batch")
@@ -397,7 +394,7 @@ class PromoEmailTaskTests(TestCase):
         mail.outbox.clear()
         cache.delete("email_count")
         
-        send_promo_email_task(self.promo.id, remaining_user_ids=[self.user3.id])
+        send_promo_email_task(self.promo.id, batch_start_index=2)
         
         # Verify second batch emails  
         second_batch_emails = [email.to[0] for email in mail.outbox]
