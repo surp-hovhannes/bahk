@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# Copy configuration files if they exist in the repository
+if [ -f "redis.conf" ]; then
+    sudo cp redis.conf /etc/redis/redis.conf
+    sudo chown vscode:vscode /etc/redis/redis.conf
+fi
+
+# Install Python dependencies if requirements.txt exists
+if [ -f "requirements.txt" ]; then
+    pip install --no-cache-dir -r requirements.txt
+fi
+
 # Start Redis server
 redis-server /etc/redis/redis.conf &
 
