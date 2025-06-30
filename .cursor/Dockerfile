@@ -42,7 +42,7 @@ COPY redis.conf /etc/redis/redis.conf
 RUN chown vscode:vscode /etc/redis/redis.conf
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY ../requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     && rm -rf /root/.cache/pip/*
 
