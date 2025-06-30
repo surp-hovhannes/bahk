@@ -195,6 +195,12 @@ class Profile(models.Model):
     # Store geocoded coordinates for performance
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    # User's timezone in IANA format (e.g., 'America/New_York')
+    timezone = models.CharField(
+        max_length=100, 
+        default='UTC', 
+        help_text="User's timezone in IANA format (e.g., 'America/New_York')"
+    )
     profile_image = models.ImageField(
         upload_to="profile_images/originals/", null=True, blank=True
     )
@@ -218,7 +224,7 @@ class Profile(models.Model):
     )
 
     # Track changes to the profile_image field
-    tracker = FieldTracker(fields=["profile_image", "location"])
+    tracker = FieldTracker(fields=["profile_image", "location", "timezone"])
 
     def geocode_location(self):
         """
