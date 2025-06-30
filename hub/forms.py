@@ -106,11 +106,12 @@ class JoinFastsForm(forms.Form):
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Profile
-        fields = ['church', 'profile_image','location', 'receive_upcoming_fast_reminders']
+        fields = ['church', 'profile_image','location', 'timezone', 'receive_upcoming_fast_reminders']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['church'].widget.attrs.update({'class': 'form-control'})
+        self.fields['timezone'].widget.attrs.update({'class': 'form-control'})
 
 
 class FastForm(forms.ModelForm):
