@@ -50,6 +50,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
 RUN chown -R vscode:vscode /home/vscode
 
 # Create startup script and set permissions
+RUN ls -la .cursor/
+RUN ls -la ./
 COPY .cursor/start.sh /home/vscode/start.sh
 RUN ls -la .cursor/
 RUN ls -la /home/vscode/
