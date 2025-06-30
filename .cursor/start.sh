@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Copy configuration files if they exist in the repository
-if [ -f "redis.conf" ]; then
-    sudo cp redis.conf /etc/redis/redis.conf
+if [ -f ".cursor/redis.conf" ]; then
+    sudo cp .cursor/redis.conf /etc/redis/redis.conf
     sudo chown vscode:vscode /etc/redis/redis.conf
 fi
 
