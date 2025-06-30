@@ -3,5 +3,6 @@
     "context": ".",
     "dockerfile": "Dockerfile"
   },
-  "install": "bash ./.cursor/start.sh"
+  "install": "bash ./.cursor/start.sh",
+  "run": "python manage.py runserver"
 }

@@ -25,6 +25,3 @@ echo "Redis is ready!"
 # Run Django commands
 python manage.py migrate
 python manage.py seed
-
-# Start Django server
-python manage.py runserver 0.0.0.0:8000 
