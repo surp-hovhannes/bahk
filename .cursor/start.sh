@@ -12,7 +12,7 @@ if [ -f "requirements.txt" ]; then
 fi
 
 # Start Redis server
-redis-server /etc/redis/redis.conf &
+sudo redis-server /etc/redis/redis.conf &
 
 # Wait for Redis to be ready
 until redis-cli ping; do
