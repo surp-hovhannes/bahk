@@ -3,5 +3,5 @@
     "context": ".",
     "dockerfile": "Dockerfile"
   },
-  "install": "bash ./start.sh"
+  "start": "bash ./start.sh"
 }
