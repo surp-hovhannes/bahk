@@ -51,6 +51,8 @@ RUN chown -R vscode:vscode /home/vscode
 
 # Create startup script and set permissions
 COPY .cursor/start.sh /home/vscode/start.sh
+RUN ls -la .cursor/
+RUN ls -la /home/vscode/
 RUN chmod +x /home/vscode/start.sh
 
 # Switch to non-root user
