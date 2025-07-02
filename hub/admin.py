@@ -16,6 +16,7 @@ from hub.models import (
     Church,
     Day,
     Devotional,
+    DevotionalSet,
     Fast,
     LLMPrompt,
     Profile,
@@ -91,6 +92,54 @@ class DevotionalAdmin(admin.ModelAdmin):
         return obj.day.date if obj.day else ""
 
     date.admin_order_field = "day__date"
+
+
+@admin.register(DevotionalSet, site=admin.site)
+class DevotionalSetAdmin(admin.ModelAdmin):
+    list_display = ('title', 'fast', 'number_of_days', 'image_preview', 'created_at')
+    search_fields = ('title', 'description', 'fast__name')
+    list_filter = ('fast', 'created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at', 'image_preview', 'number_of_days')
+    raw_id_fields = ('fast',)
+    fieldsets = (
+        (None, {
+            'fields': ('title', 'description', 'fast')
+        }),
+        ('Media', {
+            'fields': ('image', 'image_preview')
+        }),
+        ('Statistics', {
+            'fields': ('number_of_days',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def image_preview(self, obj):
+        if obj.image:
+            try:
+                # Try to get cached URL first
+                if obj.cached_thumbnail_url:
+                    return format_html(
+                        '<img src="{}" style="max-height: 50px;"/>',
+                        obj.cached_thumbnail_url
+                    )
+                # Fall back to direct thumbnail URL
+                return format_html(
+                    '<img src="{}" style="max-height: 50px;"/>',
+                    obj.thumbnail.url
+                )
+            except:
+                return "Thumbnail error"
+        return "No image"
+    image_preview.short_description = 'Image Preview'
+
+    def number_of_days(self, obj):
+        return obj.number_of_days
+    number_of_days.short_description = 'Number of Days'
 
 
 @admin.register(Fast, site=admin.site)
