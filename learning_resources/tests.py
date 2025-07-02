@@ -11,6 +11,7 @@ import json
 from hub.models import Church, Fast, DevotionalSet, Day, Devotional
 from learning_resources.models import Video
 from learning_resources.serializers import DevotionalSetSerializer
+from tests.fixtures.test_data import TestDataFactory
 
 
 class DevotionalSetModelTest(TestCase):
@@ -234,16 +235,24 @@ class DevotionalSetAdminTest(TestCase):
     """Test cases for DevotionalSet admin interface"""
     
     def setUp(self):
-        self.admin_user = User.objects.create_superuser(
-            username='admin',
+        # Create admin user using TestDataFactory for EmailBackend compatibility
+        self.admin_user = TestDataFactory.create_user(
+            username='admin@test.com',
             email='admin@test.com',
             password='password'
         )
-        self.client = Client()
-        self.client.login(username='admin', password='password')
+        # Make admin user superuser
+        self.admin_user.is_superuser = True
+        self.admin_user.is_staff = True
+        self.admin_user.save()
         
-        self.church = Church.objects.create(name="Test Church")
-        self.fast = Fast.objects.create(
+        self.client = Client()
+        # Login using email as username (EmailBackend expects this)
+        login_successful = self.client.login(username='admin@test.com', password='password')
+        self.assertTrue(login_successful, "Login failed")
+        
+        self.church = TestDataFactory.create_church(name="Test Church")
+        self.fast = TestDataFactory.create_fast(
             name="Test Fast",
             church=self.church,
             description="A test fast"
@@ -271,6 +280,7 @@ class DevotionalSetAdminTest(TestCase):
             'title': 'New Devotional Set',
             'description': 'A new set created via admin',
             'fast': self.fast.id,
+            '_save': 'Save',  # Required for admin form submission
         }
         
         response = self.client.post(url, data)
@@ -285,13 +295,18 @@ class DevotionalSetAdminTest(TestCase):
         
         # Check that the object was created
         self.assertTrue(
-            DevotionalSet.objects.filter(title='New Devotional Set').exists()
+            DevotionalSet.objects.filter(
+                title='New Devotional Set',
+                description='A new set created via admin',
+                fast=self.fast
+            ).exists()
         )
         
     def test_devotional_set_admin_edit(self):
         """Test editing DevotionalSet through admin"""
         devotional_set = DevotionalSet.objects.create(
             title="Original Title",
+            description="Original description",
             fast=self.fast
         )
         
@@ -301,6 +316,7 @@ class DevotionalSetAdminTest(TestCase):
             'title': 'Updated Title',
             'description': 'Updated description',
             'fast': self.fast.id,
+            '_save': 'Save',  # Required for admin form submission
         }
         
         response = self.client.post(url, data)
