@@ -19,7 +19,6 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
 import hub.views as views
-from learning_resources.views import ArticleListView, RecipeListView, VideoListView
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -50,12 +49,8 @@ urlpatterns += [
     path("api/learning-resources/", include("learning_resources.urls")),
 ]
 
-# Learning resources endpoints
-urlpatterns += [
-    path("api/learning-resources/videos/", VideoListView.as_view(), name="learning-resources-list"),
-    path("api/learning-resources/articles/", ArticleListView.as_view(), name="learning-resources-list"),
-    path("api/learning-resources/recipes/", RecipeListView.as_view(), name="learning-resources-list"),
-]
+# Learning resources endpoints are handled by the include above
+# Individual endpoints are defined in learning_resources/urls.py
 
 # S3FileField URLs
 urlpatterns += [

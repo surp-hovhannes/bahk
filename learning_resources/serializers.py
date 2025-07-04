@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from hub.mixins import ThumbnailCacheMixin
 from .models import Article, Recipe, Video
+from hub.models import DevotionalSet
 
 
 class VideoSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
@@ -63,3 +64,32 @@ class RecipeSerializer(ArticleSerializer):
             'time_required', 'serves', 'ingredients', 'directions',
         ]
         read_only_fields = ['created_at', 'updated_at']
+
+
+class DevotionalSetSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
+    fast_name = serializers.CharField(source='fast.name', read_only=True)
+    thumbnail_url = serializers.SerializerMethodField()
+    number_of_days = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = DevotionalSet
+        fields = [
+            'id', 'title', 'description', 'fast', 'fast_name',
+            'image', 'thumbnail_url', 'number_of_days',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_thumbnail_url(self, obj):
+        if obj.image:
+            # Try to get/update cached URL
+            cached_url = self.update_thumbnail_cache(obj, 'image', 'thumbnail')
+            if cached_url:
+                return cached_url
+            
+            # Fall back to direct thumbnail URL if caching fails
+            try:
+                return obj.thumbnail.url
+            except (AttributeError, ValueError, OSError):
+                return None
+        return None

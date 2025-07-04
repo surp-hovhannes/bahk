@@ -3,7 +3,8 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from django.db.models import Q
 from .models import Video, Article, Recipe
-from .serializers import VideoSerializer, ArticleSerializer, RecipeSerializer
+from .serializers import VideoSerializer, ArticleSerializer, RecipeSerializer, DevotionalSetSerializer
+from hub.models import DevotionalSet
 
 
 class VideoListView(generics.ListAPIView):
@@ -169,3 +170,101 @@ class RecipeListView(generics.ListAPIView):
                 Q(ingredients__icontains=search)
             )
         return queryset.order_by('-created_at')
+
+
+class DevotionalSetListView(generics.ListAPIView):
+    """
+    API endpoint that allows devotional sets to be viewed.
+
+    Permissions:
+        - GET: Any user can view devotional sets
+        - POST/PUT/PATCH/DELETE: Not supported
+
+    Query Parameters:
+        - search (str): Optional. Filter devotional sets by matching text in title or description.
+                       Case-insensitive partial matches are supported.
+        - fast (int): Optional. Filter devotional sets by fast ID.
+
+    Returns:
+        A JSON response with the following structure:
+        {
+            "count": 123,
+            "next": "http://api.example.org/devotional-sets/?page=4",
+            "previous": "http://api.example.org/devotional-sets/?page=2",
+            "results": [
+                {
+                    "id": 1,
+                    "title": "Devotional Set Title",
+                    "description": "Description of devotional set",
+                    "fast": 1,
+                    "fast_name": "Lenten Fast",
+                    "image": "/media/devotional_sets/image.jpg",
+                    "thumbnail_url": "/media/CACHE/images/devotional_sets/image/123.jpg",
+                    "number_of_days": 40,
+                    "created_at": "2024-03-14T12:00:00Z",
+                    "updated_at": "2024-03-14T12:00:00Z"
+                },
+                ...
+            ]
+        }
+
+    Example Requests:
+        GET /api/learning-resources/devotional-sets/
+        GET /api/learning-resources/devotional-sets/?search=lent
+        GET /api/learning-resources/devotional-sets/?fast=1
+    """
+    serializer_class = DevotionalSetSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        queryset = DevotionalSet.objects.select_related('fast').all()
+        search = self.request.query_params.get('search', None)
+        fast_id = self.request.query_params.get('fast', None)
+        
+        # Filter by fast if provided
+        if fast_id is not None:
+            try:
+                queryset = queryset.filter(fast_id=int(fast_id))
+            except ValueError:
+                # Invalid fast_id, return empty queryset
+                return DevotionalSet.objects.none()
+        
+        # Apply search filter if provided
+        if search is not None:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(description__icontains=search) |
+                Q(fast__name__icontains=search)
+            )
+        return queryset.order_by('-created_at')
+
+
+class DevotionalSetDetailView(generics.RetrieveAPIView):
+    """
+    API endpoint that allows a single devotional set to be viewed.
+
+    Permissions:
+        - GET: Any user can view devotional set details
+        - POST/PUT/PATCH/DELETE: Not supported
+
+    Returns:
+        A JSON response with the devotional set details:
+        {
+            "id": 1,
+            "title": "Devotional Set Title",
+            "description": "Description of devotional set",
+            "fast": 1,
+            "fast_name": "Lenten Fast",
+            "image": "/media/devotional_sets/image.jpg",
+            "thumbnail_url": "/media/CACHE/images/devotional_sets/image/123.jpg",
+            "number_of_days": 40,
+            "created_at": "2024-03-14T12:00:00Z",
+            "updated_at": "2024-03-14T12:00:00Z"
+        }
+
+    Example Requests:
+        GET /api/learning-resources/devotional-sets/1/
+    """
+    serializer_class = DevotionalSetSerializer
+    permission_classes = [AllowAny]
+    queryset = DevotionalSet.objects.select_related('fast').all()
