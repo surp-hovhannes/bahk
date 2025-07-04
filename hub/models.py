@@ -368,8 +368,8 @@ class DevotionalSet(models.Model):
     # Cache the thumbnail URL to avoid S3 calls
     cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
     cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
     # Track changes to the image field
     tracker = FieldTracker(fields=["image"])
@@ -432,9 +432,12 @@ class DevotionalSet(models.Model):
     @property
     def number_of_days(self):
         """Get number of devotionals associated with this set's fast."""
-        if self.fast:
-            return Devotional.objects.filter(day__fast=self.fast).count()
-        return 0
+        if not hasattr(self, '_number_of_days_cache'):
+            if self.fast:
+                self._number_of_days_cache = Devotional.objects.filter(day__fast=self.fast).count()
+            else:
+                self._number_of_days_cache = 0
+        return self._number_of_days_cache
 
     def __str__(self):
         return f"{self.title} ({self.number_of_days} days)"

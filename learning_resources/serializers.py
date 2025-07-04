@@ -90,6 +90,6 @@ class DevotionalSetSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.thumbnail.url
-            except:
+            except (AttributeError, ValueError, OSError):
                 return None
         return None

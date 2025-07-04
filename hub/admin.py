@@ -10,6 +10,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import Truncator
 from django.contrib import messages
+import logging
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
 from hub.models import (
@@ -124,17 +125,19 @@ class DevotionalSetAdmin(admin.ModelAdmin):
                 # Try to get cached URL first
                 if obj.cached_thumbnail_url:
                     return format_html(
-                        '<img src="{}" style="max-height: 50px;"/>',
+                        '<img src="{}" style="max-height: 50px; max-width: 100px;"/>',
                         obj.cached_thumbnail_url
                     )
                 # Fall back to direct thumbnail URL
                 return format_html(
-                    '<img src="{}" style="max-height: 50px;"/>',
+                    '<img src="{}" style="max-height: 50px; max-width: 100px;"/>',
                     obj.thumbnail.url
                 )
-            except:
+            except (AttributeError, ValueError, OSError) as e:
+                logging.error(f"Thumbnail error for DevotionalSet {obj.id}: {e}")
                 return "Thumbnail error"
         return "No image"
+
     image_preview.short_description = 'Image Preview'
 
     def number_of_days(self, obj):
