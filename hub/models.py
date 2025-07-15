@@ -437,14 +437,28 @@ class DevotionalSet(models.Model):
                     update_fields=["cached_thumbnail_url", "cached_thumbnail_updated"]
                 )
 
+    # Class-level cache invalidation counter
+    _cache_version = 0
+
+    @classmethod
+    def invalidate_all_number_of_days_cache(cls):
+        """Invalidate the cached number of days count for all instances."""
+        cls._cache_version += 1
+
     def invalidate_number_of_days_cache(self):
-        """Invalidate the cached number of days count."""
+        """Invalidate the cached number of days count for this instance."""
         if hasattr(self, '_number_of_days_cache'):
             delattr(self, '_number_of_days_cache')
 
     @property
     def number_of_days(self):
         """Get number of devotionals associated with this set's fast."""
+        # Check if we need to invalidate cache based on class version
+        if not hasattr(self, '_cache_version') or self._cache_version != DevotionalSet._cache_version:
+            if hasattr(self, '_number_of_days_cache'):
+                delattr(self, '_number_of_days_cache')
+            self._cache_version = DevotionalSet._cache_version
+        
         if not hasattr(self, '_number_of_days_cache'):
             if self.fast:
                 self._number_of_days_cache = Devotional.objects.filter(day__fast=self.fast).count()
@@ -498,10 +512,8 @@ def invalidate_devotional_set_cache(sender, instance, **kwargs):
     the fast when a devotional is created, updated, or deleted.
     """
     if instance.day and instance.day.fast:
-        # Get all DevotionalSets for this fast and invalidate their cache
-        devotional_sets = DevotionalSet.objects.filter(fast=instance.day.fast)
-        for devotional_set in devotional_sets:
-            devotional_set.invalidate_number_of_days_cache()
+        # Invalidate cache for all DevotionalSet instances (both in memory and future fetches)
+        DevotionalSet.invalidate_all_number_of_days_cache()
 
 class Reading(models.Model):
     """Stores details for a Bible reading."""
