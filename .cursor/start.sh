@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Exit on any error
+set -e
+
 # Copy configuration files if they exist in the repository
 if [ -f ".cursor/redis.conf" ]; then
     sudo cp .cursor/redis.conf /etc/redis/redis.conf
@@ -25,3 +28,6 @@ echo "Redis is ready!"
 # Run Django commands
 python manage.py migrate
 python manage.py seed
+
+echo "Setup completed successfully!"
+exit 0
