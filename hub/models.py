@@ -7,10 +7,12 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import constraints
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit, Transpose
-from model_utils import FieldTracker
+from model_utils.tracker import FieldTracker
 
 import bahk.settings as settings
 from hub.constants import (
@@ -435,6 +437,11 @@ class DevotionalSet(models.Model):
                     update_fields=["cached_thumbnail_url", "cached_thumbnail_updated"]
                 )
 
+    def invalidate_number_of_days_cache(self):
+        """Invalidate the cached number of days count."""
+        if hasattr(self, '_number_of_days_cache'):
+            delattr(self, '_number_of_days_cache')
+
     @property
     def number_of_days(self):
         """Get number of devotionals associated with this set's fast."""
@@ -482,6 +489,19 @@ class Devotional(models.Model):
         ordering = ["day__date", "order"]
         unique_together = [["day", "order"]]
 
+
+# Signal handlers to invalidate DevotionalSet cache when devotionals change
+@receiver([post_save, post_delete], sender=Devotional)
+def invalidate_devotional_set_cache(sender, instance, **kwargs):
+    """
+    Invalidate the number_of_days cache for all DevotionalSets associated with 
+    the fast when a devotional is created, updated, or deleted.
+    """
+    if instance.day and instance.day.fast:
+        # Get all DevotionalSets for this fast and invalidate their cache
+        devotional_sets = DevotionalSet.objects.filter(fast=instance.day.fast)
+        for devotional_set in devotional_sets:
+            devotional_set.invalidate_number_of_days_cache()
 
 class Reading(models.Model):
     """Stores details for a Bible reading."""
