@@ -16,11 +16,12 @@ fi
 
 # Start Redis server
 sudo redis-server /etc/redis/redis.conf &
+REDIS_PID=$!
 
-# Wait for Redis to be ready
-until redis-cli ping; do
-    echo "Waiting for Redis to start..."
-    sleep 1
+# 2️⃣  wait until it’s accepting connections
+until redis-cli ping >/dev/null 2>&1 ; do
+  echo "Waiting for Redis…"
+  sleep 1
 done
 
 echo "Redis is ready!"
