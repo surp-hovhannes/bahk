@@ -3,9 +3,15 @@ from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
 from django.utils import timezone
 import logging
-from s3_file_field import S3FileField
+from s3_file_field.fields import S3FileField
 
 from learning_resources.constants import DAYS_TO_CACHE_THUMBNAIL
+from learning_resources.utils import (
+    video_upload_path,
+    video_thumbnail_upload_path,
+    article_image_upload_path,
+    recipe_image_upload_path,
+)
 
 class Video(models.Model):
     CATEGORY_CHOICES = [
@@ -25,13 +31,13 @@ class Video(models.Model):
         db_index=True
     )
     thumbnail = models.ImageField(
-        upload_to='videos/thumbnails/',
+        upload_to=video_thumbnail_upload_path,
         help_text='Recommended size: 720x1280 pixels (portrait)',
         null=True,
         blank=True
     )
     video = S3FileField(
-        upload_to='videos/',
+        upload_to=video_upload_path,
         help_text='Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 20MB.'
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -108,7 +114,7 @@ class Article(models.Model):
         help_text='Content in Markdown format'
     )
     image = models.ImageField(
-        upload_to='articles/images/',
+        upload_to=article_image_upload_path,
         help_text='Main article image. Recommended size: 1600x1200 pixels (4:3)'
     )
     thumbnail = ImageSpecField(
@@ -193,7 +199,7 @@ class Recipe(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(null=True, blank=True)
     image = models.ImageField(
-        upload_to='recipes/images/',
+        upload_to=recipe_image_upload_path,
         help_text='Main recipe image. Recommended size: 1600x1200 pixels (4:3)'
     )
     thumbnail = ImageSpecField(

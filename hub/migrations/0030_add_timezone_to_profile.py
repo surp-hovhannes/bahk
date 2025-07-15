@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0028_llmprompt_remove_reading_context_and_more'),
+        ('hub', '0029_update_devotional_set_model'),
     ]
 
     operations = [
