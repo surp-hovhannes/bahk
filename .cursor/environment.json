@@ -4,5 +4,10 @@
     "dockerfile": "Dockerfile"
   },
   "install": "bash ./.cursor/start.sh",
-  "run": "python manage.py runserver"
+  "terminals": [
+    {
+      "name": "Django Server",
+      "command": "python manage.py runserver"
+    }
+  ]
 }
