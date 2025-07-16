@@ -21,4 +21,7 @@ def article_image_upload_path(instance, filename):
     return f"articles/images/{generate_unique_filename(instance, filename)}"
 
 def recipe_image_upload_path(instance, filename):
-    return f"recipes/images/{generate_unique_filename(instance, filename)}" 
+    return f"recipes/images/{generate_unique_filename(instance, filename)}"
+
+def devotional_set_image_upload_path(instance, filename):
+    return f"devotional_sets/{generate_unique_filename(instance, filename)}" 

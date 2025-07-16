@@ -21,6 +21,7 @@ from hub.constants import (
     DAYS_TO_CACHE_THUMBNAIL,
 )
 from learning_resources.models import Video
+from learning_resources.utils import devotional_set_image_upload_path
 
 
 class Church(models.Model):
@@ -362,7 +363,7 @@ class DevotionalSet(models.Model):
         help_text="The fast this devotional set is associated with"
     )
     image = models.ImageField(
-        upload_to="devotional_sets/", 
+        upload_to=devotional_set_image_upload_path, 
         null=True, 
         blank=True,
         help_text="Image for the devotional set. Recommended size: 1600x1200 pixels (4:3)"
