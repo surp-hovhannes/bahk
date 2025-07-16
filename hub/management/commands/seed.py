@@ -145,7 +145,7 @@ class Command(BaseCommand):
         recipes = self._create_recipes()
 
         # Create Devotional Sets and Devotionals
-        devotional_sets = self._create_devotional_sets_and_devotionals(all_days, videos)
+        devotional_sets = self._create_devotional_sets_and_devotionals(all_days, videos, fasts)
 
         # Create Readings and Reading Contexts
         readings = self._create_readings(all_days)
@@ -253,24 +253,30 @@ class Command(BaseCommand):
         ]
         return recipes
 
-    def _create_devotional_sets_and_devotionals(self, days, videos):
+    def _create_devotional_sets_and_devotionals(self, days, videos, fasts):
         """Create devotional sets and individual devotionals."""
         devotional_sets = [
-            models.DevotionalSet.objects.create(title="Lenten Journey"),
-            models.DevotionalSet.objects.create(title="Advent Reflections"),
+            models.DevotionalSet.objects.create(
+                title="Lenten Journey",
+                description="A 40-day journey through Lent with daily reflections",
+                fast=fasts[0]  # Lenten Fast
+            ),
+            models.DevotionalSet.objects.create(
+                title="Advent Reflections",
+                description="Daily reflections for the Advent season",
+                fast=fasts[1]  # Fast of the Catechumens
+            ),
         ]
 
         # Create devotionals for some days
         for i, day in enumerate(days[:6]):  # Create devotionals for first 6 days
             video = videos[i % len(videos)]
-            devotional_set = devotional_sets[i // 3] if i < 6 else None
             
             models.Devotional.objects.create(
                 day=day,
                 description=f"Daily reflection for {day.date.strftime('%B %d')}",
                 video=video,
-                devotional_set=devotional_set,
-                order=(i % 3) + 1 if devotional_set else None,
+                order=(i % 3) + 1,
             )
 
         return devotional_sets

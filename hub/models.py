@@ -7,10 +7,12 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import constraints
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit, Transpose
-from model_utils import FieldTracker
+from model_utils.tracker import FieldTracker
 
 import bahk.settings as settings
 from hub.constants import (
@@ -19,6 +21,7 @@ from hub.constants import (
     DAYS_TO_CACHE_THUMBNAIL,
 )
 from learning_resources.models import Video
+from learning_resources.utils import devotional_set_image_upload_path
 
 
 class Church(models.Model):
@@ -345,16 +348,130 @@ class Day(models.Model):
 
 
 class DevotionalSet(models.Model):
-    """Model for an ordered collection of devotionals."""
+    """Model for an ordered collection of devotionals based on a fast."""
 
     title = models.CharField(max_length=128)
+    description = models.TextField(
+        null=True, 
+        blank=True,
+        help_text="Description of the devotional set"
+    )
+    fast = models.ForeignKey(
+        Fast,
+        on_delete=models.CASCADE,
+        related_name="devotional_sets",
+        help_text="The fast this devotional set is associated with"
+    )
+    image = models.ImageField(
+        upload_to=devotional_set_image_upload_path, 
+        null=True, 
+        blank=True,
+        help_text="Image for the devotional set. Recommended size: 1600x1200 pixels (4:3)"
+    )
+    thumbnail = ImageSpecField(
+        source="image",
+        processors=[ResizeToFill(400, 300)],  # 4:3 aspect ratio
+        format="JPEG",
+        options={"quality": 85}
+    )
+    # Cache the thumbnail URL to avoid S3 calls
+    cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
+    cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+
+    # Track changes to the image field
+    tracker = FieldTracker(fields=["image"])
+
+    def save(self, **kwargs):
+        # First check if this is a new instance or if the image field has changed
+        is_new_image = (
+            self._state.adding
+            or "image" in kwargs.get("update_fields", [])
+            or (not self._state.adding and self.tracker.has_changed("image"))
+        )
+        
+        super().save(**kwargs)
+
+        # Handle thumbnail URL caching after the instance and image are fully saved to S3
+        if self.image:
+            # Update cache if:
+            # 1. No cached URL exists
+            # 2. Image was changed/uploaded
+            # 3. Cache is older than 7 days
+            should_update_cache = (
+                not self.cached_thumbnail_url
+                or is_new_image
+                or (
+                    self.cached_thumbnail_updated
+                    and (timezone.now() - self.cached_thumbnail_updated).days
+                    >= DAYS_TO_CACHE_THUMBNAIL
+                )
+            )
+
+            if should_update_cache:
+                try:
+                    # Force generation of the thumbnail and wait for S3 upload
+                    thumbnail = self.thumbnail.generate()
+
+                    # Get the S3 URL after the file has been uploaded
+                    self.cached_thumbnail_url = self.thumbnail.url
+                    self.cached_thumbnail_updated = timezone.now()
+
+                    # Save again to update the cache fields only
+                    super().save(
+                        update_fields=[
+                            "cached_thumbnail_url",
+                            "cached_thumbnail_updated",
+                        ]
+                    )
+                except Exception as e:
+                    logging.error(
+                        f"Error caching S3 thumbnail URL for DevotionalSet {self.id}: {e}"
+                    )
+        else:
+            # Clear cached URL if image is removed
+            if self.cached_thumbnail_url or self.cached_thumbnail_updated:
+                self.cached_thumbnail_url = None
+                self.cached_thumbnail_updated = None
+                super().save(
+                    update_fields=["cached_thumbnail_url", "cached_thumbnail_updated"]
+                )
+
+    # Class-level cache invalidation counter
+    _cache_version = 0
+
+    @classmethod
+    def invalidate_all_number_of_days_cache(cls):
+        """Invalidate the cached number of days count for all instances."""
+        cls._cache_version += 1
+
+    def invalidate_number_of_days_cache(self):
+        """Invalidate the cached number of days count for this instance."""
+        if hasattr(self, '_number_of_days_cache'):
+            delattr(self, '_number_of_days_cache')
 
     @property
     def number_of_days(self):
-        return self.devotionals.count()
+        """Get number of devotionals associated with this set's fast."""
+        # Check if we need to invalidate cache based on class version
+        if not hasattr(self, '_cache_version') or self._cache_version != DevotionalSet._cache_version:
+            if hasattr(self, '_number_of_days_cache'):
+                delattr(self, '_number_of_days_cache')
+            self._cache_version = DevotionalSet._cache_version
+        
+        if not hasattr(self, '_number_of_days_cache'):
+            if self.fast:
+                self._number_of_days_cache = Devotional.objects.filter(day__fast=self.fast).count()
+            else:
+                self._number_of_days_cache = 0
+        return self._number_of_days_cache
 
     def __str__(self):
         return f"{self.title} ({self.number_of_days} days)"
+    
+    class Meta:
+        ordering = ['-created_at']
 
 
 class Devotional(models.Model):
@@ -370,16 +487,8 @@ class Devotional(models.Model):
     video = models.ForeignKey(
         Video, on_delete=models.CASCADE, related_name="devotionals"
     )
-    devotional_set = models.ForeignKey(
-        DevotionalSet,
-        help_text="Set that this devotional belongs to. If none, it is a standalone devotional.",
-        on_delete=models.CASCADE,
-        related_name="devotionals",
-        null=True,
-        blank=True,
-    )
     order = models.PositiveIntegerField(
-        help_text="If part of a set, the order of the devotional in the set",
+        help_text="Order of the devotional within the fast",
         null=True,
         blank=True,
     )
@@ -392,9 +501,20 @@ class Devotional(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
-        ordering = ["order"]
-        unique_together = [["devotional_set", "order"]]
+        ordering = ["day__date", "order"]
+        unique_together = [["day", "order"]]
 
+
+# Signal handlers to invalidate DevotionalSet cache when devotionals change
+@receiver([post_save, post_delete], sender=Devotional)
+def invalidate_devotional_set_cache(sender, instance, **kwargs):
+    """
+    Invalidate the number_of_days cache for all DevotionalSets associated with 
+    the fast when a devotional is created, updated, or deleted.
+    """
+    if instance.day and instance.day.fast:
+        # Invalidate cache for all DevotionalSet instances (both in memory and future fetches)
+        DevotionalSet.invalidate_all_number_of_days_cache()
 
 class Reading(models.Model):
     """Stores details for a Bible reading."""
