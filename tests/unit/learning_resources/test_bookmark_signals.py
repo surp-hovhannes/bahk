@@ -224,6 +224,9 @@ class BookmarkDataIntegrityTests(BaseTestCase):
     
     def test_orphaned_bookmark_detection(self):
         """Test that orphaned bookmarks can be detected."""
+        from django.db.models.signals import post_delete
+        from learning_resources.signals import video_deleted_signal
+        
         # Create a bookmark
         bookmark = Bookmark.objects.create(
             user=self.user,
@@ -231,18 +234,27 @@ class BookmarkDataIntegrityTests(BaseTestCase):
             object_id=self.video.id
         )
         
-        # Manually delete the video without triggering signals
-        Video.objects.filter(id=self.video.id).delete()
+        bookmark_id = bookmark.id
         
-        # Refresh bookmark from database
-        bookmark.refresh_from_db()
+        # Temporarily disconnect the signal to create an orphaned bookmark
+        post_delete.disconnect(video_deleted_signal, sender=Video)
         
-        # content_object should now be None (orphaned)
-        self.assertIsNone(bookmark.content_object)
-        
-        # get_content_representation should handle this gracefully
-        representation = bookmark.get_content_representation()
-        self.assertIsNone(representation)
+        try:
+            # Delete the video without triggering bookmark cleanup
+            self.video.delete()
+            
+            # Get bookmark from database
+            bookmark = Bookmark.objects.get(id=bookmark_id)
+            
+            # content_object should now be None (orphaned)
+            self.assertIsNone(bookmark.content_object)
+            
+            # get_content_representation should handle this gracefully
+            representation = bookmark.get_content_representation()
+            self.assertIsNone(representation)
+        finally:
+            # Reconnect the signal
+            post_delete.connect(video_deleted_signal, sender=Video)
     
     def test_bookmark_model_handles_missing_content(self):
         """Test that bookmark model methods handle missing content gracefully."""

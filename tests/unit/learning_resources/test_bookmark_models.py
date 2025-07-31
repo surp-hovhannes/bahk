@@ -175,21 +175,32 @@ class BookmarkModelTests(BaseTestCase):
     
     def test_get_content_representation_nonexistent_object(self):
         """Test get_content_representation when content object is deleted."""
+        from django.test.utils import override_settings
+        from django.db.models.signals import post_delete
+        from learning_resources.signals import video_deleted_signal
+        
         bookmark = Bookmark.objects.create(
             user=self.user,
             content_type=ContentType.objects.get_for_model(Video),
             object_id=self.video.id
         )
         
-        # Delete the video
-        self.video.delete()
+        # Temporarily disconnect the signal to create an orphaned bookmark
+        post_delete.disconnect(video_deleted_signal, sender=Video)
         
-        # Refresh bookmark from database
-        bookmark.refresh_from_db()
-        
-        # Should return None for deleted object
-        representation = bookmark.get_content_representation()
-        self.assertIsNone(representation)
+        try:
+            # Delete the video without triggering bookmark cleanup
+            self.video.delete()
+            
+            # Refresh bookmark from database
+            bookmark.refresh_from_db()
+            
+            # Should return None for deleted object
+            representation = bookmark.get_content_representation()
+            self.assertIsNone(representation)
+        finally:
+            # Reconnect the signal
+            post_delete.connect(video_deleted_signal, sender=Video)
     
     def test_bookmark_ordering(self):
         """Test that bookmarks are ordered by creation date (newest first)."""
@@ -223,11 +234,17 @@ class BookmarkModelTests(BaseTestCase):
     
     def test_bookmark_indexes(self):
         """Test that proper database indexes exist."""
-        indexes = [index.name for index in Bookmark._meta.indexes]
+        # Check that we have the expected indexes defined
+        expected_index_fields = [
+            ['user', 'content_type'],
+            ['user', 'created_at']
+        ]
         
-        # Should have indexes for common query patterns
-        self.assertTrue(any('user' in idx and 'content_type' in idx for idx in indexes))
-        self.assertTrue(any('user' in idx and 'created_at' in idx for idx in indexes))
+        actual_index_fields = [list(index.fields) for index in Bookmark._meta.indexes]
+        
+        # Check that our expected indexes are present
+        for expected_fields in expected_index_fields:
+            self.assertIn(expected_fields, actual_index_fields)
 
 
 class BookmarkQueryTests(BaseTestCase):
