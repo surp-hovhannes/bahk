@@ -1,16 +1,26 @@
 """
-Django signals for automatic bookmark cache management.
+Django signals for automatic bookmark cache management and data integrity.
 
-This module ensures Redis cache consistency by automatically invalidating
-or updating cache when bookmark models change through any method
-(API, admin, shell, etc.).
+This module ensures:
+1. Redis cache consistency by automatically invalidating or updating cache
+2. Data integrity by cleaning up orphaned bookmarks when objects are deleted
 """
 
 import logging
 from django.db.models.signals import post_save, post_delete, pre_delete
 from django.dispatch import receiver
-from .models import Bookmark
+from django.contrib.contenttypes.models import ContentType
+from .models import Bookmark, Video, Article, Recipe
 from .cache import BookmarkCacheManager
+
+# Import from hub app for DevotionalSet
+try:
+    from hub.models import DevotionalSet, Devotional, Fast, Reading
+except ImportError:
+    DevotionalSet = None
+    Devotional = None
+    Fast = None
+    Reading = None
 
 logger = logging.getLogger(__name__)
 
@@ -68,3 +78,79 @@ try:
 except ImportError:
     # In case User model is not available
     logger.warning("Could not register User deletion signal for bookmark cache cleanup")
+
+
+# Content object deletion signals to prevent orphaned bookmarks
+def cleanup_orphaned_bookmarks(sender, instance, **kwargs):
+    """
+    Generic function to clean up bookmarks when content objects are deleted.
+    
+    This ensures data integrity by removing bookmarks that would otherwise
+    become orphaned when their referenced objects are deleted.
+    """
+    content_type = ContentType.objects.get_for_model(sender)
+    
+    # Find and delete all bookmarks pointing to this object
+    orphaned_bookmarks = Bookmark.objects.filter(
+        content_type=content_type,
+        object_id=instance.id
+    )
+    
+    count = orphaned_bookmarks.count()
+    if count > 0:
+        # Update cache for affected users before deleting bookmarks
+        for bookmark in orphaned_bookmarks:
+            BookmarkCacheManager.bookmark_deleted(
+                user=bookmark.user,
+                content_type=content_type,
+                object_id=instance.id
+            )
+        
+        # Delete orphaned bookmarks
+        orphaned_bookmarks.delete()
+        logger.info(f"Deleted {count} orphaned bookmarks for {sender.__name__} ID {instance.id}")
+
+
+# Register signals for all bookmarkable content types
+@receiver(post_delete, sender=Video)
+def video_deleted_signal(sender, instance, **kwargs):
+    """Clean up bookmarks when a video is deleted."""
+    cleanup_orphaned_bookmarks(sender, instance, **kwargs)
+
+
+@receiver(post_delete, sender=Article)
+def article_deleted_signal(sender, instance, **kwargs):
+    """Clean up bookmarks when an article is deleted."""
+    cleanup_orphaned_bookmarks(sender, instance, **kwargs)
+
+
+@receiver(post_delete, sender=Recipe)
+def recipe_deleted_signal(sender, instance, **kwargs):
+    """Clean up bookmarks when a recipe is deleted."""
+    cleanup_orphaned_bookmarks(sender, instance, **kwargs)
+
+
+# Hub app content types (if available)
+if DevotionalSet:
+    @receiver(post_delete, sender=DevotionalSet)
+    def devotional_set_deleted_signal(sender, instance, **kwargs):
+        """Clean up bookmarks when a devotional set is deleted."""
+        cleanup_orphaned_bookmarks(sender, instance, **kwargs)
+
+if Devotional:
+    @receiver(post_delete, sender=Devotional)
+    def devotional_deleted_signal(sender, instance, **kwargs):
+        """Clean up bookmarks when a devotional is deleted."""
+        cleanup_orphaned_bookmarks(sender, instance, **kwargs)
+
+if Fast:
+    @receiver(post_delete, sender=Fast)
+    def fast_deleted_signal(sender, instance, **kwargs):
+        """Clean up bookmarks when a fast is deleted."""
+        cleanup_orphaned_bookmarks(sender, instance, **kwargs)
+
+if Reading:
+    @receiver(post_delete, sender=Reading)
+    def reading_deleted_signal(sender, instance, **kwargs):
+        """Clean up bookmarks when a reading is deleted."""
+        cleanup_orphaned_bookmarks(sender, instance, **kwargs)
