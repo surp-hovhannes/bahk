@@ -1,13 +1,55 @@
-from django.shortcuts import render
-from rest_framework import generics
-from rest_framework.permissions import AllowAny
-from django.db.models import Q
-from .models import Video, Article, Recipe
-from .serializers import VideoSerializer, ArticleSerializer, RecipeSerializer, DevotionalSetSerializer
+from django.shortcuts import render, get_object_or_404
+from rest_framework import generics, status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q, Prefetch
+from .models import Video, Article, Recipe, Bookmark
+from .serializers import (
+    VideoSerializer, ArticleSerializer, RecipeSerializer, 
+    DevotionalSetSerializer, BookmarkSerializer, BookmarkCreateSerializer
+)
+from .cache import BookmarkCacheManager
 from hub.models import DevotionalSet
 
 
-class VideoListView(generics.ListAPIView):
+class BookmarkOptimizedMixin:
+    """
+    Mixin to optimize bookmark queries using Redis caching.
+    
+    This approach uses Redis cache to provide sub-millisecond bookmark lookups,
+    with automatic fallback to database queries when needed.
+    """
+    
+    def get_serializer_context(self):
+        """Add Redis bookmark cache context."""
+        context = super().get_serializer_context()
+        
+        # Enable Redis caching for authenticated users
+        if hasattr(self.request, 'user') and self.request.user.is_authenticated:
+            context['use_bookmark_cache'] = True
+            
+        return context
+    
+    def paginate_queryset(self, queryset):
+        """Override to preload bookmarks using Redis cache."""
+        page = super().paginate_queryset(queryset)
+        
+        if page is not None and hasattr(self.request, 'user') and self.request.user.is_authenticated:
+            # Use Redis cache for ultra-fast bookmark lookups
+            bookmark_status = BookmarkCacheManager.get_bookmarks_for_objects(
+                self.request.user, 
+                page
+            )
+            
+            # Store in request for serializer access
+            self.request._redis_bookmark_cache = bookmark_status
+        
+        return page
+
+
+class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
     """
     API endpoint that allows videos to be viewed.
 
@@ -37,7 +79,8 @@ class VideoListView(generics.ListAPIView):
                     "thumbnail_small_url": "/media/CACHE/images/videos/thumbnails/thumb/123.jpg",
                     "video": "/media/videos/video.mp4",
                     "created_at": "2024-03-14T12:00:00Z",
-                    "updated_at": "2024-03-14T12:00:00Z"
+                    "updated_at": "2024-03-14T12:00:00Z",
+                    "is_bookmarked": true
                 },
                 ...
             ]
@@ -67,7 +110,7 @@ class VideoListView(generics.ListAPIView):
             )
         return queryset.order_by('-created_at')
 
-class ArticleListView(generics.ListAPIView):
+class ArticleListView(BookmarkOptimizedMixin, generics.ListAPIView):
     """
     API endpoint that allows articles to be viewed.
 
@@ -117,7 +160,7 @@ class ArticleListView(generics.ListAPIView):
         return queryset.order_by('-created_at')
 
 
-class RecipeListView(generics.ListAPIView):
+class RecipeListView(BookmarkOptimizedMixin, generics.ListAPIView):
     """
     API endpoint that allows recipes to be viewed.
 
@@ -172,7 +215,7 @@ class RecipeListView(generics.ListAPIView):
         return queryset.order_by('-created_at')
 
 
-class DevotionalSetListView(generics.ListAPIView):
+class DevotionalSetListView(BookmarkOptimizedMixin, generics.ListAPIView):
     """
     API endpoint that allows devotional sets to be viewed.
 
@@ -268,3 +311,244 @@ class DevotionalSetDetailView(generics.RetrieveAPIView):
     serializer_class = DevotionalSetSerializer
     permission_classes = [AllowAny]
     queryset = DevotionalSet.objects.select_related('fast').all()
+
+
+class BookmarkListView(generics.ListAPIView):
+    """
+    API endpoint to list user's bookmarks.
+    
+    Permissions:
+        - GET: Authenticated users only
+    
+    Query Parameters:
+        - content_type (str): Optional. Filter bookmarks by content type 
+                             (video, article, recipe, devotionalset, etc.)
+    
+    Returns:
+        A JSON response with the following structure:
+        {
+            "count": 5,
+            "next": null,
+            "previous": null,
+            "results": [
+                {
+                    "id": 1,
+                    "content_type_name": "video",
+                    "object_id": 123,
+                    "content": {
+                        "id": 123,
+                        "type": "video",
+                        "title": "Morning Prayer",
+                        "description": "Daily morning prayer...",
+                        "thumbnail_url": "/media/...",
+                        "created_at": "2024-03-14T12:00:00Z"
+                    },
+                    "note": "Great prayer for daily routine",
+                    "created_at": "2024-03-15T10:30:00Z"
+                },
+                ...
+            ]
+        }
+    
+    Example Requests:
+        GET /api/learning-resources/bookmarks/
+        GET /api/learning-resources/bookmarks/?content_type=video
+    """
+    serializer_class = BookmarkSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = Bookmark.objects.filter(user=self.request.user).select_related(
+            'content_type'
+        )
+        
+        # Filter by content type if specified
+        content_type = self.request.query_params.get('content_type')
+        if content_type:
+            try:
+                if content_type.lower() == 'devotionalset':
+                    ct = ContentType.objects.get(app_label='hub', model='devotionalset')
+                elif content_type.lower() in ['devotional', 'fast', 'reading']:
+                    ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
+                else:
+                    ct = ContentType.objects.get(
+                        app_label='learning_resources', model=content_type.lower()
+                    )
+                queryset = queryset.filter(content_type=ct)
+            except ContentType.DoesNotExist:
+                # Return empty queryset for invalid content types
+                queryset = queryset.none()
+        
+        return queryset
+
+
+class BookmarkCreateView(generics.CreateAPIView):
+    """
+    API endpoint to create a new bookmark.
+    
+    Permissions:
+        - POST: Authenticated users only
+    
+    Request Body:
+        {
+            "content_type": "video",  // Required: type of content to bookmark
+            "object_id": 123,         // Required: ID of the content
+            "note": "Optional note"   // Optional: user's note about the bookmark
+        }
+    
+    Returns:
+        201 Created:
+        {
+            "id": 1,
+            "content_type_name": "video",
+            "object_id": 123,
+            "content": {
+                "id": 123,
+                "type": "video",
+                "title": "Morning Prayer",
+                "description": "Daily morning prayer...",
+                "thumbnail_url": "/media/...",
+                "created_at": "2024-03-14T12:00:00Z"
+            },
+            "note": "Optional note",
+            "created_at": "2024-03-15T10:30:00Z"
+        }
+        
+        400 Bad Request: If validation fails
+        409 Conflict: If user has already bookmarked this item
+    
+    Example Requests:
+        POST /api/learning-resources/bookmarks/
+        {
+            "content_type": "video",
+            "object_id": 123,
+            "note": "Great prayer for daily routine"
+        }
+    """
+    serializer_class = BookmarkCreateSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        bookmark = serializer.save()
+        
+        # Update Redis cache - add bookmark
+        BookmarkCacheManager.bookmark_created(
+            user=request.user,
+            content_type=bookmark.content_type,
+            object_id=bookmark.object_id
+        )
+        
+        # Return the full bookmark representation
+        response_serializer = BookmarkSerializer(bookmark)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def bookmark_delete_view(request, content_type, object_id):
+    """
+    API endpoint to delete a bookmark.
+    
+    Permissions:
+        - DELETE: Authenticated users only
+    
+    URL Parameters:
+        - content_type (str): Type of content (video, article, recipe, etc.)
+        - object_id (int): ID of the content
+    
+    Returns:
+        204 No Content: If bookmark was successfully deleted
+        404 Not Found: If bookmark doesn't exist
+    
+    Example Requests:
+        DELETE /api/learning-resources/bookmarks/video/123/
+    """
+    try:
+        # Get the content type
+        if content_type.lower() == 'devotionalset':
+            ct = ContentType.objects.get(app_label='hub', model='devotionalset')
+        elif content_type.lower() in ['devotional', 'fast', 'reading']:
+            ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
+        else:
+            ct = ContentType.objects.get(
+                app_label='learning_resources', model=content_type.lower()
+            )
+    except ContentType.DoesNotExist:
+        return Response(
+            {'error': f'Invalid content type: {content_type}'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Find and delete the bookmark
+    bookmark = get_object_or_404(
+        Bookmark,
+        user=request.user,
+        content_type=ct,
+        object_id=object_id
+    )
+    
+    # Update Redis cache - remove bookmark
+    BookmarkCacheManager.bookmark_deleted(
+        user=request.user,
+        content_type=ct,
+        object_id=object_id
+    )
+    
+    bookmark.delete()
+    
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def bookmark_check_view(request, content_type, object_id):
+    """
+    API endpoint to check if an item is bookmarked by the user.
+    
+    Permissions:
+        - GET: Authenticated users only
+    
+    URL Parameters:
+        - content_type (str): Type of content (video, article, recipe, etc.)
+        - object_id (int): ID of the content
+    
+    Returns:
+        200 OK:
+        {
+            "is_bookmarked": true,
+            "bookmark_id": 123  // Only included if bookmarked
+        }
+    
+    Example Requests:
+        GET /api/learning-resources/bookmarks/check/video/123/
+    """
+    try:
+        # Get the content type
+        if content_type.lower() == 'devotionalset':
+            ct = ContentType.objects.get(app_label='hub', model='devotionalset')
+        elif content_type.lower() in ['devotional', 'fast', 'reading']:
+            ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
+        else:
+            ct = ContentType.objects.get(
+                app_label='learning_resources', model=content_type.lower()
+            )
+    except ContentType.DoesNotExist:
+        return Response(
+            {'error': f'Invalid content type: {content_type}'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        bookmark = Bookmark.objects.get(
+            user=request.user,
+            content_type=ct,
+            object_id=object_id
+        )
+        return Response({
+            'is_bookmarked': True,
+            'bookmark_id': bookmark.id
+        })
+    except Bookmark.DoesNotExist:
+        return Response({'is_bookmarked': False})

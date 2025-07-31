@@ -55,6 +55,26 @@ class BaseAPITestCase(APITestCase):
         """Convenience method to create a profile."""
         return self.factory.create_profile(**kwargs)
     
+    def create_video(self, **kwargs):
+        """Convenience method to create a video."""
+        return self.factory.create_video(**kwargs)
+    
+    def create_article(self, **kwargs):
+        """Convenience method to create an article."""
+        return self.factory.create_article(**kwargs)
+    
+    def create_recipe(self, **kwargs):
+        """Convenience method to create a recipe."""
+        return self.factory.create_recipe(**kwargs)
+    
+    def create_devotional_set(self, **kwargs):
+        """Convenience method to create a devotional set."""
+        return self.factory.create_devotional_set(**kwargs)
+    
+    def create_bookmark(self, **kwargs):
+        """Convenience method to create a bookmark."""
+        return self.factory.create_bookmark(**kwargs)
+    
     def authenticate(self, user=None):
         """Authenticate the test client with a user."""
         if user is None:
@@ -87,3 +107,23 @@ class BaseTransactionTestCase(TransactionTestCase):
     def create_profile(self, **kwargs):
         """Convenience method to create a profile."""
         return self.factory.create_profile(**kwargs)
+    
+    def create_video(self, **kwargs):
+        """Convenience method to create a video."""
+        return self.factory.create_video(**kwargs)
+    
+    def create_article(self, **kwargs):
+        """Convenience method to create an article."""
+        return self.factory.create_article(**kwargs)
+    
+    def create_recipe(self, **kwargs):
+        """Convenience method to create a recipe."""
+        return self.factory.create_recipe(**kwargs)
+    
+    def create_devotional_set(self, **kwargs):
+        """Convenience method to create a devotional set."""
+        return self.factory.create_devotional_set(**kwargs)
+    
+    def create_bookmark(self, **kwargs):
+        """Convenience method to create a bookmark."""
+        return self.factory.create_bookmark(**kwargs)
