@@ -5,19 +5,22 @@ This command finds and removes bookmarks that point to non-existent objects,
 which can happen if objects were deleted before the signal handlers were in place.
 
 Usage:
-    python manage.py cleanup_orphaned_bookmarks           # Clean up all orphaned bookmarks
+    python manage.py cleanup_orphaned_bookmarks           # Clean up all orphaned bookmarks (sync)
     python manage.py cleanup_orphaned_bookmarks --dry-run # Show what would be deleted
     python manage.py cleanup_orphaned_bookmarks --stats   # Show statistics only
+    python manage.py cleanup_orphaned_bookmarks --async   # Run async cleanup (recommended for large datasets)
+    python manage.py cleanup_orphaned_bookmarks --async --wait # Run async and wait for completion
 """
 
 from django.core.management.base import BaseCommand
 from django.contrib.contenttypes.models import ContentType
 from learning_resources.models import Bookmark
 from learning_resources.cache import BookmarkCacheManager
+import time
 
 
 class Command(BaseCommand):
-    help = 'Clean up orphaned bookmarks that point to non-existent objects'
+    help = 'Clean up orphaned bookmarks that point to non-existent objects. Use --async for large datasets.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -37,12 +40,42 @@ class Command(BaseCommand):
             type=str,
             help='Only check specific content type (e.g., "video", "article")'
         )
+        
+        parser.add_argument(
+            '--async',
+            action='store_true',
+            help='Run the cleanup asynchronously using Celery (recommended for large datasets)'
+        )
+        
+        parser.add_argument(
+            '--batch-size',
+            type=int,
+            default=1000,
+            help='Number of bookmarks to process per batch in async mode (default: 1000)'
+        )
+        
+        parser.add_argument(
+            '--wait',
+            action='store_true',
+            help='Wait for async task to complete and show results (only with --async)'
+        )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         stats_only = options['stats']
         content_type_filter = options.get('content_type')
+        use_async = options['async']
+        batch_size = options['batch_size']
+        wait_for_completion = options['wait']
         
+        # Handle async execution
+        if use_async:
+            self._handle_async_cleanup(
+                content_type_filter, batch_size, dry_run, wait_for_completion
+            )
+            return
+        
+        # Handle synchronous execution (existing logic)
         if dry_run:
             self.stdout.write("🔍 DRY RUN MODE - No bookmarks will be deleted")
             self.stdout.write("=" * 50)
@@ -200,3 +233,92 @@ class Command(BaseCommand):
             }
         
         return stats
+    
+    def _handle_async_cleanup(self, content_type_filter, batch_size, dry_run, wait_for_completion):
+        """Handle asynchronous cleanup using Celery."""
+        try:
+            from learning_resources.tasks import cleanup_orphaned_bookmarks_async
+        except ImportError:
+            self.stdout.write(
+                self.style.ERROR("❌ Celery tasks not available. Please ensure Celery is installed and configured.")
+            )
+            return
+        
+        self.stdout.write("🚀 Starting asynchronous orphaned bookmark cleanup...")
+        self.stdout.write(f"  Content Type Filter: {content_type_filter or 'All'}")
+        self.stdout.write(f"  Batch Size: {batch_size}")
+        self.stdout.write(f"  Dry Run: {dry_run}")
+        self.stdout.write("=" * 50)
+        
+        # Start the async task
+        task = cleanup_orphaned_bookmarks_async.delay(
+            content_type_filter=content_type_filter,
+            batch_size=batch_size,
+            dry_run=dry_run
+        )
+        
+        self.stdout.write(f"✅ Task queued with ID: {task.id}")
+        
+        if not wait_for_completion:
+            self.stdout.write("\n📝 To check task status, run:")
+            self.stdout.write(f"   python manage.py shell -c \"from celery.result import AsyncResult; print(AsyncResult('{task.id}').status)\"")
+            self.stdout.write("\n💡 Use --wait flag to wait for completion in this command.")
+            return
+        
+        # Wait for task completion and show progress
+        self.stdout.write("\n⏳ Waiting for task completion...")
+        
+        last_progress = 0
+        while not task.ready():
+            try:
+                result = task.result
+                if isinstance(result, dict) and 'current' in result:
+                    current = result['current']
+                    total = result['total']
+                    progress_percent = result.get('progress_percent', 0)
+                    
+                    if progress_percent > last_progress:
+                        self.stdout.write(f"   Progress: {current}/{total} ({progress_percent}%)")
+                        last_progress = progress_percent
+                
+            except Exception:
+                # Task might not have progress info yet
+                pass
+            
+            time.sleep(2)  # Check every 2 seconds
+        
+        # Task completed, show results
+        try:
+            result = task.get()  # This will raise an exception if task failed
+            
+            self.stdout.write("\n" + "=" * 50)
+            self.stdout.write("🎉 ASYNC CLEANUP COMPLETED")
+            self.stdout.write("=" * 50)
+            
+            self.stdout.write(f"📊 Task ID: {result['task_id']}")
+            self.stdout.write(f"⏱️  Duration: {result['duration_seconds']:.2f} seconds")
+            self.stdout.write(f"📈 Total Processed: {result['total_processed']}")
+            self.stdout.write(f"🔍 Orphaned Found: {result['orphaned_found']}")
+            
+            if result['dry_run']:
+                self.stdout.write(f"🧪 DRY RUN: Would delete {result['orphaned_found']} bookmarks")
+            else:
+                self.stdout.write(f"🗑️  Deleted: {result['deleted']}")
+            
+            # Show breakdown by content type
+            if result['orphaned_by_type']:
+                self.stdout.write("\n📋 Breakdown by content type:")
+                for content_type, count in result['orphaned_by_type'].items():
+                    self.stdout.write(f"  {content_type.title()}: {count}")
+            
+            self.stdout.write(f"\n🔧 Batch Size: {result['batch_size']}")
+            
+        except Exception as e:
+            self.stdout.write(f"\n❌ Task failed: {str(e)}")
+            
+            # Try to get task state for more info
+            try:
+                if hasattr(task, 'state') and task.state == 'FAILURE':
+                    self.stdout.write(f"📄 Error details: {task.info}")
+            except Exception:
+                pass
