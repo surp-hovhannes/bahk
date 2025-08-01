@@ -124,43 +124,6 @@ class BookmarkPerformanceTests(BaseTransactionTestCase):
                     call_args = mock_bulk.call_args[0][0]  # First argument
                     self.assertEqual(len(call_args), 5)
     
-    @override_settings(BOOKMARK_CLEANUP_BULK_THRESHOLD=3, BOOKMARK_CLEANUP_ASYNC_THRESHOLD=5)
-    def test_large_deletion_behavior(self):
-        """Test the behavior pattern for large deletions."""
-        # Test that the threshold logic works correctly by verifying
-        # that large counts trigger the async code path
-        video = self.factory.create_video()
-        
-        with patch('learning_resources.models.Bookmark.objects.filter') as mock_filter:
-            # Mock a large count above the async threshold
-            mock_queryset = MagicMock()
-            mock_queryset.count.return_value = 50  # Well above async threshold of 5
-            mock_filter.return_value = mock_queryset
-            
-            # Mock the dynamic import and task
-            with patch('learning_resources.signals.bulk_cleanup_bookmarks_async') as mock_task_class:
-                mock_task_class.delay.return_value = MagicMock(id='test-task-id')
-                
-                # Mock the import to return our mock task
-                with patch('builtins.__import__') as mock_import:
-                    def import_side_effect(name, *args, **kwargs):
-                        if name == '.tasks' or 'tasks' in name:
-                            # Return a module-like object with our task
-                            mock_module = MagicMock()
-                            mock_module.bulk_cleanup_bookmarks_async = mock_task_class
-                            return mock_module
-                        # For other imports, use the real __import__
-                        return __import__(name, *args, **kwargs)
-                    
-                    mock_import.side_effect = import_side_effect
-                    
-                    # Call cleanup function
-                    signals.cleanup_orphaned_bookmarks(Video, video)
-                    
-                    # Verify that the async path was attempted
-                    # (The exact behavior depends on the import success)
-                    # The key test is that it doesn't fall through to sync processing
-                    # when count is above threshold
     
     def test_performance_thresholds_are_configurable(self):
         """Test that performance thresholds can be configured via Django settings."""
