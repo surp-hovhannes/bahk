@@ -1,7 +1,9 @@
 """Test data factory methods for Django tests."""
 import datetime
 from django.contrib.auth.models import User
-from hub.models import Church, Day, Fast, Profile
+from django.contrib.contenttypes.models import ContentType
+from hub.models import Church, Day, Fast, Profile, DevotionalSet
+from learning_resources.models import Video, Article, Recipe, Bookmark
 from notifications.models import PromoEmail
 
 
@@ -161,4 +163,152 @@ class TestDataFactory:
             'users': [user1, user2, user3],
             'profiles': [profile1, profile2, profile3],
             'fasts': [fast1, fast2],
+        }
+    
+    @staticmethod
+    def create_video(title=None, description="Test video description", category="general"):
+        """Create a test video."""
+        if title is None:
+            import time
+            import random
+            timestamp = int(time.time() * 1000000)
+            random_suffix = random.randint(1000, 9999)
+            title = f"Test Video {timestamp}_{random_suffix}"
+        
+        # Create a simple test file for the video field
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        test_video = SimpleUploadedFile("test_video.mp4", b"video content", content_type="video/mp4")
+        
+        return Video.objects.create(
+            title=title,
+            description=description,
+            category=category,
+            video=test_video
+        )
+    
+    @staticmethod
+    def create_article(title=None, body="Test article body content"):
+        """Create a test article."""
+        if title is None:
+            import time
+            import random
+            timestamp = int(time.time() * 1000000)
+            random_suffix = random.randint(1000, 9999)
+            title = f"Test Article {timestamp}_{random_suffix}"
+        
+        # Create a simple test image file
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        import io
+        image = Image.new('RGB', (100, 100), color='red')
+        image_io = io.BytesIO()
+        image.save(image_io, 'JPEG')
+        image_io.seek(0)
+        test_image = SimpleUploadedFile("test_image.jpg", image_io.read(), content_type="image/jpeg")
+        
+        return Article.objects.create(
+            title=title,
+            body=body,
+            image=test_image
+        )
+    
+    @staticmethod
+    def create_recipe(title=None, description="Test recipe description", 
+                     time_required="30 minutes", serves="4 people",
+                     ingredients="Test ingredients", directions="Test directions"):
+        """Create a test recipe."""
+        if title is None:
+            import time
+            import random
+            timestamp = int(time.time() * 1000000)
+            random_suffix = random.randint(1000, 9999)
+            title = f"Test Recipe {timestamp}_{random_suffix}"
+        
+        # Create a simple test image file
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        import io
+        image = Image.new('RGB', (100, 100), color='green')
+        image_io = io.BytesIO()
+        image.save(image_io, 'JPEG')
+        image_io.seek(0)
+        test_image = SimpleUploadedFile("test_recipe.jpg", image_io.read(), content_type="image/jpeg")
+        
+        return Recipe.objects.create(
+            title=title,
+            description=description,
+            time_required=time_required,
+            serves=serves,
+            ingredients=ingredients,
+            directions=directions,
+            image=test_image
+        )
+    
+    @staticmethod
+    def create_devotional_set(title=None, description="Test devotional set", fast=None):
+        """Create a test devotional set."""
+        if title is None:
+            import time
+            import random
+            timestamp = int(time.time() * 1000000)
+            random_suffix = random.randint(1000, 9999)
+            title = f"Test Devotional Set {timestamp}_{random_suffix}"
+        
+        if fast is None:
+            fast = TestDataFactory.create_fast()
+        
+        return DevotionalSet.objects.create(
+            title=title,
+            description=description,
+            fast=fast
+        )
+    
+    @staticmethod
+    def create_bookmark(user=None, content_object=None, note="Test bookmark note"):
+        """Create a test bookmark for any content type."""
+        if user is None:
+            user = TestDataFactory.create_user()
+        
+        if content_object is None:
+            # Default to creating a video bookmark
+            content_object = TestDataFactory.create_video()
+        
+        return Bookmark.objects.create(
+            user=user,
+            content_type=ContentType.objects.get_for_model(content_object),
+            object_id=content_object.id,
+            note=note
+        )
+    
+    @staticmethod
+    def create_sample_content_with_bookmarks(user=None, num_each=3):
+        """Create sample content and bookmarks for testing."""
+        if user is None:
+            user = TestDataFactory.create_user()
+        
+        # Create various content types
+        videos = [TestDataFactory.create_video(title=f"Video {i+1}") for i in range(num_each)]
+        articles = [TestDataFactory.create_article(title=f"Article {i+1}") for i in range(num_each)]
+        recipes = [TestDataFactory.create_recipe(title=f"Recipe {i+1}") for i in range(num_each)]
+        devotional_sets = [TestDataFactory.create_devotional_set(title=f"Devotional Set {i+1}") for i in range(num_each)]
+        
+        # Create bookmarks for some of the content (not all)
+        bookmarks = []
+        
+        # Bookmark first video and article
+        bookmarks.append(TestDataFactory.create_bookmark(user=user, content_object=videos[0], note="Great video!"))
+        bookmarks.append(TestDataFactory.create_bookmark(user=user, content_object=articles[0], note="Helpful article"))
+        
+        # Bookmark second recipe and devotional set
+        if num_each >= 2:
+            bookmarks.append(TestDataFactory.create_bookmark(user=user, content_object=recipes[1], note="Delicious recipe"))
+            bookmarks.append(TestDataFactory.create_bookmark(user=user, content_object=devotional_sets[1], note="Inspiring devotionals"))
+        
+        return {
+            'user': user,
+            'videos': videos,
+            'articles': articles,
+            'recipes': recipes,
+            'devotional_sets': devotional_sets,
+            'bookmarks': bookmarks,
         }

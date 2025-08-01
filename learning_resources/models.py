@@ -1,4 +1,7 @@
 from django.db import models
+from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
 from django.utils import timezone
@@ -269,4 +272,86 @@ class Recipe(models.Model):
     class Meta:
         ordering = ['-created_at']
         verbose_name_plural = 'Recipes'
+
+
+class Bookmark(models.Model):
+    """
+    Model for user bookmarks using generic foreign keys to support any content type.
+    
+    This allows users to bookmark videos, articles, recipes, devotionals, and any future
+    content types without modifying the bookmark model.
+    """
+    
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='bookmarks',
+        help_text="The user who created this bookmark"
+    )
+    
+    # Generic foreign key fields
+    content_type = models.ForeignKey(
+        ContentType, 
+        on_delete=models.CASCADE,
+        help_text="The type of object being bookmarked"
+    )
+    object_id = models.PositiveIntegerField(
+        help_text="The ID of the object being bookmarked"
+    )
+    content_object = GenericForeignKey('content_type', 'object_id')
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the bookmark was created"
+    )
+    
+    # Optional note for the bookmark
+    note = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Optional note about this bookmark"
+    )
+
+    class Meta:
+        # Ensure a user can only bookmark the same item once
+        unique_together = ('user', 'content_type', 'object_id')
+        ordering = ['-created_at']
+        verbose_name = 'Bookmark'
+        verbose_name_plural = 'Bookmarks'
+        indexes = [
+            models.Index(fields=['user', 'content_type']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.content_object}"
+
+    @property
+    def content_type_name(self):
+        """Return a human-readable name for the content type."""
+        return self.content_type.model_class().__name__.lower()
+
+    def get_content_representation(self):
+        """Get a dictionary representation of the bookmarked content."""
+        content = self.content_object
+        if not content:
+            return None
+            
+        # Base representation
+        representation = {
+            'id': content.id,
+            'type': self.content_type_name,
+        }
+        
+        # Add common fields that most models have
+        if hasattr(content, 'title'):
+            representation['title'] = content.title
+        if hasattr(content, 'description'):
+            representation['description'] = content.description
+        if hasattr(content, 'created_at'):
+            representation['created_at'] = content.created_at
+        if hasattr(content, 'thumbnail') or hasattr(content, 'cached_thumbnail_url'):
+            representation['thumbnail_url'] = getattr(content, 'cached_thumbnail_url', None)
+            
+        return representation
     
