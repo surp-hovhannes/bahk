@@ -4,12 +4,20 @@ Django signals for automatic bookmark cache management and data integrity.
 This module ensures:
 1. Redis cache consistency by automatically invalidating or updating cache
 2. Data integrity by cleaning up orphaned bookmarks when objects are deleted
+
+Performance optimizations:
+- Threshold-based processing: small deletions use individual operations, 
+  medium deletions use bulk operations, large deletions use async tasks
+- Bulk cache operations to reduce Redis calls for medium-sized deletions
+- Async task processing for large deletions to avoid blocking main operations
+- Configurable thresholds via Django settings
 """
 
 import logging
 from django.db.models.signals import post_save, post_delete, pre_delete
 from django.dispatch import receiver
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
 from .models import Bookmark, Video, Article, Recipe
 from .cache import BookmarkCacheManager
 
@@ -23,6 +31,10 @@ except ImportError:
     Reading = None
 
 logger = logging.getLogger(__name__)
+
+# Configuration for async processing thresholds
+BOOKMARK_CLEANUP_ASYNC_THRESHOLD = getattr(settings, 'BOOKMARK_CLEANUP_ASYNC_THRESHOLD', 50)
+BOOKMARK_CLEANUP_BULK_THRESHOLD = getattr(settings, 'BOOKMARK_CLEANUP_BULK_THRESHOLD', 10)
 
 
 @receiver(post_save, sender=Bookmark)
@@ -87,18 +99,68 @@ def cleanup_orphaned_bookmarks(sender, instance, **kwargs):
     
     This ensures data integrity by removing bookmarks that would otherwise
     become orphaned when their referenced objects are deleted.
+    
+    Performance optimization:
+    - Small deletions (< BOOKMARK_CLEANUP_BULK_THRESHOLD): Individual cache updates
+    - Medium deletions (< BOOKMARK_CLEANUP_ASYNC_THRESHOLD): Bulk cache updates, sync deletion
+    - Large deletions (>= BOOKMARK_CLEANUP_ASYNC_THRESHOLD): Async task processing
     """
     content_type = ContentType.objects.get_for_model(sender)
     
-    # Find and delete all bookmarks pointing to this object
+    # Check how many bookmarks would be affected
+    count = Bookmark.objects.filter(
+        content_type=content_type,
+        object_id=instance.id
+    ).count()
+    
+    if count == 0:
+        return
+    
+    logger.info(f"Cleaning up {count} bookmarks for {sender.__name__} ID {instance.id}")
+    
+    # Handle large deletions asynchronously to avoid blocking
+    if count >= BOOKMARK_CLEANUP_ASYNC_THRESHOLD:
+        try:
+            from .tasks import bulk_cleanup_bookmarks_async
+            
+            # Queue async task for large deletions
+            task = bulk_cleanup_bookmarks_async.delay(
+                content_type_id=content_type.id,
+                object_id=instance.id
+            )
+            
+            logger.info(f"Queued async cleanup task {task.id} for {count} bookmarks ({sender.__name__} ID {instance.id})")
+            return
+            
+        except ImportError:
+            logger.warning("Celery not available, falling back to synchronous cleanup for large deletion")
+            # Fall through to synchronous processing
+    
+    # Handle medium to small deletions synchronously
     orphaned_bookmarks = Bookmark.objects.filter(
         content_type=content_type,
         object_id=instance.id
-    )
+    ).select_related('user', 'content_type')
     
-    count = orphaned_bookmarks.count()
-    if count > 0:
-        # Update cache for affected users before deleting bookmarks
+    if count >= BOOKMARK_CLEANUP_BULK_THRESHOLD:
+        # Use bulk cache operations for medium deletions
+        bookmarks_data = []
+        for bookmark in orphaned_bookmarks:
+            bookmarks_data.append({
+                'user_id': bookmark.user_id,
+                'content_type_id': bookmark.content_type_id,
+                'object_id': bookmark.object_id
+            })
+        
+        # Bulk cache update
+        BookmarkCacheManager.bulk_bookmark_deleted(bookmarks_data)
+        
+        # Bulk delete
+        deleted_count = orphaned_bookmarks.delete()[0]
+        logger.info(f"Bulk deleted {deleted_count} bookmarks for {sender.__name__} ID {instance.id}")
+        
+    else:
+        # Use individual cache updates for small deletions
         for bookmark in orphaned_bookmarks:
             BookmarkCacheManager.bookmark_deleted(
                 user=bookmark.user,
@@ -106,9 +168,8 @@ def cleanup_orphaned_bookmarks(sender, instance, **kwargs):
                 object_id=instance.id
             )
         
-        # Delete orphaned bookmarks
-        orphaned_bookmarks.delete()
-        logger.info(f"Deleted {count} orphaned bookmarks for {sender.__name__} ID {instance.id}")
+        deleted_count = orphaned_bookmarks.delete()[0]
+        logger.info(f"Deleted {deleted_count} bookmarks for {sender.__name__} ID {instance.id}")
 
 
 # Register signals for all bookmarkable content types

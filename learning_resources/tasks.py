@@ -194,6 +194,110 @@ def cleanup_orphaned_bookmarks_async(
         raise self.retry(exc=exc, countdown=60, max_retries=2)
 
 
+@shared_task(bind=True)
+def bulk_cleanup_bookmarks_async(self, content_type_id: int, object_id: int, force_sync: bool = False) -> Dict[str, Any]:
+    """
+    Asynchronously clean up bookmarks for a deleted content object.
+    
+    This task is used when an object with many bookmarks is deleted to avoid
+    blocking the main deletion operation.
+    
+    Args:
+        content_type_id: ID of the ContentType for the deleted object
+        object_id: ID of the deleted object
+        force_sync: If True, force synchronous processing even for large datasets
+        
+    Returns:
+        Dict with cleanup results
+    """
+    task_id = self.request.id
+    start_time = timezone.now()
+    
+    logger.info(f"Starting bulk bookmark cleanup task {task_id} for ContentType {content_type_id}, Object {object_id}")
+    
+    try:
+        from .models import Bookmark
+        from .cache import BookmarkCacheManager
+        
+        # Get content type
+        try:
+            content_type = ContentType.objects.get(id=content_type_id)
+        except ContentType.DoesNotExist:
+            error_msg = f"ContentType {content_type_id} not found"
+            logger.error(error_msg)
+            return {
+                "status": "error",
+                "error": error_msg,
+                "task_id": task_id
+            }
+        
+        # Find all bookmarks for this object
+        orphaned_bookmarks = Bookmark.objects.filter(
+            content_type=content_type,
+            object_id=object_id
+        ).select_related('user', 'content_type')
+        
+        count = orphaned_bookmarks.count()
+        
+        if count == 0:
+            logger.info(f"No bookmarks found for {content_type.model} ID {object_id}")
+            return {
+                "status": "completed",
+                "task_id": task_id,
+                "bookmarks_deleted": 0,
+                "duration_seconds": (timezone.now() - start_time).total_seconds()
+            }
+        
+        logger.info(f"Found {count} bookmarks to clean up for {content_type.model} ID {object_id}")
+        
+        # Prepare data for bulk cache update
+        bookmarks_data = []
+        for bookmark in orphaned_bookmarks:
+            bookmarks_data.append({
+                'user_id': bookmark.user_id,
+                'content_type_id': bookmark.content_type_id,
+                'object_id': bookmark.object_id
+            })
+        
+        # Update cache in bulk before deleting bookmarks
+        BookmarkCacheManager.bulk_bookmark_deleted(bookmarks_data)
+        
+        # Delete bookmarks in bulk
+        deleted_count = orphaned_bookmarks.delete()[0]
+        
+        end_time = timezone.now()
+        duration = (end_time - start_time).total_seconds()
+        
+        result = {
+            "status": "completed",
+            "task_id": task_id,
+            "content_type": content_type.model,
+            "object_id": object_id,
+            "bookmarks_deleted": deleted_count,
+            "duration_seconds": duration,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat()
+        }
+        
+        logger.info(f"Bulk cleanup completed: deleted {deleted_count} bookmarks for {content_type.model} ID {object_id} in {duration:.2f}s")
+        
+        return result
+        
+    except Exception as exc:
+        error_msg = f"Bulk cleanup task failed: {str(exc)}"
+        logger.error(error_msg, exc_info=True)
+        
+        self.update_state(
+            state='FAILURE',
+            meta={
+                'error': error_msg,
+                'task_id': task_id
+            }
+        )
+        
+        raise
+
+
 @shared_task
 def bookmark_cache_maintenance():
     """

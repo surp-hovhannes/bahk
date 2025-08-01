@@ -377,3 +377,62 @@ class BookmarkCacheManager:
         This should be called when we want to force a cache refresh for a user.
         """
         BookmarkCacheService.invalidate_user_bookmarks(user)
+    
+    @staticmethod
+    def bulk_bookmark_deleted(bookmarks_data: List[Dict[str, Any]]) -> None:
+        """
+        Handle bulk bookmark deletions efficiently.
+        
+        Groups bookmarks by user and content type for efficient cache updates.
+        
+        Args:
+            bookmarks_data: List of dicts with keys: user_id, content_type_id, object_id
+        """
+        try:
+            # Group by user for efficient cache updates
+            users_affected = {}
+            
+            for bookmark_data in bookmarks_data:
+                user_id = bookmark_data['user_id']
+                content_type_id = bookmark_data['content_type_id']
+                object_id = bookmark_data['object_id']
+                
+                if user_id not in users_affected:
+                    users_affected[user_id] = {}
+                
+                if content_type_id not in users_affected[user_id]:
+                    users_affected[user_id][content_type_id] = []
+                
+                users_affected[user_id][content_type_id].append(object_id)
+            
+            # Update cache for each affected user
+            for user_id, content_types in users_affected.items():
+                try:
+                    # Get user object (with error handling)
+                    user = User.objects.get(id=user_id)
+                    
+                    for content_type_id, object_ids in content_types.items():
+                        try:
+                            content_type = ContentType.objects.get(id=content_type_id)
+                            
+                            # Remove multiple bookmarks from cache efficiently
+                            for object_id in object_ids:
+                                BookmarkCacheService.remove_bookmark_from_cache(
+                                    user, content_type, object_id
+                                )
+                                
+                        except ContentType.DoesNotExist:
+                            logger.warning(f"ContentType {content_type_id} not found during bulk cache update")
+                            continue
+                            
+                except User.DoesNotExist:
+                    logger.warning(f"User {user_id} not found during bulk cache update")
+                    continue
+            
+            total_bookmarks = len(bookmarks_data)
+            total_users = len(users_affected)
+            logger.info(f"Bulk updated cache for {total_bookmarks} bookmarks across {total_users} users")
+            
+        except Exception as e:
+            logger.error(f"Error in bulk bookmark cache update: {e}")
+            # Don't raise - cache errors shouldn't break deletion operations
