@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q, Prefetch
+import logging
 from .models import Video, Article, Recipe, Bookmark
 from .serializers import (
     VideoSerializer, ArticleSerializer, RecipeSerializer, 
@@ -481,12 +482,24 @@ def bookmark_delete_view(request, content_type, object_id):
     Returns:
         204 No Content: If bookmark was successfully deleted
         404 Not Found: If bookmark doesn't exist
+        400 Bad Request: If parameters are invalid
     
     Example Requests:
         DELETE /api/learning-resources/bookmarks/video/123/
     """
+    # Validate object_id is a valid integer
     try:
-        # Get the content type
+        object_id = int(object_id)
+        if object_id <= 0:
+            raise ValueError("Object ID must be positive")
+    except (ValueError, TypeError) as e:
+        return Response(
+            {'error': f'Invalid object_id: must be a positive integer'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Get the content type with specific error handling
+    try:
         if content_type.lower() == 'devotionalset':
             ct = ContentType.objects.get(app_label='hub', model='devotionalset')
         elif content_type.lower() in ['devotional', 'fast', 'reading']:
@@ -509,14 +522,36 @@ def bookmark_delete_view(request, content_type, object_id):
         object_id=object_id
     )
     
-    # Update Redis cache - remove bookmark
-    BookmarkCacheManager.bookmark_deleted(
-        user=request.user,
-        content_type=ct,
-        object_id=object_id
-    )
+    # Update Redis cache - handle cache failures gracefully
+    try:
+        BookmarkCacheManager.bookmark_deleted(
+            user=request.user,
+            content_type=ct,
+            object_id=object_id
+        )
+    except Exception as cache_error:
+        # Log cache failure but don't fail the request
+        # Cache inconsistency is acceptable for this operation
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"Cache update failed during bookmark deletion for user {request.user.id}, "
+            f"content_type {ct.id}, object_id {object_id}: {cache_error}"
+        )
     
-    bookmark.delete()
+    # Delete the bookmark from database
+    try:
+        bookmark.delete()
+    except Exception as db_error:
+        # Handle unexpected database errors
+        logger = logging.getLogger(__name__)
+        logger.error(
+            f"Database error during bookmark deletion for user {request.user.id}, "
+            f"bookmark {bookmark.id}: {db_error}"
+        )
+        return Response(
+            {'error': 'Unable to delete bookmark due to server error'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
     
     return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -540,12 +575,24 @@ def bookmark_check_view(request, content_type, object_id):
             "is_bookmarked": true,
             "bookmark_id": 123  // Only included if bookmarked
         }
+        400 Bad Request: If parameters are invalid
     
     Example Requests:
         GET /api/learning-resources/bookmarks/check/video/123/
     """
+    # Validate object_id is a valid integer
     try:
-        # Get the content type
+        object_id = int(object_id)
+        if object_id <= 0:
+            raise ValueError("Object ID must be positive")
+    except (ValueError, TypeError):
+        return Response(
+            {'error': 'Invalid object_id: must be a positive integer'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Get the content type with specific error handling
+    try:
         if content_type.lower() == 'devotionalset':
             ct = ContentType.objects.get(app_label='hub', model='devotionalset')
         elif content_type.lower() in ['devotional', 'fast', 'reading']:
@@ -560,6 +607,7 @@ def bookmark_check_view(request, content_type, object_id):
             status=status.HTTP_400_BAD_REQUEST
         )
     
+    # Check if bookmark exists with specific error handling
     try:
         bookmark = Bookmark.objects.get(
             user=request.user,
@@ -572,3 +620,14 @@ def bookmark_check_view(request, content_type, object_id):
         })
     except Bookmark.DoesNotExist:
         return Response({'is_bookmarked': False})
+    except Exception as db_error:
+        # Handle unexpected database errors
+        logger = logging.getLogger(__name__)
+        logger.error(
+            f"Database error during bookmark check for user {request.user.id}, "
+            f"content_type {ct.id}, object_id {object_id}: {db_error}"
+        )
+        return Response(
+            {'error': 'Unable to check bookmark due to server error'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
