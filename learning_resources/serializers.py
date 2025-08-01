@@ -11,7 +11,14 @@ class BookmarkOptimizedSerializerMixin:
     """
     Mixin for serializers to provide Redis-cached bookmark checking.
     
-    Uses Redis cache for sub-millisecond bookmark lookups with database fallback.
+    Uses explicit context data for bookmark cache to optimize performance while
+    avoiding memory issues and improving testability. Falls back to Redis cache
+    manager and database queries when needed.
+    
+    Expected context keys:
+        - bookmark_cache_data: Pre-computed bookmark status dict {object_id: bool}
+        - use_bookmark_cache: Boolean flag to enable Redis fallback
+        - request: Django request object with authenticated user
     """
     
     def get_is_bookmarked(self, obj):
@@ -20,9 +27,10 @@ class BookmarkOptimizedSerializerMixin:
         if not (request and request.user.is_authenticated):
             return False
         
-        # Try Redis cache from view first (fastest path)
-        if hasattr(request, '_redis_bookmark_cache'):
-            return request._redis_bookmark_cache.get(obj.id, False)
+        # Try explicit cache data from context first (fastest path)
+        bookmark_cache_data = self.context.get('bookmark_cache_data')
+        if bookmark_cache_data is not None:
+            return bookmark_cache_data.get(obj.id, False)
         
         # Fallback to Redis cache manager (still very fast)
         if self.context.get('use_bookmark_cache', False):

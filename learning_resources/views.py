@@ -20,15 +20,27 @@ class BookmarkOptimizedMixin:
     
     This approach uses Redis cache to provide sub-millisecond bookmark lookups,
     with automatic fallback to database queries when needed.
+    
+    Uses explicit context passing instead of storing data in the request object
+    to avoid memory issues and improve testability.
     """
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cache data for the current paginated page to avoid memory issues
+        # This is cleared after each pagination to prevent accumulation
+        self._bookmark_cache_data = None
+    
     def get_serializer_context(self):
-        """Add Redis bookmark cache context."""
+        """Add Redis bookmark cache context with explicit cache data."""
         context = super().get_serializer_context()
         
         # Enable Redis caching for authenticated users
         if hasattr(self.request, 'user') and self.request.user.is_authenticated:
             context['use_bookmark_cache'] = True
+            # Pass cached bookmark data explicitly through context
+            if self._bookmark_cache_data is not None:
+                context['bookmark_cache_data'] = self._bookmark_cache_data
             
         return context
     
@@ -38,15 +50,23 @@ class BookmarkOptimizedMixin:
         
         if page is not None and hasattr(self.request, 'user') and self.request.user.is_authenticated:
             # Use Redis cache for ultra-fast bookmark lookups
-            bookmark_status = BookmarkCacheManager.get_bookmarks_for_objects(
+            self._bookmark_cache_data = BookmarkCacheManager.get_bookmarks_for_objects(
                 self.request.user, 
                 page
             )
-            
-            # Store in request for serializer access
-            self.request._redis_bookmark_cache = bookmark_status
+            # Note: The cache data will be passed to serializers via get_serializer_context
         
         return page
+    
+    def get_paginated_response(self, data):
+        """Override to clear cache data after response generation."""
+        response = super().get_paginated_response(data)
+        
+        # Clear cache data to prevent memory accumulation
+        # This is especially important for large datasets
+        self._bookmark_cache_data = None
+        
+        return response
 
 
 class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
