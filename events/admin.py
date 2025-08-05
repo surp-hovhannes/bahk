@@ -68,6 +68,8 @@ class EventAdmin(admin.ModelAdmin):
         'title', 'event_type', 'user_link', 'target_link', 
         'timestamp', 'target_model', 'age_display'
     ]
+    
+    change_list_template = 'admin/events/event/change_list.html'
     list_filter = [
         'event_type__category', 'event_type', 'timestamp', 
         'content_type', 'user__is_staff'
@@ -173,6 +175,7 @@ class EventAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('analytics/', self.admin_site.admin_view(self.analytics_view), name='events_analytics'),
+            path('analytics/data/', self.admin_site.admin_view(self.analytics_data), name='events_analytics_data'),
             path('export_csv/', self.admin_site.admin_view(self.export_csv), name='events_export_csv'),
         ]
         return custom_urls + urls
@@ -181,13 +184,14 @@ class EventAdmin(admin.ModelAdmin):
         """
         Custom analytics view showing event statistics and trends.
         """
-        # Get date range (default to last 30 days)
+        # Get date range from request or default to last 30 days
+        days = int(request.GET.get('days', 30))
         end_date = timezone.now()
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=days)
         
         # Basic event statistics
         total_events = Event.objects.count()
-        events_last_30_days = Event.objects.filter(
+        events_in_period = Event.objects.filter(
             timestamp__gte=start_date
         ).count()
         
@@ -198,17 +202,38 @@ class EventAdmin(admin.ModelAdmin):
             count=Count('id')
         ).order_by('-count')[:10]
         
-        # Events by day (last 30 days)
+        # Events by day (histogram data)
         events_by_day = {}
-        for i in range(30):
+        fast_joins_by_day = {}
+        fast_leaves_by_day = {}
+        
+        for i in range(days):
             day = start_date + timedelta(days=i)
             day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
+            
+            # Total events for this day
             count = Event.objects.filter(
                 timestamp__gte=day_start,
                 timestamp__lt=day_end
             ).count()
             events_by_day[day.strftime('%Y-%m-%d')] = count
+            
+            # Fast joins for this day
+            joins_count = Event.objects.filter(
+                event_type__code=EventType.USER_JOINED_FAST,
+                timestamp__gte=day_start,
+                timestamp__lt=day_end
+            ).count()
+            fast_joins_by_day[day.strftime('%Y-%m-%d')] = joins_count
+            
+            # Fast leaves for this day
+            leaves_count = Event.objects.filter(
+                event_type__code=EventType.USER_LEFT_FAST,
+                timestamp__gte=day_start,
+                timestamp__lt=day_end
+            ).count()
+            fast_leaves_by_day[day.strftime('%Y-%m-%d')] = leaves_count
         
         # Top users by activity
         top_users = Event.objects.exclude(
@@ -219,7 +244,7 @@ class EventAdmin(admin.ModelAdmin):
             event_count=Count('id')
         ).order_by('-event_count')[:10]
         
-        # Fast join trends (if applicable)
+        # Fast join/leave totals for the period
         fast_joins = Event.objects.filter(
             event_type__code=EventType.USER_JOINED_FAST,
             timestamp__gte=start_date
@@ -236,22 +261,119 @@ class EventAdmin(admin.ModelAdmin):
             timestamp__gte=start_date
         ).order_by('-timestamp')[:5]
         
+        # Hourly distribution for the last 7 days (for more granular analysis)
+        hourly_data = {}
+        if days <= 7:
+            for i in range(24):
+                hour_start = start_date.replace(hour=i, minute=0, second=0, microsecond=0)
+                hour_end = hour_start + timedelta(hours=1)
+                count = Event.objects.filter(
+                    timestamp__gte=hour_start,
+                    timestamp__lt=hour_end
+                ).count()
+                hourly_data[f"{i:02d}:00"] = count
+        
+        # Fast activity trends (joins vs leaves over time)
+        fast_trends_data = {
+            'labels': list(events_by_day.keys()),
+            'joins': list(fast_joins_by_day.values()),
+            'leaves': list(fast_leaves_by_day.values()),
+            'net': [joins - leaves for joins, leaves in zip(fast_joins_by_day.values(), fast_leaves_by_day.values())]
+        }
+        
         context = {
             'title': 'Events Analytics',
             'total_events': total_events,
-            'events_last_30_days': events_last_30_days,
-            'events_by_type': events_by_type,
+            'events_in_period': events_in_period,
+            'events_by_type': list(events_by_type),  # Convert to list for JSON serialization
             'events_by_day': events_by_day,
-            'top_users': top_users,
+            'fast_joins_by_day': fast_joins_by_day,
+            'fast_leaves_by_day': fast_leaves_by_day,
+            'fast_trends_data': fast_trends_data,
+            'top_users': list(top_users),  # Convert to list for JSON serialization
             'fast_joins': fast_joins,
             'fast_leaves': fast_leaves,
             'net_joins': fast_joins - fast_leaves,
             'milestones': milestones,
+            'hourly_data': hourly_data,
             'start_date': start_date,
             'end_date': end_date,
+            'days': days,
         }
         
         return render(request, 'admin/events/analytics.html', context)
+    
+    def analytics_data(self, request):
+        """
+        AJAX endpoint for fetching analytics data with different date ranges.
+        """
+        from django.http import JsonResponse
+        
+        # Get date range from request
+        days = int(request.GET.get('days', 30))
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Events by day (histogram data)
+        events_by_day = {}
+        fast_joins_by_day = {}
+        fast_leaves_by_day = {}
+        
+        for i in range(days):
+            day = start_date + timedelta(days=i)
+            day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+            
+            # Total events for this day
+            count = Event.objects.filter(
+                timestamp__gte=day_start,
+                timestamp__lt=day_end
+            ).count()
+            events_by_day[day.strftime('%Y-%m-%d')] = count
+            
+            # Fast joins for this day
+            joins_count = Event.objects.filter(
+                event_type__code=EventType.USER_JOINED_FAST,
+                timestamp__gte=day_start,
+                timestamp__lt=day_end
+            ).count()
+            fast_joins_by_day[day.strftime('%Y-%m-%d')] = joins_count
+            
+            # Fast leaves for this day
+            leaves_count = Event.objects.filter(
+                event_type__code=EventType.USER_LEFT_FAST,
+                timestamp__gte=day_start,
+                timestamp__lt=day_end
+            ).count()
+            fast_leaves_by_day[day.strftime('%Y-%m-%d')] = leaves_count
+        
+        # Fast activity trends
+        fast_trends_data = {
+            'labels': list(events_by_day.keys()),
+            'joins': list(fast_joins_by_day.values()),
+            'leaves': list(fast_leaves_by_day.values()),
+            'net': [joins - leaves for joins, leaves in zip(fast_joins_by_day.values(), fast_leaves_by_day.values())]
+        }
+        
+        # Summary statistics
+        fast_joins = Event.objects.filter(
+            event_type__code=EventType.USER_JOINED_FAST,
+            timestamp__gte=start_date
+        ).count()
+        
+        fast_leaves = Event.objects.filter(
+            event_type__code=EventType.USER_LEFT_FAST,
+            timestamp__gte=start_date
+        ).count()
+        
+        return JsonResponse({
+            'events_by_day': events_by_day,
+            'fast_trends_data': fast_trends_data,
+            'fast_joins': fast_joins,
+            'fast_leaves': fast_leaves,
+            'net_joins': fast_joins - fast_leaves,
+            'events_in_period': sum(events_by_day.values()),
+        })
     
     def export_csv(self, request):
         """
