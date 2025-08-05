@@ -8,6 +8,10 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 from unittest.mock import patch
+from django.utils import timezone
+from django.contrib.contenttypes.models import ContentType
+from django.core.management import call_command
+from django.test.utils import override_settings
 
 from .models import Event, EventType, UserActivityFeed
 from hub.models import Fast, Church, Profile
@@ -662,7 +666,6 @@ class UserActivityFeedModelTest(TestCase):
     
     def test_cleanup_old_items(self):
         """Test cleaning up old items."""
-        from django.utils import timezone
         from datetime import timedelta
         
         # Create old read items (much older than retention policy - 100 days for fast_reminder)
@@ -1079,7 +1082,6 @@ class UserActivityFeedTasksTest(TestCase):
     def test_cleanup_old_activity_feed_items_task(self):
         """Test cleaning up old activity feed items via Celery task."""
         from .tasks import cleanup_old_activity_feed_items_task
-        from django.utils import timezone
         from datetime import timedelta
         
         # Clear any existing feed items
@@ -1226,7 +1228,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     def test_cleanup_activity_feeds_command(self):
         """Test cleanup_activity_feeds management command."""
         from django.core.management import call_command
-        from django.utils import timezone
         from datetime import timedelta
         from io import StringIO
         
@@ -1261,7 +1262,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     def test_cleanup_activity_feeds_command_dry_run(self):
         """Test cleanup_activity_feeds command with dry run."""
         from django.core.management import call_command
-        from django.utils import timezone
         from datetime import timedelta
         from io import StringIO
         
@@ -1292,3 +1292,363 @@ class UserActivityFeedManagementCommandsTest(TestCase):
         
         # Check that old item still exists (dry run)
         self.assertTrue(UserActivityFeed.objects.filter(id=old_item.id).exists())
+
+
+class EventTasksTest(TestCase):
+    """Test Celery tasks for event tracking."""
+    
+    def setUp(self):
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.profile = Profile.objects.create(user=self.user, church=self.church)
+        
+        # Ensure all event types are created
+        EventType.get_or_create_default_types()
+        
+    def test_track_fast_participant_milestone_task(self):
+        """Test the milestone tracking task."""
+        from events.tasks import track_fast_participant_milestone_task
+        
+        # Test with a milestone count
+        result = track_fast_participant_milestone_task(self.fast.id, 10)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['fast_id'], self.fast.id)
+        self.assertEqual(result['participant_count'], 10)
+        self.assertTrue(result['milestone_created'])
+        
+        # Verify event was created
+        from events.models import Event, EventType
+        event = Event.objects.filter(
+            event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
+            object_id=self.fast.id
+        ).first()
+        
+        self.assertIsNotNone(event)
+        self.assertEqual(event.data['milestone'], 10)
+        
+    def test_track_fast_participant_milestone_task_no_milestone(self):
+        """Test milestone tracking task when no milestone is reached."""
+        from events.tasks import track_fast_participant_milestone_task
+        
+        # Test with a non-milestone count
+        result = track_fast_participant_milestone_task(self.fast.id, 15)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['fast_id'], self.fast.id)
+        self.assertEqual(result['participant_count'], 15)
+        self.assertFalse(result['milestone_created'])
+        
+    def test_track_fast_beginning_task(self):
+        """Test the fast beginning tracking task."""
+        from events.tasks import track_fast_beginning_task
+        
+        result = track_fast_beginning_task(self.fast.id)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['fast_id'], self.fast.id)
+        self.assertEqual(result['fast_name'], self.fast.name)
+        self.assertTrue(result['event_created'])
+        
+        # Verify event was created
+        from events.models import Event, EventType
+        event = Event.objects.filter(
+            event_type__code=EventType.FAST_BEGINNING,
+            object_id=self.fast.id
+        ).first()
+        
+        self.assertIsNotNone(event)
+        self.assertEqual(event.data['fast_name'], self.fast.name)
+        
+    def test_check_fast_beginning_events_task(self):
+        """Test the scheduled fast beginning check task."""
+        from events.tasks import check_fast_beginning_events_task
+        from hub.models import Day
+        from django.utils import timezone
+        
+        # Create a day for today
+        today = timezone.now().date()
+        Day.objects.create(fast=self.fast, date=today)
+        
+        result = check_fast_beginning_events_task()
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('fasts_checked', result)
+        self.assertIn('events_created', result)
+        
+    def test_check_participation_milestones_task(self):
+        """Test the scheduled participation milestones check task."""
+        from events.tasks import check_participation_milestones_task
+        from hub.models import Day
+        from django.utils import timezone
+        
+        # Create a day for today
+        today = timezone.now().date()
+        Day.objects.create(fast=self.fast, date=today)
+        
+        result = check_participation_milestones_task()
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('fasts_checked', result)
+        self.assertIn('milestones_created', result)
+        
+    def test_task_error_handling(self):
+        """Test that tasks handle errors gracefully."""
+        from events.tasks import track_fast_participant_milestone_task, track_fast_beginning_task
+        
+        # Test with non-existent fast
+        result = track_fast_participant_milestone_task(99999)
+        self.assertIsNone(result)  # Should return None on error
+        
+        result = track_fast_beginning_task(99999)
+        self.assertIsNone(result)  # Should return None on error
+        
+    def test_track_devotional_availability_task(self):
+        """Test the devotional availability tracking task."""
+        from events.tasks import track_devotional_availability_task
+        from hub.models import Day, Devotional, Video
+        
+        # Create a day for today
+        today = timezone.now().date()
+        day = Day.objects.create(fast=self.fast, date=today, church=self.church)
+        
+        # Create a video
+        video = Video.objects.create(
+            title='Test Devotional Video',
+            description='Test devotional description',
+            category='devotional'
+        )
+        
+        # Create a devotional
+        devotional = Devotional.objects.create(
+            day=day,
+            video=video,
+            description='Test devotional',
+            order=1
+        )
+        
+        result = track_devotional_availability_task(self.fast.id, devotional.id)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['fast_id'], self.fast.id)
+        self.assertEqual(result['devotional_id'], devotional.id)
+        self.assertEqual(result['devotional_title'], 'Test Devotional Video')
+        self.assertTrue(result['event_created'])
+        
+        # Verify event was created
+        from events.models import Event, EventType
+        event = Event.objects.filter(
+            event_type__code=EventType.DEVOTIONAL_AVAILABLE,
+            object_id=self.fast.id
+        ).first()
+        
+        self.assertIsNotNone(event)
+        self.assertEqual(event.data['devotional_title'], 'Test Devotional Video')
+        self.assertEqual(event.data['devotional_id'], devotional.id)
+        
+    def test_check_devotional_availability_task(self):
+        """Test the scheduled devotional availability check task."""
+        from events.tasks import check_devotional_availability_task
+        from hub.models import Day, Devotional, Video
+        
+        # Create a day for today
+        today = timezone.now().date()
+        day = Day.objects.create(fast=self.fast, date=today, church=self.church)
+        
+        # Create a video
+        video = Video.objects.create(
+            title='Test Devotional Video',
+            description='Test devotional description',
+            category='devotional'
+        )
+        
+        # Create a devotional
+        devotional = Devotional.objects.create(
+            day=day,
+            video=video,
+            description='Test devotional',
+            order=1
+        )
+        
+        # Clear any existing devotional availability events for this fast
+        from events.models import Event, EventType
+        Event.objects.filter(
+            event_type__code=EventType.DEVOTIONAL_AVAILABLE,
+            object_id=self.fast.id
+        ).delete()
+        
+        result = check_devotional_availability_task()
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('devotionals_checked', result)
+        self.assertIn('events_created', result)
+        self.assertEqual(result['devotionals_checked'], 1)
+        self.assertEqual(result['events_created'], 1)
+        
+    def test_devotional_availability_task_error_handling(self):
+        """Test that devotional availability tasks handle errors gracefully."""
+        from events.tasks import track_devotional_availability_task
+        
+        # Test with non-existent fast and devotional
+        result = track_devotional_availability_task(99999, 99999)
+        self.assertIsNone(result)  # Should return None on error
+        
+    def test_track_article_published_task(self):
+        """Test the article publication tracking task."""
+        from events.tasks import track_article_published_task
+        from learning_resources.models import Article
+        
+        # Create an article
+        article = Article.objects.create(
+            title='Test Article',
+            body='Test article content in markdown format'
+        )
+        
+        result = track_article_published_task(article.id)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['article_id'], article.id)
+        self.assertEqual(result['article_title'], article.title)
+        self.assertTrue(result['event_created'])
+        
+        # Verify event was created
+        from events.models import Event, EventType
+        event = Event.objects.filter(
+            event_type__code=EventType.ARTICLE_PUBLISHED,
+            object_id=article.id
+        ).first()
+        
+        self.assertIsNotNone(event)
+        self.assertEqual(event.data['article_title'], article.title)
+        
+    def test_track_recipe_published_task(self):
+        """Test the recipe publication tracking task."""
+        from events.tasks import track_recipe_published_task
+        from learning_resources.models import Recipe
+        
+        # Create a recipe
+        recipe = Recipe.objects.create(
+            title='Test Recipe',
+            description='A delicious test recipe',
+            time_required='30 minutes',
+            serves='4 people',
+            ingredients='- Ingredient 1\n- Ingredient 2',
+            directions='1. Step one\n2. Step two'
+        )
+        
+        result = track_recipe_published_task(recipe.id)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['recipe_id'], recipe.id)
+        self.assertEqual(result['recipe_title'], recipe.title)
+        self.assertTrue(result['event_created'])
+        
+        # Verify event was created
+        from events.models import Event, EventType
+        event = Event.objects.filter(
+            event_type__code=EventType.RECIPE_PUBLISHED,
+            object_id=recipe.id
+        ).first()
+        
+        self.assertIsNotNone(event)
+        self.assertEqual(event.data['recipe_title'], recipe.title)
+        self.assertEqual(event.data['time_required'], '30 minutes')
+        
+    def test_track_video_published_task_general(self):
+        """Test the video publication tracking task for general videos."""
+        from events.tasks import track_video_published_task
+        from learning_resources.models import Video
+        
+        # Create a general video
+        video = Video.objects.create(
+            title='Test General Video',
+            description='A test general video',
+            category='general'
+        )
+        
+        result = track_video_published_task(video.id)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['video_id'], video.id)
+        self.assertEqual(result['video_title'], video.title)
+        self.assertEqual(result['video_category'], 'general')
+        self.assertTrue(result['event_created'])
+        
+        # Verify event was created
+        from events.models import Event, EventType
+        event = Event.objects.filter(
+            event_type__code=EventType.VIDEO_PUBLISHED,
+            object_id=video.id
+        ).first()
+        
+        self.assertIsNotNone(event)
+        self.assertEqual(event.data['video_title'], video.title)
+        self.assertEqual(event.data['video_category'], 'general')
+        
+    def test_track_video_published_task_tutorial(self):
+        """Test the video publication tracking task for tutorial videos."""
+        from events.tasks import track_video_published_task
+        from learning_resources.models import Video
+        
+        # Create a tutorial video
+        video = Video.objects.create(
+            title='Test Tutorial Video',
+            description='A test tutorial video',
+            category='tutorial'
+        )
+        
+        result = track_video_published_task(video.id)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['video_id'], video.id)
+        self.assertEqual(result['video_title'], video.title)
+        self.assertEqual(result['video_category'], 'tutorial')
+        self.assertTrue(result['event_created'])
+        
+    def test_track_video_published_task_devotional_skipped(self):
+        """Test that devotional videos are skipped in tracking."""
+        from events.tasks import track_video_published_task
+        from learning_resources.models import Video
+        
+        # Create a devotional video
+        video = Video.objects.create(
+            title='Test Devotional Video',
+            description='A test devotional video',
+            category='devotional'
+        )
+        
+        result = track_video_published_task(video.id)
+        
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['video_id'], video.id)
+        self.assertEqual(result['video_title'], video.title)
+        self.assertFalse(result['event_created'])
+        self.assertIn('Category devotional not tracked', result['reason'])
+        
+        # Verify no event was created
+        from events.models import Event, EventType
+        event = Event.objects.filter(
+            event_type__code=EventType.VIDEO_PUBLISHED,
+            object_id=video.id
+        ).first()
+        
+        self.assertIsNone(event)
+        
+    def test_learning_resource_task_error_handling(self):
+        """Test that learning resource tasks handle errors gracefully."""
+        from events.tasks import track_article_published_task, track_recipe_published_task, track_video_published_task
+        
+        # Test with non-existent resources
+        result = track_article_published_task(99999)
+        self.assertIsNone(result)  # Should return None on error
+        
+        result = track_recipe_published_task(99999)
+        self.assertIsNone(result)  # Should return None on error
+        
+        result = track_video_published_task(99999)
+        self.assertIsNone(result)  # Should return None on error

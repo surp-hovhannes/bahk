@@ -30,6 +30,9 @@ class EventType(models.Model):
     USER_LOGGED_OUT = 'user_logged_out'
     FAST_CREATED = 'fast_created'
     FAST_UPDATED = 'fast_updated'
+    ARTICLE_PUBLISHED = 'article_published'
+    RECIPE_PUBLISHED = 'recipe_published'
+    VIDEO_PUBLISHED = 'video_published'
     
     CORE_EVENT_TYPES = [
         (USER_JOINED_FAST, 'User Joined Fast'),
@@ -43,6 +46,9 @@ class EventType(models.Model):
         (USER_LOGGED_OUT, 'User Logged Out'),
         (FAST_CREATED, 'Fast Created'),
         (FAST_UPDATED, 'Fast Updated'),
+        (ARTICLE_PUBLISHED, 'Article Published'),
+        (RECIPE_PUBLISHED, 'Recipe Published'),
+        (VIDEO_PUBLISHED, 'Video Published'),
     ]
     
     # Core fields
@@ -122,7 +128,7 @@ class EventType(models.Model):
         """Get appropriate category for event type code."""
         if code in [cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.USER_LOGGED_IN, cls.USER_LOGGED_OUT]:
             return 'user_action'
-        elif code in [cls.FAST_BEGINNING, cls.FAST_ENDING, cls.FAST_CREATED, cls.FAST_UPDATED]:
+        elif code in [cls.FAST_BEGINNING, cls.FAST_ENDING, cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED]:
             return 'system_event'
         elif code in [cls.FAST_PARTICIPANT_MILESTONE, cls.USER_MILESTONE_REACHED]:
             return 'milestone'
@@ -136,7 +142,8 @@ class EventType(models.Model):
         return code in [
             cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.FAST_BEGINNING, 
             cls.FAST_ENDING, cls.DEVOTIONAL_AVAILABLE, cls.FAST_PARTICIPANT_MILESTONE,
-            cls.FAST_CREATED, cls.FAST_UPDATED
+            cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, 
+            cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED
         ]
 
 
@@ -365,6 +372,9 @@ class UserActivityFeed(models.Model):
         ('milestone', 'Milestone Reached'),
         ('fast_reminder', 'Fast Reminder'),
         ('devotional_reminder', 'Devotional Reminder'),
+        ('article_published', 'Article Published'),
+        ('recipe_published', 'Recipe Published'),
+        ('video_published', 'Video Published'),
     ]
     
     user = models.ForeignKey(
@@ -596,6 +606,9 @@ class UserActivityFeed(models.Model):
             EventType.FAST_BEGINNING: 'fast_start',
             EventType.DEVOTIONAL_AVAILABLE: 'devotional_available',
             EventType.FAST_PARTICIPANT_MILESTONE: 'milestone',
+            EventType.ARTICLE_PUBLISHED: 'article_published',
+            EventType.RECIPE_PUBLISHED: 'recipe_published',
+            EventType.VIDEO_PUBLISHED: 'video_published',
         }
         
         activity_type = activity_type_mapping.get(event.event_type.code)
@@ -655,5 +668,81 @@ class UserActivityFeed(models.Model):
                 'fast_id': fast.id,
                 'fast_name': fast.name,
                 'video_title': devotional.video.title if devotional.video else None
+            }
+        )
+    
+    @classmethod
+    def create_article_published_item(cls, user, article):
+        """
+        Create an article published feed item.
+        """
+        title = f"New Article: {article.title}"
+        description = f"A new article has been published"
+        
+        return cls.objects.create(
+            user=user,
+            activity_type='article_published',
+            target=article,
+            title=title,
+            description=description,
+            data={
+                'article_id': article.id,
+                'article_title': article.title,
+                'article_image_url': article.cached_thumbnail_url or (article.thumbnail.url if article.thumbnail else None),
+                'published_at': article.created_at.isoformat(),
+            }
+        )
+    
+    @classmethod
+    def create_recipe_published_item(cls, user, recipe):
+        """
+        Create a recipe published feed item.
+        """
+        title = f"New Recipe: {recipe.title}"
+        description = f"A new recipe has been published"
+        
+        return cls.objects.create(
+            user=user,
+            activity_type='recipe_published',
+            target=recipe,
+            title=title,
+            description=description,
+            data={
+                'recipe_id': recipe.id,
+                'recipe_title': recipe.title,
+                'recipe_description': recipe.description,
+                'recipe_image_url': recipe.cached_thumbnail_url or (recipe.thumbnail.url if recipe.thumbnail else None),
+                'time_required': recipe.time_required,
+                'serves': recipe.serves,
+                'published_at': recipe.created_at.isoformat(),
+            }
+        )
+    
+    @classmethod
+    def create_video_published_item(cls, user, video):
+        """
+        Create a video published feed item.
+        Only creates items for general and tutorial videos (not devotionals).
+        """
+        # Only track general and tutorial videos
+        if video.category not in ['general', 'tutorial']:
+            return None
+            
+        title = f"New Video: {video.title}"
+        description = f"A new {video.get_category_display().lower()} video has been published"
+        
+        return cls.objects.create(
+            user=user,
+            activity_type='video_published',
+            target=video,
+            title=title,
+            description=description,
+            data={
+                'video_id': video.id,
+                'video_title': video.title,
+                'video_description': video.description,
+                'video_category': video.category,
+                'video_thumbnail_url': video.cached_thumbnail_url or (video.thumbnail.url if video.thumbnail else None),
+                'published_at': video.created_at.isoformat(),
             }
         )

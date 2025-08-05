@@ -37,13 +37,13 @@ app.conf.beat_schedule = {
             }
         }
     },
-    'update-current-fast-maps-every-hour': {
+    'update-current-fast-maps-once-per-day': {
         'task': 'hub.tasks.update_current_fast_maps',
-        'schedule': 60 * 60,  # Every hour
+        'schedule': crontab(hour=1, minute=0),
         # Add Sentry Cron metadata
         'options': {
             'sentry': {
-                'monitor_slug': 'hourly-fast-map-updates',
+                'monitor_slug': 'daily-fast-map-updates',
             }
         }
     },
@@ -54,6 +54,36 @@ app.conf.beat_schedule = {
         'options': {
             'sentry': {
                 'monitor_slug': 'daily-activity-feed-cleanup',
+            }
+        }
+    },
+    'check-fast-beginning-events-daily': {
+        'task': 'events.tasks.check_fast_beginning_events_task',
+        'schedule': crontab(hour=6, minute=0),  # 6 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-fast-beginning-check',
+            }
+        }
+    },
+    'check-participation-milestones-daily': {
+        'task': 'events.tasks.check_participation_milestones_task',
+        'schedule': crontab(hour=8, minute=0),  # 8 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-participation-milestones-check',
+            }
+        }
+    },
+    'check-devotional-availability-daily': {
+        'task': 'events.tasks.check_devotional_availability_task',
+        'schedule': crontab(hour=7, minute=0),  # 7 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-devotional-availability-check',
             }
         }
     },

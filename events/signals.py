@@ -52,6 +52,15 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             }
                         )
                         logger.info(f"Tracked USER_JOINED_FAST event: {user} joined {fast}")
+                        
+                        # Check for participation milestones after user joins
+                        try:
+                            from .tasks import track_fast_participant_milestone_task
+                            track_fast_participant_milestone_task.delay(fast.id)
+                            logger.info(f"Scheduled milestone check for fast {fast.name} after user join")
+                        except Exception as milestone_error:
+                            logger.error(f"Error scheduling milestone check for fast {fast.name}: {milestone_error}")
+                            
                     except ValueError as e:
                         if "does not exist or is inactive" in str(e):
                             logger.warning(f"Event type '{EventType.USER_JOINED_FAST}' does not exist, skipping event tracking")
@@ -76,6 +85,15 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             }
                         )
                         logger.info(f"Tracked USER_LEFT_FAST event: {user} left {fast}")
+                        
+                        # Check for participation milestones after user leaves
+                        try:
+                            from .tasks import track_fast_participant_milestone_task
+                            track_fast_participant_milestone_task.delay(fast.id)
+                            logger.info(f"Scheduled milestone check for fast {fast.name} after user leave")
+                        except Exception as milestone_error:
+                            logger.error(f"Error scheduling milestone check for fast {fast.name}: {milestone_error}")
+                            
                     except ValueError as e:
                         if "does not exist or is inactive" in str(e):
                             logger.warning(f"Event type '{EventType.USER_LEFT_FAST}' does not exist, skipping event tracking")
@@ -381,3 +399,165 @@ def create_activity_feed_item(sender, instance, created, **kwargs):
         else:
             # Create feed item synchronously (current behavior)
             UserActivityFeed.create_from_event(instance, instance.user)
+
+
+@receiver(post_save, sender='hub.Devotional')
+def track_devotional_availability_on_save(sender, instance, created, **kwargs):
+    """
+    Track devotional availability when a devotional is created or updated.
+    Only triggers for devotionals with dates today or in the future.
+    """
+    try:
+        from django.utils import timezone
+        from .tasks import track_devotional_availability_task
+        
+        today = timezone.now().date()
+        
+        # Only track if the devotional's date is today or in the future
+        if instance.day and instance.day.date >= today:
+            # Schedule the task asynchronously to avoid blocking the save operation
+            track_devotional_availability_task.delay(instance.day.fast.id, instance.id)
+            logger.info(f"Scheduled devotional availability tracking for {instance.day.fast.name} - {instance.video.title if instance.video else 'Devotional'}")
+            
+    except Exception as e:
+        logger.error(f"Error scheduling devotional availability tracking: {e}")
+
+
+def track_article_published(article):
+    """
+    Utility function to track when an article is published.
+    
+    Args:
+        article: Article instance
+    """
+    try:
+        Event.create_event(
+            event_type_code=EventType.ARTICLE_PUBLISHED,
+            user=None,  # System event
+            target=article,
+            description=f"Article '{article.title}' was published",
+            data={
+                'article_id': article.id,
+                'article_title': article.title,
+                'article_image_url': article.cached_thumbnail_url or (article.thumbnail.url if article.thumbnail else None),
+                'published_at': article.created_at.isoformat(),
+            }
+        )
+        logger.info(f"Tracked ARTICLE_PUBLISHED event: {article}")
+        
+    except Exception as e:
+        logger.error(f"Error tracking article publication: {e}")
+
+
+def track_recipe_published(recipe):
+    """
+    Utility function to track when a recipe is published.
+    
+    Args:
+        recipe: Recipe instance
+    """
+    try:
+        Event.create_event(
+            event_type_code=EventType.RECIPE_PUBLISHED,
+            user=None,  # System event
+            target=recipe,
+            description=f"Recipe '{recipe.title}' was published",
+            data={
+                'recipe_id': recipe.id,
+                'recipe_title': recipe.title,
+                'recipe_description': recipe.description,
+                'recipe_image_url': recipe.cached_thumbnail_url or (recipe.thumbnail.url if recipe.thumbnail else None),
+                'time_required': recipe.time_required,
+                'serves': recipe.serves,
+                'published_at': recipe.created_at.isoformat(),
+            }
+        )
+        logger.info(f"Tracked RECIPE_PUBLISHED event: {recipe}")
+        
+    except Exception as e:
+        logger.error(f"Error tracking recipe publication: {e}")
+
+
+def track_video_published(video):
+    """
+    Utility function to track when a video is published.
+    Only tracks general and tutorial videos (not devotionals).
+    
+    Args:
+        video: Video instance
+    """
+    try:
+        # Only track general and tutorial videos
+        if video.category not in ['general', 'tutorial']:
+            logger.debug(f"Skipping video publication tracking for {video.title} (category: {video.category})")
+            return
+        
+        Event.create_event(
+            event_type_code=EventType.VIDEO_PUBLISHED,
+            user=None,  # System event
+            target=video,
+            description=f"Video '{video.title}' was published",
+            data={
+                'video_id': video.id,
+                'video_title': video.title,
+                'video_description': video.description,
+                'video_category': video.category,
+                'video_thumbnail_url': video.cached_thumbnail_url or (video.thumbnail.url if video.thumbnail else None),
+                'published_at': video.created_at.isoformat(),
+            }
+        )
+        logger.info(f"Tracked VIDEO_PUBLISHED event: {video}")
+        
+    except Exception as e:
+        logger.error(f"Error tracking video publication: {e}")
+
+
+@receiver(post_save, sender='learning_resources.Article')
+def track_article_publication_on_save(sender, instance, created, **kwargs):
+    """
+    Track article publication when an article is created.
+    """
+    try:
+        if created:
+            # Schedule the task asynchronously to avoid blocking the save operation
+            from .tasks import track_article_published_task
+            track_article_published_task.delay(instance.id)
+            logger.info(f"Scheduled article publication tracking for {instance.title}")
+            
+    except Exception as e:
+        logger.error(f"Error scheduling article publication tracking: {e}")
+
+
+@receiver(post_save, sender='learning_resources.Recipe')
+def track_recipe_publication_on_save(sender, instance, created, **kwargs):
+    """
+    Track recipe publication when a recipe is created.
+    """
+    try:
+        if created:
+            # Schedule the task asynchronously to avoid blocking the save operation
+            from .tasks import track_recipe_published_task
+            track_recipe_published_task.delay(instance.id)
+            logger.info(f"Scheduled recipe publication tracking for {instance.title}")
+            
+    except Exception as e:
+        logger.error(f"Error scheduling recipe publication tracking: {e}")
+
+
+@receiver(post_save, sender='learning_resources.Video')
+def track_video_publication_on_save(sender, instance, created, **kwargs):
+    """
+    Track video publication when a video is created.
+    Only tracks general and tutorial videos.
+    """
+    try:
+        if created and instance.category in ['general', 'tutorial']:
+            # Schedule the task asynchronously to avoid blocking the save operation
+            from .tasks import track_video_published_task
+            track_video_published_task.delay(instance.id)
+            logger.info(f"Scheduled video publication tracking for {instance.title}")
+        elif created:
+            logger.debug(f"Skipping video publication tracking for {instance.title} (category: {instance.category})")
+            
+    except Exception as e:
+        logger.error(f"Error scheduling video publication tracking: {e}")
