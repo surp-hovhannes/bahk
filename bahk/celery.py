@@ -16,7 +16,7 @@ app = Celery('bahk')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Configure SSL settings for Redis if using rediss://
-broker_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+broker_url = config('REDIS_URL', default='redis://localhost:6379/0')
 app.conf.broker_url = broker_url
 
 # The SSL settings will be automatically picked up from Django settings
