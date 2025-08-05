@@ -112,6 +112,107 @@
         border-radius: 4px;
         background: white;
     }
+    
+    .fast-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 15px;
+        margin-top: 20px;
+    }
+    
+    .fast-info-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        position: relative;
+    }
+    
+    .fast-info-card.current {
+        border-left: 4px solid #28a745;
+        background: #f8fff9;
+    }
+    
+    .fast-info-card.upcoming {
+        border-left: 4px solid #007bff;
+        background: #f8fbff;
+    }
+    
+    .fast-info-card h4 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+        font-weight: 600;
+    }
+    
+    .fast-info-card .fast-status {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .fast-info-card.current .fast-status {
+        background: #28a745;
+        color: white;
+    }
+    
+    .fast-info-card.upcoming .fast-status {
+        background: #007bff;
+        color: white;
+    }
+    
+    .fast-info-card .fast-dates {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 10px;
+    }
+    
+    .fast-info-card .fast-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .fast-info-card .stat-item {
+        text-align: center;
+    }
+    
+    .fast-info-card .stat-value {
+        font-size: 18px;
+        font-weight: bold;
+        display: block;
+    }
+    
+    .fast-info-card .stat-label {
+        font-size: 12px;
+        color: #666;
+        text-transform: uppercase;
+    }
+    
+    .fast-info-card .participant-count {
+        text-align: center;
+        padding: 8px;
+        background: white;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .fast-info-card .participant-count .count {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .fast-info-card .participant-count .label {
+        font-size: 12px;
+        color: #666;
+        text-transform: uppercase;
+    }
 </style>
 {% endblock %}
 
@@ -179,6 +280,17 @@
         <h2 class="chart-title">📊 Fast Join/Leave Histogram Over Time</h2>
         <div class="chart-wrapper">
             <canvas id="fastHistogramChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Current/Upcoming Fast Trends -->
+    <div class="chart-container">
+        <h2 class="chart-title">🎯 Current & Upcoming Fast Trends</h2>
+        <div class="chart-wrapper">
+            <canvas id="currentUpcomingFastChart"></canvas>
+        </div>
+        <div id="currentUpcomingFastInfo" class="fast-info-grid">
+            <!-- Fast info cards will be populated here -->
         </div>
     </div>
     
@@ -250,7 +362,7 @@ const chartConfig = {
 };
 
 // Initialize charts
-let eventsOverTimeChart, fastTrendsChart, fastHistogramChart, eventTypesChart, topUsersChart;
+let eventsOverTimeChart, fastTrendsChart, fastHistogramChart, currentUpcomingFastChart, eventTypesChart, topUsersChart;
 
 // Data from Django context
 const eventsByDay = {{ events_by_day|safe }};
@@ -258,6 +370,7 @@ const eventsByType = {{ events_by_type|safe }};
 const topUsers = {{ top_users|safe }};
 const fastTrendsData = {{ fast_trends_data|safe }};
 const hourlyData = {{ hourly_data|safe }};
+const currentUpcomingFastData = {{ current_upcoming_fast_data|safe }};
 
 function initializeCharts() {
     // Events Over Time Chart
@@ -373,6 +486,81 @@ function initializeCharts() {
         }
     });
     
+    // Current/Upcoming Fast Chart
+    if (Object.keys(currentUpcomingFastData).length > 0) {
+        const currentUpcomingCtx = document.getElementById('currentUpcomingFastChart').getContext('2d');
+        
+        // Prepare data for the chart
+        const fastNames = Object.keys(currentUpcomingFastData);
+        const datasets = [];
+        
+        fastNames.forEach((fastName, index) => {
+            const fastData = currentUpcomingFastData[fastName];
+            const color = fastData.is_current ? 'rgba(40, 167, 69, 0.8)' : 'rgba(0, 123, 255, 0.8)';
+            const borderColor = fastData.is_current ? 'rgb(40, 167, 69)' : 'rgb(0, 123, 255)';
+            
+            datasets.push({
+                label: `${fastName} (Joins)`,
+                data: Object.values(fastData.daily_joins),
+                backgroundColor: color,
+                borderColor: borderColor,
+                borderWidth: 1,
+                stack: `stack_${index}`,
+            });
+            
+            datasets.push({
+                label: `${fastName} (Leaves)`,
+                data: Object.values(fastData.daily_leaves),
+                backgroundColor: color.replace('0.8', '0.4'),
+                borderColor: borderColor,
+                borderWidth: 1,
+                stack: `stack_${index}`,
+            });
+        });
+        
+        currentUpcomingFastChart = new Chart(currentUpcomingCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(eventsByDay),
+                datasets: datasets
+            },
+            options: {
+                ...chartConfig,
+                plugins: {
+                    ...chartConfig.plugins,
+                    title: {
+                        display: true,
+                        text: 'Current & Upcoming Fast Join/Leave Activity'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Users'
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        // Populate fast info cards
+        populateFastInfoCards();
+    } else {
+        // Show message if no current/upcoming fasts
+        document.getElementById('currentUpcomingFastChart').parentElement.innerHTML = 
+            '<div style="text-align: center; padding: 50px; color: #666;">No current or upcoming fasts found</div>';
+    }
+    
     // Event Types Chart
     const typesCtx = document.getElementById('eventTypesChart').getContext('2d');
     eventTypesChart = new Chart(typesCtx, {
@@ -440,6 +628,47 @@ function initializeCharts() {
     });
 }
 
+function populateFastInfoCards() {
+    const infoContainer = document.getElementById('currentUpcomingFastInfo');
+    infoContainer.innerHTML = '';
+    
+    Object.keys(currentUpcomingFastData).forEach(fastName => {
+        const fastData = currentUpcomingFastData[fastName];
+        const statusClass = fastData.is_current ? 'current' : 'upcoming';
+        const statusText = fastData.is_current ? 'Current' : 'Upcoming';
+        
+        const card = document.createElement('div');
+        card.className = `fast-info-card ${statusClass}`;
+        card.innerHTML = `
+            <div class="fast-status">${statusText}</div>
+            <h4>${fastName}</h4>
+            <div class="fast-dates">
+                ${fastData.start_date} to ${fastData.end_date}
+            </div>
+            <div class="fast-stats">
+                <div class="stat-item">
+                    <span class="stat-value">${fastData.total_joins}</span>
+                    <span class="stat-label">Joins</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">${fastData.total_leaves}</span>
+                    <span class="stat-label">Leaves</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value ${fastData.net_growth >= 0 ? 'positive' : 'negative'}">${fastData.net_growth >= 0 ? '+' : ''}${fastData.net_growth}</span>
+                    <span class="stat-label">Net</span>
+                </div>
+            </div>
+            <div class="participant-count">
+                <div class="count">${fastData.participant_count}</div>
+                <div class="label">Current Participants</div>
+            </div>
+        `;
+        
+        infoContainer.appendChild(card);
+    });
+}
+
 function updateCharts() {
     const days = document.getElementById('dateRange').value;
     
@@ -483,11 +712,13 @@ function recreateCharts(data) {
     if (eventsOverTimeChart) eventsOverTimeChart.destroy();
     if (fastTrendsChart) fastTrendsChart.destroy();
     if (fastHistogramChart) fastHistogramChart.destroy();
+    if (currentUpcomingFastChart) currentUpcomingFastChart.destroy();
     
     // Recreate chart containers
     document.getElementById('eventsOverTimeChart').parentElement.innerHTML = '<canvas id="eventsOverTimeChart"></canvas>';
     document.getElementById('fastTrendsChart').parentElement.innerHTML = '<canvas id="fastTrendsChart"></canvas>';
     document.getElementById('fastHistogramChart').parentElement.innerHTML = '<canvas id="fastHistogramChart"></canvas>';
+    document.getElementById('currentUpcomingFastChart').parentElement.innerHTML = '<canvas id="currentUpcomingFastChart"></canvas>';
     
     // Recreate charts with new data
     const eventsCtx = document.getElementById('eventsOverTimeChart').getContext('2d');
@@ -598,6 +829,118 @@ function recreateCharts(data) {
                 }
             }
         }
+    });
+    
+    // Recreate Current/Upcoming Fast Chart
+    if (data.current_upcoming_fast_data && Object.keys(data.current_upcoming_fast_data).length > 0) {
+        const currentUpcomingCtx = document.getElementById('currentUpcomingFastChart').getContext('2d');
+        
+        // Prepare data for the chart
+        const fastNames = Object.keys(data.current_upcoming_fast_data);
+        const datasets = [];
+        
+        fastNames.forEach((fastName, index) => {
+            const fastData = data.current_upcoming_fast_data[fastName];
+            const color = fastData.is_current ? 'rgba(40, 167, 69, 0.8)' : 'rgba(0, 123, 255, 0.8)';
+            const borderColor = fastData.is_current ? 'rgb(40, 167, 69)' : 'rgb(0, 123, 255)';
+            
+            datasets.push({
+                label: `${fastName} (Joins)`,
+                data: Object.values(fastData.daily_joins),
+                backgroundColor: color,
+                borderColor: borderColor,
+                borderWidth: 1,
+                stack: `stack_${index}`,
+            });
+            
+            datasets.push({
+                label: `${fastName} (Leaves)`,
+                data: Object.values(fastData.daily_leaves),
+                backgroundColor: color.replace('0.8', '0.4'),
+                borderColor: borderColor,
+                borderWidth: 1,
+                stack: `stack_${index}`,
+            });
+        });
+        
+        currentUpcomingFastChart = new Chart(currentUpcomingCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(data.events_by_day),
+                datasets: datasets
+            },
+            options: {
+                ...chartConfig,
+                plugins: {
+                    ...chartConfig.plugins,
+                    title: {
+                        display: true,
+                        text: 'Current & Upcoming Fast Join/Leave Activity'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Users'
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        // Update fast info cards
+        updateFastInfoCards(data.current_upcoming_fast_data);
+    }
+}
+
+function updateFastInfoCards(fastData) {
+    const infoContainer = document.getElementById('currentUpcomingFastInfo');
+    infoContainer.innerHTML = '';
+    
+    Object.keys(fastData).forEach(fastName => {
+        const fast = fastData[fastName];
+        const statusClass = fast.is_current ? 'current' : 'upcoming';
+        const statusText = fast.is_current ? 'Current' : 'Upcoming';
+        
+        const card = document.createElement('div');
+        card.className = `fast-info-card ${statusClass}`;
+        card.innerHTML = `
+            <div class="fast-status">${statusText}</div>
+            <h4>${fastName}</h4>
+            <div class="fast-dates">
+                ${fast.start_date} to ${fast.end_date}
+            </div>
+            <div class="fast-stats">
+                <div class="stat-item">
+                    <span class="stat-value">${fast.total_joins}</span>
+                    <span class="stat-label">Joins</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">${fast.total_leaves}</span>
+                    <span class="stat-label">Leaves</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value ${fast.net_growth >= 0 ? 'positive' : 'negative'}">${fast.net_growth >= 0 ? '+' : ''}${fast.net_growth}</span>
+                    <span class="stat-label">Net</span>
+                </div>
+            </div>
+            <div class="participant-count">
+                <div class="count">${fast.participant_count}</div>
+                <div class="label">Current Participants</div>
+            </div>
+        `;
+        
+        infoContainer.appendChild(card);
     });
 }
 

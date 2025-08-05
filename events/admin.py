@@ -261,6 +261,89 @@ class EventAdmin(admin.ModelAdmin):
             timestamp__gte=start_date
         ).order_by('-timestamp')[:5]
         
+        # Get current and upcoming fasts
+        from hub.models import Fast, Day
+        today = timezone.now().date()
+        
+        # Current fasts (have days that include today)
+        current_fasts = Fast.objects.filter(
+            days__date=today
+        ).distinct()
+        
+        # Upcoming fasts (have days that start after today)
+        upcoming_fasts = Fast.objects.filter(
+            days__date__gt=today
+        ).distinct().order_by('days__date')[:3]  # Limit to next 3 upcoming fasts
+        
+        # Get join/leave data for current and upcoming fasts
+        current_upcoming_fast_data = {}
+        
+        # Combine current and upcoming fasts for analysis
+        all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
+        
+        for fast in all_relevant_fasts:
+            # Get fast date range
+            fast_days = fast.days.order_by('date')
+            if not fast_days.exists():
+                continue
+                
+            fast_start = fast_days.first().date
+            fast_end = fast_days.last().date
+            
+            # Get join/leave events for this specific fast
+            fast_joins = Event.objects.filter(
+                event_type__code=EventType.USER_JOINED_FAST,
+                target=fast,
+                timestamp__gte=start_date
+            ).count()
+            
+            fast_leaves = Event.objects.filter(
+                event_type__code=EventType.USER_LEFT_FAST,
+                target=fast,
+                timestamp__gte=start_date
+            ).count()
+            
+            # Get daily join/leave data for this fast
+            fast_daily_joins = {}
+            fast_daily_leaves = {}
+            
+            for i in range(days):
+                day = start_date + timedelta(days=i)
+                day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+                day_end = day_start + timedelta(days=1)
+                
+                # Joins for this fast on this day
+                joins_count = Event.objects.filter(
+                    event_type__code=EventType.USER_JOINED_FAST,
+                    target=fast,
+                    timestamp__gte=day_start,
+                    timestamp__lt=day_end
+                ).count()
+                fast_daily_joins[day.strftime('%Y-%m-%d')] = joins_count
+                
+                # Leaves for this fast on this day
+                leaves_count = Event.objects.filter(
+                    event_type__code=EventType.USER_LEFT_FAST,
+                    target=fast,
+                    timestamp__gte=day_start,
+                    timestamp__lt=day_end
+                ).count()
+                fast_daily_leaves[day.strftime('%Y-%m-%d')] = leaves_count
+            
+            current_upcoming_fast_data[fast.name] = {
+                'fast': fast,
+                'is_current': fast in current_fasts,
+                'is_upcoming': fast in upcoming_fasts,
+                'start_date': fast_start,
+                'end_date': fast_end,
+                'total_joins': fast_joins,
+                'total_leaves': fast_leaves,
+                'net_growth': fast_joins - fast_leaves,
+                'daily_joins': fast_daily_joins,
+                'daily_leaves': fast_daily_leaves,
+                'participant_count': fast.profiles.count()
+            }
+        
         # Hourly distribution for the last 7 days (for more granular analysis)
         hourly_data = {}
         if days <= 7:
@@ -296,6 +379,9 @@ class EventAdmin(admin.ModelAdmin):
             'net_joins': fast_joins - fast_leaves,
             'milestones': milestones,
             'hourly_data': hourly_data,
+            'current_upcoming_fast_data': current_upcoming_fast_data,
+            'current_fasts': list(current_fasts),
+            'upcoming_fasts': list(upcoming_fasts),
             'start_date': start_date,
             'end_date': end_date,
             'days': days,
@@ -355,6 +441,89 @@ class EventAdmin(admin.ModelAdmin):
             'net': [joins - leaves for joins, leaves in zip(fast_joins_by_day.values(), fast_leaves_by_day.values())]
         }
         
+        # Get current and upcoming fasts
+        from hub.models import Fast, Day
+        today = timezone.now().date()
+        
+        # Current fasts (have days that include today)
+        current_fasts = Fast.objects.filter(
+            days__date=today
+        ).distinct()
+        
+        # Upcoming fasts (have days that start after today)
+        upcoming_fasts = Fast.objects.filter(
+            days__date__gt=today
+        ).distinct().order_by('days__date')[:3]  # Limit to next 3 upcoming fasts
+        
+        # Get join/leave data for current and upcoming fasts
+        current_upcoming_fast_data = {}
+        
+        # Combine current and upcoming fasts for analysis
+        all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
+        
+        for fast in all_relevant_fasts:
+            # Get fast date range
+            fast_days = fast.days.order_by('date')
+            if not fast_days.exists():
+                continue
+                
+            fast_start = fast_days.first().date
+            fast_end = fast_days.last().date
+            
+            # Get join/leave events for this specific fast
+            fast_joins = Event.objects.filter(
+                event_type__code=EventType.USER_JOINED_FAST,
+                target=fast,
+                timestamp__gte=start_date
+            ).count()
+            
+            fast_leaves = Event.objects.filter(
+                event_type__code=EventType.USER_LEFT_FAST,
+                target=fast,
+                timestamp__gte=start_date
+            ).count()
+            
+            # Get daily join/leave data for this fast
+            fast_daily_joins = {}
+            fast_daily_leaves = {}
+            
+            for i in range(days):
+                day = start_date + timedelta(days=i)
+                day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+                day_end = day_start + timedelta(days=1)
+                
+                # Joins for this fast on this day
+                joins_count = Event.objects.filter(
+                    event_type__code=EventType.USER_JOINED_FAST,
+                    target=fast,
+                    timestamp__gte=day_start,
+                    timestamp__lt=day_end
+                ).count()
+                fast_daily_joins[day.strftime('%Y-%m-%d')] = joins_count
+                
+                # Leaves for this fast on this day
+                leaves_count = Event.objects.filter(
+                    event_type__code=EventType.USER_LEFT_FAST,
+                    target=fast,
+                    timestamp__gte=day_start,
+                    timestamp__lt=day_end
+                ).count()
+                fast_daily_leaves[day.strftime('%Y-%m-%d')] = leaves_count
+            
+            current_upcoming_fast_data[fast.name] = {
+                'fast': fast,
+                'is_current': fast in current_fasts,
+                'is_upcoming': fast in upcoming_fasts,
+                'start_date': fast_start,
+                'end_date': fast_end,
+                'total_joins': fast_joins,
+                'total_leaves': fast_leaves,
+                'net_growth': fast_joins - fast_leaves,
+                'daily_joins': fast_daily_joins,
+                'daily_leaves': fast_daily_leaves,
+                'participant_count': fast.profiles.count()
+            }
+        
         # Summary statistics
         fast_joins = Event.objects.filter(
             event_type__code=EventType.USER_JOINED_FAST,
@@ -373,6 +542,7 @@ class EventAdmin(admin.ModelAdmin):
             'fast_leaves': fast_leaves,
             'net_joins': fast_joins - fast_leaves,
             'events_in_period': sum(events_by_day.values()),
+            'current_upcoming_fast_data': current_upcoming_fast_data,
         })
     
     def export_csv(self, request):

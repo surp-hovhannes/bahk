@@ -27,11 +27,17 @@ The Django admin now includes a comprehensive analytics dashboard that provides 
 - Perfect for tracking user engagement patterns over time
 - Shows the distribution of joins and leaves by date
 
-#### 4. Event Types Distribution
+#### 4. Current & Upcoming Fast Trends
+- **New feature**: Focused chart showing join/leave activity for current and upcoming fasts only
+- Color-coded: Green for current fasts, blue for upcoming fasts
+- Shows daily join/leave patterns specifically for relevant fasts
+- Includes fast info cards with detailed statistics for each fast
+
+#### 5. Event Types Distribution
 - Doughnut chart showing breakdown of different event types
 - Helps understand what types of activities are most common
 
-#### 5. Top Active Users
+#### 6. Top Active Users
 - Horizontal bar chart of most active users
 - Useful for identifying power users and engagement patterns
 
