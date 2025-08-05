@@ -359,3 +359,25 @@ def check_and_track_participation_milestones(fast):
         
     except Exception as e:
         logger.error(f"Error checking participation milestones for fast {fast}: {e}")
+
+
+@receiver(post_save, sender=Event)
+def create_activity_feed_item(sender, instance, created, **kwargs):
+    """
+    Create activity feed items when events are created.
+    Supports both synchronous and asynchronous creation.
+    """
+    if created and instance.user:
+        from .models import UserActivityFeed
+        from django.conf import settings
+        
+        # Check if async feed creation is enabled
+        use_async = getattr(settings, 'USE_ASYNC_ACTIVITY_FEED', False)
+        
+        if use_async:
+            # Create feed item asynchronously via Celery
+            from .tasks import create_activity_feed_item_task
+            create_activity_feed_item_task.delay(instance.id, instance.user.id)
+        else:
+            # Create feed item synchronously (current behavior)
+            UserActivityFeed.create_from_event(instance, instance.user)

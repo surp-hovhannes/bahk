@@ -22,6 +22,12 @@ urlpatterns = [
     path('stats/user/<int:user_id>/', views.UserEventStatsView.as_view(), name='user-event-stats-specific'),
     path('stats/fast/<int:fast_id>/', views.FastEventStatsView.as_view(), name='fast-event-stats'),
     
+    # User Activity Feed
+    path('activity-feed/', views.UserActivityFeedView.as_view(), name='activity-feed'),
+    path('activity-feed/summary/', views.UserActivityFeedSummaryView.as_view(), name='activity-feed-summary'),
+    path('activity-feed/mark-read/', views.MarkActivityReadView.as_view(), name='mark-activity-read'),
+    path('activity-feed/generate/', views.GenerateActivityFeedView.as_view(), name='generate-activity-feed'),
+    
     # Admin utilities
     path('admin/trigger-milestone/<int:fast_id>/', views.trigger_milestone_check, name='trigger-milestone'),
 ]

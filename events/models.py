@@ -7,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from django.db.models import Count
 
 User = get_user_model()
 
@@ -346,3 +347,313 @@ class Event(models.Model):
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
+
+
+class UserActivityFeed(models.Model):
+    """
+    Tracks user activity feed items with read/unread status.
+    This provides a unified feed of all relevant activities for a user.
+    """
+    
+    # Activity types
+    ACTIVITY_TYPES = [
+        ('event', 'Event'),
+        ('fast_start', 'Fast Started'),
+        ('fast_join', 'Joined Fast'),
+        ('fast_leave', 'Left Fast'),
+        ('devotional_available', 'Devotional Available'),
+        ('milestone', 'Milestone Reached'),
+        ('fast_reminder', 'Fast Reminder'),
+        ('devotional_reminder', 'Devotional Reminder'),
+    ]
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='activity_feed_items',
+        help_text="User who this activity is for"
+    )
+    
+    activity_type = models.CharField(
+        max_length=50,
+        choices=ACTIVITY_TYPES,
+        help_text="Type of activity"
+    )
+    
+    # Reference to the original event (if applicable)
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='feed_items',
+        help_text="Related event (if this is event-based)"
+    )
+    
+    # Generic foreign key for target object (Fast, Devotional, etc.)
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Content type of the target object"
+    )
+    object_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="ID of the target object"
+    )
+    target = GenericForeignKey('content_type', 'object_id')
+    
+    # Activity details
+    title = models.CharField(
+        max_length=255,
+        help_text="Activity title"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Activity description"
+    )
+    
+    # Read status
+    is_read = models.BooleanField(
+        default=False,
+        help_text="Whether the user has seen this activity"
+    )
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the user marked this as read"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text="When this activity was created"
+    )
+    
+    # Flexible data storage
+    data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional data related to the activity"
+    )
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_read']),
+            models.Index(fields=['user', 'activity_type']),
+            models.Index(fields=['user', 'created_at']),
+            # Additional indexes for data retention queries
+            models.Index(fields=['created_at', 'is_read']),
+            models.Index(fields=['activity_type', 'created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_activity_type_display()} - {self.title}"
+    
+    def mark_as_read(self):
+        """Mark this activity as read."""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=['is_read', 'read_at'])
+    
+    @classmethod
+    def get_retention_policy(cls):
+        """
+        Define data retention policies for different activity types.
+        Returns dict of activity_type -> retention_days.
+        """
+        return {
+            'fast_reminder': 30,      # Keep reminders for 30 days
+            'devotional_reminder': 30, # Keep devotional reminders for 30 days
+            'fast_start': 90,         # Keep fast starts for 90 days
+            'fast_join': 180,         # Keep join events for 6 months
+            'fast_leave': 180,        # Keep leave events for 6 months
+            'devotional_available': 90, # Keep devotional notifications for 90 days
+            'milestone': 365,         # Keep milestones for 1 year
+            'event': 180,             # Keep generic events for 6 months
+        }
+    
+    @classmethod
+    def cleanup_old_items(cls, dry_run=True):
+        """
+        Clean up old feed items based on retention policies.
+        """
+        from django.db.models import Q
+        from datetime import timedelta
+        
+        retention_policy = cls.get_retention_policy()
+        cutoff_date = timezone.now()
+        total_deleted = 0
+        
+        for activity_type, retention_days in retention_policy.items():
+            type_cutoff = cutoff_date - timedelta(days=retention_days)
+            
+            # Delete old items of this type that are also read
+            query = Q(
+                activity_type=activity_type,
+                created_at__lt=type_cutoff,
+                is_read=True
+            )
+            
+            if dry_run:
+                count = cls.objects.filter(query).count()
+                print(f"Would delete {count} old {activity_type} items (older than {retention_days} days)")
+                total_deleted += count
+            else:
+                deleted_count = cls.objects.filter(query).delete()[0]
+                print(f"Deleted {deleted_count} old {activity_type} items")
+                total_deleted += deleted_count
+        
+        return total_deleted
+    
+    @classmethod
+    def archive_old_items(cls, archive_older_than_days=365):
+        """
+        Archive old items to a separate table instead of deleting them.
+        This preserves data for analytics while keeping the main table lean.
+        """
+        from django.db import transaction
+        from datetime import timedelta
+        
+        cutoff_date = timezone.now() - timedelta(days=archive_older_than_days)
+        
+        # Get items to archive
+        items_to_archive = cls.objects.filter(
+            created_at__lt=cutoff_date,
+            is_read=True
+        ).select_related('user', 'event', 'content_type')
+        
+        archived_count = 0
+        
+        with transaction.atomic():
+            for item in items_to_archive:
+                # Create archived record (you'd need to create this model)
+                # ArchivedUserActivityFeed.objects.create_from_feed_item(item)
+                archived_count += 1
+            
+            # Delete the original items
+            deleted_count = items_to_archive.delete()[0]
+        
+        return archived_count, deleted_count
+    
+    @classmethod
+    def get_user_feed_stats(cls, user):
+        """
+        Get comprehensive stats for a user's feed.
+        Useful for monitoring and optimization.
+        """
+        user_items = cls.objects.filter(user=user)
+        
+        stats = {
+            'total_items': user_items.count(),
+            'unread_count': user_items.filter(is_read=False).count(),
+            'read_count': user_items.filter(is_read=True).count(),
+            'oldest_item': user_items.order_by('created_at').first(),
+            'newest_item': user_items.order_by('-created_at').first(),
+            'by_type': dict(user_items.values('activity_type').annotate(
+                count=Count('id')
+            ).values_list('activity_type', 'count')),
+        }
+        
+        # Add monthly breakdown if database supports it
+        try:
+            from django.db import connection
+            if connection.vendor == 'postgresql':
+                stats['by_month'] = dict(user_items.extra(
+                    select={'month': "DATE_TRUNC('month', created_at)"}
+                ).values('month').annotate(
+                    count=Count('id')
+                ).values_list('month', 'count'))
+            else:
+                # For other databases, skip monthly breakdown
+                stats['by_month'] = {}
+        except Exception:
+            # If any error occurs, skip monthly breakdown
+            stats['by_month'] = {}
+        
+        return stats
+    
+    @classmethod
+    def create_from_event(cls, event, user=None):
+        """
+        Create a feed item from an event.
+        """
+        if not user:
+            user = event.user
+        
+        if not user:
+            return None  # System events don't create feed items
+        
+        # Map event types to activity types
+        activity_type_mapping = {
+            EventType.USER_JOINED_FAST: 'fast_join',
+            EventType.USER_LEFT_FAST: 'fast_leave',
+            EventType.FAST_BEGINNING: 'fast_start',
+            EventType.DEVOTIONAL_AVAILABLE: 'devotional_available',
+            EventType.FAST_PARTICIPANT_MILESTONE: 'milestone',
+        }
+        
+        activity_type = activity_type_mapping.get(event.event_type.code)
+        if not activity_type:
+            return None  # Don't create feed items for uninteresting events
+        
+        # Create the feed item
+        feed_item = cls.objects.create(
+            user=user,
+            activity_type=activity_type,
+            event=event,
+            target=event.target,
+            title=event.title,
+            description=event.description,
+            data=event.data
+        )
+        
+        return feed_item
+    
+    @classmethod
+    def create_fast_reminder(cls, user, fast, reminder_type='fast_reminder'):
+        """
+        Create a fast reminder feed item.
+        """
+        title = f"Fast Reminder: {fast.name}"
+        description = f"The {fast.name} is starting soon. Don't forget to join!"
+        
+        return cls.objects.create(
+            user=user,
+            activity_type=reminder_type,
+            target=fast,
+            title=title,
+            description=description,
+            data={
+                'fast_id': fast.id,
+                'fast_name': fast.name,
+                'reminder_type': reminder_type
+            }
+        )
+    
+    @classmethod
+    def create_devotional_reminder(cls, user, devotional, fast):
+        """
+        Create a devotional reminder feed item.
+        """
+        title = f"New Devotional: {devotional.video.title if devotional.video else 'Available'}"
+        description = f"A new devotional is available for {fast.name}"
+        
+        return cls.objects.create(
+            user=user,
+            activity_type='devotional_reminder',
+            target=devotional,
+            title=title,
+            description=description,
+            data={
+                'devotional_id': devotional.id,
+                'fast_id': fast.id,
+                'fast_name': fast.name,
+                'video_title': devotional.video.title if devotional.video else None
+            }
+        )

@@ -5,6 +5,8 @@ Django REST Framework serializers for the events app.
 from rest_framework import serializers
 from django.contrib.contenttypes.models import ContentType
 from .models import Event, EventType
+from .models import UserActivityFeed
+from django.utils import timezone
 
 
 class EventTypeSerializer(serializers.ModelSerializer):
@@ -147,3 +149,55 @@ class FastEventStatsSerializer(serializers.Serializer):
         child=EventListSerializer(),
         help_text="Recent activity for this fast"
     )
+
+
+class UserActivityFeedSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user activity feed items.
+    """
+    activity_type_display = serializers.CharField(source='get_activity_type_display', read_only=True)
+    age_display = serializers.SerializerMethodField()
+    target_type = serializers.SerializerMethodField()
+    target_id = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UserActivityFeed
+        fields = [
+            'id', 'activity_type', 'activity_type_display', 'title', 'description',
+            'is_read', 'read_at', 'created_at', 'age_display', 'data',
+            'target_type', 'target_id'
+        ]
+        read_only_fields = ['id', 'created_at', 'age_display']
+    
+    def get_age_display(self, obj):
+        """Show how long ago the activity occurred."""
+        age_hours = (timezone.now() - obj.created_at).total_seconds() / 3600
+        if age_hours < 1:
+            minutes = int(age_hours * 60)
+            return f"{minutes}m ago"
+        elif age_hours < 24:
+            return f"{int(age_hours)}h ago"
+        else:
+            days = int(age_hours / 24)
+            return f"{days}d ago"
+    
+    def get_target_type(self, obj):
+        """Get the target object type."""
+        if obj.content_type:
+            return f"{obj.content_type.app_label}.{obj.content_type.model}"
+        return None
+    
+    def get_target_id(self, obj):
+        """Get the target object ID."""
+        return obj.object_id
+
+
+class UserActivityFeedSummarySerializer(serializers.Serializer):
+    """
+    Serializer for activity feed summary statistics.
+    """
+    total_items = serializers.IntegerField()
+    unread_count = serializers.IntegerField()
+    read_count = serializers.IntegerField()
+    activity_types = serializers.DictField()
+    recent_activity = serializers.ListField(child=UserActivityFeedSerializer())

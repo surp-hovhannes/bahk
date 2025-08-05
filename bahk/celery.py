@@ -47,6 +47,16 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'cleanup-old-activity-feed-items-daily': {
+        'task': 'events.tasks.cleanup_old_activity_feed_items_task',
+        'schedule': crontab(hour=2, minute=0),  # 2 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-activity-feed-cleanup',
+            }
+        }
+    },
 }
 
 # Initialize Sentry for Celery worker processes

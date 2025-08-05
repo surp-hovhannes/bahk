@@ -11,10 +11,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Event, EventType
+from .models import Event, EventType, UserActivityFeed
 from .serializers import (
     EventSerializer, EventListSerializer, EventTypeSerializer,
-    EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer
+    EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer,
+    UserActivityFeedSerializer, UserActivityFeedSummarySerializer
 )
 
 
@@ -359,19 +360,21 @@ class FastEventStatsView(APIView):
 @permission_classes([permissions.IsAdminUser])
 def trigger_milestone_check(request, fast_id):
     """
-    Manually trigger a milestone check for a fast.
-    Admin-only endpoint for testing or manual triggering.
+    Manually trigger milestone check for a fast (admin only).
     """
     try:
         from hub.models import Fast
+        fast = Fast.objects.get(id=fast_id)
+        
+        # Import the milestone tracking function
         from .signals import check_and_track_participation_milestones
         
-        fast = Fast.objects.get(id=fast_id)
-        check_and_track_participation_milestones(fast)
+        # Trigger milestone check
+        milestones_created = check_and_track_participation_milestones(fast)
         
         return Response({
-            'message': f'Milestone check triggered for fast: {fast.name}',
-            'current_participants': fast.profiles.count()
+            'message': f'Milestone check completed for {fast.name}',
+            'milestones_created': milestones_created
         })
         
     except Fast.DoesNotExist:
@@ -384,3 +387,194 @@ def trigger_milestone_check(request, fast_id):
             {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+class UserActivityFeedView(generics.ListAPIView):
+    """
+    Get user's activity feed with filtering and pagination.
+    """
+    serializer_class = UserActivityFeedSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        queryset = UserActivityFeed.objects.filter(
+            user=user
+        ).select_related(
+            'event', 'event__event_type', 'content_type'
+        ).order_by('-created_at')
+        
+        # Filter by activity type
+        activity_type = self.request.query_params.get('activity_type', None)
+        if activity_type:
+            queryset = queryset.filter(activity_type=activity_type)
+        
+        # Filter by read status
+        is_read = self.request.query_params.get('is_read', None)
+        if is_read is not None:
+            is_read_bool = is_read.lower() == 'true'
+            queryset = queryset.filter(is_read=is_read_bool)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date', None)
+        end_date = self.request.query_params.get('end_date', None)
+        
+        if start_date:
+            try:
+                start_date = timezone.datetime.fromisoformat(start_date)
+                queryset = queryset.filter(created_at__gte=start_date)
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                end_date = timezone.datetime.fromisoformat(end_date)
+                queryset = queryset.filter(created_at__lte=end_date)
+            except ValueError:
+                pass
+        
+        return queryset
+
+
+class UserActivityFeedSummaryView(APIView):
+    """
+    Get summary statistics for user's activity feed.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        
+        # Get basic counts
+        total_items = UserActivityFeed.objects.filter(user=user).count()
+        unread_count = UserActivityFeed.objects.filter(user=user, is_read=False).count()
+        read_count = total_items - unread_count
+        
+        # Get activity type breakdown
+        activity_types = {}
+        type_counts = UserActivityFeed.objects.filter(user=user).values(
+            'activity_type'
+        ).annotate(count=Count('id'))
+        
+        for item in type_counts:
+            activity_types[item['activity_type']] = item['count']
+        
+        # Get recent activity (last 5 items)
+        recent_activity = UserActivityFeed.objects.filter(
+            user=user
+        ).select_related(
+            'event', 'event__event_type', 'content_type'
+        ).order_by('-created_at')[:5]
+        
+        data = {
+            'total_items': total_items,
+            'unread_count': unread_count,
+            'read_count': read_count,
+            'activity_types': activity_types,
+            'recent_activity': UserActivityFeedSerializer(recent_activity, many=True).data
+        }
+        
+        return Response(data)
+
+
+class MarkActivityReadView(APIView):
+    """
+    Mark activity feed items as read.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        activity_ids = request.data.get('activity_ids', [])
+        mark_all = request.data.get('mark_all', False)
+        
+        if mark_all:
+            # Mark all unread items as read
+            updated_count = UserActivityFeed.objects.filter(
+                user=user, is_read=False
+            ).update(
+                is_read=True, 
+                read_at=timezone.now()
+            )
+            
+            return Response({
+                'message': f'Marked {updated_count} items as read',
+                'updated_count': updated_count
+            })
+        
+        elif activity_ids:
+            # Mark specific items as read
+            if not isinstance(activity_ids, list):
+                return Response(
+                    {'error': 'activity_ids must be a list'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            updated_count = UserActivityFeed.objects.filter(
+                user=user, 
+                id__in=activity_ids
+            ).update(
+                is_read=True, 
+                read_at=timezone.now()
+            )
+            
+            return Response({
+                'message': f'Marked {updated_count} items as read',
+                'updated_count': updated_count
+            })
+        
+        else:
+            return Response(
+                {'error': 'Either activity_ids or mark_all must be provided'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class GenerateActivityFeedView(APIView):
+    """
+    Generate activity feed items for a user (admin only).
+    This can be used to populate the feed with historical data or test data.
+    """
+    permission_classes = [permissions.IsAdminUser]
+    
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        days_back = request.data.get('days_back', 30)
+        
+        try:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculate date range
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=days_back)
+        
+        # Get user's events in the date range
+        events = Event.objects.filter(
+            user=user,
+            timestamp__gte=start_date,
+            timestamp__lte=end_date
+        ).select_related('event_type', 'content_type')
+        
+        # Create feed items from events
+        created_count = 0
+        for event in events:
+            feed_item = UserActivityFeed.create_from_event(event, user)
+            if feed_item:
+                created_count += 1
+        
+        return Response({
+            'message': f'Generated {created_count} activity feed items for user {user.username}',
+            'created_count': created_count,
+            'date_range': {
+                'start': start_date.isoformat(),
+                'end': end_date.isoformat()
+            }
+        })

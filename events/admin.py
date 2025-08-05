@@ -16,7 +16,7 @@ from datetime import timedelta
 import json
 import csv
 
-from .models import Event, EventType
+from .models import Event, EventType, UserActivityFeed
 
 
 @admin.register(EventType)
@@ -576,6 +576,126 @@ class EventAdmin(admin.ModelAdmin):
             ])
         
         return response
+
+
+@admin.register(UserActivityFeed)
+class UserActivityFeedAdmin(admin.ModelAdmin):
+    """
+    Admin interface for UserActivityFeed model with monitoring capabilities.
+    """
+    list_display = [
+        'user', 'activity_type', 'title', 'is_read', 'created_at', 'age_display'
+    ]
+    list_filter = [
+        'activity_type', 'is_read', 'created_at', 'user__is_active'
+    ]
+    search_fields = [
+        'user__username', 'user__email', 'title', 'description'
+    ]
+    readonly_fields = [
+        'created_at', 'read_at', 'age_display', 'target_type_display'
+    ]
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('User & Activity', {
+            'fields': ('user', 'activity_type', 'title', 'description')
+        }),
+        ('Status', {
+            'fields': ('is_read', 'read_at', 'created_at')
+        }),
+        ('Related Objects', {
+            'fields': ('event', 'target_type_display', 'target_id'),
+            'classes': ('collapse',)
+        }),
+        ('Data', {
+            'fields': ('data',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['mark_as_read', 'mark_as_unread', 'delete_old_items']
+    
+    def age_display(self, obj):
+        """Show how long ago the activity occurred."""
+        age_hours = (timezone.now() - obj.created_at).total_seconds() / 3600
+        if age_hours < 1:
+            minutes = int(age_hours * 60)
+            return f"{minutes}m ago"
+        elif age_hours < 24:
+            return f"{int(age_hours)}h ago"
+        else:
+            days = int(age_hours / 24)
+            return f"{days}d ago"
+    age_display.short_description = 'Age'
+    
+    def target_type_display(self, obj):
+        """Display target object type."""
+        if obj.content_type:
+            return f"{obj.content_type.app_label}.{obj.content_type.model}"
+        return "None"
+    target_type_display.short_description = 'Target Type'
+    
+    def mark_as_read(self, request, queryset):
+        """Mark selected items as read."""
+        updated = queryset.update(is_read=True, read_at=timezone.now())
+        self.message_user(
+            request, 
+            f'Successfully marked {updated} items as read.'
+        )
+    mark_as_read.short_description = "Mark selected items as read"
+    
+    def mark_as_unread(self, request, queryset):
+        """Mark selected items as unread."""
+        updated = queryset.update(is_read=False, read_at=None)
+        self.message_user(
+            request, 
+            f'Successfully marked {updated} items as unread.'
+        )
+    mark_as_unread.short_description = "Mark selected items as unread"
+    
+    def delete_old_items(self, request, queryset):
+        """Delete old items based on retention policy."""
+        from .models import UserActivityFeed
+        
+        # Use the model's cleanup method
+        deleted_count = UserActivityFeed.cleanup_old_items(dry_run=False)
+        self.message_user(
+            request, 
+            f'Successfully deleted {deleted_count} old items based on retention policy.'
+        )
+    delete_old_items.short_description = "Delete old items (retention policy)"
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related."""
+        return super().get_queryset(request).select_related(
+            'user', 'event', 'event__event_type', 'content_type'
+        )
+    
+    def changelist_view(self, request, extra_context=None):
+        """Add summary statistics to the changelist view."""
+        extra_context = extra_context or {}
+        
+        # Get summary stats
+        total_items = UserActivityFeed.objects.count()
+        unread_count = UserActivityFeed.objects.filter(is_read=False).count()
+        read_count = total_items - unread_count
+        
+        # Get activity type breakdown
+        from django.db.models import Count
+        type_counts = UserActivityFeed.objects.values('activity_type').annotate(
+            count=Count('id')
+        ).order_by('-count')[:5]
+        
+        extra_context.update({
+            'total_items': total_items,
+            'unread_count': unread_count,
+            'read_count': read_count,
+            'type_counts': type_counts,
+        })
+        
+        return super().changelist_view(request, extra_context)
 
 
 # Add analytics link to the admin index

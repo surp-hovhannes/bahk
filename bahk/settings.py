@@ -614,3 +614,15 @@ AWS_S3_FILE_OVERWRITE = False
 
 # Best practice is to disable ACLs
 AWS_DEFAULT_ACL = None  # Disable ACLs
+
+# Activity Feed Settings
+# Set to True to use Celery for async activity feed item creation
+# Set to False to use synchronous creation (default)
+USE_ASYNC_ACTIVITY_FEED = config('USE_ASYNC_ACTIVITY_FEED', default=False, cast=bool)
+
+# Activity Feed Cleanup Settings
+# How often to run cleanup tasks (in seconds)
+ACTIVITY_FEED_CLEANUP_INTERVAL = config('ACTIVITY_FEED_CLEANUP_INTERVAL', default=86400, cast=int)  # 24 hours
+
+# Batch size for bulk operations
+ACTIVITY_FEED_BATCH_SIZE = config('ACTIVITY_FEED_BATCH_SIZE', default=100, cast=int)
