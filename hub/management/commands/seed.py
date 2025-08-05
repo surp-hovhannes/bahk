@@ -10,6 +10,7 @@ import hub.models as models
 from notifications.models import DeviceToken, PromoEmail
 from app_management.models import Changelog
 from learning_resources.models import Video, Article, Recipe
+from events.models import EventType
 
 # Default prompt template for LLM context generation
 PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings. 
@@ -70,6 +71,9 @@ class Command(BaseCommand):
         Video.objects.all().delete()
         Article.objects.all().delete()
         Recipe.objects.all().delete()
+        
+        # Clear events data
+        EventType.objects.all().delete()
 
     def populate_db(self):
         # Create Churches
@@ -164,6 +168,9 @@ class Command(BaseCommand):
 
         # Create App Management models
         self._create_changelogs()
+
+        # Initialize Event Types
+        self._init_event_types()
 
         self.stdout.write(self.style.SUCCESS("All models populated with seed data."))
 
@@ -401,4 +408,31 @@ class Command(BaseCommand):
                 description="# Version 1.2.0\n\n## Major Updates\n- Video library\n- Articles and recipes\n- Devotional content\n- Reading contexts with AI-generated insights",
                 version="1.2.0",
             ),
-        ]        
+        ]
+
+    def _init_event_types(self):
+        """Initialize default event types for the events app."""
+        self.stdout.write("Initializing event types...")
+        
+        created_types = EventType.get_or_create_default_types()
+        
+        if created_types:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'Created {len(created_types)} new event types:'
+                )
+            )
+            for event_type in created_types:
+                self.stdout.write(f'  - {event_type.name} ({event_type.code})')
+        else:
+            self.stdout.write(
+                self.style.WARNING('All default event types already exist.')
+            )
+        
+        # Display summary
+        all_types = EventType.objects.all().order_by('category', 'name')
+        self.stdout.write(f'\nEvent types initialized: {all_types.count()} total types')
+        
+        self.stdout.write(
+            self.style.SUCCESS('Event types initialization complete!')
+        )        
