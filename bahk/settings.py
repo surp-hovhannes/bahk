@@ -133,6 +133,7 @@ INSTALLED_APPS = [
     'notifications',
     'learning_resources',
     's3_file_field',
+    'events',  # User events tracking
 ]
 
 MIDDLEWARE = [
