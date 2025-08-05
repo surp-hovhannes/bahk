@@ -180,19 +180,22 @@ class EventSignalsTest(TestCase):
     
     def test_fast_join_signal(self):
         """Test that joining a fast creates an event."""
-        # Should start with no events
-        self.assertEqual(Event.objects.count(), 0)
+        # Should start with 1 event (FAST_CREATED from signal)
+        initial_count = Event.objects.count()
+        self.assertEqual(initial_count, 1)
         
         # Join the fast
         self.profile.fasts.add(self.fast)
         
         # Should have created a join event
-        self.assertEqual(Event.objects.count(), 1)
+        self.assertEqual(Event.objects.count(), initial_count + 1)
         
-        event = Event.objects.first()
-        self.assertEqual(event.event_type.code, EventType.USER_JOINED_FAST)
-        self.assertEqual(event.user, self.user)
-        self.assertEqual(event.target, self.fast)
+        join_event = Event.objects.filter(
+            event_type__code=EventType.USER_JOINED_FAST
+        ).first()
+        self.assertIsNotNone(join_event)
+        self.assertEqual(join_event.user, self.user)
+        self.assertEqual(join_event.target, self.fast)
     
     def test_fast_leave_signal(self):
         """Test that leaving a fast creates an event."""
@@ -282,7 +285,8 @@ class EventAPITest(APITestCase):
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 2)
+        # Account for the FAST_CREATED event from signal + 2 manually created events
+        self.assertEqual(len(response.data['results']), 3)
     
     def test_event_detail(self):
         """Test event detail endpoint."""
