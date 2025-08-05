@@ -26,16 +26,17 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
     if sender != Profile.fasts.through or not hasattr(instance, 'user') or action not in ['post_add', 'post_remove'] or not pk_set:
         return
         
-        try:
-            # Get the user from the profile
-            user = instance.user
-            
-            for fast_pk in pk_set:
-                try:
-                    fast = Fast.objects.get(pk=fast_pk)
-                    
-                    if action == 'post_add':
-                        # User joined a fast
+    try:
+        # Get the user from the profile
+        user = instance.user
+        
+        for fast_pk in pk_set:
+            try:
+                fast = Fast.objects.get(pk=fast_pk)
+                
+                if action == 'post_add':
+                    # User joined a fast
+                    try:
                         Event.create_event(
                             event_type_code=EventType.USER_JOINED_FAST,
                             user=user,
@@ -51,9 +52,15 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             }
                         )
                         logger.info(f"Tracked USER_JOINED_FAST event: {user} joined {fast}")
+                    except ValueError as e:
+                        if "does not exist or is inactive" in str(e):
+                            logger.warning(f"Event type '{EventType.USER_JOINED_FAST}' does not exist, skipping event tracking")
+                        else:
+                            raise
                         
-                    elif action == 'post_remove':
-                        # User left a fast
+                elif action == 'post_remove':
+                    # User left a fast
+                    try:
                         Event.create_event(
                             event_type_code=EventType.USER_LEFT_FAST,
                             user=user,
@@ -69,14 +76,19 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             }
                         )
                         logger.info(f"Tracked USER_LEFT_FAST event: {user} left {fast}")
+                    except ValueError as e:
+                        if "does not exist or is inactive" in str(e):
+                            logger.warning(f"Event type '{EventType.USER_LEFT_FAST}' does not exist, skipping event tracking")
+                        else:
+                            raise
                         
-                except Fast.DoesNotExist:
-                    logger.warning(f"Fast with ID {fast_pk} not found while tracking membership change")
-                except Exception as e:
-                    logger.error(f"Error tracking fast membership change: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Error in track_fast_membership_changes signal: {e}")
+            except Fast.DoesNotExist:
+                logger.warning(f"Fast with ID {fast_pk} not found while tracking membership change")
+            except Exception as e:
+                logger.error(f"Error tracking fast membership change: {e}")
+                
+    except Exception as e:
+        logger.error(f"Error in track_fast_membership_changes signal: {e}")
 
 
 @receiver(post_save, sender='hub.Fast')
@@ -85,39 +97,52 @@ def track_fast_creation_and_updates(sender, instance, created, **kwargs):
     Track when fasts are created or updated.
     """
     try:
+        # Check if event types exist before trying to create events
         if created:
             # Fast was created
-            Event.create_event(
-                event_type_code=EventType.FAST_CREATED,
-                user=None,  # System event
-                target=instance,
-                description=f"Fast '{instance.name}' was created",
-                data={
-                    'fast_id': instance.id,
-                    'fast_name': instance.name,
-                    'church_id': instance.church.id if instance.church else None,
-                    'church_name': instance.church.name if instance.church else None,
-                    'year': instance.year,
-                }
-            )
-            logger.info(f"Tracked FAST_CREATED event: {instance}")
+            try:
+                Event.create_event(
+                    event_type_code=EventType.FAST_CREATED,
+                    user=None,  # System event
+                    target=instance,
+                    description=f"Fast '{instance.name}' was created",
+                    data={
+                        'fast_id': instance.id,
+                        'fast_name': instance.name,
+                        'church_id': instance.church.id if instance.church else None,
+                        'church_name': instance.church.name if instance.church else None,
+                        'year': instance.year,
+                    }
+                )
+                logger.info(f"Tracked FAST_CREATED event: {instance}")
+            except ValueError as e:
+                if "does not exist or is inactive" in str(e):
+                    logger.warning(f"Event type '{EventType.FAST_CREATED}' does not exist, skipping event tracking")
+                else:
+                    raise
         else:
             # Fast was updated
             # Note: We could add more sophisticated tracking here to see what fields changed
-            Event.create_event(
-                event_type_code=EventType.FAST_UPDATED,
-                user=None,  # System event (could be enhanced to track who made the change)
-                target=instance,
-                description=f"Fast '{instance.name}' was updated",
-                data={
-                    'fast_id': instance.id,
-                    'fast_name': instance.name,
-                    'church_id': instance.church.id if instance.church else None,
-                    'church_name': instance.church.name if instance.church else None,
-                    'year': instance.year,
-                }
-            )
-            logger.info(f"Tracked FAST_UPDATED event: {instance}")
+            try:
+                Event.create_event(
+                    event_type_code=EventType.FAST_UPDATED,
+                    user=None,  # System event (could be enhanced to track who made the change)
+                    target=instance,
+                    description=f"Fast '{instance.name}' was updated",
+                    data={
+                        'fast_id': instance.id,
+                        'fast_name': instance.name,
+                        'church_id': instance.church.id if instance.church else None,
+                        'church_name': instance.church.name if instance.church else None,
+                        'year': instance.year,
+                    }
+                )
+                logger.info(f"Tracked FAST_UPDATED event: {instance}")
+            except ValueError as e:
+                if "does not exist or is inactive" in str(e):
+                    logger.warning(f"Event type '{EventType.FAST_UPDATED}' does not exist, skipping event tracking")
+                else:
+                    raise
             
     except Exception as e:
         logger.error(f"Error tracking fast creation/update: {e}")
@@ -143,6 +168,11 @@ def track_user_login(sender, request, user, **kwargs):
         )
         logger.info(f"Tracked USER_LOGGED_IN event: {user}")
         
+    except ValueError as e:
+        if "does not exist or is inactive" in str(e):
+            logger.warning(f"Event type '{EventType.USER_LOGGED_IN}' does not exist, skipping event tracking")
+        else:
+            raise
     except Exception as e:
         logger.error(f"Error tracking user login: {e}")
 
@@ -168,6 +198,11 @@ def track_user_logout(sender, request, user, **kwargs):
             )
             logger.info(f"Tracked USER_LOGGED_OUT event: {user}")
             
+    except ValueError as e:
+        if "does not exist or is inactive" in str(e):
+            logger.warning(f"Event type '{EventType.USER_LOGGED_OUT}' does not exist, skipping event tracking")
+        else:
+            raise
     except Exception as e:
         logger.error(f"Error tracking user logout: {e}")
 
