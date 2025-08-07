@@ -7,6 +7,8 @@ from django.contrib.contenttypes.models import ContentType
 from .models import Event, EventType
 from .models import UserActivityFeed
 from django.utils import timezone
+from django.utils.html import strip_tags
+import re
 
 
 class EventTypeSerializer(serializers.ModelSerializer):
@@ -168,6 +170,9 @@ class UserActivityFeedSerializer(serializers.ModelSerializer):
             'target_type', 'target_id'
         ]
         read_only_fields = ['id', 'created_at', 'age_display']
+        extra_kwargs = {
+            'title': {"allow_blank": False},
+        }
     
     def get_age_display(self, obj):
         """Show how long ago the activity occurred."""
@@ -190,6 +195,107 @@ class UserActivityFeedSerializer(serializers.ModelSerializer):
     def get_target_id(self, obj):
         """Get the target object ID."""
         return obj.object_id
+
+    # -----------------------------
+    # Validation and sanitization
+    # -----------------------------
+
+    @staticmethod
+    def _sanitize_text(value: str, max_length: int) -> str:
+        if value is None:
+            return value
+        # Remove NULLs and control characters
+        value = value.replace('\x00', '')
+        value = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F]", "", value)
+        # Strip HTML tags
+        value = strip_tags(value)
+        # Collapse whitespace
+        value = re.sub(r"\s+", " ", value).strip()
+        # Enforce length limits
+        if len(value) > max_length:
+            value = value[:max_length]
+        return value
+
+    def _sanitize_data_value(self, value, depth: int = 0):
+        if depth > 3:
+            raise serializers.ValidationError({
+                'data': 'Data is too deeply nested (max depth 3).'
+            })
+        if isinstance(value, str):
+            return self._sanitize_text(value, max_length=1000)
+        if isinstance(value, (int, float, bool)) or value is None:
+            return value
+        if isinstance(value, list):
+            if len(value) > 100:
+                raise serializers.ValidationError({'data': 'Lists in data may not exceed 100 items.'})
+            return [self._sanitize_data_value(v, depth + 1) for v in value]
+        if isinstance(value, dict):
+            if len(value) > 50:
+                raise serializers.ValidationError({'data': 'Data may not contain more than 50 keys.'})
+            sanitized = {}
+            for k, v in value.items():
+                if not isinstance(k, str):
+                    raise serializers.ValidationError({'data': 'All keys in data must be strings.'})
+                key_clean = self._sanitize_text(k, max_length=100)
+                sanitized[key_clean] = self._sanitize_data_value(v, depth + 1)
+            return sanitized
+        # Fallback to string representation for unsupported types
+        return self._sanitize_text(str(value), max_length=1000)
+
+    def validate_activity_type(self, value: str) -> str:
+        valid_values = {code for code, _ in UserActivityFeed.ACTIVITY_TYPES}
+        if value not in valid_values:
+            raise serializers.ValidationError("Invalid activity_type.")
+        return value
+
+    def validate_data(self, value):
+        if value in (None, {}):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Data must be an object/dictionary.')
+        # Sanitize recursively
+        return self._sanitize_data_value(value)
+
+    def validate(self, attrs):
+        # Ensure read_at only present when is_read is True
+        is_read = attrs.get('is_read')
+        read_at = attrs.get('read_at')
+        instance_is_read = getattr(self.instance, 'is_read', False) if getattr(self, 'instance', None) else False
+        effective_is_read = is_read if is_read is not None else instance_is_read
+        if read_at and not effective_is_read:
+            raise serializers.ValidationError({'read_at': 'read_at can only be set when is_read is true.'})
+        return attrs
+
+    def create(self, validated_data):
+        # Sanitize text fields
+        if 'title' in validated_data:
+            validated_data['title'] = self._sanitize_text(validated_data['title'], max_length=255)
+        if 'description' in validated_data and validated_data['description'] is not None:
+            validated_data['description'] = self._sanitize_text(validated_data['description'], max_length=5000)
+        # Sanitize data (validate_data already handles)
+        if 'data' in validated_data and validated_data['data']:
+            validated_data['data'] = self._sanitize_data_value(validated_data['data'])
+        # Auto-set read_at when marking as read
+        if validated_data.get('is_read') and not validated_data.get('read_at'):
+            validated_data['read_at'] = timezone.now()
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Sanitize text fields
+        if 'title' in validated_data:
+            validated_data['title'] = self._sanitize_text(validated_data['title'], max_length=255)
+        if 'description' in validated_data and validated_data['description'] is not None:
+            validated_data['description'] = self._sanitize_text(validated_data['description'], max_length=5000)
+        # Sanitize data
+        if 'data' in validated_data and validated_data['data'] is not None:
+            validated_data['data'] = self._sanitize_data_value(validated_data['data'])
+        # Auto-set/clear read_at based on is_read
+        if 'is_read' in validated_data:
+            if validated_data['is_read'] and not validated_data.get('read_at'):
+                validated_data['read_at'] = timezone.now()
+            if not validated_data['is_read']:
+                validated_data['read_at'] = None
+        return super().update(instance, validated_data)
 
 
 class UserActivityFeedSummarySerializer(serializers.Serializer):
