@@ -293,13 +293,15 @@ class EventAdmin(admin.ModelAdmin):
             # Get join/leave events for this specific fast
             fast_joins = Event.objects.filter(
                 event_type__code=EventType.USER_JOINED_FAST,
-                target=fast,
+                content_type=ContentType.objects.get_for_model(fast),
+                object_id=fast.id,
                 timestamp__gte=start_date
             ).count()
             
             fast_leaves = Event.objects.filter(
                 event_type__code=EventType.USER_LEFT_FAST,
-                target=fast,
+                content_type=ContentType.objects.get_for_model(fast),
+                object_id=fast.id,
                 timestamp__gte=start_date
             ).count()
             
@@ -315,7 +317,8 @@ class EventAdmin(admin.ModelAdmin):
                 # Joins for this fast on this day
                 joins_count = Event.objects.filter(
                     event_type__code=EventType.USER_JOINED_FAST,
-                    target=fast,
+                    content_type=ContentType.objects.get_for_model(fast),
+                    object_id=fast.id,
                     timestamp__gte=day_start,
                     timestamp__lt=day_end
                 ).count()
@@ -324,7 +327,8 @@ class EventAdmin(admin.ModelAdmin):
                 # Leaves for this fast on this day
                 leaves_count = Event.objects.filter(
                     event_type__code=EventType.USER_LEFT_FAST,
-                    target=fast,
+                    content_type=ContentType.objects.get_for_model(fast),
+                    object_id=fast.id,
                     timestamp__gte=day_start,
                     timestamp__lt=day_end
                 ).count()
@@ -394,6 +398,7 @@ class EventAdmin(admin.ModelAdmin):
         AJAX endpoint for fetching analytics data with different date ranges.
         """
         from django.http import JsonResponse
+        from django.contrib.contenttypes.models import ContentType
         
         # Get date range from request
         days = int(request.GET.get('days', 30))
@@ -473,13 +478,15 @@ class EventAdmin(admin.ModelAdmin):
             # Get join/leave events for this specific fast
             fast_joins = Event.objects.filter(
                 event_type__code=EventType.USER_JOINED_FAST,
-                target=fast,
+                content_type=ContentType.objects.get_for_model(fast),
+                object_id=fast.id,
                 timestamp__gte=start_date
             ).count()
             
             fast_leaves = Event.objects.filter(
                 event_type__code=EventType.USER_LEFT_FAST,
-                target=fast,
+                content_type=ContentType.objects.get_for_model(fast),
+                object_id=fast.id,
                 timestamp__gte=start_date
             ).count()
             
@@ -495,7 +502,8 @@ class EventAdmin(admin.ModelAdmin):
                 # Joins for this fast on this day
                 joins_count = Event.objects.filter(
                     event_type__code=EventType.USER_JOINED_FAST,
-                    target=fast,
+                    content_type=ContentType.objects.get_for_model(fast),
+                    object_id=fast.id,
                     timestamp__gte=day_start,
                     timestamp__lt=day_end
                 ).count()
@@ -504,7 +512,8 @@ class EventAdmin(admin.ModelAdmin):
                 # Leaves for this fast on this day
                 leaves_count = Event.objects.filter(
                     event_type__code=EventType.USER_LEFT_FAST,
-                    target=fast,
+                    content_type=ContentType.objects.get_for_model(fast),
+                    object_id=fast.id,
                     timestamp__gte=day_start,
                     timestamp__lt=day_end
                 ).count()
@@ -707,10 +716,4 @@ def analytics_link():
     )
 
 
-# Register a custom admin site section for events
-class EventsAdminSite:
-    """Custom admin configuration for events."""
-    
-    def __init__(self):
-        # Add analytics link to the admin index
-        admin.site.index_template = 'admin/events/index_with_analytics.html'
+# Note: If a custom admin index is desired, ensure the template exists before assigning admin.site.index_template.

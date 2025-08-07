@@ -70,15 +70,26 @@ class EventListView(generics.ListAPIView):
         
         if start_date:
             try:
-                start_date = timezone.datetime.fromisoformat(start_date)
-                queryset = queryset.filter(timestamp__gte=start_date)
+                # Support both date-only and ISO datetime; make timezone-aware
+                if len(start_date) == 10 and start_date.count('-') == 2:
+                    parsed = timezone.datetime.fromisoformat(start_date)
+                else:
+                    parsed = timezone.datetime.fromisoformat(start_date)
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+                queryset = queryset.filter(timestamp__gte=parsed)
             except ValueError:
                 pass
         
         if end_date:
             try:
-                end_date = timezone.datetime.fromisoformat(end_date)
-                queryset = queryset.filter(timestamp__lte=end_date)
+                if len(end_date) == 10 and end_date.count('-') == 2:
+                    parsed = timezone.datetime.fromisoformat(end_date)
+                else:
+                    parsed = timezone.datetime.fromisoformat(end_date)
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+                queryset = queryset.filter(timestamp__lte=parsed)
             except ValueError:
                 pass
         
@@ -422,15 +433,19 @@ class UserActivityFeedView(generics.ListAPIView):
         
         if start_date:
             try:
-                start_date = timezone.datetime.fromisoformat(start_date)
-                queryset = queryset.filter(created_at__gte=start_date)
+                parsed = timezone.datetime.fromisoformat(start_date)
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+                queryset = queryset.filter(created_at__gte=parsed)
             except ValueError:
                 pass
         
         if end_date:
             try:
-                end_date = timezone.datetime.fromisoformat(end_date)
-                queryset = queryset.filter(created_at__lte=end_date)
+                parsed = timezone.datetime.fromisoformat(end_date)
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+                queryset = queryset.filter(created_at__lte=parsed)
             except ValueError:
                 pass
         
@@ -542,6 +557,11 @@ class GenerateActivityFeedView(APIView):
         user_id = request.data.get('user_id')
         days_back = request.data.get('days_back', 30)
         
+        try:
+            days_back = int(days_back)
+        except (TypeError, ValueError):
+            days_back = 30
+
         try:
             from django.contrib.auth import get_user_model
             User = get_user_model()
