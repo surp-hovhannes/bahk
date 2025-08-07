@@ -37,13 +37,19 @@ def get_email_count():
     return cache.get('email_count', 0)
 
 def increment_email_count():
-    """Increment the email count and set expiration if not already set."""
-    count = cache.get('email_count', 0)
-    if count == 0:
-        # Set expiration when first email is sent
-        cache.set('email_count', 1, settings.EMAIL_RATE_LIMIT_WINDOW)
-    else:
-        cache.incr('email_count')
+    """Atomically increment the email count and set expiration if not already set."""
+    try:
+        # Try to atomically increment first
+        new_count = cache.incr('email_count')
+        return new_count
+    except ValueError:
+        # Key doesn't exist, set it atomically with timeout
+        success = cache.add('email_count', 1, timeout=settings.EMAIL_RATE_LIMIT_WINDOW)
+        if success:
+            return 1
+        else:
+            # Another process set it, increment it
+            return cache.incr('email_count')
 
 @shared_task(bind=True, max_retries=3)
 def send_promo_email_task(self, promo_id, batch_start_index=0):
@@ -59,26 +65,29 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
     lock_key = f'promo_task_lock:{promo_id}'
     lock_timeout = 3600  # 1 hour timeout
     
-    # Try to acquire lock
-    if cache.get(lock_key):
+    # Try to acquire lock atomically
+    if not cache.add(lock_key, True, timeout=lock_timeout):
         logger.warning(f"Task for promo {promo_id} is already running, skipping duplicate execution")
         return
-    
-    # Set lock
-    cache.set(lock_key, True, timeout=lock_timeout)
     
     try:
         promo = PromoEmail.objects.get(id=promo_id)
         
-        # Check if another task already completed this promo
-        if promo.status in [PromoEmail.SENT, PromoEmail.FAILED, PromoEmail.CANCELED]:
-            logger.info(f"Promo {promo_id} already completed with status {promo.status}, skipping")
-            return
-                
-        # Update status to sending only if it's not already sending
-        if promo.status != PromoEmail.SENDING:
-            promo.status = PromoEmail.SENDING
-            promo.save()
+        # Atomically update status to SENDING if not already in a final state
+        from django.db import transaction
+        with transaction.atomic():
+            # Re-fetch with select_for_update to prevent race conditions
+            promo = PromoEmail.objects.select_for_update().get(id=promo_id)
+            
+            # Check if another task already completed this promo
+            if promo.status in [PromoEmail.SENT, PromoEmail.FAILED, PromoEmail.CANCELED]:
+                logger.info(f"Promo {promo_id} already completed with status {promo.status}, skipping")
+                return
+                    
+            # Update status to sending only if it's not already sending
+            if promo.status != PromoEmail.SENDING:
+                promo.status = PromoEmail.SENDING
+                promo.save()
         
         # Implement caching for user IDs
         cache_key = f'promo:{promo_id}:user_ids'
@@ -106,8 +115,11 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
             cache.delete(cache_key)
             return
         
-        # Get users for the current batch - don't slice, use the full list and iterate from batch_start_index
-        users_to_process = User.objects.filter(id__in=user_ids[batch_start_index:]).order_by('id')
+        # Get users for the current batch - preserve exact order from cached user_ids
+        batch_user_ids = user_ids[batch_start_index:]
+        # Create a mapping to preserve the exact order from user_ids
+        users_dict = {user.id: user for user in User.objects.filter(id__in=batch_user_ids)}
+        users_to_process = [users_dict[user_id] for user_id in batch_user_ids if user_id in users_dict]
         
         # Prepare email content
         from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
