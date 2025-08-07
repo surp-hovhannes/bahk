@@ -37,13 +37,19 @@ def get_email_count():
     return cache.get('email_count', 0)
 
 def increment_email_count():
-    """Increment the email count and set expiration if not already set."""
-    count = cache.get('email_count', 0)
-    if count == 0:
-        # Set expiration when first email is sent
-        cache.set('email_count', 1, settings.EMAIL_RATE_LIMIT_WINDOW)
-    else:
-        cache.incr('email_count')
+    """Atomically increment the email count and set expiration if not already set."""
+    try:
+        # Try to atomically increment first
+        new_count = cache.incr('email_count')
+        return new_count
+    except ValueError:
+        # Key doesn't exist, set it atomically with timeout
+        success = cache.add('email_count', 1, timeout=settings.EMAIL_RATE_LIMIT_WINDOW)
+        if success:
+            return 1
+        else:
+            # Another process set it, increment it
+            return cache.incr('email_count')
 
 @shared_task(bind=True, max_retries=3)
 def send_promo_email_task(self, promo_id, batch_start_index=0):
@@ -55,12 +61,33 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
         promo_id: ID of the PromoEmail to send
         batch_start_index: Index to start processing from (for batch continuation)
     """
+    # Create a lock key for this specific promo to prevent concurrent execution
+    lock_key = f'promo_task_lock:{promo_id}'
+    lock_timeout = 3600  # 1 hour timeout
+    
+    # Try to acquire lock atomically
+    if not cache.add(lock_key, True, timeout=lock_timeout):
+        logger.warning(f"Task for promo {promo_id} is already running, skipping duplicate execution")
+        return
+    
     try:
         promo = PromoEmail.objects.get(id=promo_id)
-                
-        # Update status to sending
-        promo.status = PromoEmail.SENDING
-        promo.save()
+        
+        # Atomically update status to SENDING if not already in a final state
+        from django.db import transaction
+        with transaction.atomic():
+            # Re-fetch with select_for_update to prevent race conditions
+            promo = PromoEmail.objects.select_for_update().get(id=promo_id)
+            
+            # Check if another task already completed this promo
+            if promo.status in [PromoEmail.SENT, PromoEmail.FAILED, PromoEmail.CANCELED]:
+                logger.info(f"Promo {promo_id} already completed with status {promo.status}, skipping")
+                return
+                    
+            # Update status to sending only if it's not already sending
+            if promo.status != PromoEmail.SENDING:
+                promo.status = PromoEmail.SENDING
+                promo.save()
         
         # Implement caching for user IDs
         cache_key = f'promo:{promo_id}:user_ids'
@@ -76,14 +103,23 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
             user_ids = list(target_users.values_list('id', flat=True))
             cache.set(cache_key, user_ids, timeout=86400)  # Cache for 24 hours
         
-        # Get total users count and slice user IDs for this batch
+        # Get total users count 
         total_users = len(user_ids)
         
-        # Get users for the current batch based on batch_start_index
-        current_batch_user_ids = user_ids[batch_start_index:]
-        # Create user lookup to maintain order
-        users_dict = {user.id: user for user in User.objects.filter(id__in=current_batch_user_ids)}
-        users_list = [users_dict[user_id] for user_id in current_batch_user_ids if user_id in users_dict]
+        # Validate batch_start_index
+        if batch_start_index >= total_users:
+            logger.warning(f"batch_start_index {batch_start_index} >= total_users {total_users}, marking as completed")
+            promo.status = PromoEmail.SENT
+            promo.sent_at = timezone.now()
+            promo.save()
+            cache.delete(cache_key)
+            return
+        
+        # Get users for the current batch - preserve exact order from cached user_ids
+        batch_user_ids = user_ids[batch_start_index:]
+        # Create a mapping to preserve the exact order from user_ids
+        users_dict = {user.id: user for user in User.objects.filter(id__in=batch_user_ids)}
+        users_to_process = [users_dict[user_id] for user_id in batch_user_ids if user_id in users_dict]
         
         # Prepare email content
         from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
@@ -98,7 +134,10 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
         signer = TimestampSigner()
         
         # Process users starting from batch_start_index
-        for i, user in enumerate(users_list, start=batch_start_index):
+        for current_user_index, user in enumerate(users_to_process):
+            # Calculate actual position in original user_ids list
+            actual_index = batch_start_index + current_user_index
+            
             # Ensure user has an email address and is active
             if not user.email or not user.is_active:
                 logger.warning(f"Skipping user {user.id} for promo {promo_id} due to missing email or inactive status.")
@@ -115,15 +154,16 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
                         current_count, 
                         settings.EMAIL_RATE_LIMIT, 
                         settings.EMAIL_RATE_LIMIT_WINDOW,
-                        processed_count + batch_start_index,
+                        actual_index,
                         total_users
                     )
-                    # Schedule the next batch with only the batch_start_index
+                    # Calculate the correct next batch start index
+                    next_batch_start = actual_index
                     if not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
                         # Schedule the next batch automatically in non-eager mode
                         send_promo_email_task.apply_async(
                             args=[promo_id],
-                            kwargs={'batch_start_index': i},
+                            kwargs={'batch_start_index': next_batch_start},
                             countdown=settings.EMAIL_RATE_LIMIT_WINDOW
                         )
                     # Mark that we paused due to rate limiting
@@ -172,13 +212,14 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
                 # Check if it's a Mailgun rate limit error
                 if "420" in error_message or "429" in error_message or "rate limit" in error_message.lower():
                     logger.warning(f"Mailgun rate limit hit for user {user.id} ({user.email}): {error_message}")
-                    # For rate limit errors, we should pause and reschedule the remaining users
-                    remaining_users_count = len(user_ids) - i
+                    # Calculate the correct next batch start index for Mailgun rate limit
+                    next_batch_start = actual_index
+                    remaining_users_count = total_users - actual_index
                     if remaining_users_count > 0 and not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
                         logger.info(f"Rescheduling {remaining_users_count} remaining users due to Mailgun rate limit")
                         send_promo_email_task.apply_async(
                             args=[promo_id],
-                            kwargs={'batch_start_index': i},
+                            kwargs={'batch_start_index': next_batch_start},
                             countdown=7200  # Wait 2 hours before retrying when hitting Mailgun limits
                         )
                     rate_limited = True
@@ -215,7 +256,7 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
                 "Rate limit reached for '%s' (ID: %d). Processed %d/%d users in this batch. Remaining emails queued for next batch.",
                 promo.title,
                 promo_id,
-                processed_count + batch_start_index,
+                batch_start_index + processed_count,
                 total_users
             )
 
@@ -226,7 +267,7 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
             promo_id,
             success_count,
             failure_count,
-            processed_count + batch_start_index,
+            batch_start_index + processed_count,
             total_users
         )
         
@@ -250,6 +291,9 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
              pass # Already logged above
         except Exception as inner_e:
              logger.error(f"Failed to mark promo {promo_id} as FAILED after outer exception: {inner_e}")
+    finally:
+        # Always release the lock
+        cache.delete(lock_key)
 
 def get_target_users(promo):
     """Helper function to get eligible users for a promotional email."""
