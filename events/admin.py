@@ -207,6 +207,8 @@ class EventAdmin(admin.ModelAdmin):
         fast_joins_by_day = {}
         fast_leaves_by_day = {}
         
+        # TODO: As dataset grows, we need to address pagination and caching
+        # for better performance when processing large date ranges
         for i in range(days):
             day = start_date + timedelta(days=i)
             day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
