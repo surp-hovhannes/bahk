@@ -103,6 +103,9 @@ class Command(BaseCommand):
                         EventType.FAST_BEGINNING: 'fast_start',
                         EventType.DEVOTIONAL_AVAILABLE: 'devotional_available',
                         EventType.FAST_PARTICIPANT_MILESTONE: 'milestone',
+                        EventType.ARTICLE_PUBLISHED: 'article_published',
+                        EventType.RECIPE_PUBLISHED: 'recipe_published',
+                        EventType.VIDEO_PUBLISHED: 'video_published',
                     }
                     if event.event_type.code in activity_type_mapping:
                         user_created += 1

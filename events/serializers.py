@@ -99,10 +99,7 @@ class EventStatsSerializer(serializers.Serializer):
         help_text="Fast joining statistics"
     )
     
-    milestone_events = serializers.ListField(
-        child=EventListSerializer(),
-        help_text="Recent milestone events"
-    )
+    milestone_events = EventListSerializer(many=True)
 
 
 class UserEventStatsSerializer(serializers.Serializer):
@@ -116,10 +113,7 @@ class UserEventStatsSerializer(serializers.Serializer):
     fasts_left = serializers.IntegerField()
     net_fast_joins = serializers.IntegerField()
     
-    recent_events = serializers.ListField(
-        child=EventListSerializer(),
-        help_text="Recent events for this user"
-    )
+    recent_events = EventListSerializer(many=True)
     
     event_types_breakdown = serializers.DictField(
         help_text="Breakdown of events by type"
@@ -138,19 +132,13 @@ class FastEventStatsSerializer(serializers.Serializer):
     total_leaves = serializers.IntegerField()
     net_joins = serializers.IntegerField()
     
-    milestone_events = serializers.ListField(
-        child=EventListSerializer(),
-        help_text="Milestone events for this fast"
-    )
+    milestone_events = EventListSerializer(many=True)
     
     join_timeline = serializers.DictField(
         help_text="Timeline of joins and leaves"
     )
     
-    recent_activity = serializers.ListField(
-        child=EventListSerializer(),
-        help_text="Recent activity for this fast"
-    )
+    recent_activity = EventListSerializer(many=True)
 
 
 class UserActivityFeedSerializer(serializers.ModelSerializer):
