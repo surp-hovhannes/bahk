@@ -1,4 +1,4 @@
-{% extends "admin/index.html" %}
+{% extends "admin/base_site.html" %}
 {% load i18n %}
 
 {% block content %}
@@ -41,12 +41,12 @@
     {% else %}
         <p>{% translate "You don't have permission to view or edit anything." %}</p>
     {% endif %}
-</div>
+    </div>
 {% endblock %}
 
 {% block sidebar %}
+{% load log %}
 <div id="content-related">
-    <!-- Custom Analytics Section -->
     <div class="module" id="analytics-module">
         <h2>📊 Analytics Dashboard</h2>
         <ul class="actionlist">
@@ -59,10 +59,9 @@
             </li>
         </ul>
     </div>
-    
+
     <div class="module" id="recent-actions-module">
         <h2>{% translate 'Recent actions' %}</h2>
-        {% load log %}
         {% get_admin_log 10 as admin_log for_user user %}
         {% if not admin_log %}
         <p>{% translate 'None available' %}</p>
@@ -87,4 +86,6 @@
         {% endif %}
     </div>
 </div>
-{% endblock %} 
+{% endblock %}
+
+

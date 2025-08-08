@@ -716,4 +716,10 @@ def analytics_link():
     )
 
 
-# Note: If a custom admin index is desired, ensure the template exists before assigning admin.site.index_template.
+# Register a custom admin site section for events
+class EventsAdminSite:
+    """Custom admin configuration for events."""
+    
+    def __init__(self):
+        # Add analytics link to the admin index
+        admin.site.index_template = 'admin/events/index_with_analytics.html'
