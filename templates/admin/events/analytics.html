@@ -262,7 +262,7 @@
     <!-- Events Over Time Chart -->
     <div class="chart-container">
         <h2 class="chart-title">📈 Events Over Time</h2>
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" id="eventsOverTimeWrapper">
             <canvas id="eventsOverTimeChart"></canvas>
         </div>
     </div>
@@ -270,7 +270,7 @@
     <!-- Fast Join/Leave Trends -->
     <div class="chart-container">
         <h2 class="chart-title">🔄 Fast Join/Leave Trends</h2>
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" id="fastTrendsWrapper">
             <canvas id="fastTrendsChart"></canvas>
         </div>
     </div>
@@ -278,7 +278,7 @@
     <!-- Fast Join/Leave Histogram -->
     <div class="chart-container">
         <h2 class="chart-title">📊 Fast Join/Leave Histogram Over Time</h2>
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" id="fastHistogramWrapper">
             <canvas id="fastHistogramChart"></canvas>
         </div>
     </div>
@@ -286,7 +286,7 @@
     <!-- Current/Upcoming Fast Trends -->
     <div class="chart-container">
         <h2 class="chart-title">🎯 Current & Upcoming Fast Trends</h2>
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" id="currentUpcomingFastWrapper">
             <canvas id="currentUpcomingFastChart"></canvas>
         </div>
         <div id="currentUpcomingFastInfo" class="fast-info-grid">
@@ -691,7 +691,7 @@ function updateCharts() {
     });
     
     // Fetch new data via AJAX
-    fetch(`?days=${days}`, {
+    fetch(`${window.location.pathname}data/?days=${days}`, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
         }
@@ -727,11 +727,11 @@ function recreateCharts(data) {
     if (fastHistogramChart) fastHistogramChart.destroy();
     if (currentUpcomingFastChart) currentUpcomingFastChart.destroy();
     
-    // Recreate chart containers
-    document.getElementById('eventsOverTimeChart').parentElement.innerHTML = '<canvas id="eventsOverTimeChart"></canvas>';
-    document.getElementById('fastTrendsChart').parentElement.innerHTML = '<canvas id="fastTrendsChart"></canvas>';
-    document.getElementById('fastHistogramChart').parentElement.innerHTML = '<canvas id="fastHistogramChart"></canvas>';
-    document.getElementById('currentUpcomingFastChart').parentElement.innerHTML = '<canvas id="currentUpcomingFastChart"></canvas>';
+    // Recreate chart containers using wrapper IDs
+    document.getElementById('eventsOverTimeWrapper').innerHTML = '<canvas id="eventsOverTimeChart"></canvas>';
+    document.getElementById('fastTrendsWrapper').innerHTML = '<canvas id="fastTrendsChart"></canvas>';
+    document.getElementById('fastHistogramWrapper').innerHTML = '<canvas id="fastHistogramChart"></canvas>';
+    document.getElementById('currentUpcomingFastWrapper').innerHTML = '<canvas id="currentUpcomingFastChart"></canvas>';
     
     // Recreate charts with new data
     const eventsCtx = document.getElementById('eventsOverTimeChart').getContext('2d');
