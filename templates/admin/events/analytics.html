@@ -327,7 +327,8 @@
 </div>
 
 <!-- Chart.js CDN -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+
 
 <script>
 // Chart configuration
@@ -603,7 +604,7 @@ function initializeCharts() {
     // Top Users Chart
     const usersCtx = document.getElementById('topUsersChart').getContext('2d');
     topUsersChart = new Chart(usersCtx, {
-        type: 'horizontalBar',
+        type: 'bar',
         data: {
             labels: topUsers.map(user => user.user__username),
             datasets: [{
