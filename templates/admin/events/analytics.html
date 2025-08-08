@@ -329,6 +329,16 @@
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 
+<!-- JSON data blobs (safe embedding) -->
+{{ events_by_day|json_script:"events-by-day-data" }}
+{{ events_by_type|json_script:"events-by-type-data" }}
+{{ top_users|json_script:"top-users-data" }}
+{{ fast_trends_data|json_script:"fast-trends-data" }}
+{{ hourly_data|json_script:"hourly-data" }}
+{{ current_upcoming_fast_data|json_script:"current-upcoming-fast-data" }}
+{{ fast_joins|json_script:"fast-joins" }}
+{{ fast_leaves|json_script:"fast-leaves" }}
+
 
 <script>
 // Chart configuration
@@ -365,13 +375,15 @@ const chartConfig = {
 // Initialize charts
 let eventsOverTimeChart, fastTrendsChart, fastHistogramChart, currentUpcomingFastChart, eventTypesChart, topUsersChart;
 
-// Data from Django context
-const eventsByDay = {{ events_by_day|safe }};
-const eventsByType = {{ events_by_type|safe }};
-const topUsers = {{ top_users|safe }};
-const fastTrendsData = {{ fast_trends_data|safe }};
-const hourlyData = {{ hourly_data|safe }};
-const currentUpcomingFastData = {{ current_upcoming_fast_data|safe }};
+// Data from Django context (parsed from json_script elements)
+const eventsByDay = JSON.parse(document.getElementById('events-by-day-data').textContent);
+const eventsByType = JSON.parse(document.getElementById('events-by-type-data').textContent);
+const topUsers = JSON.parse(document.getElementById('top-users-data').textContent);
+const fastTrendsData = JSON.parse(document.getElementById('fast-trends-data').textContent);
+const hourlyData = JSON.parse(document.getElementById('hourly-data').textContent);
+const currentUpcomingFastData = JSON.parse(document.getElementById('current-upcoming-fast-data').textContent);
+const FAST_JOINS = JSON.parse(document.getElementById('fast-joins').textContent);
+const FAST_LEAVES = JSON.parse(document.getElementById('fast-leaves').textContent);
 
 function initializeCharts() {
     // Events Over Time Chart
@@ -409,7 +421,7 @@ function initializeCharts() {
             labels: ['Joins', 'Leaves'],
             datasets: [{
                 label: 'Fast Activity',
-                data: [{{ fast_joins }}, {{ fast_leaves }}],
+                data: [FAST_JOINS, FAST_LEAVES],
                 backgroundColor: [
                     'rgba(75, 192, 192, 0.8)',
                     'rgba(255, 99, 132, 0.8)'

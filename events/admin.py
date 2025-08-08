@@ -337,11 +337,10 @@ class EventAdmin(admin.ModelAdmin):
                 fast_daily_leaves[day.strftime('%Y-%m-%d')] = leaves_count
             
             current_upcoming_fast_data[fast.name] = {
-                'fast': fast,
                 'is_current': fast in current_fasts,
                 'is_upcoming': fast in upcoming_fasts,
-                'start_date': fast_start,
-                'end_date': fast_end,
+                'start_date': fast_start.isoformat(),
+                'end_date': fast_end.isoformat(),
                 'total_joins': fast_joins,
                 'total_leaves': fast_leaves,
                 'net_growth': fast_joins - fast_leaves,
@@ -522,11 +521,10 @@ class EventAdmin(admin.ModelAdmin):
                 fast_daily_leaves[day.strftime('%Y-%m-%d')] = leaves_count
             
             current_upcoming_fast_data[fast.name] = {
-                'fast': fast,
                 'is_current': fast in current_fasts,
                 'is_upcoming': fast in upcoming_fasts,
-                'start_date': fast_start,
-                'end_date': fast_end,
+                'start_date': fast_start.isoformat(),
+                'end_date': fast_end.isoformat(),
                 'total_joins': fast_joins,
                 'total_leaves': fast_leaves,
                 'net_growth': fast_joins - fast_leaves,
