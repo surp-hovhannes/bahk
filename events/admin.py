@@ -206,10 +206,12 @@ class EventAdmin(admin.ModelAdmin):
         events_by_day = {}
         fast_joins_by_day = {}
         fast_leaves_by_day = {}
+        # Include the current day in the histogram
+        num_days = days + 1
         
         # TODO: As dataset grows, we need to address pagination and caching
         # for better performance when processing large date ranges
-        for i in range(days):
+        for i in range(num_days):
             day = start_date + timedelta(days=i)
             day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
@@ -311,7 +313,7 @@ class EventAdmin(admin.ModelAdmin):
             fast_daily_joins = {}
             fast_daily_leaves = {}
             
-            for i in range(days):
+            for i in range(num_days):
                 day = start_date + timedelta(days=i)
                 day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
                 day_end = day_start + timedelta(days=1)
@@ -410,8 +412,10 @@ class EventAdmin(admin.ModelAdmin):
         events_by_day = {}
         fast_joins_by_day = {}
         fast_leaves_by_day = {}
+        # Include the current day in the histogram
+        num_days = days + 1
         
-        for i in range(days):
+        for i in range(num_days):
             day = start_date + timedelta(days=i)
             day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
@@ -495,7 +499,7 @@ class EventAdmin(admin.ModelAdmin):
             fast_daily_joins = {}
             fast_daily_leaves = {}
             
-            for i in range(days):
+            for i in range(num_days):
                 day = start_date + timedelta(days=i)
                 day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
                 day_end = day_start + timedelta(days=1)
