@@ -248,16 +248,9 @@ class EventAdmin(admin.ModelAdmin):
             event_count=Count('id')
         ).order_by('-event_count')[:10]
         
-        # Fast join/leave totals for the period
-        fast_joins = Event.objects.filter(
-            event_type__code=EventType.USER_JOINED_FAST,
-            timestamp__gte=start_date
-        ).count()
-        
-        fast_leaves = Event.objects.filter(
-            event_type__code=EventType.USER_LEFT_FAST,
-            timestamp__gte=start_date
-        ).count()
+        # Fast join/leave totals for the period (derived from per-day buckets to align with charts)
+        fast_joins = sum(fast_joins_by_day.values())
+        fast_leaves = sum(fast_leaves_by_day.values())
         
         # Recent milestones
         milestones = Event.objects.filter(
@@ -537,16 +530,9 @@ class EventAdmin(admin.ModelAdmin):
                 'participant_count': fast.profiles.count()
             }
         
-        # Summary statistics
-        fast_joins = Event.objects.filter(
-            event_type__code=EventType.USER_JOINED_FAST,
-            timestamp__gte=start_date
-        ).count()
-        
-        fast_leaves = Event.objects.filter(
-            event_type__code=EventType.USER_LEFT_FAST,
-            timestamp__gte=start_date
-        ).count()
+        # Summary statistics aligned with per-day buckets
+        fast_joins = sum(fast_joins_by_day.values())
+        fast_leaves = sum(fast_leaves_by_day.values())
         
         return JsonResponse({
             'events_by_day': events_by_day,
