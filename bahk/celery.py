@@ -16,7 +16,7 @@ app = Celery('bahk')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Configure SSL settings for Redis if using rediss://
-broker_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+broker_url = config('REDIS_URL', default='redis://localhost:6379/0')
 app.conf.broker_url = broker_url
 
 # The SSL settings will be automatically picked up from Django settings
@@ -37,13 +37,53 @@ app.conf.beat_schedule = {
             }
         }
     },
-    'update-current-fast-maps-every-hour': {
+    'update-current-fast-maps-once-per-day': {
         'task': 'hub.tasks.update_current_fast_maps',
-        'schedule': 60 * 60,  # Every hour
+        'schedule': crontab(hour=1, minute=0),
         # Add Sentry Cron metadata
         'options': {
             'sentry': {
-                'monitor_slug': 'hourly-fast-map-updates',
+                'monitor_slug': 'daily-fast-map-updates',
+            }
+        }
+    },
+    'cleanup-old-activity-feed-items-daily': {
+        'task': 'events.tasks.cleanup_old_activity_feed_items_task',
+        'schedule': crontab(hour=2, minute=0),  # 2 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-activity-feed-cleanup',
+            }
+        }
+    },
+    'check-fast-beginning-events-daily': {
+        'task': 'events.tasks.check_fast_beginning_events_task',
+        'schedule': crontab(hour=6, minute=0),  # 6 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-fast-beginning-check',
+            }
+        }
+    },
+    'check-participation-milestones-daily': {
+        'task': 'events.tasks.check_participation_milestones_task',
+        'schedule': crontab(hour=8, minute=0),  # 8 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-participation-milestones-check',
+            }
+        }
+    },
+    'check-devotional-availability-daily': {
+        'task': 'events.tasks.check_devotional_availability_task',
+        'schedule': crontab(hour=7, minute=0),  # 7 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-devotional-availability-check',
             }
         }
     },
