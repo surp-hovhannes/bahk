@@ -28,6 +28,8 @@ class EventType(models.Model):
     USER_MILESTONE_REACHED = 'user_milestone_reached'  # Future feature
     USER_LOGGED_IN = 'user_logged_in'
     USER_LOGGED_OUT = 'user_logged_out'
+    USER_REGISTERED = 'user_registered'
+    USER_ACCOUNT_CREATED = 'user_account_created'
     FAST_CREATED = 'fast_created'
     FAST_UPDATED = 'fast_updated'
     ARTICLE_PUBLISHED = 'article_published'
@@ -44,6 +46,8 @@ class EventType(models.Model):
         (USER_MILESTONE_REACHED, 'User Milestone Reached'),
         (USER_LOGGED_IN, 'User Logged In'),
         (USER_LOGGED_OUT, 'User Logged Out'),
+        (USER_REGISTERED, 'User Registered'),
+        (USER_ACCOUNT_CREATED, 'User Account Created'),
         (FAST_CREATED, 'Fast Created'),
         (FAST_UPDATED, 'Fast Updated'),
         (ARTICLE_PUBLISHED, 'Article Published'),
@@ -372,6 +376,8 @@ class UserActivityFeed(models.Model):
         ('milestone', 'Milestone Reached'),
         ('fast_reminder', 'Fast Reminder'),
         ('devotional_reminder', 'Devotional Reminder'),
+        ('user_registered', 'User Registered'),
+        ('user_account_created', 'User Account Created'),
         ('article_published', 'Article Published'),
         ('recipe_published', 'Recipe Published'),
         ('video_published', 'Video Published'),
@@ -485,6 +491,8 @@ class UserActivityFeed(models.Model):
             'fast_leave': 180,        # Keep leave events for 6 months
             'devotional_available': 90, # Keep devotional notifications for 90 days
             'milestone': 365,         # Keep milestones for 1 year
+            'user_registered': 365,   # Keep user registration for 1 year
+            'user_account_created': 365, # Keep account creation for 1 year
             'event': 180,             # Keep generic events for 6 months
         }
     
@@ -606,6 +614,8 @@ class UserActivityFeed(models.Model):
             EventType.FAST_BEGINNING: 'fast_start',
             EventType.DEVOTIONAL_AVAILABLE: 'devotional_available',
             EventType.FAST_PARTICIPANT_MILESTONE: 'milestone',
+            EventType.USER_REGISTERED: 'user_registered',
+            EventType.USER_ACCOUNT_CREATED: 'user_account_created',
             EventType.ARTICLE_PUBLISHED: 'article_published',
             EventType.RECIPE_PUBLISHED: 'recipe_published',
             EventType.VIDEO_PUBLISHED: 'video_published',
