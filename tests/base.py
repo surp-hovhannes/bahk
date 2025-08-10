@@ -2,6 +2,7 @@
 from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APITestCase
 from tests.fixtures.test_data import TestDataFactory
+from events.models import EventType
 
 
 class BaseTestCase(TestCase):
@@ -12,6 +13,9 @@ class BaseTestCase(TestCase):
         """Set up class-level test data."""
         super().setUpClass()
         cls.factory = TestDataFactory
+        
+        # Initialize event types for tests
+        EventType.get_or_create_default_types()
     
     def create_user(self, **kwargs):
         """Convenience method to create a user."""
@@ -38,6 +42,9 @@ class BaseAPITestCase(APITestCase):
         """Set up class-level test data."""
         super().setUpClass()
         cls.factory = TestDataFactory
+        
+        # Initialize event types for tests
+        EventType.get_or_create_default_types()
     
     def create_user(self, **kwargs):
         """Convenience method to create a user."""
@@ -91,6 +98,9 @@ class BaseTransactionTestCase(TransactionTestCase):
         """Set up class-level test data."""
         super().setUpClass()
         cls.factory = TestDataFactory
+        
+        # Initialize event types for tests
+        EventType.get_or_create_default_types()
     
     def create_user(self, **kwargs):
         """Convenience method to create a user."""

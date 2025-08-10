@@ -102,7 +102,7 @@ DEFAULT_CHURCH_NAME = "Armenian Apostolic Church"
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-340y5$yaevl3%&50ob@)r@6htxve-6b0161m03j$)4r_%g8djq')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-340y5$yaevl3%&50ob@)r@6htxve-6b0161m03j$)4r_%g8djq')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
@@ -133,6 +133,7 @@ INSTALLED_APPS = [
     'notifications',
     'learning_resources',
     's3_file_field',
+    'events',  # User events tracking
 ]
 
 MIDDLEWARE = [
@@ -174,10 +175,10 @@ WSGI_APPLICATION = 'bahk.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 import dj_database_url
 
-if os.getenv('DATABASE_URL'):
+if config('DATABASE_URL', default=None):
     # We are running on Heroku, use the DATABASE_URL environment variable
     DATABASES = {
-        'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
+        'default': dj_database_url.config(default=config('DATABASE_URL'))
     }
 else:
     DATABASES = {
@@ -422,8 +423,8 @@ if 'test' in sys.argv:
     CELERY_TASK_EAGER_PROPAGATES = True  # Raise task errors directly in tests
     
     # Use the same database for tests with a test_ prefix
-    if 'DATABASE_URL' in os.environ:
-        db_config = dj_database_url.config(default=os.environ['DATABASE_URL'])
+    if config('DATABASE_URL', default=None):
+        db_config = dj_database_url.config(default=config('DATABASE_URL'))
         DATABASES = {
             'default': {
                 **db_config,
@@ -594,18 +595,18 @@ LOGGING = {
 }
 
 # S3 File Field Configuration
-S3FF_UPLOAD_PREFIX = os.environ.get('AWS_LOCATION', 'uploads')
+S3FF_UPLOAD_PREFIX = config('AWS_LOCATION', default='uploads')
 
 # AWS settings
-AWS_S3_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-AWS_S3_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
-AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL')
+AWS_S3_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
+AWS_S3_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_S3_ENDPOINT_URL = config('AWS_S3_ENDPOINT_URL', default=None)
 
 # AWS Location Service configuration
-AWS_LOCATION_PLACE_INDEX = os.environ.get('AWS_LOCATION_PLACE_INDEX', 'ExamplePlaceIndex')
-AWS_LOCATION_API_KEY = os.environ.get('AWS_LOCATION_SERVICES_KEY', None)
+AWS_LOCATION_PLACE_INDEX = config('AWS_LOCATION_PLACE_INDEX', default='ExamplePlaceIndex')
+AWS_LOCATION_API_KEY = config('AWS_LOCATION_SERVICES_KEY', default=None)
 
 # Force version 4 signing for S3
 AWS_S3_SIGNATURE_VERSION = 's3v4'
@@ -613,3 +614,15 @@ AWS_S3_FILE_OVERWRITE = False
 
 # Best practice is to disable ACLs
 AWS_DEFAULT_ACL = None  # Disable ACLs
+
+# Activity Feed Settings
+# Set to True to use Celery for async activity feed item creation
+# Set to False to use synchronous creation (default)
+USE_ASYNC_ACTIVITY_FEED = config('USE_ASYNC_ACTIVITY_FEED', default=False, cast=bool)
+
+# Activity Feed Cleanup Settings
+# How often to run cleanup tasks (in seconds)
+ACTIVITY_FEED_CLEANUP_INTERVAL = config('ACTIVITY_FEED_CLEANUP_INTERVAL', default=86400, cast=int)  # 24 hours
+
+# Batch size for bulk operations
+ACTIVITY_FEED_BATCH_SIZE = config('ACTIVITY_FEED_BATCH_SIZE', default=100, cast=int)

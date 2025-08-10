@@ -10,6 +10,7 @@ import hub.models as models
 from notifications.models import DeviceToken, PromoEmail
 from app_management.models import Changelog
 from learning_resources.models import Video, Article, Recipe, Bookmark
+from events.models import EventType
 
 # Default prompt template for LLM context generation
 PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings. 
@@ -67,12 +68,15 @@ class Command(BaseCommand):
         DeviceToken.objects.all().delete()
         PromoEmail.objects.all().delete()
         Changelog.objects.all().delete()
-        
+
         # Clear learning resources (bookmarks first due to foreign keys)
         Bookmark.objects.all().delete()
         Video.objects.all().delete()
         Article.objects.all().delete()
         Recipe.objects.all().delete()
+
+        # Clear events data
+        EventType.objects.all().delete()
 
     def populate_db(self):
         # Create Churches
@@ -149,7 +153,7 @@ class Command(BaseCommand):
 
         # Create Devotional Sets and Devotionals
         devotional_sets = self._create_devotional_sets_and_devotionals(all_days, videos, fasts)
-        
+
         # Create Bookmarks
         users = [up[0] for up in users_and_profiles]
         self._create_bookmarks(users, videos, articles, recipes, devotional_sets)
@@ -170,6 +174,9 @@ class Command(BaseCommand):
 
         # Create App Management models
         self._create_changelogs()
+
+        # Initialize Event Types
+        self._init_event_types()
 
         self.stdout.write(self.style.SUCCESS("All models populated with seed data."))
 
@@ -263,7 +270,7 @@ class Command(BaseCommand):
         """Create sample bookmarks for users."""
         from django.contrib.contenttypes.models import ContentType
         import random
-        
+
         # Sample bookmark notes based on content type
         video_notes = [
             "Great for morning prayers",
@@ -272,7 +279,7 @@ class Command(BaseCommand):
             "Shared with my prayer group",
             "Excellent spiritual guidance"
         ]
-        
+
         article_notes = [
             "Thought-provoking insights",
             "Helpful for Bible study",
@@ -280,7 +287,7 @@ class Command(BaseCommand):
             "Great practical advice",
             "Important spiritual reading"
         ]
-        
+
         recipe_notes = [
             "Perfect for fasting period",
             "Family loves this recipe",
@@ -288,7 +295,7 @@ class Command(BaseCommand):
             "Easy to prepare",
             "Traditional and delicious"
         ]
-        
+
         devotional_notes = [
             "Following this devotional series",
             "Great for spiritual growth",
@@ -296,16 +303,16 @@ class Command(BaseCommand):
             "Perfect timing for me",
             "Very meaningful content"
         ]
-        
+
         # Combine all content
         all_content = list(videos) + list(articles) + list(recipes) + list(devotional_sets)
-        
+
         # Create bookmarks for each user
         for user in users:
             # Each user bookmarks 3-7 random items
             num_bookmarks = random.randint(3, min(7, len(all_content)))
             bookmarked_content = random.sample(all_content, num_bookmarks)
-            
+
             for content in bookmarked_content:
                 # Select appropriate note based on content type
                 if isinstance(content, Video):
@@ -318,7 +325,7 @@ class Command(BaseCommand):
                     note = random.choice(devotional_notes)
                 else:
                     note = "Bookmarked for later reference"
-                
+
                 # Create bookmark
                 Bookmark.objects.create(
                     user=user,
@@ -326,7 +333,7 @@ class Command(BaseCommand):
                     object_id=content.id,
                     note=note
                 )
-        
+
         total_bookmarks = Bookmark.objects.count()
         self.stdout.write(f"Created {total_bookmarks} bookmarks across {len(users)} users")
 
@@ -478,4 +485,31 @@ class Command(BaseCommand):
                 description="# Version 1.2.0\n\n## Major Updates\n- Video library\n- Articles and recipes\n- Devotional content\n- Reading contexts with AI-generated insights",
                 version="1.2.0",
             ),
-        ]        
+        ]
+
+    def _init_event_types(self):
+        """Initialize default event types for the events app."""
+        self.stdout.write("Initializing event types...")
+
+        created_types = EventType.get_or_create_default_types()
+
+        if created_types:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'Created {len(created_types)} new event types:'
+                )
+            )
+            for event_type in created_types:
+                self.stdout.write(f'  - {event_type.name} ({event_type.code})')
+        else:
+            self.stdout.write(
+                self.style.WARNING('All default event types already exist.')
+            )
+
+        # Display summary
+        all_types = EventType.objects.all().order_by('category', 'name')
+        self.stdout.write(f'\nEvent types initialized: {all_types.count()} total types')
+
+        self.stdout.write(
+            self.style.SUCCESS('Event types initialization complete!')
+        )
