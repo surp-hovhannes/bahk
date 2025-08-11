@@ -6,6 +6,15 @@ from django.db import migrations
 def create_user_account_created_event_type(apps, schema_editor):
     """Create EventType record for user account creation tracking."""
     EventType = apps.get_model('events', 'EventType')
+    # Respect settings flag to skip creating this type in certain environments (e.g., tests)
+    try:
+        from django.conf import settings
+        # Default to skipping unless explicitly enabled
+        if not getattr(settings, 'INIT_USER_ACCOUNT_CREATED_EVENT_TYPE', False):
+            return
+    except Exception:
+        # If settings isn't available, skip by default
+        return
     
     # Create the USER_ACCOUNT_CREATED event type if it doesn't exist
     user_account_created, created = EventType.objects.get_or_create(

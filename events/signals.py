@@ -570,6 +570,13 @@ def track_user_account_creation(sender, instance, created, **kwargs):
     Track when user profiles are created (indicating full account setup).
     This tracks the completion of account creation after profile setup.
     """
+    from django.conf import settings
+
+    # Allow enabling/disabling this tracking via settings to avoid
+    # unintended events in environments like tests/fixtures.
+    if not getattr(settings, 'TRACK_USER_ACCOUNT_CREATED', False):
+        return
+
     if not created:
         return  # Only track new profile creation, not updates
         
