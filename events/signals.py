@@ -561,3 +561,47 @@ def track_video_publication_on_save(sender, instance, created, **kwargs):
             
     except Exception as e:
         logger.error(f"Error scheduling video publication tracking: {e}")
+
+
+
+@receiver(post_save, sender='hub.Profile')
+def track_user_account_creation(sender, instance, created, **kwargs):
+    """
+    Track when user profiles are created (indicating full account setup).
+    This tracks the completion of account creation after profile setup.
+    """
+    from django.conf import settings
+
+    # Allow enabling/disabling this tracking via settings to avoid
+    # unintended events in environments like tests/fixtures.
+    if not getattr(settings, 'TRACK_USER_ACCOUNT_CREATED', False):
+        return
+
+    if not created:
+        return  # Only track new profile creation, not updates
+        
+    try:
+        Event.create_event(
+            event_type_code=EventType.USER_ACCOUNT_CREATED,
+            user=instance.user,
+            target=instance,  # The profile is the target of the account creation event
+            description=f"User {instance.user.username} completed account creation",
+            data={
+                'user_id': instance.user.id,
+                'username': instance.user.username,
+                'email': instance.user.email,
+                'profile_id': instance.id,
+                'church_id': instance.church.id if instance.church else None,
+                'church_name': instance.church.name if instance.church else None,
+                'name': instance.name,
+            }
+        )
+        logger.info(f"Tracked USER_ACCOUNT_CREATED event: {instance.user.username}")
+        
+    except ValueError as e:
+        if "does not exist or is inactive" in str(e):
+            logger.warning(f"Event type '{EventType.USER_ACCOUNT_CREATED}' does not exist, skipping event tracking")
+        else:
+            raise
+    except Exception as e:
+        logger.error(f"Error tracking user account creation: {e}")
