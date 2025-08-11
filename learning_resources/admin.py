@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from markdownx.admin import MarkdownxModelAdmin
-from .models import Article, Recipe, Video
+from .models import Article, Recipe, Video, Bookmark
 
 from django import forms
 from s3_file_field.widgets import S3FileInput
@@ -102,3 +102,84 @@ class RecipeAdmin(MarkdownxModelAdmin):
             )
         return "No image"
     image_preview.short_description = 'Image Preview'
+
+
+@admin.register(Bookmark)
+class BookmarkAdmin(admin.ModelAdmin):
+    """Admin interface for managing user bookmarks."""
+    
+    list_display = (
+        'user', 'content_type_name', 'content_title', 
+        'object_id', 'created_at'
+    )
+    list_filter = ('content_type', 'created_at')
+    search_fields = (
+        'user__username', 'user__email', 'note'
+    )
+    readonly_fields = ('created_at', 'content_object_link')
+    raw_id_fields = ('user',)  # Better performance for large user lists
+    
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'content_type', 'object_id', 'content_object_link')
+        }),
+        ('Details', {
+            'fields': ('note', 'created_at')
+        })
+    )
+    
+    def content_type_name(self, obj):
+        """Display the content type in a readable format."""
+        return obj.content_type.model.title().replace('_', ' ')
+    content_type_name.short_description = 'Content Type'
+    content_type_name.admin_order_field = 'content_type'
+    
+    def content_title(self, obj):
+        """Display the title of the bookmarked content if available."""
+        content = obj.content_object
+        if content and hasattr(content, 'title'):
+            return content.title
+        elif content and hasattr(content, 'name'):
+            return content.name
+        return f"{obj.content_type.model} #{obj.object_id}"
+    content_title.short_description = 'Content Title'
+    
+    def content_object_link(self, obj):
+        """Display a link to the actual content object in admin."""
+        content = obj.content_object
+        if content:
+            # Try to get the admin URL for the content object
+            try:
+                from django.urls import reverse
+                url = reverse(
+                    f'admin:{content._meta.app_label}_{content._meta.model_name}_change',
+                    args=[content.pk]
+                )
+                return format_html(
+                    '<a href="{}" target="_blank">{}</a>',
+                    url,
+                    content
+                )
+            except:
+                return str(content)
+        return "Content not found"
+    content_object_link.short_description = 'Content Object'
+    content_object_link.allow_tags = True
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related."""
+        return super().get_queryset(request).select_related(
+            'user', 'content_type'
+        )
+    
+    def has_add_permission(self, request):
+        """Allow admins to add bookmarks manually if needed."""
+        return True
+    
+    def has_change_permission(self, request, obj=None):
+        """Allow admins to modify bookmarks."""
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        """Allow admins to delete bookmarks."""
+        return True
