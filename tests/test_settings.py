@@ -95,3 +95,6 @@ SIMPLE_JWT = {
 
 # Use custom test runner that cleans up media files
 TEST_RUNNER = 'tests.test_runner.MediaCleanupTestRunner'
+
+# Enable user account creation tracking
+TRACK_USER_ACCOUNT_CREATED = False

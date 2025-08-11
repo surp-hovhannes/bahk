@@ -626,3 +626,6 @@ ACTIVITY_FEED_CLEANUP_INTERVAL = config('ACTIVITY_FEED_CLEANUP_INTERVAL', defaul
 
 # Batch size for bulk operations
 ACTIVITY_FEED_BATCH_SIZE = config('ACTIVITY_FEED_BATCH_SIZE', default=100, cast=int)
+
+# Enable user account creation tracking
+TRACK_USER_ACCOUNT_CREATED = config('TRACK_USER_ACCOUNT_CREATED', default=True, cast=bool)
