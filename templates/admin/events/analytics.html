@@ -715,8 +715,20 @@ function updateCharts() {
     })
     .catch(error => {
         console.error('Error updating charts:', error);
-        // Restore original charts on error
-        initializeCharts();
+        
+        // Show user-friendly error message
+        document.querySelectorAll('.chart-wrapper').forEach(wrapper => {
+            wrapper.innerHTML = '<div style="text-align: center; padding: 50px; color: #dc3545;">Error loading data. Please refresh the page and try again.</div>';
+        });
+        
+        // Try to restore original charts after a delay
+        setTimeout(() => {
+            try {
+                initializeCharts();
+            } catch (e) {
+                console.error('Failed to restore original charts:', e);
+            }
+        }, 2000);
     });
 }
 

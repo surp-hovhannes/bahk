@@ -256,9 +256,17 @@ class Event(models.Model):
             raise ValidationError("Event data must be a valid JSON object.")
     
     def save(self, *args, **kwargs):
-        """Override save to perform validation."""
+        """Override save to perform validation and cache invalidation."""
         self.full_clean()
         super().save(*args, **kwargs)
+        
+        # Invalidate analytics caches when new events are created
+        try:
+            from .analytics_cache import AnalyticsCacheService
+            AnalyticsCacheService.invalidate_current_day()
+        except ImportError:
+            # analytics_cache module may not be available in some contexts
+            pass
     
     @property
     def target_model_name(self):
