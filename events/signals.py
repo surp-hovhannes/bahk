@@ -17,7 +17,9 @@ def cache_fast_original_values(sender, instance, **kwargs):
             return
         from hub.models import Fast
         original = Fast.objects.filter(pk=instance.pk).first()
-        if not original:
+        try:
+            original = Fast.objects.get(pk=instance.pk)
+        except Fast.DoesNotExist:
             return
         # Store a lightweight snapshot of original values
         instance._original_values = {
@@ -189,7 +191,8 @@ def track_fast_creation_and_updates(sender, instance, created, **kwargs):
 
                 # Select which fields to check
                 fields_to_check = set(current_values.keys())
-                if update_fields:
+                # Only filter by update_fields if it is explicitly provided (not None)
+                if update_fields is not None:
                     fields_to_check &= set(update_fields)
 
                 # Compute diffs
