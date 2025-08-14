@@ -38,12 +38,14 @@ class AnalyticsQueryOptimizer:
         
         end_of_window = start_of_window + timedelta(days=num_days)
         
-        # Single query with conditional aggregation
+        # Single query with conditional aggregation using Django's database-agnostic date truncation
+        from django.db.models.functions import TruncDate
+        
         daily_stats = Event.objects.filter(
             timestamp__gte=start_of_window,
             timestamp__lt=end_of_window
-        ).extra(
-            select={'date': "DATE(timestamp)"}
+        ).annotate(
+            date=TruncDate('timestamp')
         ).values('date').annotate(
             total_events=Count('id'),
             fast_joins=Count(
@@ -118,14 +120,16 @@ class AnalyticsQueryOptimizer:
         result = {}
         
         for fast in fast_queryset:
-            # Get daily data for this fast with a single query
+            # Get daily data for this fast with a single query using Django's database-agnostic date truncation
+            from django.db.models.functions import TruncDate
+            
             daily_stats = Event.objects.filter(
                 content_type=fast_content_type,
                 object_id=fast.id,
                 timestamp__gte=start_of_window,
                 timestamp__lt=end_of_window
-            ).extra(
-                select={'date': "DATE(timestamp)"}
+            ).annotate(
+                date=TruncDate('timestamp')
             ).values('date').annotate(
                 joins=Count(
                     Case(
