@@ -5,8 +5,35 @@ These signals listen for specific model changes and create corresponding event r
 
 import logging
 from django.contrib.auth.signals import user_logged_in, user_logged_out
-from django.db.models.signals import post_save, post_delete, m2m_changed
+from django.db.models.signals import post_save, post_delete, m2m_changed, pre_save
 from django.dispatch import receiver
+@receiver(pre_save, sender='hub.Fast')
+def cache_fast_original_values(sender, instance, **kwargs):
+    """
+    Cache original values for selected Fast fields before save, so we can compute diffs in post_save.
+    """
+    try:
+        if not instance.pk:
+            return
+        from hub.models import Fast
+        original = Fast.objects.filter(pk=instance.pk).first()
+        try:
+            original = Fast.objects.get(pk=instance.pk)
+        except Fast.DoesNotExist:
+            return
+        # Store a lightweight snapshot of original values
+        instance._original_values = {
+            'name': original.name,
+            'description': original.description,
+            'church_id': original.church_id,
+            'culmination_feast': getattr(original, 'culmination_feast', None),
+            'culmination_feast_date': getattr(original, 'culmination_feast_date', None),
+            'url': getattr(original, 'url', None),
+            'image': (original.image.name if getattr(original, 'image', None) else None),
+        }
+    except Exception as e:
+        logger.error(f"Error caching original Fast values: {e}")
+
 from django.contrib.contenttypes.models import ContentType
 
 from .models import Event, EventType
@@ -142,6 +169,51 @@ def track_fast_creation_and_updates(sender, instance, created, **kwargs):
             # Fast was updated
             # Note: We could add more sophisticated tracking here to see what fields changed
             try:
+                # Determine changed fields using pre_save snapshot
+                update_fields = kwargs.get('update_fields')
+                original_values = getattr(instance, '_original_values', {})
+                meaningful_fields = {
+                    'name', 'description', 'church_id',
+                    'culmination_feast', 'culmination_feast_date', 'url', 'image'
+                }
+                system_only_fields = {'year', 'cached_thumbnail_url', 'cached_thumbnail_updated'}
+
+                # Build current values for comparison
+                current_values = {
+                    'name': instance.name,
+                    'description': instance.description,
+                    'church_id': instance.church_id,
+                    'culmination_feast': getattr(instance, 'culmination_feast', None),
+                    'culmination_feast_date': getattr(instance, 'culmination_feast_date', None),
+                    'url': getattr(instance, 'url', None),
+                    'image': (instance.image.name if getattr(instance, 'image', None) else None),
+                }
+
+                # Select which fields to check
+                fields_to_check = set(current_values.keys())
+                # Only filter by update_fields if it is explicitly provided (not None)
+                if update_fields is not None:
+                    fields_to_check &= set(update_fields)
+
+                # Compute diffs
+                diffs = {}
+                for field in fields_to_check:
+                    old_value = original_values.get(field)
+                    new_value = current_values.get(field)
+                    if old_value != new_value:
+                        diffs[field] = {'old': old_value, 'new': new_value}
+
+                # If only system-maintained fields changed (or nothing changed), skip
+                if not diffs:
+                    return
+                if set(diffs.keys()).issubset(system_only_fields):
+                    return
+
+                # Keep only meaningful diffs for payload and decision to emit
+                meaningful_diffs = {k: v for k, v in diffs.items() if k in meaningful_fields}
+                if not meaningful_diffs:
+                    return
+
                 Event.create_event(
                     event_type_code=EventType.FAST_UPDATED,
                     user=None,  # System event (could be enhanced to track who made the change)
@@ -153,6 +225,8 @@ def track_fast_creation_and_updates(sender, instance, created, **kwargs):
                         'church_id': instance.church.id if instance.church else None,
                         'church_name': instance.church.name if instance.church else None,
                         'year': instance.year,
+                        'updated_fields': sorted(list(meaningful_diffs.keys())),
+                        'field_diffs': meaningful_diffs,
                     }
                 )
                 logger.info(f"Tracked FAST_UPDATED event: {instance}")
@@ -399,6 +473,31 @@ def create_activity_feed_item(sender, instance, created, **kwargs):
         else:
             # Create feed item synchronously (current behavior)
             UserActivityFeed.create_from_event(instance, instance.user)
+
+    # Fan-out select system events to relevant users (participants of the fast)
+    if created and not instance.user:
+        try:
+            code = instance.event_type.code
+            # Only propagate certain system events
+            if code in (EventType.FAST_BEGINNING, EventType.DEVOTIONAL_AVAILABLE):
+                # Ensure the event targets a Fast
+                if instance.content_type and instance.content_type.model == 'fast' and instance.object_id:
+                    from django.contrib.auth import get_user_model
+                    from hub.models import Fast
+                    from .tasks import create_activity_feed_item_task
+
+                    fast = Fast.objects.filter(id=instance.object_id).first()
+                    if fast:
+                        User = get_user_model()
+                        user_ids = list(
+                            User.objects.filter(profile__fasts=fast)
+                            .values_list('id', flat=True)
+                            .distinct()
+                        )
+                        for user_id in user_ids:
+                            create_activity_feed_item_task.delay(instance.id, user_id)
+        except Exception as e:
+            logger.error(f"Error propagating system event {instance.id} to participants: {e}")
 
 
 @receiver(post_save, sender='hub.Devotional')

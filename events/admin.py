@@ -185,9 +185,14 @@ class EventAdmin(admin.ModelAdmin):
         Custom analytics view showing event statistics and trends.
         """
         # Get date range from request or default to last 30 days
+        # Normalize to calendar-day boundaries so initial load matches AJAX updates
         days = int(request.GET.get('days', 30))
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=days)
+        now = timezone.now()
+        end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        start_of_window = end_of_today - timedelta(days=days)
+        # Expose these in context for UI/debugging
+        start_date = start_of_window
+        end_date = end_of_today
         
         # Basic event statistics
         total_events = Event.objects.count()
@@ -202,42 +207,19 @@ class EventAdmin(admin.ModelAdmin):
             count=Count('id')
         ).order_by('-count')[:10]
         
-        # Events by day (histogram data)
-        events_by_day = {}
-        fast_joins_by_day = {}
-        fast_leaves_by_day = {}
-        # Include the current day in the histogram
-        num_days = days + 1
+        # Events by day (histogram data) - Optimized single query approach
+        from .analytics_optimizer import AnalyticsQueryOptimizer
         
-        # TODO: As dataset grows, we need to address pagination and caching
-        # for better performance when processing large date ranges
-        for i in range(num_days):
-            day = start_date + timedelta(days=i)
-            day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
-            
-            # Total events for this day
-            count = Event.objects.filter(
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
-            events_by_day[day.strftime('%Y-%m-%d')] = count
-            
-            # Fast joins for this day
-            joins_count = Event.objects.filter(
-                event_type__code=EventType.USER_JOINED_FAST,
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
-            fast_joins_by_day[day.strftime('%Y-%m-%d')] = joins_count
-            
-            # Fast leaves for this day
-            leaves_count = Event.objects.filter(
-                event_type__code=EventType.USER_LEFT_FAST,
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
-            fast_leaves_by_day[day.strftime('%Y-%m-%d')] = leaves_count
+        # Exactly "days" calendar days including today
+        num_days = days
+        
+        # Replace N+1 queries with single optimized aggregation
+        daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+            start_of_window, num_days
+        )
+        events_by_day = daily_aggregates['events_by_day']
+        fast_joins_by_day = daily_aggregates['fast_joins_by_day']
+        fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
         
         # Top users by activity
         top_users = Event.objects.exclude(
@@ -255,7 +237,7 @@ class EventAdmin(admin.ModelAdmin):
         # Recent milestones
         milestones = Event.objects.filter(
             event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
-            timestamp__gte=start_date
+            timestamp__gte=start_of_window
         ).order_by('-timestamp')[:5]
         
         # Get current and upcoming fasts
@@ -272,83 +254,21 @@ class EventAdmin(admin.ModelAdmin):
             days__date__gt=today
         ).distinct().order_by('days__date')[:3]  # Limit to next 3 upcoming fasts
         
-        # Get join/leave data for current and upcoming fasts
-        current_upcoming_fast_data = {}
-        
+        # Get join/leave data for current and upcoming fasts - Optimized
         # Combine current and upcoming fasts for analysis
         all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
         
-        for fast in all_relevant_fasts:
-            # Get fast date range
-            fast_days = fast.days.order_by('date')
-            if not fast_days.exists():
-                continue
-                
-            fast_start = fast_days.first().date
-            fast_end = fast_days.last().date
-            
-            # Get join/leave events for this specific fast
-            fast_joins = Event.objects.filter(
-                event_type__code=EventType.USER_JOINED_FAST,
-                content_type=ContentType.objects.get_for_model(fast),
-                object_id=fast.id,
-                timestamp__gte=start_date
-            ).count()
-            
-            fast_leaves = Event.objects.filter(
-                event_type__code=EventType.USER_LEFT_FAST,
-                content_type=ContentType.objects.get_for_model(fast),
-                object_id=fast.id,
-                timestamp__gte=start_date
-            ).count()
-            
-            # Get daily join/leave data for this fast
-            fast_daily_joins = {}
-            fast_daily_leaves = {}
-            
-            for i in range(num_days):
-                day = start_date + timedelta(days=i)
-                day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-                day_end = day_start + timedelta(days=1)
-                
-                # Joins for this fast on this day
-                joins_count = Event.objects.filter(
-                    event_type__code=EventType.USER_JOINED_FAST,
-                    content_type=ContentType.objects.get_for_model(fast),
-                    object_id=fast.id,
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
-                ).count()
-                fast_daily_joins[day.strftime('%Y-%m-%d')] = joins_count
-                
-                # Leaves for this fast on this day
-                leaves_count = Event.objects.filter(
-                    event_type__code=EventType.USER_LEFT_FAST,
-                    content_type=ContentType.objects.get_for_model(fast),
-                    object_id=fast.id,
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
-                ).count()
-                fast_daily_leaves[day.strftime('%Y-%m-%d')] = leaves_count
-            
-            current_upcoming_fast_data[fast.name] = {
-                'is_current': fast in current_fasts,
-                'is_upcoming': fast in upcoming_fasts,
-                'start_date': fast_start.isoformat(),
-                'end_date': fast_end.isoformat(),
-                'total_joins': fast_joins,
-                'total_leaves': fast_leaves,
-                'net_growth': fast_joins - fast_leaves,
-                'daily_joins': fast_daily_joins,
-                'daily_leaves': fast_daily_leaves,
-                'participant_count': fast.profiles.count()
-            }
+        # Get fast-specific data with optimized queries
+        current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
+            all_relevant_fasts, start_of_window, num_days
+        )
         
         # Hourly distribution for the last 7 days (for more granular analysis)
         hourly_data = {}
         if days <= 7:
             for i in range(24):
-                hour_start = start_date.replace(hour=i, minute=0, second=0, microsecond=0)
+                hour_start = end_of_today - timedelta(days=1)
+                hour_start = hour_start.replace(hour=i, minute=0, second=0, microsecond=0)
                 hour_end = hour_start + timedelta(hours=1)
                 count = Event.objects.filter(
                     timestamp__gte=hour_start,
@@ -367,7 +287,7 @@ class EventAdmin(admin.ModelAdmin):
         context = {
             'title': 'Events Analytics',
             'total_events': total_events,
-            'events_in_period': events_in_period,
+            'events_in_period': sum(events_by_day.values()),
             'events_by_type': list(events_by_type),  # Convert to list for JSON serialization
             'events_by_day': events_by_day,
             'fast_joins_by_day': fast_joins_by_day,
@@ -396,45 +316,39 @@ class EventAdmin(admin.ModelAdmin):
         from django.http import JsonResponse
         from django.contrib.contenttypes.models import ContentType
         
-        # Get date range from request
-        days = int(request.GET.get('days', 30))
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=days)
+        try:
+            # Get date range from request with validation
+            days = int(request.GET.get('days', 30))
+            
+            # Validate date range
+            if days <= 0 or days > 365:
+                return JsonResponse({
+                    'error': 'Invalid date range. Must be between 1 and 365 days.'
+                }, status=400)
+            
+            # Normalize to calendar-day boundaries so AJAX updates match initial load
+            now = timezone.now()
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+            
+        except (ValueError, TypeError) as e:
+            return JsonResponse({
+                'error': f'Invalid parameters: {str(e)}'
+            }, status=400)
         
-        # Events by day (histogram data)
-        events_by_day = {}
-        fast_joins_by_day = {}
-        fast_leaves_by_day = {}
-        # Include the current day in the histogram
-        num_days = days + 1
+        # Events by day (histogram data) - Optimized single query approach
+        from .analytics_optimizer import AnalyticsQueryOptimizer
         
-        for i in range(num_days):
-            day = start_date + timedelta(days=i)
-            day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
-            
-            # Total events for this day
-            count = Event.objects.filter(
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
-            events_by_day[day.strftime('%Y-%m-%d')] = count
-            
-            # Fast joins for this day
-            joins_count = Event.objects.filter(
-                event_type__code=EventType.USER_JOINED_FAST,
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
-            fast_joins_by_day[day.strftime('%Y-%m-%d')] = joins_count
-            
-            # Fast leaves for this day
-            leaves_count = Event.objects.filter(
-                event_type__code=EventType.USER_LEFT_FAST,
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
-            fast_leaves_by_day[day.strftime('%Y-%m-%d')] = leaves_count
+        # Exactly "days" calendar days including today
+        num_days = days
+        
+        # Replace N+1 queries with single optimized aggregation
+        daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+            start_of_window, num_days
+        )
+        events_by_day = daily_aggregates['events_by_day']
+        fast_joins_by_day = daily_aggregates['fast_joins_by_day']
+        fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
         
         # Fast activity trends
         fast_trends_data = {
@@ -461,88 +375,38 @@ class EventAdmin(admin.ModelAdmin):
         # Get join/leave data for current and upcoming fasts
         current_upcoming_fast_data = {}
         
-        # Combine current and upcoming fasts for analysis
+        # Combine current and upcoming fasts for analysis - Optimized
         all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
         
-        for fast in all_relevant_fasts:
-            # Get fast date range
-            fast_days = fast.days.order_by('date')
-            if not fast_days.exists():
-                continue
-                
-            fast_start = fast_days.first().date
-            fast_end = fast_days.last().date
-            
-            # Get join/leave events for this specific fast
-            fast_joins = Event.objects.filter(
-                event_type__code=EventType.USER_JOINED_FAST,
-                content_type=ContentType.objects.get_for_model(fast),
-                object_id=fast.id,
-                timestamp__gte=start_date
-            ).count()
-            
-            fast_leaves = Event.objects.filter(
-                event_type__code=EventType.USER_LEFT_FAST,
-                content_type=ContentType.objects.get_for_model(fast),
-                object_id=fast.id,
-                timestamp__gte=start_date
-            ).count()
-            
-            # Get daily join/leave data for this fast
-            fast_daily_joins = {}
-            fast_daily_leaves = {}
-            
-            for i in range(num_days):
-                day = start_date + timedelta(days=i)
-                day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-                day_end = day_start + timedelta(days=1)
-                
-                # Joins for this fast on this day
-                joins_count = Event.objects.filter(
-                    event_type__code=EventType.USER_JOINED_FAST,
-                    content_type=ContentType.objects.get_for_model(fast),
-                    object_id=fast.id,
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
-                ).count()
-                fast_daily_joins[day.strftime('%Y-%m-%d')] = joins_count
-                
-                # Leaves for this fast on this day
-                leaves_count = Event.objects.filter(
-                    event_type__code=EventType.USER_LEFT_FAST,
-                    content_type=ContentType.objects.get_for_model(fast),
-                    object_id=fast.id,
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
-                ).count()
-                fast_daily_leaves[day.strftime('%Y-%m-%d')] = leaves_count
-            
-            current_upcoming_fast_data[fast.name] = {
-                'is_current': fast in current_fasts,
-                'is_upcoming': fast in upcoming_fasts,
-                'start_date': fast_start.isoformat(),
-                'end_date': fast_end.isoformat(),
-                'total_joins': fast_joins,
-                'total_leaves': fast_leaves,
-                'net_growth': fast_joins - fast_leaves,
-                'daily_joins': fast_daily_joins,
-                'daily_leaves': fast_daily_leaves,
-                'participant_count': fast.profiles.count()
-            }
+        # Get fast-specific data with optimized queries
+        current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
+            all_relevant_fasts, start_of_window, num_days
+        )
         
-        # Summary statistics aligned with per-day buckets
-        fast_joins = sum(fast_joins_by_day.values())
-        fast_leaves = sum(fast_leaves_by_day.values())
-        
-        return JsonResponse({
-            'events_by_day': events_by_day,
-            'fast_trends_data': fast_trends_data,
-            'fast_joins': fast_joins,
-            'fast_leaves': fast_leaves,
-            'net_joins': fast_joins - fast_leaves,
-            'events_in_period': sum(events_by_day.values()),
-            'current_upcoming_fast_data': current_upcoming_fast_data,
-        })
+        try:
+            # Summary statistics aligned with per-day buckets
+            fast_joins = sum(fast_joins_by_day.values())
+            fast_leaves = sum(fast_leaves_by_day.values())
+            
+            return JsonResponse({
+                'events_by_day': events_by_day,
+                'fast_trends_data': fast_trends_data,
+                'fast_joins': fast_joins,
+                'fast_leaves': fast_leaves,
+                'net_joins': fast_joins - fast_leaves,
+                'events_in_period': sum(events_by_day.values()),
+                'current_upcoming_fast_data': current_upcoming_fast_data,
+            })
+            
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Analytics data generation failed: {str(e)}", exc_info=True)
+            
+            return JsonResponse({
+                'error': 'An error occurred while generating analytics data. Please try again.'
+            }, status=500)
     
     def export_csv(self, request):
         """
