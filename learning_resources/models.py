@@ -343,15 +343,37 @@ class Bookmark(models.Model):
             'type': self.content_type_name,
         }
         
-        # Add common fields that most models have
-        if hasattr(content, 'title'):
-            representation['title'] = content.title
-        if hasattr(content, 'description'):
-            representation['description'] = content.description
+        # Special handling for individual devotionals - use video information
+        if self.content_type_name == 'devotional':
+            # For devotionals, use the associated video's information
+            if hasattr(content, 'video') and content.video:
+                representation['title'] = content.video.title
+                representation['description'] = content.video.description
+                # Handle thumbnail URL with proper error handling
+                try:
+                    representation['thumbnail_url'] = (
+                        content.video.cached_thumbnail_url or
+                        (content.video.thumbnail_small.url if content.video.thumbnail else None)
+                    )
+                except (AttributeError, ValueError, OSError):
+                    representation['thumbnail_url'] = None
+            else:
+                # Fallback to devotional's own information
+                representation['title'] = getattr(content, 'title', f'Devotional {content.id}')
+                representation['description'] = getattr(content, 'description', None)
+                representation['thumbnail_url'] = None
+        else:
+            # Add common fields for other content types
+            if hasattr(content, 'title'):
+                representation['title'] = content.title
+            if hasattr(content, 'description'):
+                representation['description'] = content.description
+            if hasattr(content, 'thumbnail') or hasattr(content, 'cached_thumbnail_url'):
+                representation['thumbnail_url'] = getattr(content, 'cached_thumbnail_url', None)
+        
+        # Always add created_at if available
         if hasattr(content, 'created_at'):
             representation['created_at'] = content.created_at
-        if hasattr(content, 'thumbnail') or hasattr(content, 'cached_thumbnail_url'):
-            representation['thumbnail_url'] = getattr(content, 'cached_thumbnail_url', None)
             
         return representation
     
