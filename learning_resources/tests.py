@@ -9,9 +9,11 @@ from PIL import Image
 import json
 
 from hub.models import Church, Fast, DevotionalSet, Day, Devotional
-from learning_resources.models import Video, Article, Recipe
+from learning_resources.models import Video, Article, Recipe, Bookmark
 from learning_resources.serializers import DevotionalSetSerializer
 from tests.fixtures.test_data import TestDataFactory
+from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 
 
 class DevotionalSetModelTest(TestCase):
@@ -302,6 +304,9 @@ class VideoDetailViewTest(APITestCase):
     """Test cases for VideoDetailView endpoint"""
     
     def setUp(self):
+        # Clear cache before each test to ensure clean state
+        cache.clear()
+        
         # Create test videos
         self.video1 = Video.objects.create(
             title="Test Video 1",
@@ -348,9 +353,6 @@ class VideoDetailViewTest(APITestCase):
         self.client.force_authenticate(user=user)
         
         # Create a bookmark for the video
-        from learning_resources.models import Bookmark
-        from django.contrib.contenttypes.models import ContentType
-        
         video_ct = ContentType.objects.get_for_model(Video)
         Bookmark.objects.create(
             user=user,
@@ -377,9 +379,6 @@ class VideoDetailViewTest(APITestCase):
         self.client.force_authenticate(user=user)
         
         # Verify no bookmarks exist for this user and video
-        from learning_resources.models import Bookmark
-        from django.contrib.contenttypes.models import ContentType
-        
         video_ct = ContentType.objects.get_for_model(Video)
         bookmark_exists = Bookmark.objects.filter(
             user=user,
@@ -429,6 +428,9 @@ class ArticleDetailViewTest(APITestCase):
     """Test cases for ArticleDetailView endpoint"""
     
     def setUp(self):
+        # Clear cache before each test to ensure clean state
+        cache.clear()
+        
         # Create test articles
         self.article1 = Article.objects.create(
             title="Test Article 1",
@@ -472,9 +474,6 @@ class ArticleDetailViewTest(APITestCase):
         self.client.force_authenticate(user=user)
         
         # Create a bookmark for the article
-        from learning_resources.models import Bookmark
-        from django.contrib.contenttypes.models import ContentType
-        
         article_ct = ContentType.objects.get_for_model(Article)
         Bookmark.objects.create(
             user=user,
@@ -501,9 +500,6 @@ class ArticleDetailViewTest(APITestCase):
         self.client.force_authenticate(user=user)
         
         # Verify no bookmarks exist for this user and article
-        from learning_resources.models import Bookmark
-        from django.contrib.contenttypes.models import ContentType
-        
         article_ct = ContentType.objects.get_for_model(Article)
         bookmark_exists = Bookmark.objects.filter(
             user=user,
@@ -553,6 +549,9 @@ class RecipeDetailViewTest(APITestCase):
     """Test cases for RecipeDetailView endpoint"""
     
     def setUp(self):
+        # Clear cache before each test to ensure clean state
+        cache.clear()
+        
         # Create test recipes
         self.recipe1 = Recipe.objects.create(
             title="Test Recipe 1",
@@ -608,9 +607,6 @@ class RecipeDetailViewTest(APITestCase):
         self.client.force_authenticate(user=user)
         
         # Create a bookmark for the recipe
-        from learning_resources.models import Bookmark
-        from django.contrib.contenttypes.models import ContentType
-        
         recipe_ct = ContentType.objects.get_for_model(Recipe)
         Bookmark.objects.create(
             user=user,
@@ -637,9 +633,6 @@ class RecipeDetailViewTest(APITestCase):
         self.client.force_authenticate(user=user)
         
         # Verify no bookmarks exist for this user and recipe
-        from learning_resources.models import Bookmark
-        from django.contrib.contenttypes.models import ContentType
-        
         recipe_ct = ContentType.objects.get_for_model(Recipe)
         bookmark_exists = Bookmark.objects.filter(
             user=user,
@@ -690,6 +683,9 @@ class DetailViewIntegrationTest(APITestCase):
     """Integration tests for all detail view endpoints"""
     
     def setUp(self):
+        # Clear cache before each test to ensure clean state
+        cache.clear()
+        
         # Create test user
         self.user = User.objects.create_user(
             username='integrationuser',
@@ -738,9 +734,6 @@ class DetailViewIntegrationTest(APITestCase):
         self.client.force_authenticate(user=self.user)
         
         # Create bookmarks for all content types
-        from learning_resources.models import Bookmark
-        from django.contrib.contenttypes.models import ContentType
-        
         content_objects = [
             (Video, self.video),
             (Article, self.article),

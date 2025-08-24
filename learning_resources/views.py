@@ -68,6 +68,19 @@ class BookmarkOptimizedMixin:
         self._bookmark_cache_data = None
         
         return response
+    
+    def get_object(self):
+        """Override to preload bookmarks for single object retrieval."""
+        obj = super().get_object()
+        
+        # For single object retrieval, load bookmark data directly
+        if hasattr(self.request, 'user') and self.request.user.is_authenticated:
+            self._bookmark_cache_data = BookmarkCacheManager.get_bookmarks_for_objects(
+                self.request.user, 
+                [obj]
+            )
+        
+        return obj
 
 
 class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
