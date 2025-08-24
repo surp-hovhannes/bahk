@@ -41,6 +41,7 @@ alwaysApply: true
   - Use Django's URL dispatcher (urls.py) to define clear and RESTful URL patterns.
   - Apply Django's security best practices (e.g., CSRF protection, SQL injection protection, XSS prevention).
   - Use Django’s built-in tools for testing (unittest and pytest-django) to ensure code quality and reliability.
+  - When running tests from the approprate setup for the command line should be `python manage.py test --exclude-tag=performance --settings=tests.test_settings`. You can then add reference to the sub-app and/or specific functionality being tested.
   - Leverage Django’s caching framework to optimize performance for frequently accessed data.
   - Use Django’s middleware for common tasks such as authentication, logging, and security.
 
