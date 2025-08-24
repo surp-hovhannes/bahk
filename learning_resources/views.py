@@ -236,7 +236,7 @@ class RecipeListView(BookmarkOptimizedMixin, generics.ListAPIView):
         return queryset.order_by('-created_at')
 
 
-class VideoDetailView(generics.RetrieveAPIView):
+class VideoDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     """
     API endpoint that allows a single video to be viewed.
 
@@ -267,7 +267,7 @@ class VideoDetailView(generics.RetrieveAPIView):
     queryset = Video.objects.all()
 
 
-class ArticleDetailView(generics.RetrieveAPIView):
+class ArticleDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     """
     API endpoint that allows a single article to be viewed.
 
@@ -296,7 +296,7 @@ class ArticleDetailView(generics.RetrieveAPIView):
     queryset = Article.objects.all()
 
 
-class RecipeDetailView(generics.RetrieveAPIView):
+class RecipeDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     """
     API endpoint that allows a single recipe to be viewed.
 
