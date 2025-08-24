@@ -5,14 +5,18 @@ from .views import (
     RecipeListView, VideoListView, ArticleListView, 
     DevotionalSetListView, DevotionalSetDetailView,
     BookmarkListView, BookmarkCreateView, 
-    bookmark_delete_view, bookmark_check_view
+    bookmark_delete_view, bookmark_check_view,
+    VideoDetailView, ArticleDetailView, RecipeDetailView
 )
 
 urlpatterns = [
     # Content listing endpoints
     path('videos/', VideoListView.as_view(), name='video-list'),
+    path('videos/<int:pk>/', VideoDetailView.as_view(), name='video-detail'),
     path('articles/', ArticleListView.as_view(), name='article-list'),
+    path('articles/<int:pk>/', ArticleDetailView.as_view(), name='article-detail'),
     path('recipes/', RecipeListView.as_view(), name='recipe-list'),
+    path('recipes/<int:pk>/', RecipeDetailView.as_view(), name='recipe-detail'),
     path('devotional-sets/', DevotionalSetListView.as_view(), name='devotional-set-list'),
     path('devotional-sets/<int:pk>/', DevotionalSetDetailView.as_view(), name='devotional-set-detail'),
     

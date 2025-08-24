@@ -236,6 +236,99 @@ class RecipeListView(BookmarkOptimizedMixin, generics.ListAPIView):
         return queryset.order_by('-created_at')
 
 
+class VideoDetailView(generics.RetrieveAPIView):
+    """
+    API endpoint that allows a single video to be viewed.
+
+    Permissions:
+        - GET: Any user can view video details
+        - POST/PUT/PATCH/DELETE: Not supported
+
+    Returns:
+        A JSON response with the video details:
+        {
+            "id": 1,
+            "title": "Video Title",
+            "description": "Video description text",
+            "category": "general",
+            "thumbnail": "/media/videos/thumbnails/thumb.jpg",
+            "thumbnail_small_url": "/media/CACHE/images/videos/thumbnails/thumb/123.jpg",
+            "video": "/media/videos/video.mp4",
+            "created_at": "2024-03-14T12:00:00Z",
+            "updated_at": "2024-03-14T12:00:00Z",
+            "is_bookmarked": true
+        }
+
+    Example Requests:
+        GET /api/learning-resources/videos/1/
+    """
+    serializer_class = VideoSerializer
+    permission_classes = [AllowAny]
+    queryset = Video.objects.all()
+
+
+class ArticleDetailView(generics.RetrieveAPIView):
+    """
+    API endpoint that allows a single article to be viewed.
+
+    Permissions:
+        - GET: Any user can view article details
+        - POST/PUT/PATCH/DELETE: Not supported
+
+    Returns:
+        A JSON response with the article details:
+        {
+            "id": 1,
+            "title": "Article Title",
+            "body": "Article body in markdown format",
+            "image": "/media/articles/images/main.jpg",
+            "thumbnail_url": "/media/CACHE/images/articles/images/main/123.jpg",
+            "created_at": "2024-03-14T12:00:00Z",
+            "updated_at": "2024-03-14T12:00:00Z",
+            "is_bookmarked": true
+        }
+
+    Example Requests:
+        GET /api/learning-resources/articles/1/
+    """
+    serializer_class = ArticleSerializer
+    permission_classes = [AllowAny]
+    queryset = Article.objects.all()
+
+
+class RecipeDetailView(generics.RetrieveAPIView):
+    """
+    API endpoint that allows a single recipe to be viewed.
+
+    Permissions:
+        - GET: Any user can view recipe details
+        - POST/PUT/PATCH/DELETE: Not supported
+
+    Returns:
+        A JSON response with the recipe details:
+        {
+            "id": 1,
+            "title": "Recipe Title",
+            "description": "Recipe Description Text",
+            "image": "/media/recipes/images/main.jpg",
+            "thumbnail_url": "/media/CACHE/images/recipes/images/main/123.jpg",
+            "time_required": "30 minutes",
+            "serves": "4-6 people",
+            "ingredients": "List of ingredients",
+            "directions": "Directions for preparing the recipe",
+            "created_at": "2024-03-14T12:00:00Z",
+            "updated_at": "2024-03-14T12:00:00Z",
+            "is_bookmarked": true
+        }
+
+    Example Requests:
+        GET /api/learning-resources/recipes/1/
+    """
+    serializer_class = RecipeSerializer
+    permission_classes = [AllowAny]
+    queryset = Recipe.objects.all()
+
+
 class DevotionalSetListView(BookmarkOptimizedMixin, generics.ListAPIView):
     """
     API endpoint that allows devotional sets to be viewed.
