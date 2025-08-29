@@ -1916,3 +1916,74 @@ class UserMilestoneTasksTest(TestCase):
         ).first()
         
         self.assertIsNone(milestone)
+
+
+class UserActivityFeedSerializerTest(TestCase):
+    """Test UserActivityFeedSerializer functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+    
+    def test_serializer_includes_target_thumbnail(self):
+        """Test that serializer includes target_thumbnail field."""
+        from .serializers import UserActivityFeedSerializer
+        
+        # Create activity feed item
+        feed_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Joined Test Fast',
+            description='User joined the fast',
+            target=self.fast
+        )
+        
+        # Serialize the feed item
+        serializer = UserActivityFeedSerializer(feed_item)
+        data = serializer.data
+        
+        # Check that target_thumbnail field is present
+        self.assertIn('target_thumbnail', data)
+        self.assertIn('target_type', data)
+        self.assertIn('target_id', data)
+        
+        # Should be None since test fast has no image
+        self.assertIsNone(data['target_thumbnail'])
+        self.assertEqual(data['target_type'], 'hub.fast')
+        self.assertEqual(data['target_id'], self.fast.id)
+    
+    def test_serializer_with_no_target(self):
+        """Test serializer behavior when there's no target object."""
+        from .serializers import UserActivityFeedSerializer
+        
+        # Create activity feed item without target
+        feed_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='milestone',
+            title='Achievement unlocked',
+            description='User achieved something'
+        )
+        
+        # Serialize the feed item
+        serializer = UserActivityFeedSerializer(feed_item)
+        data = serializer.data
+        
+        # Should have None values for target fields
+        self.assertIsNone(data['target_thumbnail'])
+        self.assertIsNone(data['target_type'])
+        self.assertIsNone(data['target_id'])

@@ -9,6 +9,7 @@ from .models import UserActivityFeed
 from django.utils import timezone
 from django.utils.html import strip_tags
 import re
+from hub.mixins import ThumbnailCacheMixin
 
 
 class EventTypeSerializer(serializers.ModelSerializer):
@@ -141,7 +142,7 @@ class FastEventStatsSerializer(serializers.Serializer):
     recent_activity = EventListSerializer(many=True)
 
 
-class UserActivityFeedSerializer(serializers.ModelSerializer):
+class UserActivityFeedSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     """
     Serializer for user activity feed items.
     """
@@ -149,13 +150,14 @@ class UserActivityFeedSerializer(serializers.ModelSerializer):
     age_display = serializers.SerializerMethodField()
     target_type = serializers.SerializerMethodField()
     target_id = serializers.SerializerMethodField()
+    target_thumbnail = serializers.SerializerMethodField()
     
     class Meta:
         model = UserActivityFeed
         fields = [
             'id', 'activity_type', 'activity_type_display', 'title', 'description',
             'is_read', 'read_at', 'created_at', 'age_display', 'data',
-            'target_type', 'target_id'
+            'target_type', 'target_id', 'target_thumbnail'
         ]
         read_only_fields = ['id', 'created_at', 'age_display']
         extra_kwargs = {
@@ -183,6 +185,62 @@ class UserActivityFeedSerializer(serializers.ModelSerializer):
     def get_target_id(self, obj):
         """Get the target object ID."""
         return obj.object_id
+    
+    def get_target_thumbnail(self, obj):
+        """Get the thumbnail URL for the target object if available."""
+        if not obj.target:
+            return None
+        
+        target = obj.target
+        
+        # Handle Fast thumbnails
+        if hasattr(target, 'image') and target.image:
+            try:
+                # Use cached thumbnail URL if available
+                cached_url = self.update_thumbnail_cache(target, 'image', 'image_thumbnail')
+                if cached_url:
+                    return cached_url
+                
+                # Fall back to direct thumbnail URL
+                if hasattr(target, 'image_thumbnail'):
+                    return target.image_thumbnail.url
+            except Exception:
+                pass
+        
+        # Handle Profile thumbnails
+        if hasattr(target, 'profile_image') and target.profile_image:
+            try:
+                # Use cached thumbnail URL if available
+                cached_url = self.update_thumbnail_cache(target, 'profile_image', 'profile_image_thumbnail')
+                if cached_url:
+                    return cached_url
+                
+                # Fall back to direct thumbnail URL
+                if hasattr(target, 'profile_image_thumbnail'):
+                    return target.profile_image_thumbnail.url
+            except Exception:
+                pass
+        
+        # Handle Video thumbnails (for devotionals, learning resources)
+        if hasattr(target, 'thumbnail') and target.thumbnail:
+            try:
+                # Use cached thumbnail URL if available
+                if hasattr(target, 'cached_thumbnail_url') and target.cached_thumbnail_url:
+                    return target.cached_thumbnail_url
+                
+                # Fall back to direct thumbnail URL
+                return target.thumbnail.url
+            except Exception:
+                pass
+        
+        # Handle Article/Recipe thumbnails (learning resources)
+        if hasattr(target, 'thumbnail') and target.thumbnail:
+            try:
+                return target.thumbnail.url
+            except Exception:
+                pass
+        
+        return None
 
     # -----------------------------
     # Validation and sanitization

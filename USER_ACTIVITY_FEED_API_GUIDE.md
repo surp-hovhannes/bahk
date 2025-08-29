@@ -15,6 +15,7 @@ The User Activity Feed system provides a unified way for users to view all their
 - **🎯 Activity Types**: Event-based, reminder-based, and system-generated activities
 - **🔍 Filtering & Search**: Filter by activity type, read status, and date ranges
 - **⚡ Real-time Updates**: Automatic creation from user actions and system events
+- **🖼️ Target Thumbnails**: Automatic inclusion of thumbnail URLs from related objects (Fasts, Profiles, etc.)
 
 ---
 
@@ -114,7 +115,8 @@ const { data, isLoading, error } = useQuery({
         "participant_count": 45
       },
       "target_type": "hub.fast",
-      "target_id": 123
+      "target_id": 123,
+      "target_thumbnail": "https://example.com/media/fast_images/thumbnails/great_lent_thumb.jpg"
     },
     {
       "id": 2,
@@ -132,7 +134,8 @@ const { data, isLoading, error } = useQuery({
         "fast_id": 123
       },
       "target_type": "hub.devotional",
-      "target_id": 456
+      "target_id": 456,
+      "target_thumbnail": null
     },
     {
       "id": 3,
@@ -151,7 +154,8 @@ const { data, isLoading, error } = useQuery({
         "fast_name": "Great Lent Fast"
       },
       "target_type": "hub.fast",
-      "target_id": 123
+      "target_id": 123,
+      "target_thumbnail": "https://example.com/media/fast_images/thumbnails/great_lent_thumb.jpg"
     }
   ]
 }
@@ -656,6 +660,7 @@ interface ActivityFeedItem {
   data: Record<string, any>;
   target_type: string | null;
   target_id: number | null;
+  target_thumbnail: string | null;
 }
 ```
 
