@@ -16,7 +16,7 @@ from datetime import timedelta
 import json
 import csv
 
-from .models import Event, EventType, UserActivityFeed
+from .models import Event, EventType, UserActivityFeed, UserMilestone
 
 
 @admin.register(EventType)
@@ -577,3 +577,58 @@ class EventsAdminSite:
     def __init__(self):
         # Add analytics link to the admin index
         admin.site.index_template = 'admin/events/index_with_analytics.html'
+
+
+@admin.register(UserMilestone)
+class UserMilestoneAdmin(admin.ModelAdmin):
+    """
+    Admin interface for UserMilestone model.
+    """
+    list_display = [
+        'user', 'milestone_type', 'milestone_type_display', 
+        'related_object_display', 'achieved_at'
+    ]
+    list_filter = [
+        'milestone_type', 'achieved_at', 'content_type'
+    ]
+    search_fields = [
+        'user__username', 'user__email', 'user__profile__name'
+    ]
+    readonly_fields = [
+        'achieved_at', 'milestone_type_display', 'related_object_display'
+    ]
+    ordering = ['-achieved_at']
+    date_hierarchy = 'achieved_at'
+    
+    fieldsets = (
+        ('User & Milestone', {
+            'fields': ('user', 'milestone_type', 'milestone_type_display')
+        }),
+        ('Related Object', {
+            'fields': ('content_type', 'object_id', 'related_object_display'),
+            'classes': ('collapse',)
+        }),
+        ('Timeline', {
+            'fields': ('achieved_at',)
+        }),
+        ('Additional Data', {
+            'fields': ('data',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def milestone_type_display(self, obj):
+        """Display the human-readable milestone type."""
+        return obj.get_milestone_type_display()
+    milestone_type_display.short_description = 'Milestone Type'
+    
+    def related_object_display(self, obj):
+        """Display the related object if it exists."""
+        if obj.related_object:
+            return f"{obj.content_type.model.title()}: {obj.related_object}"
+        return "No related object"
+    related_object_display.short_description = 'Related Object'
+    
+    def has_add_permission(self, request):
+        """Prevent manual creation of milestones - they should be awarded automatically."""
+        return False

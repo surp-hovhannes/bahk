@@ -628,18 +628,53 @@ class UserActivityFeed(models.Model):
         if not activity_type:
             return None  # Don't create feed items for uninteresting events
         
+        # Generate personalized title for the user's activity feed
+        personalized_title = cls._generate_personalized_title(event, user)
+        
         # Create the feed item
         feed_item = cls.objects.create(
             user=user,
             activity_type=activity_type,
             event=event,
             target=event.target,
-            title=event.title,
+            title=personalized_title,
             description=event.description,
             data=event.data
         )
         
         return feed_item
+    
+    @classmethod
+    def _generate_personalized_title(cls, event, user):
+        """
+        Generate a personalized title for the user's activity feed.
+        Removes self-referential usernames to make messages more user-friendly.
+        """
+        target = event.target
+        
+        if event.event_type.code == EventType.USER_JOINED_FAST:
+            return f"Joined {target}"
+        elif event.event_type.code == EventType.USER_LEFT_FAST:
+            return f"Left {target}"
+        elif event.event_type.code == EventType.FAST_BEGINNING:
+            return f"{target} has begun"
+        elif event.event_type.code == EventType.FAST_ENDING:
+            return f"{target} has ended"
+        elif event.event_type.code == EventType.DEVOTIONAL_AVAILABLE:
+            return f"New devotional available for {target}"
+        elif event.event_type.code == EventType.FAST_PARTICIPANT_MILESTONE:
+            return f"{target} reached participation milestone"
+        elif event.event_type.code == EventType.USER_ACCOUNT_CREATED:
+            return "Account created"
+        elif event.event_type.code == EventType.ARTICLE_PUBLISHED:
+            return f"Article published: {target}" if target else "Article published"
+        elif event.event_type.code == EventType.RECIPE_PUBLISHED:
+            return f"Recipe published: {target}" if target else "Recipe published"
+        elif event.event_type.code == EventType.VIDEO_PUBLISHED:
+            return f"Video published: {target}" if target else "Video published"
+        else:
+            # Fallback to original title without username
+            return event.title.replace(f"{user} ", "").replace(f"{user.username} ", "")
     
     @classmethod
     def create_fast_reminder(cls, user, fast, reminder_type='fast_reminder'):
@@ -759,3 +794,130 @@ class UserActivityFeed(models.Model):
                 'published_at': video.created_at.isoformat(),
             }
         )
+
+
+class UserMilestone(models.Model):
+    """
+    Tracks individual user milestones and achievements.
+    """
+    
+    # Milestone types
+    MILESTONE_TYPES = [
+        ('first_fast_join', 'First Fast Joined'),
+        ('first_nonweekly_fast_complete', 'First Non-Weekly Fast Completed'),
+        # Future milestone types can be added here
+        # ('fasts_completed_5', 'Five Fasts Completed'),
+        # ('consecutive_fasts_3', 'Three Consecutive Fasts'),
+    ]
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='milestones',
+        help_text="User who achieved the milestone"
+    )
+    
+    milestone_type = models.CharField(
+        max_length=50,
+        choices=MILESTONE_TYPES,
+        help_text="Type of milestone achieved"
+    )
+    
+    # Generic foreign key for related object (Fast, etc.)
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Content type of the related object"
+    )
+    object_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="ID of the related object"
+    )
+    related_object = GenericForeignKey('content_type', 'object_id')
+    
+    # Milestone details
+    achieved_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the milestone was achieved"
+    )
+    
+    data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional data related to the milestone (JSON format)"
+    )
+    
+    class Meta:
+        # Ensure each user can only achieve each milestone type once
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'milestone_type'],
+                name='unique_user_milestone'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['user', 'milestone_type']),
+            models.Index(fields=['achieved_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_milestone_type_display()}"
+    
+    @classmethod
+    def create_milestone(cls, user, milestone_type, related_object=None, data=None):
+        """
+        Create a milestone for a user if it doesn't already exist.
+        
+        Args:
+            user: User instance
+            milestone_type: Type of milestone (must be in MILESTONE_TYPES)
+            related_object: Optional related object (Fast, etc.)
+            data: Optional additional data
+            
+        Returns:
+            UserMilestone instance if created, None if already exists
+        """
+        # Check if milestone already exists
+        if cls.objects.filter(user=user, milestone_type=milestone_type).exists():
+            return None
+        
+        # Create the milestone
+        milestone = cls.objects.create(
+            user=user,
+            milestone_type=milestone_type,
+            related_object=related_object,
+            data=data or {}
+        )
+        
+        # Create a corresponding activity feed item
+        from .models import UserActivityFeed
+        
+        # Generate title based on milestone type
+        if milestone_type == 'first_fast_join':
+            title = f"Joined your first fast"
+            description = f"Congratulations on joining your first fast!"
+        elif milestone_type == 'first_nonweekly_fast_complete':
+            title = f"Completed your first fast"
+            description = f"Congratulations on completing your first non-weekly fast!"
+        else:
+            title = f"Milestone achieved: {milestone.get_milestone_type_display()}"
+            description = f"You've achieved a new milestone!"
+        
+        # Create activity feed item
+        UserActivityFeed.objects.create(
+            user=user,
+            activity_type='milestone',
+            title=title,
+            description=description,
+            target=related_object,
+            data={
+                'milestone_type': milestone_type,
+                'milestone_id': milestone.id,
+                **(data or {})
+            }
+        )
+        
+        return milestone

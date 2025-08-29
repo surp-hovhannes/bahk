@@ -14,7 +14,7 @@ from django.core.management import call_command
 from django.test.utils import override_settings
 
 from .models import Event, EventType, UserActivityFeed
-from hub.models import Fast, Church, Profile
+from hub.models import Fast, Church, Profile, Day
 
 User = get_user_model()
 
@@ -581,7 +581,8 @@ class UserActivityFeedModelTest(TestCase):
         self.assertEqual(feed_item.activity_type, 'fast_join')
         self.assertEqual(feed_item.event, self.event)
         self.assertEqual(feed_item.target, self.fast)
-        self.assertEqual(feed_item.title, self.event.title)
+        # Expect personalized title instead of original event title
+        self.assertEqual(feed_item.title, f"Joined {self.fast}")
         self.assertEqual(feed_item.description, self.event.description)
     
     def test_create_from_event_no_user(self):
@@ -1652,3 +1653,266 @@ class EventTasksTest(TestCase):
         
         result = track_video_published_task(99999)
         self.assertIsNone(result)  # Should return None on error
+
+
+class UserMilestoneModelTest(TestCase):
+    """Test UserMilestone model functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+    
+    def test_create_milestone_first_fast_join(self):
+        """Test creating first fast join milestone."""
+        from .models import UserMilestone
+        
+        # Create milestone
+        milestone = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast,
+            data={'fast_name': self.fast.name}
+        )
+        
+        self.assertIsNotNone(milestone)
+        self.assertEqual(milestone.user, self.user)
+        self.assertEqual(milestone.milestone_type, 'first_fast_join')
+        self.assertEqual(milestone.related_object, self.fast)
+        self.assertEqual(milestone.data['fast_name'], self.fast.name)
+        
+        # Check that activity feed item was created
+        feed_item = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='milestone'
+        ).first()
+        
+        self.assertIsNotNone(feed_item)
+        self.assertEqual(feed_item.title, "Joined your first fast")
+        self.assertEqual(feed_item.target, self.fast)
+        self.assertEqual(feed_item.data['milestone_type'], 'first_fast_join')
+    
+    def test_create_milestone_duplicate_prevention(self):
+        """Test that duplicate milestones are prevented."""
+        from .models import UserMilestone
+        
+        # Create first milestone
+        milestone1 = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast
+        )
+        
+        # Try to create duplicate
+        milestone2 = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast
+        )
+        
+        self.assertIsNotNone(milestone1)
+        self.assertIsNone(milestone2)
+        
+        # Should only have one milestone
+        milestone_count = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_fast_join'
+        ).count()
+        self.assertEqual(milestone_count, 1)
+    
+    def test_milestone_str_representation(self):
+        """Test milestone string representation."""
+        from .models import UserMilestone
+        
+        milestone = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast
+        )
+        
+        expected_str = f"{self.user.username} - First Fast Joined"
+        self.assertEqual(str(milestone), expected_str)
+
+
+class UserMilestoneSignalsTest(TestCase):
+    """Test UserMilestone signal functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+    
+    def test_first_fast_join_milestone_triggered(self):
+        """Test that first fast join milestone is triggered when user joins their first fast."""
+        from .models import UserMilestone
+        
+        # User joins their first fast
+        self.profile.fasts.add(self.fast)
+        
+        # Check that milestone was created
+        milestone = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_fast_join'
+        ).first()
+        
+        self.assertIsNotNone(milestone)
+        self.assertEqual(milestone.related_object, self.fast)
+        
+        # Check that activity feed item was created
+        feed_item = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='milestone',
+            title="Joined your first fast"
+        ).first()
+        
+        self.assertIsNotNone(feed_item)
+    
+    def test_first_fast_join_milestone_not_triggered_twice(self):
+        """Test that first fast join milestone is not triggered for subsequent fast joins."""
+        from .models import UserMilestone
+        
+        # Create another fast
+        fast2 = Fast.objects.create(
+            name='Second Test Fast',
+            church=self.church,
+            year=2024
+        )
+        
+        # User joins first fast
+        self.profile.fasts.add(self.fast)
+        
+        # User joins second fast
+        self.profile.fasts.add(fast2)
+        
+        # Should only have one first fast join milestone
+        milestone_count = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_fast_join'
+        ).count()
+        
+        self.assertEqual(milestone_count, 1)
+
+
+class UserMilestoneTasksTest(TestCase):
+    """Test UserMilestone Celery tasks."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+        
+        # Create days for the fast (ended yesterday)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        yesterday = timezone.now().date() - timedelta(days=1)
+        Day.objects.create(fast=self.fast, date=yesterday)
+    
+    def test_check_completed_fast_milestones_task(self):
+        """Test the task that checks for completed fast milestones."""
+        from events.tasks import check_completed_fast_milestones_task
+        from .models import UserMilestone
+        
+        # User participated in the fast
+        self.profile.fasts.add(self.fast)
+        
+        # Run the task
+        result = check_completed_fast_milestones_task()
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('users_processed', result)
+        self.assertIn('milestones_awarded', result)
+        self.assertIn('completed_fasts_checked', result)
+        
+        # Check that milestone was created
+        milestone = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_nonweekly_fast_complete'
+        ).first()
+        
+        self.assertIsNotNone(milestone)
+        self.assertEqual(milestone.related_object, self.fast)
+        
+        # Check that activity feed item was created
+        feed_item = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='milestone',
+            title="Completed your first fast"
+        ).first()
+        
+        self.assertIsNotNone(feed_item)
+    
+    def test_weekly_fast_completion_ignored(self):
+        """Test that weekly fast completions don't trigger milestones."""
+        from events.tasks import check_completed_fast_milestones_task
+        from .models import UserMilestone
+        
+        # Create a weekly fast
+        weekly_fast = Fast.objects.create(
+            name='Friday Fasts',
+            church=self.church,
+            year=2024
+        )
+        
+        # Create days for the weekly fast (ended yesterday)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        yesterday = timezone.now().date() - timedelta(days=1)
+        Day.objects.create(fast=weekly_fast, date=yesterday)
+        
+        # User participated in the weekly fast
+        self.profile.fasts.add(weekly_fast)
+        
+        # Run the task
+        result = check_completed_fast_milestones_task()
+        
+        # Check that no milestone was created for weekly fast
+        milestone = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_nonweekly_fast_complete'
+        ).first()
+        
+        self.assertIsNone(milestone)
