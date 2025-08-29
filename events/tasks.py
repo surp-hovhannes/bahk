@@ -751,4 +751,67 @@ def check_completed_fast_milestones_task():
             'milestones_awarded': 0,
             'completed_fasts_checked': 0,
             'error': str(e)
-        } 
+        }
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def create_announcement_feed_items_task(self, announcement_id):
+    """
+    Create activity feed items for all target users when an announcement is published.
+    
+    Args:
+        announcement_id: ID of the Announcement
+    """
+    try:
+        from .models import Announcement, UserActivityFeed
+        
+        announcement = Announcement.objects.get(id=announcement_id)
+        
+        # Get target users
+        target_users = announcement.get_target_users()
+        
+        created_count = 0
+        for user in target_users:
+            try:
+                # Check if user already has this announcement in their feed
+                from django.contrib.contenttypes.models import ContentType
+                announcement_ct = ContentType.objects.get_for_model(announcement)
+                existing_item = UserActivityFeed.objects.filter(
+                    user=user,
+                    activity_type='announcement',
+                    content_type=announcement_ct,
+                    object_id=announcement.id
+                ).exists()
+                
+                if not existing_item:
+                    UserActivityFeed.create_announcement_item(user, announcement)
+                    created_count += 1
+                    
+            except Exception as e:
+                logger.error(f"Error creating announcement feed item for user {user.username}: {e}")
+                continue
+        
+        # Update total recipients count
+        announcement.total_recipients = created_count
+        announcement.save(update_fields=['total_recipients'])
+        
+        logger.info(f"Created {created_count} announcement feed items for announcement '{announcement.title}'")
+        
+        return {
+            'announcement_id': announcement_id,
+            'announcement_title': announcement.title,
+            'recipients_count': created_count,
+            'target_all_users': announcement.target_all_users
+        }
+        
+    except Announcement.DoesNotExist:
+        logger.error(f"Announcement {announcement_id} not found")
+        return {
+            'announcement_id': announcement_id,
+            'recipients_count': 0,
+            'error': 'Announcement not found'
+        }
+    except Exception as exc:
+        logger.error(f"Error creating announcement feed items for announcement {announcement_id}: {exc}")
+        # Retry the task
+        raise self.retry(exc=exc) 

@@ -386,6 +386,7 @@ class UserActivityFeed(models.Model):
         ('article_published', 'Article Published'),
         ('recipe_published', 'Recipe Published'),
         ('video_published', 'Video Published'),
+        ('announcement', 'Announcement'),
     ]
     
     user = models.ForeignKey(
@@ -498,6 +499,7 @@ class UserActivityFeed(models.Model):
             'milestone': 365,         # Keep milestones for 1 year
             'user_account_created': 365, # Keep account creation for 1 year
             'event': 180,             # Keep generic events for 6 months
+            'announcement': 90,       # Keep announcements for 3 months
         }
     
     @classmethod
@@ -794,6 +796,28 @@ class UserActivityFeed(models.Model):
                 'published_at': video.created_at.isoformat(),
             }
         )
+    
+    @classmethod
+    def create_announcement_item(cls, user, announcement):
+        """
+        Create an announcement feed item for a user.
+        """
+        title = announcement.title
+        description = announcement.description
+        
+        return cls.objects.create(
+            user=user,
+            activity_type='announcement',
+            target=announcement,
+            title=title,
+            description=description,
+            data={
+                'announcement_id': announcement.id,
+                'announcement_url': announcement.url,
+                'publish_at': announcement.publish_at.isoformat(),
+                'expires_at': announcement.expires_at.isoformat() if announcement.expires_at else None,
+            }
+        )
 
 
 class UserMilestone(models.Model):
@@ -921,3 +945,135 @@ class UserMilestone(models.Model):
         )
         
         return milestone
+
+
+class Announcement(models.Model):
+    """
+    System announcements that appear in user activity feeds.
+    """
+    
+    # Status choices
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+        ('archived', 'Archived'),
+    ]
+    
+    title = models.CharField(
+        max_length=255,
+        help_text="Announcement title"
+    )
+    
+    description = models.TextField(
+        help_text="Short description of the announcement"
+    )
+    
+    url = models.URLField(
+        max_length=2048,
+        blank=True,
+        help_text="Optional URL for more information"
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        help_text="Publication status"
+    )
+    
+    # Targeting options
+    target_all_users = models.BooleanField(
+        default=True,
+        help_text="Send to all users"
+    )
+    
+    target_churches = models.ManyToManyField(
+        'hub.Church',
+        blank=True,
+        help_text="Send to specific churches (if not targeting all users)"
+    )
+    
+    # Scheduling
+    publish_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When to publish the announcement"
+    )
+    
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the announcement expires (optional)"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_announcements',
+        help_text="User who created this announcement"
+    )
+    
+    # Tracking
+    total_recipients = models.PositiveIntegerField(
+        default=0,
+        help_text="Total number of users who received this announcement"
+    )
+    
+    class Meta:
+        ordering = ['-publish_at']
+        indexes = [
+            models.Index(fields=['status', 'publish_at']),
+            models.Index(fields=['expires_at']),
+            models.Index(fields=['target_all_users']),
+        ]
+    
+    def __str__(self):
+        return self.title
+    
+    @property
+    def is_published(self):
+        """Check if announcement is published and within valid time range."""
+        return (
+            self.status == 'published' and
+            self.publish_at <= timezone.now() and
+            (self.expires_at is None or self.expires_at > timezone.now())
+        )
+    
+    @property
+    def is_expired(self):
+        """Check if announcement has expired."""
+        return self.expires_at and self.expires_at <= timezone.now()
+    
+    def get_target_users(self):
+        """Get queryset of users who should receive this announcement."""
+        if self.target_all_users:
+            return User.objects.filter(is_active=True)
+        else:
+            # Target specific churches
+            return User.objects.filter(
+                is_active=True,
+                profile__church__in=self.target_churches.all()
+            )
+    
+    def publish(self, user=None):
+        """
+        Publish the announcement and create activity feed items for target users.
+        
+        Args:
+            user: User who is publishing the announcement
+        """
+        if self.status == 'published':
+            return  # Already published
+        
+        self.status = 'published'
+        if user:
+            self.created_by = user
+        self.save()
+        
+        # Create activity feed items for target users
+        from .tasks import create_announcement_feed_items_task
+        create_announcement_feed_items_task.delay(self.id)

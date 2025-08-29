@@ -16,7 +16,7 @@ from datetime import timedelta
 import json
 import csv
 
-from .models import Event, EventType, UserActivityFeed, UserMilestone
+from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
 
 
 @admin.register(EventType)
@@ -456,7 +456,7 @@ class UserActivityFeedAdmin(admin.ModelAdmin):
         'user__username', 'user__email', 'title', 'description'
     ]
     readonly_fields = [
-        'created_at', 'read_at', 'age_display', 'target_type_display'
+        'created_at', 'read_at', 'age_display', 'target_type_display', 'object_id'
     ]
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
@@ -469,7 +469,7 @@ class UserActivityFeedAdmin(admin.ModelAdmin):
             'fields': ('is_read', 'read_at', 'created_at')
         }),
         ('Related Objects', {
-            'fields': ('event', 'target_type_display', 'target_id'),
+            'fields': ('event', 'target_type_display', 'object_id'),
             'classes': ('collapse',)
         }),
         ('Data', {
@@ -632,3 +632,79 @@ class UserMilestoneAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         """Prevent manual creation of milestones - they should be awarded automatically."""
         return False
+
+
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    """
+    Admin interface for Announcement model.
+    """
+    list_display = [
+        'title', 'status', 'target_all_users', 'publish_at', 
+        'expires_at', 'total_recipients', 'created_by'
+    ]
+    list_filter = [
+        'status', 'target_all_users', 'publish_at', 'expires_at', 
+        'created_at', 'target_churches'
+    ]
+    search_fields = ['title', 'description']
+    readonly_fields = ['total_recipients', 'created_at', 'updated_at']
+    ordering = ['-publish_at']
+    date_hierarchy = 'publish_at'
+    
+    fieldsets = (
+        ('Content', {
+            'fields': ('title', 'description', 'url')
+        }),
+        ('Publication', {
+            'fields': ('status', 'publish_at', 'expires_at')
+        }),
+        ('Targeting', {
+            'fields': ('target_all_users', 'target_churches'),
+            'description': 'Choose who should receive this announcement'
+        }),
+        ('Tracking', {
+            'fields': ('total_recipients', 'created_by'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    filter_horizontal = ['target_churches']
+    
+    def save_model(self, request, obj, form, change):
+        """Set created_by when saving."""
+        if not obj.created_by:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related."""
+        return super().get_queryset(request).select_related('created_by')
+    
+    actions = ['publish_announcements', 'archive_announcements']
+    
+    def publish_announcements(self, request, queryset):
+        """Publish selected announcements."""
+        published_count = 0
+        for announcement in queryset.filter(status='draft'):
+            announcement.publish(user=request.user)
+            published_count += 1
+        
+        self.message_user(
+            request,
+            f"Published {published_count} announcements and created activity feed items."
+        )
+    publish_announcements.short_description = "Publish selected announcements"
+    
+    def archive_announcements(self, request, queryset):
+        """Archive selected announcements."""
+        updated = queryset.update(status='archived')
+        self.message_user(
+            request,
+            f"Archived {updated} announcements."
+        )
+    archive_announcements.short_description = "Archive selected announcements"
