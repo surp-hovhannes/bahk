@@ -80,6 +80,24 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                         )
                         logger.info(f"Tracked USER_JOINED_FAST event: {user} joined {fast}")
                         
+                        # Check for user milestone: first fast join
+                        try:
+                            from .models import UserMilestone
+                            milestone = UserMilestone.create_milestone(
+                                user=user,
+                                milestone_type='first_fast_join',
+                                related_object=fast,
+                                data={
+                                    'fast_id': fast.id,
+                                    'fast_name': fast.name,
+                                    'church_name': fast.church.name if fast.church else None,
+                                }
+                            )
+                            if milestone:
+                                logger.info(f"User {user.username} achieved first fast join milestone with {fast.name}")
+                        except Exception as milestone_error:
+                            logger.error(f"Error creating first fast join milestone for {user.username}: {milestone_error}")
+                        
                         # Check for participation milestones after user joins
                         try:
                             from .tasks import track_fast_participant_milestone_task

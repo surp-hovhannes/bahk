@@ -87,6 +87,16 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'check-completed-fast-milestones-daily': {
+        'task': 'events.tasks.check_completed_fast_milestones_task',
+        'schedule': crontab(hour=3, minute=0),  # 3 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-completed-fast-milestones-check',
+            }
+        }
+    },
 }
 
 # Initialize Sentry for Celery worker processes

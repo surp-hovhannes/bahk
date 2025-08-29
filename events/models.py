@@ -386,6 +386,7 @@ class UserActivityFeed(models.Model):
         ('article_published', 'Article Published'),
         ('recipe_published', 'Recipe Published'),
         ('video_published', 'Video Published'),
+        ('announcement', 'Announcement'),
     ]
     
     user = models.ForeignKey(
@@ -498,6 +499,7 @@ class UserActivityFeed(models.Model):
             'milestone': 365,         # Keep milestones for 1 year
             'user_account_created': 365, # Keep account creation for 1 year
             'event': 180,             # Keep generic events for 6 months
+            'announcement': 90,       # Keep announcements for 3 months
         }
     
     @classmethod
@@ -628,18 +630,53 @@ class UserActivityFeed(models.Model):
         if not activity_type:
             return None  # Don't create feed items for uninteresting events
         
+        # Generate personalized title for the user's activity feed
+        personalized_title = cls._generate_personalized_title(event, user)
+        
         # Create the feed item
         feed_item = cls.objects.create(
             user=user,
             activity_type=activity_type,
             event=event,
             target=event.target,
-            title=event.title,
+            title=personalized_title,
             description=event.description,
             data=event.data
         )
         
         return feed_item
+    
+    @classmethod
+    def _generate_personalized_title(cls, event, user):
+        """
+        Generate a personalized title for the user's activity feed.
+        Removes self-referential usernames to make messages more user-friendly.
+        """
+        target = event.target
+        
+        if event.event_type.code == EventType.USER_JOINED_FAST:
+            return f"Joined {target}"
+        elif event.event_type.code == EventType.USER_LEFT_FAST:
+            return f"Left {target}"
+        elif event.event_type.code == EventType.FAST_BEGINNING:
+            return f"{target} has begun"
+        elif event.event_type.code == EventType.FAST_ENDING:
+            return f"{target} has ended"
+        elif event.event_type.code == EventType.DEVOTIONAL_AVAILABLE:
+            return f"New devotional available for {target}"
+        elif event.event_type.code == EventType.FAST_PARTICIPANT_MILESTONE:
+            return f"{target} reached participation milestone"
+        elif event.event_type.code == EventType.USER_ACCOUNT_CREATED:
+            return "Account created"
+        elif event.event_type.code == EventType.ARTICLE_PUBLISHED:
+            return f"Article published: {target}" if target else "Article published"
+        elif event.event_type.code == EventType.RECIPE_PUBLISHED:
+            return f"Recipe published: {target}" if target else "Recipe published"
+        elif event.event_type.code == EventType.VIDEO_PUBLISHED:
+            return f"Video published: {target}" if target else "Video published"
+        else:
+            # Fallback to original title without username
+            return event.title.replace(f"{user} ", "").replace(f"{user.username} ", "")
     
     @classmethod
     def create_fast_reminder(cls, user, fast, reminder_type='fast_reminder'):
@@ -759,3 +796,284 @@ class UserActivityFeed(models.Model):
                 'published_at': video.created_at.isoformat(),
             }
         )
+    
+    @classmethod
+    def create_announcement_item(cls, user, announcement):
+        """
+        Create an announcement feed item for a user.
+        """
+        title = announcement.title
+        description = announcement.description
+        
+        return cls.objects.create(
+            user=user,
+            activity_type='announcement',
+            target=announcement,
+            title=title,
+            description=description,
+            data={
+                'announcement_id': announcement.id,
+                'announcement_url': announcement.url,
+                'publish_at': announcement.publish_at.isoformat(),
+                'expires_at': announcement.expires_at.isoformat() if announcement.expires_at else None,
+            }
+        )
+
+
+class UserMilestone(models.Model):
+    """
+    Tracks individual user milestones and achievements.
+    """
+    
+    # Milestone types
+    MILESTONE_TYPES = [
+        ('first_fast_join', 'First Fast Joined'),
+        ('first_nonweekly_fast_complete', 'First Non-Weekly Fast Completed'),
+        # Future milestone types can be added here
+        # ('fasts_completed_5', 'Five Fasts Completed'),
+        # ('consecutive_fasts_3', 'Three Consecutive Fasts'),
+    ]
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='milestones',
+        help_text="User who achieved the milestone"
+    )
+    
+    milestone_type = models.CharField(
+        max_length=50,
+        choices=MILESTONE_TYPES,
+        help_text="Type of milestone achieved"
+    )
+    
+    # Generic foreign key for related object (Fast, etc.)
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Content type of the related object"
+    )
+    object_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="ID of the related object"
+    )
+    related_object = GenericForeignKey('content_type', 'object_id')
+    
+    # Milestone details
+    achieved_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the milestone was achieved"
+    )
+    
+    data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional data related to the milestone (JSON format)"
+    )
+    
+    class Meta:
+        # Ensure each user can only achieve each milestone type once
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'milestone_type'],
+                name='unique_user_milestone'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['user', 'milestone_type']),
+            models.Index(fields=['achieved_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_milestone_type_display()}"
+    
+    @classmethod
+    def create_milestone(cls, user, milestone_type, related_object=None, data=None):
+        """
+        Create a milestone for a user if it doesn't already exist.
+        
+        Args:
+            user: User instance
+            milestone_type: Type of milestone (must be in MILESTONE_TYPES)
+            related_object: Optional related object (Fast, etc.)
+            data: Optional additional data
+            
+        Returns:
+            UserMilestone instance if created, None if already exists
+        """
+        # Check if milestone already exists
+        if cls.objects.filter(user=user, milestone_type=milestone_type).exists():
+            return None
+        
+        # Create the milestone
+        milestone = cls.objects.create(
+            user=user,
+            milestone_type=milestone_type,
+            related_object=related_object,
+            data=data or {}
+        )
+        
+        # Create a corresponding activity feed item
+        from .models import UserActivityFeed
+        
+        # Generate title based on milestone type
+        if milestone_type == 'first_fast_join':
+            title = f"Joined your first fast"
+            description = f"Congratulations on joining your first fast!"
+        elif milestone_type == 'first_nonweekly_fast_complete':
+            title = f"Completed your first fast"
+            description = f"Congratulations on completing your first non-weekly fast!"
+        else:
+            title = f"Milestone achieved: {milestone.get_milestone_type_display()}"
+            description = f"You've achieved a new milestone!"
+        
+        # Create activity feed item
+        UserActivityFeed.objects.create(
+            user=user,
+            activity_type='milestone',
+            title=title,
+            description=description,
+            target=related_object,
+            data={
+                'milestone_type': milestone_type,
+                'milestone_id': milestone.id,
+                **(data or {})
+            }
+        )
+        
+        return milestone
+
+
+class Announcement(models.Model):
+    """
+    System announcements that appear in user activity feeds.
+    """
+    
+    # Status choices
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+        ('archived', 'Archived'),
+    ]
+    
+    title = models.CharField(
+        max_length=255,
+        help_text="Announcement title"
+    )
+    
+    description = models.TextField(
+        help_text="Short description of the announcement"
+    )
+    
+    url = models.URLField(
+        max_length=2048,
+        blank=True,
+        help_text="Optional URL for more information"
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        help_text="Publication status"
+    )
+    
+    # Targeting options
+    target_all_users = models.BooleanField(
+        default=True,
+        help_text="Send to all users"
+    )
+    
+    target_churches = models.ManyToManyField(
+        'hub.Church',
+        blank=True,
+        help_text="Send to specific churches (if not targeting all users)"
+    )
+    
+    # Scheduling
+    publish_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When to publish the announcement"
+    )
+    
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the announcement expires (optional)"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_announcements',
+        help_text="User who created this announcement"
+    )
+    
+    # Tracking
+    total_recipients = models.PositiveIntegerField(
+        default=0,
+        help_text="Total number of users who received this announcement"
+    )
+    
+    class Meta:
+        ordering = ['-publish_at']
+        indexes = [
+            models.Index(fields=['status', 'publish_at']),
+            models.Index(fields=['expires_at']),
+            models.Index(fields=['target_all_users']),
+        ]
+    
+    def __str__(self):
+        return self.title
+    
+    @property
+    def is_published(self):
+        """Check if announcement is published and within valid time range."""
+        return (
+            self.status == 'published' and
+            self.publish_at <= timezone.now() and
+            (self.expires_at is None or self.expires_at > timezone.now())
+        )
+    
+    @property
+    def is_expired(self):
+        """Check if announcement has expired."""
+        return self.expires_at and self.expires_at <= timezone.now()
+    
+    def get_target_users(self):
+        """Get queryset of users who should receive this announcement."""
+        if self.target_all_users:
+            return User.objects.filter(is_active=True)
+        else:
+            # Target specific churches
+            return User.objects.filter(
+                is_active=True,
+                profile__church__in=self.target_churches.all()
+            )
+    
+    def publish(self, user=None):
+        """
+        Publish the announcement and create activity feed items for target users.
+        
+        Args:
+            user: User who is publishing the announcement
+        """
+        if self.status == 'published':
+            return  # Already published
+        
+        self.status = 'published'
+        if user:
+            self.created_by = user
+        self.save()
+        
+        # Create activity feed items for target users
+        from .tasks import create_announcement_feed_items_task
+        create_announcement_feed_items_task.delay(self.id)

@@ -36,10 +36,18 @@ I've successfully implemented a comprehensive user events tracking system for yo
 - Read/unread status tracking
 - Activity type categorization
 
+**UserMilestone Model:**
+- Individual user achievement tracking
+- Prevents duplicate milestone awards
+- Generic foreign key support for related objects
+- Automatic activity feed integration
+- Currently tracks: first fast join, first non-weekly fast completion
+
 ### 2. Automatic Event Tracking (`events/signals.py`)
 
 **Django Signals Integration:**
 - **Fast Join/Leave**: Automatically tracks when users join or leave fasts via Profile.fasts relationship
+- **User Milestones**: Awards first fast join milestones immediately when users join their first fast
 - **Fast Creation/Updates**: Tracks when fasts are created or modified
 - **User Login/Logout**: Tracks authentication events
 - **Milestone Tracking**: Utility functions for participation milestones (10, 25, 50, 100, 250, 500, 1000 participants)
@@ -65,6 +73,7 @@ I've successfully implemented a comprehensive user events tracking system for yo
 - `check_fast_beginning_events_task()` - Daily check for fasts starting today (6 AM)
 - `check_participation_milestones_task()` - Daily check for participation milestones (8 AM)
 - `check_devotional_availability_task()` - Daily check for devotional availability (7 AM)
+- `check_completed_fast_milestones_task()` - Daily check for user milestone awards (3 AM)
 - `cleanup_old_activity_feed_items_task()` - Daily cleanup of old feed items (2 AM)
 
 **Activity Feed Tasks:**
@@ -79,6 +88,7 @@ I've successfully implemented a comprehensive user events tracking system for yo
 - **EventType Management**: Full CRUD for event types with event counts
 - **Event Viewing**: Read-only event browser with advanced filtering
 - **UserActivityFeed Management**: Feed item management with retention policy controls
+- **UserMilestone Management**: View user achievements (read-only to prevent manual creation)
 - **Analytics Dashboard**: Custom analytics view with:
   - Event statistics (total, last 24h/7d/30d)
   - Top event types
@@ -166,6 +176,9 @@ I've successfully implemented a comprehensive user events tracking system for yo
 - **UserActivityFeedTasksTest**: Celery task functionality
 - **UserActivityFeedManagementCommandsTest**: Management command testing
 - **EventTasksTest**: Event tracking task testing
+- **UserMilestoneModelTest**: User milestone creation and validation
+- **UserMilestoneSignalsTest**: Automatic milestone award signals
+- **UserMilestoneTasksTest**: Daily completion milestone checking
 
 ## 🔧 Configuration & Setup
 
@@ -259,6 +272,23 @@ from events.signals import check_and_track_participation_milestones
 check_and_track_participation_milestones(fast)
 ```
 
+### User Milestone Creation
+
+```python
+from events.models import UserMilestone
+
+# Award a user milestone (automatically creates activity feed item)
+milestone = UserMilestone.create_milestone(
+    user=user,
+    milestone_type='first_fast_join',
+    related_object=fast,
+    data={'fast_name': fast.name}
+)
+
+# Check existing milestones
+user_milestones = UserMilestone.objects.filter(user=user)
+```
+
 ### Learning Resource Tracking
 
 ```python
@@ -312,7 +342,7 @@ track_video_published(video)  # Only tracks 'general' and 'tutorial' categories
 ## 🔮 Future Enhancements
 
 ### Ready for Growth:
-1. **User Milestones**: The `user_milestone_reached` event type is ready for your future milestones feature
+1. **Additional User Milestones**: The system supports easy addition of new milestone types (5 fasts completed, consecutive fasts, etc.)
 2. **Custom Event Types**: Easily add new event types through admin or code
 3. **Advanced Analytics**: Event data structure supports complex analytics queries
 4. **Devotional Integration**: `track_devotional_available()` ready for devotional system integration

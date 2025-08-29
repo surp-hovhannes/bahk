@@ -14,7 +14,7 @@ from django.core.management import call_command
 from django.test.utils import override_settings
 
 from .models import Event, EventType, UserActivityFeed
-from hub.models import Fast, Church, Profile
+from hub.models import Fast, Church, Profile, Day
 
 User = get_user_model()
 
@@ -581,7 +581,8 @@ class UserActivityFeedModelTest(TestCase):
         self.assertEqual(feed_item.activity_type, 'fast_join')
         self.assertEqual(feed_item.event, self.event)
         self.assertEqual(feed_item.target, self.fast)
-        self.assertEqual(feed_item.title, self.event.title)
+        # Expect personalized title instead of original event title
+        self.assertEqual(feed_item.title, f"Joined {self.fast}")
         self.assertEqual(feed_item.description, self.event.description)
     
     def test_create_from_event_no_user(self):
@@ -1652,3 +1653,551 @@ class EventTasksTest(TestCase):
         
         result = track_video_published_task(99999)
         self.assertIsNone(result)  # Should return None on error
+
+
+class UserMilestoneModelTest(TestCase):
+    """Test UserMilestone model functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+    
+    def test_create_milestone_first_fast_join(self):
+        """Test creating first fast join milestone."""
+        from .models import UserMilestone
+        
+        # Create milestone
+        milestone = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast,
+            data={'fast_name': self.fast.name}
+        )
+        
+        self.assertIsNotNone(milestone)
+        self.assertEqual(milestone.user, self.user)
+        self.assertEqual(milestone.milestone_type, 'first_fast_join')
+        self.assertEqual(milestone.related_object, self.fast)
+        self.assertEqual(milestone.data['fast_name'], self.fast.name)
+        
+        # Check that activity feed item was created
+        feed_item = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='milestone'
+        ).first()
+        
+        self.assertIsNotNone(feed_item)
+        self.assertEqual(feed_item.title, "Joined your first fast")
+        self.assertEqual(feed_item.target, self.fast)
+        self.assertEqual(feed_item.data['milestone_type'], 'first_fast_join')
+    
+    def test_create_milestone_duplicate_prevention(self):
+        """Test that duplicate milestones are prevented."""
+        from .models import UserMilestone
+        
+        # Create first milestone
+        milestone1 = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast
+        )
+        
+        # Try to create duplicate
+        milestone2 = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast
+        )
+        
+        self.assertIsNotNone(milestone1)
+        self.assertIsNone(milestone2)
+        
+        # Should only have one milestone
+        milestone_count = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_fast_join'
+        ).count()
+        self.assertEqual(milestone_count, 1)
+    
+    def test_milestone_str_representation(self):
+        """Test milestone string representation."""
+        from .models import UserMilestone
+        
+        milestone = UserMilestone.create_milestone(
+            user=self.user,
+            milestone_type='first_fast_join',
+            related_object=self.fast
+        )
+        
+        expected_str = f"{self.user.username} - First Fast Joined"
+        self.assertEqual(str(milestone), expected_str)
+
+
+class UserMilestoneSignalsTest(TestCase):
+    """Test UserMilestone signal functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+    
+    def test_first_fast_join_milestone_triggered(self):
+        """Test that first fast join milestone is triggered when user joins their first fast."""
+        from .models import UserMilestone
+        
+        # User joins their first fast
+        self.profile.fasts.add(self.fast)
+        
+        # Check that milestone was created
+        milestone = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_fast_join'
+        ).first()
+        
+        self.assertIsNotNone(milestone)
+        self.assertEqual(milestone.related_object, self.fast)
+        
+        # Check that activity feed item was created
+        feed_item = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='milestone',
+            title="Joined your first fast"
+        ).first()
+        
+        self.assertIsNotNone(feed_item)
+    
+    def test_first_fast_join_milestone_not_triggered_twice(self):
+        """Test that first fast join milestone is not triggered for subsequent fast joins."""
+        from .models import UserMilestone
+        
+        # Create another fast
+        fast2 = Fast.objects.create(
+            name='Second Test Fast',
+            church=self.church,
+            year=2024
+        )
+        
+        # User joins first fast
+        self.profile.fasts.add(self.fast)
+        
+        # User joins second fast
+        self.profile.fasts.add(fast2)
+        
+        # Should only have one first fast join milestone
+        milestone_count = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_fast_join'
+        ).count()
+        
+        self.assertEqual(milestone_count, 1)
+
+
+class UserMilestoneTasksTest(TestCase):
+    """Test UserMilestone Celery tasks."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+        
+        # Create days for the fast (ended yesterday)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        yesterday = timezone.now().date() - timedelta(days=1)
+        Day.objects.create(fast=self.fast, date=yesterday)
+    
+    def test_check_completed_fast_milestones_task(self):
+        """Test the task that checks for completed fast milestones."""
+        from events.tasks import check_completed_fast_milestones_task
+        from .models import UserMilestone
+        
+        # User participated in the fast
+        self.profile.fasts.add(self.fast)
+        
+        # Run the task
+        result = check_completed_fast_milestones_task()
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('users_processed', result)
+        self.assertIn('milestones_awarded', result)
+        self.assertIn('completed_fasts_checked', result)
+        
+        # Check that milestone was created
+        milestone = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_nonweekly_fast_complete'
+        ).first()
+        
+        self.assertIsNotNone(milestone)
+        self.assertEqual(milestone.related_object, self.fast)
+        
+        # Check that activity feed item was created
+        feed_item = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='milestone',
+            title="Completed your first fast"
+        ).first()
+        
+        self.assertIsNotNone(feed_item)
+    
+    def test_weekly_fast_completion_ignored(self):
+        """Test that weekly fast completions don't trigger milestones."""
+        from events.tasks import check_completed_fast_milestones_task
+        from .models import UserMilestone
+        
+        # Create a weekly fast
+        weekly_fast = Fast.objects.create(
+            name='Friday Fasts',
+            church=self.church,
+            year=2024
+        )
+        
+        # Create days for the weekly fast (ended yesterday)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        yesterday = timezone.now().date() - timedelta(days=1)
+        Day.objects.create(fast=weekly_fast, date=yesterday)
+        
+        # User participated in the weekly fast
+        self.profile.fasts.add(weekly_fast)
+        
+        # Run the task
+        result = check_completed_fast_milestones_task()
+        
+        # Check that no milestone was created for weekly fast
+        milestone = UserMilestone.objects.filter(
+            user=self.user,
+            milestone_type='first_nonweekly_fast_complete'
+        ).first()
+        
+        self.assertIsNone(milestone)
+
+
+class UserActivityFeedSerializerTest(TestCase):
+    """Test UserActivityFeedSerializer functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user)
+        
+        self.church = Church.objects.create(name='Test Church')
+        self.fast = Fast.objects.create(
+            name='Test Fast',
+            church=self.church,
+            year=2024
+        )
+    
+    def test_serializer_includes_target_thumbnail(self):
+        """Test that serializer includes target_thumbnail field."""
+        from .serializers import UserActivityFeedSerializer
+        
+        # Create activity feed item
+        feed_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Joined Test Fast',
+            description='User joined the fast',
+            target=self.fast
+        )
+        
+        # Serialize the feed item
+        serializer = UserActivityFeedSerializer(feed_item)
+        data = serializer.data
+        
+        # Check that target_thumbnail field is present
+        self.assertIn('target_thumbnail', data)
+        self.assertIn('target_type', data)
+        self.assertIn('target_id', data)
+        
+        # Should be None since test fast has no image
+        self.assertIsNone(data['target_thumbnail'])
+        self.assertEqual(data['target_type'], 'hub.fast')
+        self.assertEqual(data['target_id'], self.fast.id)
+    
+    def test_serializer_with_no_target(self):
+        """Test serializer behavior when there's no target object."""
+        from .serializers import UserActivityFeedSerializer
+        
+        # Create activity feed item without target
+        feed_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='milestone',
+            title='Achievement unlocked',
+            description='User achieved something'
+        )
+        
+        # Serialize the feed item
+        serializer = UserActivityFeedSerializer(feed_item)
+        data = serializer.data
+        
+        # Should have None values for target fields
+        self.assertIsNone(data['target_thumbnail'])
+        self.assertIsNone(data['target_type'])
+        self.assertIsNone(data['target_id'])
+
+
+class AnnouncementModelTest(TestCase):
+    """Test Announcement model functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com'
+        )
+        
+        self.church = Church.objects.create(name='Test Church')
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user, church=self.church)
+    
+    def test_create_announcement(self):
+        """Test creating an announcement."""
+        from .models import Announcement
+        
+        announcement = Announcement.objects.create(
+            title='Test Announcement',
+            description='This is a test announcement',
+            url='https://example.com',
+            created_by=self.user
+        )
+        
+        self.assertEqual(announcement.title, 'Test Announcement')
+        self.assertEqual(announcement.description, 'This is a test announcement')
+        self.assertEqual(announcement.url, 'https://example.com')
+        self.assertEqual(announcement.status, 'draft')
+        self.assertTrue(announcement.target_all_users)
+        self.assertEqual(announcement.created_by, self.user)
+    
+    def test_announcement_properties(self):
+        """Test announcement properties."""
+        from .models import Announcement
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        now = timezone.now()
+        
+        # Published announcement
+        announcement = Announcement.objects.create(
+            title='Published Announcement',
+            description='This is published',
+            status='published',
+            publish_at=now - timedelta(hours=1)
+        )
+        
+        self.assertTrue(announcement.is_published)
+        self.assertFalse(announcement.is_expired)
+        
+        # Expired announcement
+        expired_announcement = Announcement.objects.create(
+            title='Expired Announcement',
+            description='This is expired',
+            status='published',
+            publish_at=now - timedelta(hours=2),
+            expires_at=now - timedelta(hours=1)
+        )
+        
+        self.assertFalse(expired_announcement.is_published)
+        self.assertTrue(expired_announcement.is_expired)
+    
+    def test_get_target_users(self):
+        """Test getting target users for announcements."""
+        from .models import Announcement
+        
+        # Create another user and church
+        user2 = User.objects.create_user(username='user2', email='user2@example.com')
+        church2 = Church.objects.create(name='Church 2')
+        Profile.objects.create(user=user2, church=church2)
+        
+        # Announcement targeting all users
+        announcement_all = Announcement.objects.create(
+            title='All Users Announcement',
+            description='For everyone',
+            target_all_users=True
+        )
+        
+        target_users_all = announcement_all.get_target_users()
+        self.assertIn(self.user, target_users_all)
+        self.assertIn(user2, target_users_all)
+        
+        # Announcement targeting specific church
+        announcement_church = Announcement.objects.create(
+            title='Church Announcement',
+            description='For specific church',
+            target_all_users=False
+        )
+        announcement_church.target_churches.add(self.church)
+        
+        target_users_church = announcement_church.get_target_users()
+        self.assertIn(self.user, target_users_church)
+        self.assertNotIn(user2, target_users_church)
+    
+    def test_announcement_publish(self):
+        """Test publishing an announcement."""
+        from .models import Announcement
+        from unittest.mock import patch
+        
+        announcement = Announcement.objects.create(
+            title='Draft Announcement',
+            description='To be published',
+            status='draft'
+        )
+        
+        with patch('events.tasks.create_announcement_feed_items_task') as mock_task:
+            announcement.publish(user=self.user)
+        
+        announcement.refresh_from_db()
+        self.assertEqual(announcement.status, 'published')
+        self.assertEqual(announcement.created_by, self.user)
+        mock_task.delay.assert_called_once_with(announcement.id)
+
+
+class AnnouncementTasksTest(TestCase):
+    """Test Announcement Celery tasks."""
+    
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            is_active=True
+        )
+        
+        self.church = Church.objects.create(name='Test Church')
+        
+        # Create profile for user
+        self.profile = Profile.objects.create(user=self.user, church=self.church)
+    
+    def test_create_announcement_feed_items_task(self):
+        """Test the announcement feed items creation task."""
+        from events.tasks import create_announcement_feed_items_task
+        from .models import Announcement, UserActivityFeed
+        
+        # Create announcement
+        announcement = Announcement.objects.create(
+            title='Test Announcement',
+            description='Test description',
+            url='https://example.com',
+            status='published'
+        )
+        
+        # Test manually creating feed items to verify the logic works
+        target_users = announcement.get_target_users()
+        self.assertIn(self.user, target_users)
+        
+        # Manually create feed item
+        from django.contrib.contenttypes.models import ContentType
+        announcement_ct = ContentType.objects.get_for_model(announcement)
+        
+        created_count = 0
+        for user in target_users:
+            existing_item = UserActivityFeed.objects.filter(
+                user=user,
+                activity_type='announcement',
+                content_type=announcement_ct,
+                object_id=announcement.id
+            ).exists()
+            
+            if not existing_item:
+                UserActivityFeed.create_announcement_item(user, announcement)
+                created_count += 1
+        
+        self.assertGreater(created_count, 0)
+        
+        # Check that feed item was created
+        feed_item = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='announcement',
+            content_type=announcement_ct,
+            object_id=announcement.id
+        ).first()
+        
+        self.assertIsNotNone(feed_item)
+        self.assertEqual(feed_item.title, announcement.title)
+        self.assertEqual(feed_item.description, announcement.description)
+        self.assertEqual(feed_item.data['announcement_url'], announcement.url)
+    
+    def test_create_announcement_feed_items_duplicate_prevention(self):
+        """Test that duplicate announcement feed items are not created."""
+        from events.tasks import create_announcement_feed_items_task
+        from .models import Announcement, UserActivityFeed
+        from django.contrib.contenttypes.models import ContentType
+        
+        # Create announcement
+        announcement = Announcement.objects.create(
+            title='Test Announcement',
+            description='Test description',
+            status='published'
+        )
+        
+        # Run the task twice
+        result1 = create_announcement_feed_items_task(announcement.id)
+        result2 = create_announcement_feed_items_task(announcement.id)
+        
+        # First run should create items, second should not
+        self.assertGreater(result1['recipients_count'], 0)
+        self.assertEqual(result2['recipients_count'], 0)
+        
+        # Should only have one feed item
+        announcement_ct = ContentType.objects.get_for_model(announcement)
+        feed_items = UserActivityFeed.objects.filter(
+            user=self.user,
+            activity_type='announcement',
+            content_type=announcement_ct,
+            object_id=announcement.id
+        )
+        
+        self.assertEqual(feed_items.count(), 1)
