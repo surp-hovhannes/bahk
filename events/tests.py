@@ -2201,3 +2201,142 @@ class AnnouncementTasksTest(TestCase):
         )
         
         self.assertEqual(feed_items.count(), 1)
+
+
+class RetroactiveMilestoneCommandTest(TestCase):
+    """Test the retroactive milestone management command."""
+    
+    def setUp(self):
+        """Set up test data."""
+        EventType.get_or_create_default_types()
+        
+        # Create users
+        self.user1 = User.objects.create_user(
+            username='user1',
+            email='user1@example.com',
+            is_active=True
+        )
+        self.user2 = User.objects.create_user(
+            username='user2',
+            email='user2@example.com',
+            is_active=True
+        )
+        
+        # Create profiles
+        self.church = Church.objects.create(name='Test Church')
+        self.profile1 = Profile.objects.create(user=self.user1, church=self.church)
+        self.profile2 = Profile.objects.create(user=self.user2, church=self.church)
+        
+        # Create fasts with different start dates
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        today = timezone.now().date()
+        
+        # Fast 1 started 30 days ago
+        self.fast1 = Fast.objects.create(
+            name='First Fast',
+            church=self.church,
+            year=2024
+        )
+        Day.objects.create(fast=self.fast1, date=today - timedelta(days=30))
+        Day.objects.create(fast=self.fast1, date=today - timedelta(days=29))
+        
+        # Fast 2 started 15 days ago  
+        self.fast2 = Fast.objects.create(
+            name='Second Fast',
+            church=self.church,
+            year=2024
+        )
+        Day.objects.create(fast=self.fast2, date=today - timedelta(days=15))
+        Day.objects.create(fast=self.fast2, date=today - timedelta(days=14))
+        
+        # User 1 joined both fasts (first fast should be Fast 1)
+        self.profile1.fasts.add(self.fast1, self.fast2)
+        
+        # User 2 only joined the second fast
+        self.profile2.fasts.add(self.fast2)
+    
+    def test_award_first_fast_join_milestones(self):
+        """Test awarding retroactive first fast join milestones."""
+        from django.core.management import call_command
+        from .models import UserMilestone
+        from io import StringIO
+        
+        # Ensure no milestones exist yet
+        UserMilestone.objects.filter(milestone_type='first_fast_join').delete()
+        
+        # Run the command
+        out = StringIO()
+        call_command(
+            'award_retroactive_milestones',
+            milestone_type='first_fast_join',
+            stdout=out
+        )
+        
+        # Check that milestones were created
+        user1_milestone = UserMilestone.objects.filter(
+            user=self.user1,
+            milestone_type='first_fast_join'
+        ).first()
+        
+        user2_milestone = UserMilestone.objects.filter(
+            user=self.user2,
+            milestone_type='first_fast_join'
+        ).first()
+        
+        # User 1 should get milestone for Fast 1 (earliest)
+        self.assertIsNotNone(user1_milestone)
+        self.assertEqual(user1_milestone.related_object, self.fast1)
+        
+        # User 2 should get milestone for Fast 2 (their only fast)
+        self.assertIsNotNone(user2_milestone)
+        self.assertEqual(user2_milestone.related_object, self.fast2)
+        
+        # Check activity feed items were created
+        user1_feed = UserActivityFeed.objects.filter(
+            user=self.user1,
+            activity_type='milestone',
+            title='Joined your first fast'
+        ).exists()
+        
+        user2_feed = UserActivityFeed.objects.filter(
+            user=self.user2,
+            activity_type='milestone',
+            title='Joined your first fast'
+        ).exists()
+        
+        self.assertTrue(user1_feed)
+        self.assertTrue(user2_feed)
+    
+    def test_retroactive_milestones_skip_existing(self):
+        """Test that retroactive command skips users who already have milestones."""
+        from django.core.management import call_command
+        from .models import UserMilestone
+        from io import StringIO
+        
+        # Create milestone for user1
+        UserMilestone.create_milestone(
+            user=self.user1,
+            milestone_type='first_fast_join',
+            related_object=self.fast1
+        )
+        
+        # Run the command
+        out = StringIO()
+        call_command(
+            'award_retroactive_milestones',
+            milestone_type='first_fast_join',
+            stdout=out
+        )
+        
+        # Should only have one milestone for user1 (existing), user2 gets one too
+        user1_milestones = UserMilestone.objects.filter(user=self.user1, milestone_type='first_fast_join')
+        user2_milestones = UserMilestone.objects.filter(user=self.user2, milestone_type='first_fast_join')
+        
+        self.assertEqual(user1_milestones.count(), 1)  # user1 already had one
+        self.assertEqual(user2_milestones.count(), 1)  # user2 gets a new one
+        
+        # Output should mention skipping (both users already have milestones after first run)
+        output = out.getvalue()
+        self.assertIn('skipped', output)
