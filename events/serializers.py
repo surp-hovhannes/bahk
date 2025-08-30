@@ -221,21 +221,14 @@ class UserActivityFeedSerializer(serializers.ModelSerializer, ThumbnailCacheMixi
             except Exception:
                 pass
         
-        # Handle Video thumbnails (for devotionals, learning resources)
+        # Handle Video/Article/Recipe thumbnails (for devotionals, learning resources)
         if hasattr(target, 'thumbnail') and target.thumbnail:
             try:
-                # Use cached thumbnail URL if available
+                # Use cached thumbnail URL if available (for video thumbnails)
                 if hasattr(target, 'cached_thumbnail_url') and target.cached_thumbnail_url:
                     return target.cached_thumbnail_url
                 
-                # Fall back to direct thumbnail URL
-                return target.thumbnail.url
-            except Exception:
-                pass
-        
-        # Handle Article/Recipe thumbnails (learning resources)
-        if hasattr(target, 'thumbnail') and target.thumbnail:
-            try:
+                # Fall back to direct thumbnail URL (works for both video and article/recipe thumbnails)
                 return target.thumbnail.url
             except Exception:
                 pass
