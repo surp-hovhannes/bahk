@@ -882,6 +882,23 @@ class UserActivityFeedAPITest(APITestCase):
         })
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_user_milestones_endpoint(self):
+        """Test the user milestones API endpoint."""
+        url = reverse('events:user-milestones')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_milestones'], 1)
+        self.assertEqual(response.data['unread_milestones'], 0)  # milestone was read
+        self.assertEqual(len(response.data['milestone_types']), 1)
+        self.assertEqual(len(response.data['all_milestones']), 1)
+        
+        # Check milestone type data
+        milestone_type_data = response.data['milestone_types'][0]
+        self.assertIn('milestone_type', milestone_type_data)
+        self.assertEqual(milestone_type_data['count'], 1)
+        self.assertIn('latest_achievement', milestone_type_data)
 
 
 class UserActivityFeedSignalsTest(TestCase):
