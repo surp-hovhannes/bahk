@@ -25,6 +25,7 @@ urlpatterns = [
     # User Activity Feed
     path('activity-feed/', views.UserActivityFeedView.as_view(), name='activity-feed'),
     path('activity-feed/summary/', views.UserActivityFeedSummaryView.as_view(), name='activity-feed-summary'),
+    path('activity-feed/milestones/', views.UserMilestonesView.as_view(), name='user-milestones'),
     path('activity-feed/mark-read/', views.MarkActivityReadView.as_view(), name='mark-activity-read'),
     path('activity-feed/generate/', views.GenerateActivityFeedView.as_view(), name='generate-activity-feed'),
     

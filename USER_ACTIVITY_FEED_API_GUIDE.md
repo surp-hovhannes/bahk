@@ -286,7 +286,64 @@ markAsReadMutation.mutate({ markAll: true });
 
 ---
 
-### 4. Generate Activity Feed (Admin Only)
+### 4. Get User Milestones
+
+**Endpoint:** `GET /api/events/activity-feed/milestones/`
+
+**Description:** Get detailed information about user's milestones and achievements.
+
+**Example Request:**
+```javascript
+const { data } = useQuery({
+  queryKey: ['user-milestones'],
+  queryFn: async () => {
+    const response = await fetch('/api/events/activity-feed/milestones/', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return response.json();
+  },
+});
+```
+
+**Response:**
+```json
+{
+  "total_milestones": 2,
+  "unread_milestones": 1,
+  "milestone_types": [
+    {
+      "milestone_type": "first_fast_join",
+      "count": 1,
+      "latest_achievement": {
+        "id": 15,
+        "activity_type": "milestone",
+        "title": "Joined your first fast",
+        "description": "Congratulations on joining your first fast!",
+        "is_read": true,
+        "created_at": "2024-01-15T10:30:00Z",
+        "data": {
+          "milestone_type": "first_fast_join",
+          "milestone_id": 123,
+          "fast_id": 456,
+          "fast_name": "Great Lent Fast"
+        },
+        "target_type": "hub.fast",
+        "target_id": 456,
+        "target_thumbnail": "https://example.com/thumbnails/fast.jpg"
+      }
+    }
+  ],
+  "all_milestones": [
+    // ... all milestone activity feed items in chronological order
+  ]
+}
+```
+
+---
+
+### 5. Generate Activity Feed (Admin Only)
 
 **Endpoint:** `POST /api/events/activity-feed/generate/`
 

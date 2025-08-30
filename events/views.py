@@ -493,6 +493,57 @@ class UserActivityFeedSummaryView(APIView):
         return Response(data)
 
 
+class UserMilestonesView(APIView):
+    """
+    Get user's milestones from activity feed.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        
+        # Get all milestone activity feed items
+        milestone_items = UserActivityFeed.objects.filter(
+            user=user,
+            activity_type='milestone'
+        ).select_related('content_type').order_by('-created_at')
+        
+        # Get milestone statistics
+        total_milestones = milestone_items.count()
+        unread_milestones = milestone_items.filter(is_read=False).count()
+        
+        # Group by milestone type from data field
+        milestone_types = {}
+        for item in milestone_items:
+            milestone_type = item.data.get('milestone_type', 'unknown')
+            if milestone_type not in milestone_types:
+                milestone_types[milestone_type] = {
+                    'count': 0,
+                    'latest': None
+                }
+            milestone_types[milestone_type]['count'] += 1
+            if milestone_types[milestone_type]['latest'] is None:
+                milestone_types[milestone_type]['latest'] = item
+        
+        # Serialize milestone data
+        milestone_data = []
+        for milestone_type, info in milestone_types.items():
+            milestone_data.append({
+                'milestone_type': milestone_type,
+                'count': info['count'],
+                'latest_achievement': UserActivityFeedSerializer(info['latest']).data
+            })
+        
+        data = {
+            'total_milestones': total_milestones,
+            'unread_milestones': unread_milestones,
+            'milestone_types': milestone_data,
+            'all_milestones': UserActivityFeedSerializer(milestone_items, many=True).data
+        }
+        
+        return Response(data)
+
+
 class MarkActivityReadView(APIView):
     """
     Mark activity feed items as read.
