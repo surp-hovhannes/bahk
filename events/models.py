@@ -891,6 +891,58 @@ class UserMilestone(models.Model):
         return f"{self.user.username} - {self.get_milestone_type_display()}"
     
     @classmethod
+    def _get_milestone_text(cls, milestone_type, related_object=None):
+        """
+        Get the title and description text for a milestone.
+        Customize this method to change milestone messages.
+        
+        Args:
+            milestone_type: The type of milestone
+            related_object: The related object (Fast, etc.)
+            
+        Returns:
+            tuple: (title, description)
+        """
+        # Milestone text configuration - CUSTOMIZE THESE MESSAGES
+        # Option 1: Simple text (current)
+        MILESTONE_MESSAGES = {
+            'first_fast_join': {
+                'title': "Joined your first fast",
+                'description': "Congratulations on joining your first fast! May God bless your spiritual journey."
+            },
+            'first_nonweekly_fast_complete': {
+                'title': "Completed your first fast", 
+                'description': "Congratulations on completing your first non-weekly fast! Your participation inspired us to continue our spiritual journey together."
+            },
+            # Add more milestone types here
+            # 'fasts_completed_5': {
+            #     'title': "Completed 5 fasts",
+            #     'description': "Amazing! You've completed 5 fasts!"
+            # },
+        }
+        
+        # Get the message configuration
+        message_config = MILESTONE_MESSAGES.get(milestone_type)
+        
+        if message_config:
+            title = message_config['title']
+            description = message_config['description']
+            
+            # You can add dynamic elements based on related_object
+            if related_object and hasattr(related_object, 'name'):
+                # Optionally include the fast name in the description
+                # description += f" The fast was: {related_object.name}"
+                pass
+                
+        else:
+            # Fallback for unknown milestone types
+            display_name = dict(cls.MILESTONE_TYPES).get(milestone_type, milestone_type)
+            title = f"Milestone achieved: {display_name}"
+            description = "You've achieved a new milestone!"
+        
+        return title, description
+    
+    @classmethod
     def create_milestone(cls, user, milestone_type, related_object=None, data=None):
         """
         Create a milestone for a user if it doesn't already exist.
@@ -919,16 +971,8 @@ class UserMilestone(models.Model):
         # Create a corresponding activity feed item
         from .models import UserActivityFeed
         
-        # Generate title based on milestone type
-        if milestone_type == 'first_fast_join':
-            title = f"Joined your first fast"
-            description = f"Congratulations on joining your first fast!"
-        elif milestone_type == 'first_nonweekly_fast_complete':
-            title = f"Completed your first fast"
-            description = f"Congratulations on completing your first non-weekly fast!"
-        else:
-            title = f"Milestone achieved: {milestone.get_milestone_type_display()}"
-            description = f"You've achieved a new milestone!"
+        # Generate title and description for the milestone
+        title, description = cls._get_milestone_text(milestone_type, related_object)
         
         # Create activity feed item
         UserActivityFeed.objects.create(
