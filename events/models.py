@@ -165,8 +165,8 @@ class EventType(models.Model):
             cls.FAST_ENDING, cls.DEVOTIONAL_AVAILABLE, cls.FAST_PARTICIPANT_MILESTONE,
             cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, 
             cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED,
-            # Engagement target
-            cls.DEVOTIONAL_VIEWED,
+            # Engagement targets
+            cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED,
         ]
 
 
