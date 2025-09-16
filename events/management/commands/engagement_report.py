@@ -101,9 +101,20 @@ class Command(BaseCommand):
         tz_now = timezone.now()
         start_date = self._parse_date(options.get("start")) or (tz_now - timedelta(days=30))
         end_date = self._parse_date(options.get("end")) or tz_now
-        # Normalize to date boundaries
-        start_dt = timezone.make_aware(datetime.combine(start_date.date(), datetime.min.time())) if isinstance(start_date, datetime) else start_date
-        end_dt = timezone.make_aware(datetime.combine(end_date.date(), datetime.max.time())) if isinstance(end_date, datetime) else end_date
+        # Normalize to date boundaries while preserving timezone info
+        if isinstance(start_date, datetime):
+            # Preserve the original timezone when normalizing to start of day
+            original_tz = start_date.tzinfo
+            start_dt = datetime.combine(start_date.date(), datetime.min.time()).replace(tzinfo=original_tz)
+        else:
+            start_dt = start_date
+            
+        if isinstance(end_date, datetime):
+            # Preserve the original timezone when normalizing to end of day
+            original_tz = end_date.tzinfo
+            end_dt = datetime.combine(end_date.date(), datetime.max.time()).replace(tzinfo=original_tz)
+        else:
+            end_dt = end_date
 
         output_format = options["format"]
         print_stdout = options["stdout"]
@@ -135,7 +146,10 @@ class Command(BaseCommand):
         }
 
         if print_stdout:
-            self.stdout.write(json.dumps(consolidated, indent=2, default=str))
+            # Use sys.stdout directly to avoid any potential attribute conflicts
+            import sys
+            sys.stdout.write(json.dumps(consolidated, indent=2, default=str))
+            sys.stdout.write('\n')
             return
 
         # Write files
@@ -365,7 +379,7 @@ class Command(BaseCommand):
 
         # If we have an archive path, upload that. Otherwise, create a new archive in memory.
         if isinstance(path_or_files, str):
-            key = os.path.join(s3_prefix.rstrip("/"), os.path.basename(path_or_files))
+            key = f"{s3_prefix.rstrip('/')}/{os.path.basename(path_or_files)}"
             s3.upload_file(path_or_files, bucket, key, ExtraArgs={"ContentType": "application/zip"})
             return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
 
@@ -376,8 +390,7 @@ class Command(BaseCommand):
             for fpath in path_or_files:
                 zf.write(fpath, arcname=os.path.basename(fpath))
         buffer.seek(0)
-        key = os.path.join(s3_prefix.rstrip("/"), "engagement_report.zip")
-        s3.putObject = getattr(s3, "put_object")
-        s3.putObject(Bucket=bucket, Key=key, Body=buffer.getvalue(), ContentType="application/zip")
+        key = f"{s3_prefix.rstrip('/')}/engagement_report.zip"
+        s3.put_object(Bucket=bucket, Key=key, Body=buffer.getvalue(), ContentType="application/zip")
         return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
 
