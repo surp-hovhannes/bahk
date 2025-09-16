@@ -38,7 +38,7 @@ def get_user_profile_safe(user):
     """
     try:
         return user.profile
-    except user.profile.RelatedObjectDoesNotExist:
+    except Exception:  # Catch any profile-related exception
         return None
 
 
