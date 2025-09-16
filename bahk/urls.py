@@ -24,6 +24,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.response import Response
 
 
 class TrackingTokenObtainPairView(TokenObtainPairView):
@@ -47,7 +48,7 @@ class TrackingTokenObtainPairView(TokenObtainPairView):
             except Exception:
                 pass
 
-        return self.response_class(serializer.validated_data, status=200)
+        return Response(serializer.validated_data, status=200)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
