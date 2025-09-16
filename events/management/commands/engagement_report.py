@@ -210,7 +210,13 @@ class Command(BaseCommand):
         return [NewUsersOverTimeRow(date=x["day"].isoformat(), count=x["count"]) for x in qs]
 
     def _compute_fast_engagement(self, start_dt: datetime, end_dt: datetime) -> List[FastEngagementRow]:
-        fasts = Fast.objects.all().select_related("church")
+        # Optimize query to avoid N+1 problem by prefetching profiles and counting them
+        fasts = (
+            Fast.objects.all()
+            .select_related("church")
+            .prefetch_related("profiles")
+            .annotate(participant_count=Count("profiles"))
+        )
 
         # joins/leaves in period based on Events
         joins = (
@@ -238,12 +244,17 @@ class Command(BaseCommand):
 
         rows: List[FastEngagementRow] = []
         for fast in fasts:
+            # Safe access to church name - handle case where church might be None
+            church_name = None
+            if fast.church_id and fast.church:
+                church_name = fast.church.name
+            
             rows.append(
                 FastEngagementRow(
                     fast_id=fast.id,
                     fast_name=str(fast),
-                    church_name=fast.church.name if fast.church_id else None,
-                    participants=fast.profiles.count(),
+                    church_name=church_name,
+                    participants=fast.participant_count,
                     joins_in_period=joins_map.get(fast.id, 0),
                     leaves_in_period=leaves_map.get(fast.id, 0),
                 )
