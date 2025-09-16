@@ -29,6 +29,10 @@ urlpatterns = [
     path('activity-feed/mark-read/', views.MarkActivityReadView.as_view(), name='mark-activity-read'),
     path('activity-feed/generate/', views.GenerateActivityFeedView.as_view(), name='generate-activity-feed'),
     
+    # Engagement tracking endpoints
+    path('track/devotional-viewed/', views.TrackDevotionalViewedView.as_view(), name='track-devotional-viewed'),
+    path('track/checklist-used/', views.TrackChecklistUsedView.as_view(), name='track-checklist-used'),
+    
     # Admin utilities
     path('admin/trigger-milestone/<int:fast_id>/', views.trigger_milestone_check, name='trigger-milestone'),
 ]

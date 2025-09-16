@@ -21,9 +21,34 @@ from django.views.generic import RedirectView
 import hub.views as views
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.response import Response
+
+
+class TrackingTokenObtainPairView(TokenObtainPairView):
+    """Subclass to emit a USER_LOGGED_IN event for JWT credentials."""
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Emit login event using the validated user
+        user = getattr(serializer, 'user', None)
+        if user is not None:
+            try:
+                from events.models import Event, EventType
+                Event.create_event(
+                    event_type_code=EventType.USER_LOGGED_IN,
+                    user=user,
+                    title='User logged in (JWT)',
+                    data={'method': 'jwt'},
+                    request=request,
+                )
+            except Exception:
+                pass
+
+        return Response(serializer.validated_data, status=200)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,7 +57,7 @@ urlpatterns = [
 
     # Authentication endpoints
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/', TrackingTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     path('markdownx/', include('markdownx.urls')),  # Include markdownx URLs

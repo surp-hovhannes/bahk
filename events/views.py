@@ -367,6 +367,76 @@ class FastEventStatsView(APIView):
         return Response(serializer.data)
 
 
+class TrackDevotionalViewedView(APIView):
+    """
+    Track when a user watches/opens a devotional. We do not record which items they check, only that it happened.
+    POST body: { "devotional_id": number }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        devotional_id = request.data.get('devotional_id')
+        if not devotional_id:
+            return Response({"error": "devotional_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from hub.models import Devotional
+            devotional = Devotional.objects.get(id=int(devotional_id))
+        except (ValueError, Devotional.DoesNotExist):
+            return Response({"error": "Invalid devotional_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            Event.create_event(
+                event_type_code=EventType.DEVOTIONAL_VIEWED,
+                user=request.user,
+                target=devotional,
+                title="Devotional viewed",
+                data={
+                    'devotional_id': devotional.id,
+                    'fast_id': devotional.day.fast.id if devotional.day and devotional.day.fast else None,
+                    'day': devotional.day.date.isoformat() if devotional.day else None,
+                },
+                request=request,
+            )
+            return Response({"status": "ok"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TrackChecklistUsedView(APIView):
+    """
+    Track a generic fasting checklist interaction without capturing specific items.
+    POST body: { "fast_id": number, "action": string? }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        fast_id = request.data.get('fast_id')
+        action = request.data.get('action')  # optional small descriptor
+        if not fast_id:
+            return Response({"error": "fast_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from hub.models import Fast
+            fast = Fast.objects.get(id=int(fast_id))
+        except (ValueError, Fast.DoesNotExist):
+            return Response({"error": "Invalid fast_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            Event.create_event(
+                event_type_code=EventType.CHECKLIST_USED,
+                user=request.user,
+                target=fast,
+                title="Checklist used",
+                data={
+                    'fast_id': fast.id,
+                    'action': action,
+                },
+                request=request,
+            )
+            return Response({"status": "ok"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAdminUser])
 def trigger_milestone_check(request, fast_id):

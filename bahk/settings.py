@@ -144,6 +144,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'events.middleware.AnalyticsTrackingMiddleware',  # Analytics/session tracking
     'hub.middleware.TimezoneUpdateMiddleware',  # Add timezone update middleware after auth
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -279,6 +280,9 @@ REST_FRAMEWORK = {
     ),
     'PAGE_SIZE': 10
 }
+
+# Analytics settings
+ANALYTICS_SESSION_TIMEOUT_MINUTES = int(config('ANALYTICS_SESSION_TIMEOUT_MINUTES', default=30))
 
 # extend lifetime of JWT refresh tokens
 SIMPLE_JWT = {

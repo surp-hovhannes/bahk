@@ -5,6 +5,7 @@ import pytz
 import logging
 from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
+from .utils import get_user_profile_safe
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,10 @@ class TimezoneUpdateMiddleware(MiddlewareMixin):
         if not request.user or not request.user.is_authenticated:
             return None
             
-        # Check if user has a profile
-        if not hasattr(request.user, 'profile'):
+        # Check if user has a profile and get it safely
+        profile = get_user_profile_safe(request.user)
+        if profile is None:
+            # User has no profile, skip timezone update
             return None
             
         # Get timezone from query parameter or header
@@ -55,15 +58,15 @@ class TimezoneUpdateMiddleware(MiddlewareMixin):
             tz = pytz.timezone(timezone_str)
             
             # Get user's current timezone from profile
-            current_timezone = request.user.profile.timezone
+            current_timezone = profile.timezone
             
             # If timezone differs from current, update it
             if current_timezone != timezone_str:
                 logger.info(f"Updating timezone for user {request.user.id} from {current_timezone} to {timezone_str}")
                 
                 # Update profile timezone
-                request.user.profile.timezone = timezone_str
-                request.user.profile.save(update_fields=['timezone'])
+                profile.timezone = timezone_str
+                profile.save(update_fields=['timezone'])
                 
         except pytz.exceptions.UnknownTimeZoneError:
             # Invalid timezone string, log warning but don't fail the request

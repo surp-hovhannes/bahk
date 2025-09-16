@@ -22,6 +22,26 @@ logger = logging.getLogger(__name__)
 PARSER_REGEX = r"^([A-za-z1-4\'\. ]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
 SUPPORTED_CHURCHES = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME)
 
+
+def get_user_profile_safe(user):
+    """
+    Safely get a user's profile, returning None if it doesn't exist.
+    
+    This handles the RelatedObjectDoesNotExist exception that occurs when
+    accessing user.profile on a OneToOneField where no related Profile exists.
+    
+    Args:
+        user: Django User instance
+        
+    Returns:
+        Profile instance if it exists, None otherwise
+    """
+    try:
+        return user.profile
+    except Exception:  # Catch any profile-related exception
+        return None
+
+
 def invalidate_fast_participants_cache(fast_id):
     """
     Invalidate cache for a specific fast's participant list.
@@ -40,10 +60,11 @@ def invalidate_fast_participants_cache(fast_id):
         # Fallback - less efficient
         cache.clear()
 
+
 def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
     """Scrapes readings from sacredtradition.am""" 
     if church not in SUPPORTED_CHURCHES:
-        logging.error("Web-scraping for readings only set up for the following churches: %r. %s not supported.", 
+        logging.error("Web-scraping for readings only set up for the following churches: %r. %s not supported.",
                       SUPPORTED_CHURCHES, church)
         return []
 
@@ -113,7 +134,7 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
             })
         except Exception:
             logging.error(
-                "Could not parse reading with text %s with regex %s from %s. Skipping.", 
+                "Could not parse reading with text %s with regex %s from %s. Skipping.",
                 reading_str, PARSER_REGEX, url, exc_info=True
             )
             continue
@@ -191,4 +212,3 @@ def test_email():
         logger.info('Email sent successfully.')
     except Exception as e:
         logger.error(f'Failed to send email: {e}')
-        raise e

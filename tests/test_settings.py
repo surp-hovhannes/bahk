@@ -98,3 +98,12 @@ TEST_RUNNER = 'tests.test_runner.MediaCleanupTestRunner'
 
 # Enable user account creation tracking
 TRACK_USER_ACCOUNT_CREATED = False
+
+# Analytics testing settings
+ANALYTICS_SESSION_TIMEOUT_MINUTES = 30
+
+# Ensure middleware is enabled for testing
+if 'events.middleware.AnalyticsTrackingMiddleware' not in MIDDLEWARE:
+    # Insert after authentication middleware
+    auth_index = MIDDLEWARE.index('django.contrib.auth.middleware.AuthenticationMiddleware')
+    MIDDLEWARE.insert(auth_index + 1, 'events.middleware.AnalyticsTrackingMiddleware')

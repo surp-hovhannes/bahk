@@ -18,6 +18,16 @@ class EventType(models.Model):
     This allows for flexible event categorization and easy addition of new event types.
     """
     
+    # Analytics/event tracking additions
+    APP_OPEN = 'app_open'
+    SESSION_START = 'session_start'
+    SCREEN_VIEW = 'screen_view'
+    SESSION_END = 'session_end'
+    
+    # Engagement events for retention calculations
+    DEVOTIONAL_VIEWED = 'devotional_viewed'
+    CHECKLIST_USED = 'checklist_used'
+    
     # Event type constants
     USER_JOINED_FAST = 'user_joined_fast'
     USER_LEFT_FAST = 'user_left_fast'
@@ -51,6 +61,13 @@ class EventType(models.Model):
         (ARTICLE_PUBLISHED, 'Article Published'),
         (RECIPE_PUBLISHED, 'Recipe Published'),
         (VIDEO_PUBLISHED, 'Video Published'),
+        # Analytics and engagement
+        (APP_OPEN, 'App Open'),
+        (SESSION_START, 'Session Start'),
+        (SESSION_END, 'Session End'),
+        (SCREEN_VIEW, 'Screen View'),
+        (DEVOTIONAL_VIEWED, 'Devotional Viewed'),
+        (CHECKLIST_USED, 'Checklist Used'),
     ]
     
     # Core fields
@@ -136,6 +153,8 @@ class EventType(models.Model):
             return 'milestone'
         elif code in [cls.DEVOTIONAL_AVAILABLE]:
             return 'notification'
+        elif code in [cls.APP_OPEN, cls.SESSION_START, cls.SESSION_END, cls.SCREEN_VIEW, cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED]:
+            return 'analytics'
         return 'user_action'
     
     @classmethod
@@ -145,7 +164,9 @@ class EventType(models.Model):
             cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.FAST_BEGINNING, 
             cls.FAST_ENDING, cls.DEVOTIONAL_AVAILABLE, cls.FAST_PARTICIPANT_MILESTONE,
             cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, 
-            cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED
+            cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED,
+            # Engagement targets
+            cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED,
         ]
 
 
