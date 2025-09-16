@@ -529,3 +529,216 @@ The enhanced events system now provides comprehensive analytics tracking that en
 - **Ready to scale** to millions of events with minor architecture changes
 
 The system is production-ready and designed to grow with your user base while providing actionable insights into user behavior and app performance.
+
+## 📱 Frontend Integration Guide
+
+### ⚙️ CORS Configuration (Required)
+
+The analytics headers are configured via environment variables for flexibility:
+
+```python
+# In bahk/settings.py - Already configured for you
+default_cors_headers = [
+    'accept', 'accept-encoding', 'authorization', 'content-type',
+    'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
+    # Analytics tracking headers
+    'x-app-version',     # ✅ App version tracking
+    'x-platform',        # ✅ Platform tracking (ios/android/web)
+    'x-screen',          # ✅ Custom screen names
+    'x-join-source',     # ✅ User acquisition source
+]
+
+CORS_ALLOW_HEADERS = config(
+    'CORS_ALLOW_HEADERS', 
+    default=','.join(default_cors_headers),
+    cast=Csv()
+)
+```
+
+#### **Heroku Configuration Options:**
+
+**Option 1: Use Defaults (Recommended)**
+- ✅ No environment variables needed
+- ✅ Analytics headers already included in defaults
+- ✅ Ready to use immediately
+
+**Option 2: Custom Headers via Environment Variable**
+```bash
+# Heroku CLI
+heroku config:set CORS_ALLOW_HEADERS="accept,authorization,content-type,x-app-version,x-platform,x-screen,x-join-source" --app your-app-name
+
+# Or via Heroku Dashboard → Settings → Config Vars
+CORS_ALLOW_HEADERS=accept,authorization,content-type,x-app-version,x-platform,x-screen,x-join-source
+```
+
+### 🔗 New API Endpoints
+
+#### **1. Engagement Tracking Endpoints**
+
+**Track Devotional Views:**
+```
+POST /api/events/track/devotional-viewed/
+Content-Type: application/json
+Authorization: Bearer {jwt_token}
+
+Payload:
+{
+  "devotional_id": 123  // Required: ID of the devotional
+}
+
+Response: {"status": "ok"}
+Errors: 400 (missing/invalid devotional_id), 401 (unauthorized)
+```
+
+**Track Checklist Usage (Enhanced - fast_id now optional):**
+```
+POST /api/events/track/checklist-used/
+Content-Type: application/json
+Authorization: Bearer {jwt_token}
+
+Payload Options:
+// Fast-specific usage
+{
+  "fast_id": 456,                    // Optional: ID of the fast
+  "action": "morning_review"          // Optional: Description of action
+}
+
+// General usage (no active fast)
+{
+  "action": "daily_reflection"        // Optional: Description of action
+}
+
+// Minimal tracking
+{}                                    // Track that checklist was used
+
+Response: {"status": "ok"}
+Errors: 400 (invalid fast_id), 401 (unauthorized)
+```
+
+### 📊 Automatic Analytics Headers
+
+#### **Screen View Tracking (Recommended)**
+Add these headers to **all GET requests** for enhanced analytics:
+
+```
+GET /api/{any-endpoint}
+Authorization: Bearer {jwt_token}
+X-Screen: {screen_name}              // Custom screen identifier
+X-App-Version: {app_version}         // App version for analytics
+X-Platform: {platform}               // Platform: ios/android/web
+```
+
+**Screen Name Examples:**
+- `fasts_list` - List of available fasts
+- `fast_detail` - Individual fast details
+- `devotional_view` - Viewing a devotional
+- `profile_edit` - Editing user profile
+- `settings` - App settings screen
+- `checklist` - Daily checklist screen
+
+**Alternative: Query Parameters**
+```
+GET /api/fasts/?screen=fasts_list
+GET /api/profile/?screen=profile_view
+```
+
+### 🎯 Attribution Tracking
+
+#### **UTM Parameters (Marketing Campaigns)**
+Include UTM parameters in **any request** to capture attribution:
+
+```
+GET /api/{any-endpoint}?utm_source={source}&utm_campaign={campaign}
+
+Examples:
+- utm_source=facebook&utm_campaign=lent2024
+- utm_source=instagram&utm_campaign=easter2024
+- utm_source=email&utm_campaign=weekly_newsletter
+```
+
+#### **Join Source Tracking**
+```
+// Via query parameter
+GET /api/fasts/?join_source=push_notification
+GET /api/fasts/?join_source=email_link
+GET /api/fasts/?join_source=social_media
+
+// Via header
+X-Join-Source: push_notification
+```
+
+### 🔄 No Changes Required (Automatic)
+
+These features work automatically without frontend modifications:
+
+#### **✅ Session Tracking**
+- App opens detected after 30+ minutes of inactivity
+- Session duration and request counting
+- Automatic session end tracking
+
+#### **✅ Basic Screen Views**
+- All GET requests automatically tracked
+- Uses URL path as fallback screen name
+- No code changes needed
+
+#### **✅ Login Event Tracking**
+- JWT login endpoint automatically tracks login events
+- No changes to existing authentication flow
+- Existing tokens continue working
+
+### 📋 API Specifications
+
+#### **Authentication Requirements**
+- All tracking endpoints require valid JWT token
+- Use existing authentication flow
+- No additional permissions needed
+
+#### **Error Handling**
+- All tracking endpoints return JSON responses
+- Failed tracking should not break user experience
+- Implement graceful error handling in frontend
+
+#### **Response Formats**
+```
+// Success Response
+{"status": "ok"}
+
+// Error Responses
+{"error": "devotional_id is required"}     // 400 Bad Request
+{"error": "Invalid devotional_id"}         // 400 Bad Request  
+{"error": "Authentication required"}       // 401 Unauthorized
+{"error": "Internal server error"}         // 500 Server Error
+```
+
+### 🎯 Implementation Priority
+
+#### **High Priority (Immediate Value):**
+1. **Devotional view tracking** - Track when users engage with devotionals
+2. **Checklist usage tracking** - Track spiritual practice engagement (fast_id optional)
+3. **Screen name headers** - Better screen view analytics
+
+#### **Medium Priority (Enhanced Analytics):**
+1. **App version/platform headers** - App performance insights
+2. **UTM parameter passing** - Marketing campaign attribution
+3. **Join source tracking** - User acquisition analysis
+
+#### **Low Priority (Advanced Features):**
+1. **Custom action descriptions** - Detailed interaction tracking
+2. **Advanced attribution** - Multi-touch attribution analysis
+
+### 🛡️ Best Practices
+
+#### **Error Resilience**
+- Wrap all analytics calls in try-catch blocks
+- Never let analytics failures break user experience
+- Log analytics errors for debugging but don't show to users
+
+#### **Performance**
+- Make analytics calls non-blocking
+- Don't await analytics responses in critical user flows
+- Consider batching analytics calls if high volume
+
+#### **Privacy**
+- Only track necessary engagement data
+- Don't capture sensitive user information
+- Respect user privacy preferences
