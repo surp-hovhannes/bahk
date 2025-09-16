@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.core.cache import cache
 from django.utils.deprecation import MiddlewareMixin
 from django.conf import settings
+from hub.utils import get_user_profile_safe
 
 
 class AnalyticsTrackingMiddleware(MiddlewareMixin):
@@ -141,10 +142,10 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
         join_source = params.get('join_source') or request.META.get('HTTP_X_JOIN_SOURCE')
 
         # Update profile if values provided and changed
-        if not hasattr(user, 'profile'):
+        profile = get_user_profile_safe(user)
+        if profile is None:
+            # User has no profile, skip UTM ingestion
             return
-
-        profile = user.profile
         fields_to_update = []
 
         if utm_source is not None and utm_source != profile.utm_source:
