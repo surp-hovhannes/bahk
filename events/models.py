@@ -166,7 +166,8 @@ class EventType(models.Model):
             cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, 
             cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED,
             # Engagement targets
-            cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED,
+            cls.DEVOTIONAL_VIEWED,
+            # Note: CHECKLIST_USED removed - can be used without a specific fast
         ]
 
 

@@ -405,30 +405,42 @@ class TrackDevotionalViewedView(APIView):
 class TrackChecklistUsedView(APIView):
     """
     Track a generic fasting checklist interaction without capturing specific items.
-    POST body: { "fast_id": number, "action": string? }
+    POST body: { "fast_id": number (optional), "action": string (optional) }
+    
+    Examples:
+    - Fast-specific checklist: {"fast_id": 123, "action": "morning_review"}
+    - General checklist: {"action": "daily_reflection"}
+    - Minimal tracking: {} (just tracks that checklist was used)
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        fast_id = request.data.get('fast_id')
+        fast_id = request.data.get('fast_id')  # Now optional
         action = request.data.get('action')  # optional small descriptor
-        if not fast_id:
-            return Response({"error": "fast_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            from hub.models import Fast
-            fast = Fast.objects.get(id=int(fast_id))
-        except (ValueError, Fast.DoesNotExist):
-            return Response({"error": "Invalid fast_id"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        fast = None
+        target = None
+        
+        # If fast_id is provided, validate and use it
+        if fast_id:
+            try:
+                from hub.models import Fast
+                fast = Fast.objects.get(id=int(fast_id))
+                target = fast
+            except (ValueError, Fast.DoesNotExist):
+                return Response({"error": "Invalid fast_id"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             Event.create_event(
                 event_type_code=EventType.CHECKLIST_USED,
                 user=request.user,
-                target=fast,
+                target=target,  # Can be None now
                 title="Checklist used",
                 data={
-                    'fast_id': fast.id,
+                    'fast_id': fast.id if fast else None,
+                    'fast_name': fast.name if fast else None,
                     'action': action,
+                    'context': 'fast_specific' if fast else 'general',
                 },
                 request=request,
             )

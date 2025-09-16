@@ -209,6 +209,35 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(checklist_event.target, self.fast)
         self.assertEqual(checklist_event.data['fast_id'], self.fast.id)
         self.assertEqual(checklist_event.data['action'], 'daily_review')
+        self.assertEqual(checklist_event.data['context'], 'fast_specific')
+    
+    def test_track_checklist_used_minimal_data(self):
+        """Test checklist tracking with minimal data (no fast_id, no action)."""
+        url = reverse('events:track-checklist-used')
+        data = {}  # Completely empty
+        
+        initial_event_count = Event.objects.count()
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        
+        # Event should still be created
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
+        
+        checklist_event = Event.objects.filter(
+            event_type__code=EventType.CHECKLIST_USED,
+            user=self.user
+        ).order_by('-timestamp').first()
+        
+        self.assertIsNotNone(checklist_event)
+        self.assertEqual(checklist_event.title, 'Checklist used')
+        self.assertIsNone(checklist_event.target)
+        self.assertIsNone(checklist_event.data['fast_id'])
+        self.assertIsNone(checklist_event.data['fast_name'])
+        self.assertIsNone(checklist_event.data['action'])
+        self.assertEqual(checklist_event.data['context'], 'general')
     
     def test_track_checklist_used_without_action(self):
         """Test checklist tracking without optional action parameter."""
@@ -232,21 +261,35 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertIsNotNone(checklist_event)
         self.assertEqual(checklist_event.data['fast_id'], self.fast.id)
         self.assertIsNone(checklist_event.data['action'])
+        self.assertEqual(checklist_event.data['context'], 'fast_specific')
     
-    def test_track_checklist_used_missing_fast_id(self):
-        """Test checklist tracking with missing fast_id."""
+    def test_track_checklist_used_without_fast_id(self):
+        """Test checklist tracking without fast_id (general usage)."""
         url = reverse('events:track-checklist-used')
-        data = {'action': 'daily_review'}  # Missing fast_id
+        data = {'action': 'general_reflection'}  # No fast_id
         
         initial_event_count = Event.objects.count()
         
         response = self.client.post(url, data, format='json')
         
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('fast_id is required', response.data['error'])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
         
-        # No event should be created
-        self.assertEqual(Event.objects.count(), initial_event_count)
+        # Check that event was created
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
+        
+        checklist_event = Event.objects.filter(
+            event_type__code=EventType.CHECKLIST_USED,
+            user=self.user
+        ).order_by('-timestamp').first()
+        
+        self.assertIsNotNone(checklist_event)
+        self.assertEqual(checklist_event.title, 'Checklist used')
+        self.assertIsNone(checklist_event.target)  # No target fast
+        self.assertIsNone(checklist_event.data['fast_id'])
+        self.assertIsNone(checklist_event.data['fast_name'])
+        self.assertEqual(checklist_event.data['action'], 'general_reflection')
+        self.assertEqual(checklist_event.data['context'], 'general')
     
     def test_track_checklist_used_invalid_fast_id(self):
         """Test checklist tracking with invalid fast_id."""
