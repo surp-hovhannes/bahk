@@ -452,6 +452,31 @@ else:
 CORS_ORIGIN_ALLOW_ALL = config('CORS_ORIGIN_ALLOW_ALL', default=False, cast=bool)
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 
+# Allow analytics tracking headers for frontend apps
+# Can be customized via CORS_ALLOW_HEADERS environment variable
+default_cors_headers = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    # Analytics tracking headers
+    'x-app-version',
+    'x-platform', 
+    'x-screen',
+    'x-join-source',
+]
+
+CORS_ALLOW_HEADERS = config(
+    'CORS_ALLOW_HEADERS', 
+    default=','.join(default_cors_headers),
+    cast=Csv()
+)
+
 # Frontend URL for password reset, if local development or production
 FRONTEND_URL = config('FRONTEND_URL', default='https://fastandpray.app')
 APP_URL = config('APP_URL', default='https://web.fastandpray.app')
