@@ -64,6 +64,10 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                 if action == 'post_add':
                     # User joined a fast
                     try:
+                        # Pull attribution data from profile
+                        utm_source = getattr(user.profile, 'utm_source', None)
+                        utm_campaign = getattr(user.profile, 'utm_campaign', None)
+                        join_source = getattr(user.profile, 'join_source', None)
                         Event.create_event(
                             event_type_code=EventType.USER_JOINED_FAST,
                             user=user,
@@ -76,6 +80,9 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                                 'church_name': fast.church.name if fast.church else None,
                                 'user_id': user.id,
                                 'username': user.username,
+                                'utm_source': utm_source,
+                                'utm_campaign': utm_campaign,
+                                'join_source': join_source,
                             }
                         )
                         logger.info(f"Tracked USER_JOINED_FAST event: {user} joined {fast}")

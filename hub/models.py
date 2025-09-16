@@ -225,6 +225,16 @@ class Profile(models.Model):
     receive_promotional_emails = models.BooleanField(
         default=True, help_text="Receive promotional emails"
     )
+    # Attribution fields for campaign/source tracking
+    utm_source = models.CharField(
+        max_length=255, null=True, blank=True, help_text="Last seen UTM source"
+    )
+    utm_campaign = models.CharField(
+        max_length=255, null=True, blank=True, help_text="Last seen UTM campaign"
+    )
+    join_source = models.CharField(
+        max_length=255, null=True, blank=True, help_text="Join source such as push,email,social"
+    )
 
     # Track changes to the profile_image field
     tracker = FieldTracker(fields=["profile_image", "location", "timezone"])
