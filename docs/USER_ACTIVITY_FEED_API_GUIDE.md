@@ -74,7 +74,7 @@ Authorization: Bearer <your-jwt-token>
 | `start_date` | string | No | ISO format date (e.g., `2024-01-01T00:00:00Z`) |
 | `end_date` | string | No | ISO format date |
 | `page` | integer | No | Page number for pagination (default: 1) |
-| `page_size` | integer | No | Items per page (default: 20) |
+| `page_size` | integer | No | Items per page (default: 10) |
 
 **Example Request:**
 ```javascript

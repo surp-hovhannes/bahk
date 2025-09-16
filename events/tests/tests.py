@@ -13,7 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.test.utils import override_settings
 
-from .models import Event, EventType, UserActivityFeed
+from events.models import Event, EventType, UserActivityFeed
 from hub.models import Fast, Church, Profile, Day
 
 User = get_user_model()
@@ -430,7 +430,7 @@ class EventUtilsTest(TestCase):
     
     def test_track_fast_participant_milestone(self):
         """Test milestone tracking function."""
-        from .signals import track_fast_participant_milestone
+        from events.signals import track_fast_participant_milestone
         
         initial_count = Event.objects.count()
         
@@ -455,7 +455,7 @@ class EventUtilsTest(TestCase):
     
     def test_track_devotional_available(self):
         """Test devotional availability tracking."""
-        from .signals import track_devotional_available
+        from events.signals import track_devotional_available
         
         initial_count = Event.objects.count()
         
@@ -480,7 +480,7 @@ class EventUtilsTest(TestCase):
     
     def test_track_fast_beginning_ending(self):
         """Test fast beginning and ending tracking."""
-        from .signals import track_fast_beginning, track_fast_ending
+        from events.signals import track_fast_beginning, track_fast_ending
         
         initial_count = Event.objects.count()
         
@@ -1021,7 +1021,7 @@ class UserActivityFeedTasksTest(TestCase):
     
     def test_create_activity_feed_item_task(self):
         """Test creating activity feed item via Celery task."""
-        from .tasks import create_activity_feed_item_task
+        from events.tasks import create_activity_feed_item_task
         
         # Run task synchronously
         result = create_activity_feed_item_task(self.event.id, self.user.id)
@@ -1037,7 +1037,7 @@ class UserActivityFeedTasksTest(TestCase):
     
     def test_create_activity_feed_item_task_no_event(self):
         """Test task with non-existent event."""
-        from .tasks import create_activity_feed_item_task
+        from events.tasks import create_activity_feed_item_task
         
         # Clear any existing feed items
         UserActivityFeed.objects.filter(user=self.user).delete()
@@ -1051,7 +1051,7 @@ class UserActivityFeedTasksTest(TestCase):
     
     def test_create_fast_reminder_feed_items_task(self):
         """Test creating fast reminder feed items via Celery task."""
-        from .tasks import create_fast_reminder_feed_items_task
+        from events.tasks import create_fast_reminder_feed_items_task
         
         # Clear any existing feed items
         UserActivityFeed.objects.filter(user=self.user).delete()
@@ -1074,7 +1074,7 @@ class UserActivityFeedTasksTest(TestCase):
     
     def test_batch_create_activity_feed_items_task(self):
         """Test batch creating activity feed items via Celery task."""
-        from .tasks import batch_create_activity_feed_items_task
+        from events.tasks import batch_create_activity_feed_items_task
         
         # Clear any existing feed items
         UserActivityFeed.objects.filter(user=self.user).delete()
@@ -1099,7 +1099,7 @@ class UserActivityFeedTasksTest(TestCase):
     
     def test_cleanup_old_activity_feed_items_task(self):
         """Test cleaning up old activity feed items via Celery task."""
-        from .tasks import cleanup_old_activity_feed_items_task
+        from events.tasks import cleanup_old_activity_feed_items_task
         from datetime import timedelta
         
         # Clear any existing feed items
@@ -1127,7 +1127,7 @@ class UserActivityFeedTasksTest(TestCase):
     
     def test_populate_user_activity_feed_task(self):
         """Test populating user activity feed via Celery task."""
-        from .tasks import populate_user_activity_feed_task
+        from events.tasks import populate_user_activity_feed_task
         
         # Clear any existing feed items
         UserActivityFeed.objects.filter(user=self.user).delete()
@@ -1696,7 +1696,7 @@ class UserMilestoneModelTest(TestCase):
     
     def test_create_milestone_first_fast_join(self):
         """Test creating first fast join milestone."""
-        from .models import UserMilestone
+        from events.models import UserMilestone
         
         # Create milestone
         milestone = UserMilestone.create_milestone(
@@ -1725,7 +1725,7 @@ class UserMilestoneModelTest(TestCase):
     
     def test_create_milestone_duplicate_prevention(self):
         """Test that duplicate milestones are prevented."""
-        from .models import UserMilestone
+        from events.models import UserMilestone
         
         # Create first milestone
         milestone1 = UserMilestone.create_milestone(
@@ -1753,7 +1753,7 @@ class UserMilestoneModelTest(TestCase):
     
     def test_milestone_str_representation(self):
         """Test milestone string representation."""
-        from .models import UserMilestone
+        from events.models import UserMilestone
         
         milestone = UserMilestone.create_milestone(
             user=self.user,
@@ -1789,7 +1789,7 @@ class UserMilestoneSignalsTest(TestCase):
     
     def test_first_fast_join_milestone_triggered(self):
         """Test that first fast join milestone is triggered when user joins their first fast."""
-        from .models import UserMilestone
+        from events.models import UserMilestone
         
         # User joins their first fast
         self.profile.fasts.add(self.fast)
@@ -1814,7 +1814,7 @@ class UserMilestoneSignalsTest(TestCase):
     
     def test_first_fast_join_milestone_not_triggered_twice(self):
         """Test that first fast join milestone is not triggered for subsequent fast joins."""
-        from .models import UserMilestone
+        from events.models import UserMilestone
         
         # Create another fast
         fast2 = Fast.objects.create(
@@ -1870,7 +1870,7 @@ class UserMilestoneTasksTest(TestCase):
     def test_check_completed_fast_milestones_task(self):
         """Test the task that checks for completed fast milestones."""
         from events.tasks import check_completed_fast_milestones_task
-        from .models import UserMilestone
+        from events.models import UserMilestone
         
         # User participated in the fast
         self.profile.fasts.add(self.fast)
@@ -1904,7 +1904,7 @@ class UserMilestoneTasksTest(TestCase):
     def test_weekly_fast_completion_ignored(self):
         """Test that weekly fast completions don't trigger milestones."""
         from events.tasks import check_completed_fast_milestones_task
-        from .models import UserMilestone
+        from events.models import UserMilestone
         
         # Create a weekly fast
         weekly_fast = Fast.objects.create(
@@ -1959,7 +1959,7 @@ class UserActivityFeedSerializerTest(TestCase):
     
     def test_serializer_includes_target_thumbnail(self):
         """Test that serializer includes target_thumbnail field."""
-        from .serializers import UserActivityFeedSerializer
+        from events.serializers import UserActivityFeedSerializer
         
         # Create activity feed item
         feed_item = UserActivityFeed.objects.create(
@@ -1986,7 +1986,7 @@ class UserActivityFeedSerializerTest(TestCase):
     
     def test_serializer_with_no_target(self):
         """Test serializer behavior when there's no target object."""
-        from .serializers import UserActivityFeedSerializer
+        from events.serializers import UserActivityFeedSerializer
         
         # Create activity feed item without target
         feed_item = UserActivityFeed.objects.create(
@@ -2023,7 +2023,7 @@ class AnnouncementModelTest(TestCase):
     
     def test_create_announcement(self):
         """Test creating an announcement."""
-        from .models import Announcement
+        from events.models import Announcement
         
         announcement = Announcement.objects.create(
             title='Test Announcement',
@@ -2041,7 +2041,7 @@ class AnnouncementModelTest(TestCase):
     
     def test_announcement_properties(self):
         """Test announcement properties."""
-        from .models import Announcement
+        from events.models import Announcement
         from django.utils import timezone
         from datetime import timedelta
         
@@ -2072,7 +2072,7 @@ class AnnouncementModelTest(TestCase):
     
     def test_get_target_users(self):
         """Test getting target users for announcements."""
-        from .models import Announcement
+        from events.models import Announcement
         
         # Create another user and church
         user2 = User.objects.create_user(username='user2', email='user2@example.com')
@@ -2104,7 +2104,7 @@ class AnnouncementModelTest(TestCase):
     
     def test_announcement_publish(self):
         """Test publishing an announcement."""
-        from .models import Announcement
+        from events.models import Announcement
         from unittest.mock import patch
         
         announcement = Announcement.objects.create(
@@ -2141,7 +2141,7 @@ class AnnouncementTasksTest(TestCase):
     def test_create_announcement_feed_items_task(self):
         """Test the announcement feed items creation task."""
         from events.tasks import create_announcement_feed_items_task
-        from .models import Announcement, UserActivityFeed
+        from events.models import Announcement, UserActivityFeed
         
         # Create announcement
         announcement = Announcement.objects.create(
@@ -2190,7 +2190,7 @@ class AnnouncementTasksTest(TestCase):
     def test_create_announcement_feed_items_duplicate_prevention(self):
         """Test that duplicate announcement feed items are not created."""
         from events.tasks import create_announcement_feed_items_task
-        from .models import Announcement, UserActivityFeed
+        from events.models import Announcement, UserActivityFeed
         from django.contrib.contenttypes.models import ContentType
         
         # Create announcement
@@ -2277,7 +2277,7 @@ class RetroactiveMilestoneCommandTest(TestCase):
     def test_award_first_fast_join_milestones(self):
         """Test awarding retroactive first fast join milestones."""
         from django.core.management import call_command
-        from .models import UserMilestone
+        from events.models import UserMilestone
         from io import StringIO
         
         # Ensure no milestones exist yet
@@ -2329,7 +2329,7 @@ class RetroactiveMilestoneCommandTest(TestCase):
     def test_retroactive_milestones_skip_existing(self):
         """Test that retroactive command skips users who already have milestones."""
         from django.core.management import call_command
-        from .models import UserMilestone
+        from events.models import UserMilestone
         from io import StringIO
         
         # Create milestone for user1
