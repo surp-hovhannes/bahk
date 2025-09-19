@@ -148,7 +148,13 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
         # For API requests with JWT tokens, manually authenticate
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
         if auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
+            # Extract token more robustly, handling multiple spaces and missing tokens
+            token_parts = auth_header.split(' ', 1)
+            if len(token_parts) < 2:
+                return None
+            token = token_parts[1].strip()
+            if not token:
+                return None
             try:
                 from rest_framework_simplejwt.authentication import JWTAuthentication
                 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
