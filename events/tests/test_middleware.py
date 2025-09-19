@@ -485,3 +485,157 @@ class AnalyticsTrackingMiddlewareTest(TestCase):
         # Should be able to parse as UUID without raising exception
         parsed_uuid = uuid.UUID(session_id)
         self.assertEqual(str(parsed_uuid), session_id)
+    
+    def test_jwt_authentication_valid_token(self):
+        """Test that valid JWT tokens are properly authenticated."""
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        # Generate a valid JWT token
+        refresh = RefreshToken.for_user(self.user)
+        access_token = str(refresh.access_token)
+        
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
+        # Don't set request.user to simulate API request
+        
+        initial_event_count = Event.objects.count()
+        
+        self.middleware.process_request(request)
+        
+        # Should authenticate user and create events
+        self.assertEqual(Event.objects.count(), initial_event_count + 3)
+        
+        # Verify user was set on request
+        self.assertEqual(request.user, self.user)
+    
+    def test_jwt_authentication_multiple_spaces_after_bearer(self):
+        """Test that JWT parsing handles multiple spaces after 'Bearer'."""
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        refresh = RefreshToken.for_user(self.user)
+        access_token = str(refresh.access_token)
+        
+        request = self.factory.get('/api/fasts/')
+        # Multiple spaces after Bearer
+        request.META['HTTP_AUTHORIZATION'] = f'Bearer    {access_token}'
+        
+        initial_event_count = Event.objects.count()
+        
+        self.middleware.process_request(request)
+        
+        # Should still authenticate and create events
+        self.assertEqual(Event.objects.count(), initial_event_count + 3)
+        self.assertEqual(request.user, self.user)
+    
+    def test_jwt_authentication_no_token_after_bearer(self):
+        """Test that JWT parsing handles 'Bearer ' with no token."""
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = 'Bearer '
+        
+        initial_event_count = Event.objects.count()
+        
+        result = self.middleware.process_request(request)
+        
+        # Should skip tracking (no authentication)
+        self.assertIsNone(result)
+        self.assertEqual(Event.objects.count(), initial_event_count)
+    
+    def test_jwt_authentication_only_bearer_no_space(self):
+        """Test that JWT parsing handles 'Bearer' with no space or token."""
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = 'Bearer'
+        
+        initial_event_count = Event.objects.count()
+        
+        result = self.middleware.process_request(request)
+        
+        # Should skip tracking (no authentication)
+        self.assertIsNone(result)
+        self.assertEqual(Event.objects.count(), initial_event_count)
+    
+    def test_jwt_authentication_empty_token(self):
+        """Test that JWT parsing handles empty token after Bearer."""
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = 'Bearer   '  # Only spaces after Bearer
+        
+        initial_event_count = Event.objects.count()
+        
+        result = self.middleware.process_request(request)
+        
+        # Should skip tracking (no valid token)
+        self.assertIsNone(result)
+        self.assertEqual(Event.objects.count(), initial_event_count)
+    
+    def test_jwt_authentication_invalid_token(self):
+        """Test that invalid JWT tokens are handled gracefully."""
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = 'Bearer invalid_token_here'
+        
+        initial_event_count = Event.objects.count()
+        
+        result = self.middleware.process_request(request)
+        
+        # Should skip tracking (invalid token)
+        self.assertIsNone(result)
+        self.assertEqual(Event.objects.count(), initial_event_count)
+    
+    def test_jwt_authentication_expired_token(self):
+        """Test that expired JWT tokens are handled gracefully."""
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from unittest.mock import patch
+        from rest_framework_simplejwt.exceptions import TokenError
+        
+        refresh = RefreshToken.for_user(self.user)
+        access_token = str(refresh.access_token)
+        
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
+        
+        # Mock token validation to raise TokenError (simulating expired token)
+        with patch('rest_framework_simplejwt.authentication.JWTAuthentication.get_validated_token', 
+                   side_effect=TokenError('Token is expired')):
+            initial_event_count = Event.objects.count()
+            
+            result = self.middleware.process_request(request)
+            
+            # Should skip tracking (expired token)
+            self.assertIsNone(result)
+            self.assertEqual(Event.objects.count(), initial_event_count)
+    
+    def test_jwt_authentication_fallback_to_session_auth(self):
+        """Test that middleware falls back to session authentication when JWT fails."""
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = 'Bearer invalid_token'
+        request.user = self.user  # Session authenticated user
+        
+        initial_event_count = Event.objects.count()
+        
+        self.middleware.process_request(request)
+        
+        # Should use session auth and create events
+        self.assertEqual(Event.objects.count(), initial_event_count + 3)
+    
+    def test_jwt_authentication_no_authorization_header(self):
+        """Test that requests without Authorization header fall back to session auth."""
+        request = self.factory.get('/api/fasts/')
+        request.user = self.user  # Session authenticated user
+        
+        initial_event_count = Event.objects.count()
+        
+        self.middleware.process_request(request)
+        
+        # Should use session auth and create events
+        self.assertEqual(Event.objects.count(), initial_event_count + 3)
+    
+    def test_jwt_authentication_non_bearer_token(self):
+        """Test that non-Bearer authorization headers are ignored."""
+        request = self.factory.get('/api/fasts/')
+        request.META['HTTP_AUTHORIZATION'] = 'Basic dXNlcjpwYXNz'  # Basic auth
+        request.user = self.user  # Session authenticated user
+        
+        initial_event_count = Event.objects.count()
+        
+        self.middleware.process_request(request)
+        
+        # Should use session auth and create events
+        self.assertEqual(Event.objects.count(), initial_event_count + 3)

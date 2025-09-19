@@ -25,7 +25,8 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
     """
 
     def process_request(self, request):
-        user = getattr(request, 'user', None)
+        # For API requests, try to authenticate using JWT first
+        user = self._get_authenticated_user(request)
         if not user or not user.is_authenticated:
             return None
 
@@ -133,6 +134,44 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
             except Exception:
                 pass
 
+        return None
+
+    def _get_authenticated_user(self, request):
+        """
+        Get authenticated user, handling both session and JWT authentication.
+        """
+        # First try the standard Django user (for admin/session auth)
+        user = getattr(request, 'user', None)
+        if user and user.is_authenticated:
+            return user
+        
+        # For API requests with JWT tokens, manually authenticate
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            # Extract token more robustly, handling multiple spaces and missing tokens
+            token_parts = auth_header.split(' ', 1)
+            if len(token_parts) < 2:
+                return None
+            token = token_parts[1].strip()
+            if not token:
+                return None
+            try:
+                from rest_framework_simplejwt.authentication import JWTAuthentication
+                from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+                
+                jwt_authenticator = JWTAuthentication()
+                validated_token = jwt_authenticator.get_validated_token(token)
+                user = jwt_authenticator.get_user(validated_token)
+                
+                if user and user.is_authenticated:
+                    # Set the user on the request for consistency
+                    request.user = user
+                    return user
+                    
+            except (InvalidToken, TokenError, Exception):
+                # Token is invalid or expired, skip tracking
+                pass
+        
         return None
 
     def _ingest_utm_params(self, request, user):

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 
 from django.test import TestCase, override_settings
+from django.test.utils import tag
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
@@ -327,6 +328,7 @@ class AnalyticsPerformanceTest(TestCase):
         
         self.assertEqual(result, complex_data)
     
+    @tag('performance')
     def test_analytics_performance_under_load(self):
         """Test analytics performance with many events."""
         # Create many events
