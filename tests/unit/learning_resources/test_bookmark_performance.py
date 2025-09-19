@@ -3,6 +3,7 @@ Tests for bookmark performance optimizations and bulk operations.
 """
 from unittest.mock import patch, MagicMock, call
 from django.test import TestCase, override_settings
+from django.test.utils import tag
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from tests.base import BaseTransactionTestCase
@@ -11,6 +12,7 @@ from learning_resources.cache import BookmarkCacheManager
 from learning_resources import signals
 
 
+@tag('performance')
 class BookmarkPerformanceTests(BaseTransactionTestCase):
     """Test performance optimizations for bookmark operations."""
     
@@ -175,6 +177,7 @@ class BookmarkPerformanceTests(BaseTransactionTestCase):
         self.assertEqual(signals.BOOKMARK_CLEANUP_ASYNC_THRESHOLD, 20)
 
 
+@tag('performance')
 class BulkBookmarkTaskTests(BaseTransactionTestCase):
     """Test the bulk bookmark cleanup async task."""
     
