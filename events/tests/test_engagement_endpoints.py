@@ -6,7 +6,7 @@ This module tests the API endpoints that track user engagement:
 - TrackChecklistUsedView
 """
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
@@ -19,6 +19,21 @@ from hub.models import Fast, Church, Profile, Day, Devotional, Video
 User = get_user_model()
 
 
+@override_settings(
+    MIDDLEWARE=[
+        'django.middleware.security.SecurityMiddleware',
+        'whitenoise.middleware.WhiteNoiseMiddleware',
+        'django.contrib.sessions.middleware.SessionMiddleware',
+        'corsheaders.middleware.CorsMiddleware',
+        'django.middleware.common.CommonMiddleware',
+        'django.middleware.csrf.CsrfViewMiddleware',
+        'django.contrib.auth.middleware.AuthenticationMiddleware',
+        # 'events.middleware.AnalyticsTrackingMiddleware',  # Disabled for tests
+        'hub.middleware.TimezoneUpdateMiddleware',
+        'django.contrib.messages.middleware.MessageMiddleware',
+        'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    ]
+)
 class EngagementTrackingEndpointsTest(APITestCase):
     """Test engagement tracking API endpoints."""
     
