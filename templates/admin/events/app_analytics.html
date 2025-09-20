@@ -1,0 +1,168 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .analytics-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; }
+    .stat-card h3 { margin: 0 0 6px 0; color: #666; font-size: 12px; text-transform: uppercase; }
+    .stat-value { font-size: 28px; font-weight: bold; color: #333; margin: 0; }
+    .chart-container { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .chart-title { margin: 0 0 12px 0; color: #333; font-size: 18px; font-weight: 600; }
+    .chart-wrapper { position: relative; height: 360px; }
+    .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .date-range-selector { margin-bottom: 12px; text-align: right; }
+    .date-range-selector select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; background: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-container">
+    <h1>📱 App Analytics Dashboard</h1>
+
+    <div class="date-range-selector">
+        <select id="dateRange" onchange="updateCharts()">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last year</option>
+        </select>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>App Opens</h3>
+            <p class="stat-value" id="stat-app-opens">{{ total_app_opens }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Screen Views</h3>
+            <p class="stat-value" id="stat-screen-views">{{ total_screen_views }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Active Users</h3>
+            <p class="stat-value" id="stat-active-users">{{ active_users }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Avg Session (s)</h3>
+            <p class="stat-value" id="stat-avg-session">{{ avg_session_duration }}</p>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <h2 class="chart-title">📈 Analytics Events Over Time</h2>
+        <div class="chart-wrapper" id="eventsOverTimeWrapper">
+            <canvas id="eventsOverTimeChart"></canvas>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div class="chart-container">
+            <h2 class="chart-title">⏰ App Opens by Hour</h2>
+            <div class="chart-wrapper" id="opensByHourWrapper">
+                <canvas id="opensByHourChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h2 class="chart-title">📲 Most Active Platforms</h2>
+            <div class="chart-wrapper" id="platformsWrapper">
+                <canvas id="platformsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div class="chart-container">
+            <h2 class="chart-title">🗺️ Most Viewed Screens</h2>
+            <div class="chart-wrapper" id="screensWrapper">
+                <canvas id="screensChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h2 class="chart-title">👤 Sessions per User (Top 10)</h2>
+            <div class="chart-wrapper" id="sessionsPerUserWrapper">
+                <canvas id="sessionsPerUserChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+
+{{ events_by_day|json_script:"events-by-day-data" }}
+{{ app_open_hourly|json_script:"app-open-hourly-data" }}
+{{ top_screens|json_script:"top-screens-data" }}
+{{ platform_counts|json_script:"platform-counts-data" }}
+{{ sessions_per_user_top|json_script:"sessions-per-user-data" }}
+
+<script>
+const chartConfig = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } };
+
+let eventsOverTimeChart, opensByHourChart, platformsChart, screensChart, sessionsPerUserChart;
+
+function initCharts() {
+    const eventsByDay = JSON.parse(document.getElementById('events-by-day-data').textContent);
+    const appOpenHourly = JSON.parse(document.getElementById('app-open-hourly-data').textContent);
+    const topScreens = JSON.parse(document.getElementById('top-screens-data').textContent);
+    const platformCounts = JSON.parse(document.getElementById('platform-counts-data').textContent);
+    const sessionsPerUser = JSON.parse(document.getElementById('sessions-per-user-data').textContent);
+
+    const eventsCtx = document.getElementById('eventsOverTimeChart').getContext('2d');
+    eventsOverTimeChart = new Chart(eventsCtx, { type: 'line', data: { labels: Object.keys(eventsByDay), datasets: [{ label: 'Analytics Events', data: Object.values(eventsByDay), borderColor: '#6f42c1', backgroundColor: 'rgba(111,66,193,0.2)', tension: 0.1, fill: true }] }, options: { ...chartConfig } });
+
+    const hourCtx = document.getElementById('opensByHourChart').getContext('2d');
+    const hourLabels = Object.keys(appOpenHourly);
+    opensByHourChart = new Chart(hourCtx, { type: 'bar', data: { labels: hourLabels, datasets: [{ label: 'App Opens', data: hourLabels.map(h => appOpenHourly[h]), backgroundColor: '#2ca58d' }] }, options: { ...chartConfig } });
+
+    const platformCtx = document.getElementById('platformsChart').getContext('2d');
+    platformsChart = new Chart(platformCtx, { type: 'doughnut', data: { labels: platformCounts.map(p => p['data__platform'] || 'Unknown'), datasets: [{ data: platformCounts.map(p => p.count) }] }, options: { ...chartConfig, plugins: { ...chartConfig.plugins, legend: { position: 'right' } } } });
+
+    const screensCtx = document.getElementById('screensChart').getContext('2d');
+    screensChart = new Chart(screensCtx, { type: 'bar', data: { labels: topScreens.map(s => s['data__screen'] || 'Unknown'), datasets: [{ label: 'Views', data: topScreens.map(s => s.count), backgroundColor: '#ff7f50' }] }, options: { ...chartConfig, indexAxis: 'y' } });
+
+    const sessionsCtx = document.getElementById('sessionsPerUserChart').getContext('2d');
+    sessionsPerUserChart = new Chart(sessionsCtx, { type: 'bar', data: { labels: sessionsPerUser.map(u => u['user__username'] || 'Unknown'), datasets: [{ label: 'Sessions', data: sessionsPerUser.map(u => u.session_count), backgroundColor: '#1f77b4' }] }, options: { ...chartConfig, indexAxis: 'y' } });
+}
+
+function updateCharts() {
+    const days = document.getElementById('dateRange').value;
+    document.querySelectorAll('.chart-wrapper').forEach(w => w.innerHTML = '<div style="text-align:center;padding:40px;">Loading...</div>');
+    fetch(`${window.location.pathname}data/?days=${days}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('stat-app-opens').textContent = data.total_app_opens;
+            document.getElementById('stat-screen-views').textContent = data.total_screen_views;
+            document.getElementById('stat-active-users').textContent = data.active_users;
+            document.getElementById('stat-avg-session').textContent = data.avg_session_duration;
+
+            // recreate charts
+            document.getElementById('eventsOverTimeWrapper').innerHTML = '<canvas id="eventsOverTimeChart"></canvas>';
+            document.getElementById('opensByHourWrapper').innerHTML = '<canvas id="opensByHourChart"></canvas>';
+            document.getElementById('platformsWrapper').innerHTML = '<canvas id="platformsChart"></canvas>';
+            document.getElementById('screensWrapper').innerHTML = '<canvas id="screensChart"></canvas>';
+            document.getElementById('sessionsPerUserWrapper').innerHTML = '<canvas id="sessionsPerUserChart"></canvas>';
+
+            const eventsCtx = document.getElementById('eventsOverTimeChart').getContext('2d');
+            eventsOverTimeChart = new Chart(eventsCtx, { type: 'line', data: { labels: Object.keys(data.events_by_day), datasets: [{ label: 'Analytics Events', data: Object.values(data.events_by_day), borderColor: '#6f42c1', backgroundColor: 'rgba(111,66,193,0.2)', tension: 0.1, fill: true }] }, options: { ...chartConfig } });
+
+            const hourCtx = document.getElementById('opensByHourChart').getContext('2d');
+            const hourLabels = Object.keys(data.app_open_hourly);
+            opensByHourChart = new Chart(hourCtx, { type: 'bar', data: { labels: hourLabels, datasets: [{ label: 'App Opens', data: hourLabels.map(h => data.app_open_hourly[h]), backgroundColor: '#2ca58d' }] }, options: { ...chartConfig } });
+
+            const platformCtx = document.getElementById('platformsChart').getContext('2d');
+            platformsChart = new Chart(platformCtx, { type: 'doughnut', data: { labels: data.platform_counts.map(p => p['data__platform'] || 'Unknown'), datasets: [{ data: data.platform_counts.map(p => p.count) }] }, options: { ...chartConfig, plugins: { ...chartConfig.plugins, legend: { position: 'right' } } } });
+
+            const screensCtx = document.getElementById('screensChart').getContext('2d');
+            screensChart = new Chart(screensCtx, { type: 'bar', data: { labels: data.top_screens.map(s => s['data__screen'] || 'Unknown'), datasets: [{ label: 'Views', data: data.top_screens.map(s => s.count), backgroundColor: '#ff7f50' }] }, options: { ...chartConfig, indexAxis: 'y' } });
+
+            const sessionsCtx = document.getElementById('sessionsPerUserChart').getContext('2d');
+            sessionsPerUserChart = new Chart(sessionsCtx, { type: 'bar', data: { labels: data.sessions_per_user_top.map(u => u['user__username'] || 'Unknown'), datasets: [{ label: 'Sessions', data: data.sessions_per_user_top.map(u => u.session_count), backgroundColor: '#1f77b4' }] }, options: { ...chartConfig, indexAxis: 'y' } });
+        })
+        .catch(err => console.error(err));
+}
+
+document.addEventListener('DOMContentLoaded', function() { initCharts(); });
+</script>
+{% endblock %}
+

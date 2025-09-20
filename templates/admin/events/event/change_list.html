@@ -4,7 +4,12 @@
 {% block object-tools-items %}
     <li>
         <a href="{% url 'admin:events_analytics' %}" class="addlink" style="background: #417690; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none;">
-            📊 Analytics Dashboard
+            📊 User Engagement Dashboard
+        </a>
+    </li>
+    <li>
+        <a href="{% url 'admin:events_app_analytics' %}" class="addlink" style="background: #6f42c1; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none;">
+            📱 App Analytics Dashboard
         </a>
     </li>
     {{ block.super }}
