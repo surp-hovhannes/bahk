@@ -277,6 +277,148 @@ class AnalyticsPerformanceTest(TestCase):
                 self.assertEqual(args[1], 7)
                 self.assertIsInstance(args[2], dict)
     
+    def test_analytics_query_optimizer_with_filters_no_cache(self):
+        """Test that query optimizer does not use cache when filters are applied."""
+        start_date = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=7)
+        
+        # Create test events with different categories and staff/non-staff users
+        staff_user = User.objects.create_user(
+            username='staffuser',
+            email='staff@example.com',
+            is_staff=True
+        )
+        
+        # Create analytics-category event
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.APP_OPEN),
+            user=self.user,
+            title='App opened',
+            timestamp=start_date + timedelta(hours=10)
+        )
+        
+        # Create staff user event
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.USER_LOGGED_IN),
+            user=staff_user,
+            title='Staff user logged in',
+            timestamp=start_date + timedelta(hours=11)
+        )
+        
+        # Mock cache to ensure it's not called when filters are applied
+        with patch.object(AnalyticsCacheService, 'get_daily_aggregates') as mock_get:
+            with patch.object(AnalyticsCacheService, 'set_daily_aggregates') as mock_set:
+                # Test with exclude_staff filter
+                result = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+                    start_date, 7, filters={'exclude_staff': True}
+                )
+                
+                # Cache methods should not be called when filters are applied
+                mock_get.assert_not_called()
+                mock_set.assert_not_called()
+                
+                self.assertIsInstance(result, dict)
+                self.assertIn('events_by_day', result)
+    
+    def test_analytics_query_optimizer_exclude_staff_filter(self):
+        """Test query optimizer with exclude_staff filter."""
+        start_date = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Create staff user
+        staff_user = User.objects.create_user(
+            username='staffuser',
+            email='staff@example.com',
+            is_staff=True
+        )
+        
+        # Create events for both regular and staff users
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.USER_LOGGED_IN),
+            user=self.user,
+            title='Regular user logged in',
+            timestamp=start_date + timedelta(hours=10)
+        )
+        
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.USER_LOGGED_IN),
+            user=staff_user,
+            title='Staff user logged in',
+            timestamp=start_date + timedelta(hours=11)
+        )
+        
+        # Test without filter (should include all events)
+        result_all = AnalyticsQueryOptimizer.get_daily_event_aggregates(start_date, 1)
+        today_str = start_date.strftime('%Y-%m-%d')
+        
+        # Test with exclude_staff filter (should exclude staff events)
+        result_no_staff = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+            start_date, 1, filters={'exclude_staff': True}
+        )
+        
+        # Without filter should have more events than with filter
+        self.assertGreaterEqual(result_all['events_by_day'][today_str], result_no_staff['events_by_day'][today_str])
+    
+    def test_analytics_query_optimizer_include_categories_filter(self):
+        """Test query optimizer with include_categories filter."""
+        start_date = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Create events with different categories
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.APP_OPEN),
+            user=self.user,
+            title='App opened',
+            timestamp=start_date + timedelta(hours=10)
+        )
+        
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.USER_LOGGED_IN),
+            user=self.user,
+            title='User logged in',
+            timestamp=start_date + timedelta(hours=11)
+        )
+        
+        # Test with include_categories filter for analytics only
+        result = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+            start_date, 1, filters={'include_categories': ['analytics']}
+        )
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('events_by_day', result)
+        
+        today_str = start_date.strftime('%Y-%m-%d')
+        # Should have at least the APP_OPEN event (analytics category)
+        self.assertGreaterEqual(result['events_by_day'][today_str], 1)
+    
+    def test_analytics_query_optimizer_exclude_categories_filter(self):
+        """Test query optimizer with exclude_categories filter."""
+        start_date = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Create events with different categories
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.APP_OPEN),
+            user=self.user,
+            title='App opened',
+            timestamp=start_date + timedelta(hours=10)
+        )
+        
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.USER_LOGGED_IN),
+            user=self.user,
+            title='User logged in',
+            timestamp=start_date + timedelta(hours=11)
+        )
+        
+        # Test with exclude_categories filter for analytics
+        result = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+            start_date, 1, filters={'exclude_categories': ['analytics']}
+        )
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('events_by_day', result)
+        
+        today_str = start_date.strftime('%Y-%m-%d')
+        # Should have at least the USER_LOGGED_IN event (user_action category)
+        self.assertGreaterEqual(result['events_by_day'][today_str], 1)
+    
     def test_event_model_cache_invalidation_on_save(self):
         """Test that saving events invalidates analytics cache."""
         with patch.object(AnalyticsCacheService, 'invalidate_current_day') as mock_invalidate:
