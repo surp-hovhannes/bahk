@@ -5,7 +5,8 @@ Provides comprehensive views for events, event types, and analytics.
 
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Avg, FloatField
+from django.db.models.functions import Cast
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.urls import path, reverse
@@ -527,9 +528,8 @@ class EventAdmin(admin.ModelAdmin):
         )
 
         # Average session duration from session_end events
-        from django.db.models import Avg
         avg_session_duration = base_qs.filter(event_type__code=EventType.SESSION_END, data__has_key='duration_seconds')\
-            .aggregate(avg=Avg('data__duration_seconds'))['avg'] or 0
+            .aggregate(avg=Avg(Cast('data__duration_seconds', FloatField())))['avg'] or 0
 
         context = {
             'title': 'App Analytics Dashboard',
@@ -594,7 +594,7 @@ class EventAdmin(admin.ModelAdmin):
         total_screen_views = base_qs.filter(event_type__code=EventType.SCREEN_VIEW).count()
         active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
         avg_session_duration = base_qs.filter(event_type__code=EventType.SESSION_END, data__has_key='duration_seconds')\
-            .aggregate(avg=Avg('data__duration_seconds'))['avg'] or 0
+            .aggregate(avg=Avg(Cast('data__duration_seconds', FloatField())))['avg'] or 0
 
         top_screens = list(
             base_qs.filter(event_type__code=EventType.SCREEN_VIEW, data__has_key='screen')
