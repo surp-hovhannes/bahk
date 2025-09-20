@@ -17,7 +17,7 @@ class AnalyticsQueryOptimizer:
     """
     
     @staticmethod
-    def get_daily_event_aggregates(start_of_window, num_days):
+    def get_daily_event_aggregates(start_of_window, num_days, filters=None):
         """
         Get daily event counts with a single optimized query instead of N loops.
         Includes intelligent caching for improved performance.
@@ -31,20 +31,39 @@ class AnalyticsQueryOptimizer:
         """
         from .analytics_cache import AnalyticsCacheService
         
-        # Try to get from cache first
-        cached_data = AnalyticsCacheService.get_daily_aggregates(start_of_window, num_days)
-        if cached_data:
-            return cached_data
+        # Only use cache when no filters are applied to avoid cache key explosion
+        if not filters:
+            cached_data = AnalyticsCacheService.get_daily_aggregates(start_of_window, num_days)
+            if cached_data:
+                return cached_data
         
         end_of_window = start_of_window + timedelta(days=num_days)
         
         # Single query with conditional aggregation using Django's database-agnostic date truncation
         from django.db.models.functions import TruncDate
         
-        daily_stats = Event.objects.filter(
+        # Base queryset with optional filters
+        queryset = Event.objects.filter(
             timestamp__gte=start_of_window,
             timestamp__lt=end_of_window
-        ).annotate(
+        )
+
+        if filters:
+            include_categories = filters.get('include_categories')
+            exclude_categories = filters.get('exclude_categories')
+            exclude_staff = filters.get('exclude_staff')
+            only_event_types = filters.get('only_event_types')
+
+            if include_categories:
+                queryset = queryset.filter(event_type__category__in=include_categories)
+            if exclude_categories:
+                queryset = queryset.exclude(event_type__category__in=exclude_categories)
+            if exclude_staff:
+                queryset = queryset.exclude(user__is_staff=True)
+            if only_event_types:
+                queryset = queryset.filter(event_type__code__in=only_event_types)
+
+        daily_stats = queryset.annotate(
             date=TruncDate('timestamp')
         ).values('date').annotate(
             total_events=Count('id'),
@@ -93,13 +112,14 @@ class AnalyticsQueryOptimizer:
             'fast_leaves_by_day': fast_leaves_by_day
         }
         
-        # Cache the result
-        AnalyticsCacheService.set_daily_aggregates(start_of_window, num_days, result)
+        # Cache the result when no filters are applied
+        if not filters:
+            AnalyticsCacheService.set_daily_aggregates(start_of_window, num_days, result)
         
         return result
     
     @staticmethod
-    def get_fast_specific_daily_data(fast_queryset, start_of_window, num_days):
+    def get_fast_specific_daily_data(fast_queryset, start_of_window, num_days, filters=None):
         """
         Get daily join/leave data for specific fasts with optimized queries.
         
@@ -107,6 +127,7 @@ class AnalyticsQueryOptimizer:
             fast_queryset: QuerySet of Fast objects to analyze
             start_of_window: datetime start of analysis window
             num_days: number of days to analyze
+            filters: optional dict with keys include_categories, exclude_categories, exclude_staff
             
         Returns:
             dict: {fast_name: {'daily_joins': {...}, 'daily_leaves': {...}, ...}}
@@ -123,12 +144,29 @@ class AnalyticsQueryOptimizer:
             # Get daily data for this fast with a single query using Django's database-agnostic date truncation
             from django.db.models.functions import TruncDate
             
-            daily_stats = Event.objects.filter(
+            base_qs = Event.objects.filter(
                 content_type=fast_content_type,
                 object_id=fast.id,
                 timestamp__gte=start_of_window,
                 timestamp__lt=end_of_window
-            ).annotate(
+            )
+
+            if filters:
+                include_categories = filters.get('include_categories')
+                exclude_categories = filters.get('exclude_categories')
+                exclude_staff = filters.get('exclude_staff')
+                only_event_types = filters.get('only_event_types')
+
+                if include_categories:
+                    base_qs = base_qs.filter(event_type__category__in=include_categories)
+                if exclude_categories:
+                    base_qs = base_qs.exclude(event_type__category__in=exclude_categories)
+                if exclude_staff:
+                    base_qs = base_qs.exclude(user__is_staff=True)
+                if only_event_types:
+                    base_qs = base_qs.filter(event_type__code__in=only_event_types)
+
+            daily_stats = base_qs.annotate(
                 date=TruncDate('timestamp')
             ).values('date').annotate(
                 joins=Count(
