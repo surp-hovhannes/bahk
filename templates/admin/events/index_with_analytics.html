@@ -48,14 +48,21 @@
 {% load log %}
 <div id="content-related">
     <div class="module" id="analytics-module">
-        <h2>📊 Analytics Dashboard</h2>
+        <h2>📊 Analytics Dashboards</h2>
         <ul class="actionlist">
             <li>
                 <a href="{% url 'admin:events_analytics' %}" style="font-weight: bold; color: #417690;">
-                    📈 View Events Analytics
+                    👥 User Engagement Dashboard
                 </a>
                 <br>
-                <span class="mini quiet">Track user activity, fast joins/leaves, and trends</span>
+                <span class="mini quiet">Track user activity and engagement trends (excludes staff & analytics events)</span>
+            </li>
+            <li>
+                <a href="{% url 'admin:events_app_analytics' %}" style="font-weight: bold; color: #6f42c1;">
+                    📱 App Analytics Dashboard
+                </a>
+                <br>
+                <span class="mini quiet">Screen views, platforms, app opens by hour, session metrics</span>
             </li>
         </ul>
     </div>

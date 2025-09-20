@@ -5,7 +5,8 @@ Provides comprehensive views for events, event types, and analytics.
 
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Avg, FloatField
+from django.db.models.functions import Cast
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.urls import path, reverse
@@ -176,13 +177,15 @@ class EventAdmin(admin.ModelAdmin):
         custom_urls = [
             path('analytics/', self.admin_site.admin_view(self.analytics_view), name='events_analytics'),
             path('analytics/data/', self.admin_site.admin_view(self.analytics_data), name='events_analytics_data'),
+            path('analytics/app/', self.admin_site.admin_view(self.app_analytics_view), name='events_app_analytics'),
+            path('analytics/app/data/', self.admin_site.admin_view(self.app_analytics_data), name='events_app_analytics_data'),
             path('export_csv/', self.admin_site.admin_view(self.export_csv), name='events_export_csv'),
         ]
         return custom_urls + urls
     
     def analytics_view(self, request):
         """
-        Custom analytics view showing event statistics and trends.
+        User Engagement Dashboard: excludes staff users and analytics-category events.
         """
         # Get date range from request or default to last 30 days
         # Normalize to calendar-day boundaries so initial load matches AJAX updates
@@ -194,14 +197,19 @@ class EventAdmin(admin.ModelAdmin):
         start_date = start_of_window
         end_date = end_of_today
         
+        # Base queryset with engagement filters (exclude staff and analytics-category events)
+        base_qs = Event.objects.select_related('event_type', 'user', 'content_type')\
+            .exclude(user__is_staff=True)\
+            .exclude(event_type__category='analytics')
+
         # Basic event statistics
-        total_events = Event.objects.count()
-        events_in_period = Event.objects.filter(
+        total_events = base_qs.count()
+        events_in_period = base_qs.filter(
             timestamp__gte=start_date
         ).count()
         
         # Events by type
-        events_by_type = Event.objects.values(
+        events_by_type = base_qs.values(
             'event_type__name', 'event_type__code'
         ).annotate(
             count=Count('id')
@@ -215,14 +223,17 @@ class EventAdmin(admin.ModelAdmin):
         
         # Replace N+1 queries with single optimized aggregation
         daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
-            start_of_window, num_days
+            start_of_window, num_days, filters={
+                'exclude_staff': True,
+                'exclude_categories': ['analytics']
+            }
         )
         events_by_day = daily_aggregates['events_by_day']
         fast_joins_by_day = daily_aggregates['fast_joins_by_day']
         fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
         
         # Top users by activity
-        top_users = Event.objects.exclude(
+        top_users = base_qs.exclude(
             user__isnull=True
         ).values(
             'user__username', 'user__id'
@@ -235,7 +246,7 @@ class EventAdmin(admin.ModelAdmin):
         fast_leaves = sum(fast_leaves_by_day.values())
         
         # Recent milestones
-        milestones = Event.objects.filter(
+        milestones = base_qs.filter(
             event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
             timestamp__gte=start_of_window
         ).order_by('-timestamp')[:5]
@@ -260,7 +271,10 @@ class EventAdmin(admin.ModelAdmin):
         
         # Get fast-specific data with optimized queries
         current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
-            all_relevant_fasts, start_of_window, num_days
+            all_relevant_fasts, start_of_window, num_days, filters={
+                'exclude_staff': True,
+                'exclude_categories': ['analytics']
+            }
         )
         
         # Hourly distribution for the last 7 days (for more granular analysis)
@@ -270,7 +284,7 @@ class EventAdmin(admin.ModelAdmin):
                 hour_start = end_of_today - timedelta(days=1)
                 hour_start = hour_start.replace(hour=i, minute=0, second=0, microsecond=0)
                 hour_end = hour_start + timedelta(hours=1)
-                count = Event.objects.filter(
+                count = base_qs.filter(
                     timestamp__gte=hour_start,
                     timestamp__lt=hour_end
                 ).count()
@@ -285,7 +299,7 @@ class EventAdmin(admin.ModelAdmin):
         }
         
         context = {
-            'title': 'Events Analytics',
+            'title': 'User Engagement Dashboard',
             'total_events': total_events,
             'events_in_period': sum(events_by_day.values()),
             'events_by_type': list(events_by_type),  # Convert to list for JSON serialization
@@ -344,7 +358,10 @@ class EventAdmin(admin.ModelAdmin):
         
         # Replace N+1 queries with single optimized aggregation
         daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
-            start_of_window, num_days
+            start_of_window, num_days, filters={
+                'exclude_staff': True,
+                'exclude_categories': ['analytics']
+            }
         )
         events_by_day = daily_aggregates['events_by_day']
         fast_joins_by_day = daily_aggregates['fast_joins_by_day']
@@ -380,7 +397,10 @@ class EventAdmin(admin.ModelAdmin):
         
         # Get fast-specific data with optimized queries
         current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
-            all_relevant_fasts, start_of_window, num_days
+            all_relevant_fasts, start_of_window, num_days, filters={
+                'exclude_staff': True,
+                'exclude_categories': ['analytics']
+            }
         )
         
         try:
@@ -439,6 +459,171 @@ class EventAdmin(admin.ModelAdmin):
             ])
         
         return response
+
+    def app_analytics_view(self, request):
+        """
+        App Analytics Dashboard: shows analytics-category events only.
+        """
+        from django.http import JsonResponse
+        from django.db.models.functions import ExtractHour
+
+        days = int(request.GET.get('days', 30))
+        now = timezone.now()
+        end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        start_of_window = end_of_today - timedelta(days=days)
+
+        # Filters for analytics-only and exclude staff
+        analytics_filters = {
+            'exclude_staff': True,
+            'include_categories': ['analytics']
+        }
+
+        base_qs = Event.objects.select_related('event_type', 'user').filter(
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_of_today,
+            event_type__category='analytics'
+        ).exclude(user__is_staff=True)
+
+        # Totals
+        total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
+        total_screen_views = base_qs.filter(event_type__code=EventType.SCREEN_VIEW).count()
+        active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
+
+        # Events over time (analytics)
+        from .analytics_optimizer import AnalyticsQueryOptimizer
+        daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+            start_of_window, days, filters=analytics_filters
+        )
+        events_by_day = daily_aggregates['events_by_day']
+
+        # App opens by hour of day (0-23) within window
+        from django.db.models import IntegerField
+        from django.db.models.functions import ExtractHour
+        app_open_hours = base_qs.filter(event_type__code=EventType.APP_OPEN).annotate(
+            hour=ExtractHour('timestamp')
+        ).values('hour').annotate(count=Count('id')).order_by('hour')
+        app_open_hourly = {f"{h:02d}": 0 for h in range(24)}
+        for row in app_open_hours:
+            hour = row['hour'] if row['hour'] is not None else 0
+            app_open_hourly[f"{int(hour):02d}"] = row['count']
+
+        # Most viewed screens
+        top_screens = list(
+            base_qs.filter(event_type__code=EventType.SCREEN_VIEW, data__has_key='screen')
+            .values('data__screen').annotate(count=Count('id')).order_by('-count')[:15]
+        )
+
+        # Most active platforms (from app_open)
+        platform_counts = list(
+            base_qs.filter(event_type__code=EventType.APP_OPEN, data__has_key='platform')
+            .values('data__platform').annotate(count=Count('id')).order_by('-count')
+        )
+
+        # Sessions per user (top)
+        sessions_per_user_top = list(
+            base_qs.filter(event_type__code=EventType.SESSION_START)
+            .exclude(user__isnull=True)
+            .values('user__username').annotate(session_count=Count('id'))
+            .order_by('-session_count')[:10]
+        )
+
+        # Average session duration from session_end events
+        avg_session_duration = base_qs.filter(event_type__code=EventType.SESSION_END, data__has_key='duration_seconds')\
+            .aggregate(avg=Avg(Cast('data__duration_seconds', FloatField())))['avg'] or 0
+
+        context = {
+            'title': 'App Analytics Dashboard',
+            'days': days,
+            'events_by_day': events_by_day,
+            'total_app_opens': total_app_opens,
+            'total_screen_views': total_screen_views,
+            'active_users': active_users,
+            'avg_session_duration': int(avg_session_duration),
+            'app_open_hourly': app_open_hourly,
+            'top_screens': top_screens,
+            'platform_counts': platform_counts,
+            'sessions_per_user_top': sessions_per_user_top,
+        }
+
+        return render(request, 'admin/events/app_analytics.html', context)
+
+    def app_analytics_data(self, request):
+        """
+        AJAX endpoint for App Analytics Dashboard.
+        """
+        from django.http import JsonResponse
+        from django.db.models.functions import ExtractHour
+        from django.db.models import Avg
+
+        try:
+            days = int(request.GET.get('days', 30))
+            if days <= 0 or days > 365:
+                return JsonResponse({'error': 'Invalid date range. Must be between 1 and 365 days.'}, status=400)
+            now = timezone.now()
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+        except (ValueError, TypeError) as e:
+            return JsonResponse({'error': f'Invalid parameters: {str(e)}'}, status=400)
+
+        base_qs = Event.objects.select_related('event_type', 'user').filter(
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_of_today,
+            event_type__category='analytics'
+        ).exclude(user__is_staff=True)
+
+        # Events over time
+        from .analytics_optimizer import AnalyticsQueryOptimizer
+        daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
+            start_of_window, days, filters={
+                'exclude_staff': True,
+                'include_categories': ['analytics']
+            }
+        )
+
+        # App opens by hour of day
+        app_open_hours = base_qs.filter(event_type__code=EventType.APP_OPEN).annotate(
+            hour=ExtractHour('timestamp')
+        ).values('hour').annotate(count=Count('id')).order_by('hour')
+        app_open_hourly = {f"{h:02d}": 0 for h in range(24)}
+        for row in app_open_hours:
+            hour = row['hour'] if row['hour'] is not None else 0
+            app_open_hourly[f"{int(hour):02d}"] = row['count']
+
+        # Other metrics
+        total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
+        total_screen_views = base_qs.filter(event_type__code=EventType.SCREEN_VIEW).count()
+        active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
+        avg_session_duration = base_qs.filter(event_type__code=EventType.SESSION_END, data__has_key='duration_seconds')\
+            .aggregate(avg=Avg(Cast('data__duration_seconds', FloatField())))['avg'] or 0
+
+        top_screens = list(
+            base_qs.filter(event_type__code=EventType.SCREEN_VIEW, data__has_key='screen')
+            .values('data__screen').annotate(count=Count('id')).order_by('-count')[:15]
+        )
+
+        platform_counts = list(
+            base_qs.filter(event_type__code=EventType.APP_OPEN, data__has_key='platform')
+            .values('data__platform').annotate(count=Count('id')).order_by('-count')
+        )
+
+        sessions_per_user_top = list(
+            base_qs.filter(event_type__code=EventType.SESSION_START)
+            .exclude(user__isnull=True)
+            .values('user__username').annotate(session_count=Count('id'))
+            .order_by('-session_count')[:10]
+        )
+
+        return JsonResponse({
+            'events_by_day': daily_aggregates['events_by_day'],
+            'app_open_hourly': app_open_hourly,
+            'total_app_opens': total_app_opens,
+            'total_screen_views': total_screen_views,
+            'active_users': active_users,
+            'avg_session_duration': int(avg_session_duration),
+            'top_screens': top_screens,
+            'platform_counts': platform_counts,
+            'sessions_per_user_top': sessions_per_user_top,
+        })
 
 
 @admin.register(UserActivityFeed)
@@ -565,7 +750,7 @@ class UserActivityFeedAdmin(admin.ModelAdmin):
 def analytics_link():
     """Helper to create analytics link for admin index."""
     return format_html(
-        '<a href="{}">📊 View Events Analytics</a>',
+        '<a href="{}">👥 User Engagement Dashboard</a>',
         reverse('admin:events_analytics')
     )
 
