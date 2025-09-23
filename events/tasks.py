@@ -494,6 +494,10 @@ def track_devotional_availability_task(self, fast_id, devotional_id):
     """
     Track when a specific devotional becomes available asynchronously.
     
+    NOTE: This task is primarily for manual/testing purposes.
+    The main devotional availability tracking is handled by the daily
+    check_devotional_availability_task which runs at 7 AM.
+    
     Args:
         fast_id: ID of the Fast
         devotional_id: ID of the Devotional

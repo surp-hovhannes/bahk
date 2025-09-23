@@ -538,26 +538,9 @@ def create_activity_feed_item(sender, instance, created, **kwargs):
             logger.error(f"Error propagating system event {instance.id} to participants: {e}")
 
 
-@receiver(post_save, sender='hub.Devotional')
-def track_devotional_availability_on_save(sender, instance, created, **kwargs):
-    """
-    Track devotional availability when a devotional is created or updated.
-    Only triggers for devotionals with dates today or in the future.
-    """
-    try:
-        from django.utils import timezone
-        from .tasks import track_devotional_availability_task
-        
-        today = timezone.now().date()
-        
-        # Only track if the devotional's date is today or in the future
-        if instance.day and instance.day.date >= today:
-            # Schedule the task asynchronously to avoid blocking the save operation
-            track_devotional_availability_task.delay(instance.day.fast.id, instance.id)
-            logger.info(f"Scheduled devotional availability tracking for {instance.day.fast.name} - {instance.video.title if instance.video else 'Devotional'}")
-            
-    except Exception as e:
-        logger.error(f"Error scheduling devotional availability tracking: {e}")
+# Removed post-save signal for devotional availability tracking
+# Now using only the daily scheduled task (check_devotional_availability_task) 
+# which runs at 7 AM and creates events for devotionals with today's date
 
 
 def track_article_published(article):
