@@ -21,6 +21,7 @@ from hub.constants import (
     DAYS_TO_CACHE_THUMBNAIL,
 )
 from learning_resources.models import Video
+from parler.models import TranslatableModel, TranslatedFields
 from learning_resources.utils import devotional_set_image_upload_path
 
 
@@ -38,13 +39,15 @@ class Church(models.Model):
         return self.name
 
 
-class Fast(models.Model):
+class Fast(TranslatableModel):
     """Model for a fast."""
 
-    name = models.CharField(max_length=128)
+    translations = TranslatedFields(
+        name=models.CharField(max_length=128),
+        description=models.TextField(null=True, blank=True),
+        culmination_feast=models.CharField(max_length=128, null=True, blank=True),
+    )
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="fasts")
-    description = models.TextField(null=True, blank=True)
-    culmination_feast = models.CharField(max_length=128, null=True, blank=True)
     culmination_feast_date = models.DateField(
         null=True,
         blank=True,
@@ -153,9 +156,6 @@ class Fast(models.Model):
 
     class Meta:
         constraints = [
-            constraints.UniqueConstraint(
-                fields=["name", "church", "year"], name="unique_name_church_year"
-            ),
             constraints.UniqueConstraint(
                 fields=["culmination_feast_date", "church"],
                 name="unique_feast_date_church",
@@ -357,14 +357,12 @@ class Day(models.Model):
         ]
 
 
-class DevotionalSet(models.Model):
+class DevotionalSet(TranslatableModel):
     """Model for an ordered collection of devotionals based on a fast."""
 
-    title = models.CharField(max_length=128)
-    description = models.TextField(
-        null=True, 
-        blank=True,
-        help_text="Description of the devotional set"
+    translations = TranslatedFields(
+        title=models.CharField(max_length=128),
+        description=models.TextField(null=True, blank=True, help_text="Description of the devotional set"),
     )
     fast = models.ForeignKey(
         Fast,
@@ -484,7 +482,7 @@ class DevotionalSet(models.Model):
         ordering = ['-created_at']
 
 
-class Devotional(models.Model):
+class Devotional(TranslatableModel):
     """Stores content for a daily devotional."""
 
     day = models.ForeignKey(
@@ -493,7 +491,9 @@ class Devotional(models.Model):
         on_delete=models.CASCADE,
         related_name="devotionals",
     )
-    description = models.TextField(null=True, blank=True)
+    translations = TranslatedFields(
+        description=models.TextField(null=True, blank=True),
+    )
     video = models.ForeignKey(
         Video, on_delete=models.CASCADE, related_name="devotionals"
     )
@@ -502,6 +502,7 @@ class Devotional(models.Model):
         null=True,
         blank=True,
     )
+    language_code = models.CharField(max_length=5, default='en')
 
     def save(self, *args, **kwargs):
         # Set video category to 'devotional' before saving
@@ -512,7 +513,7 @@ class Devotional(models.Model):
 
     class Meta:
         ordering = ["day__date", "order"]
-        unique_together = [["day", "order"]]
+        unique_together = (("day", "order", "language_code"),)
 
 
 # Signal handlers to invalidate DevotionalSet cache when devotionals change

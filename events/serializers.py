@@ -7,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from .models import Event, EventType
 from .models import UserActivityFeed
 from django.utils import timezone
+from django.utils.translation import get_language
 from django.utils.html import strip_tags
 import re
 from hub.mixins import ThumbnailCacheMixin
@@ -163,6 +164,17 @@ class UserActivityFeedSerializer(serializers.ModelSerializer, ThumbnailCacheMixi
         extra_kwargs = {
             'title': {"allow_blank": False},
         }
+
+    def _lang(self):
+        return self.context.get('lang') or get_language() or 'en'
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Replace title/description with translated values per requested lang
+        lang = self._lang()
+        data['title'] = instance.safe_translation_getter('title', language_code=lang, any_language=True)
+        data['description'] = instance.safe_translation_getter('description', language_code=lang, any_language=True)
+        return data
     
     def get_age_display(self, obj):
         """Show how long ago the activity occurred."""

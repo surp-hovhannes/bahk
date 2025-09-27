@@ -4,6 +4,7 @@ import datetime
 from django.contrib.auth.forms import UserCreationForm 
 from django.core.exceptions import ValidationError
 from django import forms
+from parler.forms import TranslatableModelForm
 from django.contrib.auth.models import User
 
 from hub.constants import DATE_FORMAT_STRING
@@ -33,7 +34,7 @@ class AddDaysToFastAdminForm(forms.Form):
         return dates
         
 
-class CreateFastWithDatesAdminForm(forms.ModelForm):
+class CreateFastWithDatesAdminForm(TranslatableModelForm):
     first_day = forms.DateField(widget=forms.SelectDateWidget)
     last_day = forms.DateField(widget=forms.SelectDateWidget)
 
@@ -114,7 +115,7 @@ class ProfileForm(forms.ModelForm):
         self.fields['timezone'].widget.attrs.update({'class': 'form-control'})
 
 
-class FastForm(forms.ModelForm):
+class FastForm(TranslatableModelForm):
     class Meta:
         model = Fast
         fields = ['name', 'description', 'image'] 

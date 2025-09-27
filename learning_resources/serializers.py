@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
+from django.utils.translation import get_language
 from hub.mixins import ThumbnailCacheMixin
 from .models import Article, Recipe, Video, Bookmark
 from .cache import BookmarkCacheManager
@@ -47,6 +48,8 @@ class BookmarkOptimizedSerializerMixin:
 class VideoSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
     thumbnail_small_url = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
 
     class Meta:
         model = Video
@@ -71,9 +74,20 @@ class VideoSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSeriali
                 return None
         return None
 
+    def _lang(self):
+        return self.context.get('lang') or get_language() or 'en'
+
+    def get_title(self, obj):
+        return obj.safe_translation_getter('title', language_code=self._lang(), any_language=True)
+
+    def get_description(self, obj):
+        return obj.safe_translation_getter('description', language_code=self._lang(), any_language=True)
+
 class ArticleSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
     thumbnail_url = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+    body = serializers.SerializerMethodField()
 
     class Meta:
         model = Article
@@ -97,7 +111,22 @@ class ArticleSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSeria
                 return None
         return None 
     
+    def _lang(self):
+        return self.context.get('lang') or get_language() or 'en'
+
+    def get_title(self, obj):
+        return obj.safe_translation_getter('title', language_code=self._lang(), any_language=True)
+
+    def get_body(self, obj):
+        return obj.safe_translation_getter('body', language_code=self._lang(), any_language=True)
+    
 class RecipeSerializer(ArticleSerializer):
+    title = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+    time_required = serializers.SerializerMethodField()
+    serves = serializers.SerializerMethodField()
+    ingredients = serializers.SerializerMethodField()
+    directions = serializers.SerializerMethodField()
     class Meta:
         model = Recipe
         fields = [
@@ -106,12 +135,35 @@ class RecipeSerializer(ArticleSerializer):
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
 
+    def _lang(self):
+        return self.context.get('lang') or get_language() or 'en'
+
+    def get_title(self, obj):
+        return obj.safe_translation_getter('title', language_code=self._lang(), any_language=True)
+
+    def get_description(self, obj):
+        return obj.safe_translation_getter('description', language_code=self._lang(), any_language=True)
+
+    def get_time_required(self, obj):
+        return obj.safe_translation_getter('time_required', language_code=self._lang(), any_language=True)
+
+    def get_serves(self, obj):
+        return obj.safe_translation_getter('serves', language_code=self._lang(), any_language=True)
+
+    def get_ingredients(self, obj):
+        return obj.safe_translation_getter('ingredients', language_code=self._lang(), any_language=True)
+
+    def get_directions(self, obj):
+        return obj.safe_translation_getter('directions', language_code=self._lang(), any_language=True)
+
 
 class DevotionalSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
     fast_name = serializers.CharField(source='fast.name', read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
     number_of_days = serializers.ReadOnlyField()
     is_bookmarked = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
     
     class Meta:
         model = DevotionalSet
@@ -135,6 +187,15 @@ class DevotionalSetSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
             except (AttributeError, ValueError, OSError):
                 return None
         return None
+
+    def _lang(self):
+        return self.context.get('lang') or get_language() or 'en'
+
+    def get_title(self, obj):
+        return obj.safe_translation_getter('title', language_code=self._lang(), any_language=True)
+
+    def get_description(self, obj):
+        return obj.safe_translation_getter('description', language_code=self._lang(), any_language=True)
 
 
 class BookmarkSerializer(serializers.ModelSerializer):

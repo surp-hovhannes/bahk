@@ -9,6 +9,7 @@ from django.db import models
 from django.utils import timezone
 from django.db.models import Count
 
+from parler.models import TranslatableModel, TranslatedFields
 User = get_user_model()
 
 
@@ -388,7 +389,7 @@ class Event(models.Model):
         return ip
 
 
-class UserActivityFeed(models.Model):
+class UserActivityFeed(TranslatableModel):
     """
     Tracks user activity feed items with read/unread status.
     This provides a unified feed of all relevant activities for a user.
@@ -449,14 +450,10 @@ class UserActivityFeed(models.Model):
     )
     target = GenericForeignKey('content_type', 'object_id')
     
-    # Activity details
-    title = models.CharField(
-        max_length=255,
-        help_text="Activity title"
-    )
-    description = models.TextField(
-        blank=True,
-        help_text="Activity description"
+    # Activity details (translated)
+    translations = TranslatedFields(
+        title=models.CharField(max_length=255, help_text="Activity title"),
+        description=models.TextField(blank=True, help_text="Activity description"),
     )
     
     # Read status
@@ -1013,7 +1010,7 @@ class UserMilestone(models.Model):
         return milestone
 
 
-class Announcement(models.Model):
+class Announcement(TranslatableModel):
     """
     System announcements that appear in user activity feeds.
     """
@@ -1025,13 +1022,9 @@ class Announcement(models.Model):
         ('archived', 'Archived'),
     ]
     
-    title = models.CharField(
-        max_length=255,
-        help_text="Announcement title"
-    )
-    
-    description = models.TextField(
-        help_text="Short description of the announcement"
+    translations = TranslatedFields(
+        title=models.CharField(max_length=255, help_text="Announcement title"),
+        description=models.TextField(help_text="Short description of the announcement"),
     )
     
     url = models.URLField(

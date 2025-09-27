@@ -13,6 +13,7 @@ from .serializers import (
 )
 from .cache import BookmarkCacheManager
 from hub.models import DevotionalSet
+from django.utils.translation import activate, get_language_from_request
 
 
 class BookmarkOptimizedMixin:
@@ -129,6 +130,8 @@ class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Video.objects.all()
         search = self.request.query_params.get('search', None)
         category = self.request.query_params.get('category', 'general')
@@ -142,7 +145,9 @@ class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
                 Q(title__icontains=search) |
                 Q(description__icontains=search)
             )
-        return queryset.order_by('-created_at')
+        queryset = queryset.order_by('-created_at')
+        qs_lang = queryset.filter(language_code=lang)
+        return qs_lang if qs_lang.exists() else queryset.filter(language_code='en')
 
 class ArticleListView(BookmarkOptimizedMixin, generics.ListAPIView):
     """
@@ -184,6 +189,8 @@ class ArticleListView(BookmarkOptimizedMixin, generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Article.objects.all()
         search = self.request.query_params.get('search', None)
         if search is not None:
@@ -238,6 +245,8 @@ class RecipeListView(BookmarkOptimizedMixin, generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Recipe.objects.all()
         search = self.request.query_params.get('search', None)
         if search is not None:
@@ -279,6 +288,11 @@ class VideoDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     permission_classes = [AllowAny]
     queryset = Video.objects.all()
 
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
+
 
 class ArticleDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     """
@@ -307,6 +321,11 @@ class ArticleDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     serializer_class = ArticleSerializer
     permission_classes = [AllowAny]
     queryset = Article.objects.all()
+
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
 
 
 class RecipeDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
@@ -340,6 +359,11 @@ class RecipeDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     serializer_class = RecipeSerializer
     permission_classes = [AllowAny]
     queryset = Recipe.objects.all()
+
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
 
 
 class DevotionalSetListView(BookmarkOptimizedMixin, generics.ListAPIView):
@@ -387,6 +411,8 @@ class DevotionalSetListView(BookmarkOptimizedMixin, generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = DevotionalSet.objects.select_related('fast').all()
         search = self.request.query_params.get('search', None)
         fast_id = self.request.query_params.get('fast', None)
@@ -438,6 +464,11 @@ class DevotionalSetDetailView(generics.RetrieveAPIView):
     serializer_class = DevotionalSetSerializer
     permission_classes = [AllowAny]
     queryset = DevotionalSet.objects.select_related('fast').all()
+
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
 
 
 class BookmarkListView(generics.ListAPIView):

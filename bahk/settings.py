@@ -134,12 +134,14 @@ INSTALLED_APPS = [
     'learning_resources',
     's3_file_field',
     'events',  # User events tracking
+    'parler',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -262,6 +264,18 @@ TIME_ZONE = 'America/Los_Angeles'
 USE_I18N = True
 
 USE_TZ = True
+
+# django-parler configuration
+PARLER_LANGUAGES = {
+    None: (
+        { 'code': 'en' },  # English
+        { 'code': 'hy' },  # Armenian
+    ),
+    'default': {
+        'fallbacks': ['en'],
+        'hide_untranslated': False,
+    }
+}
 
 
 # Static files (CSS, JavaScript, Images)

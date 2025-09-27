@@ -3,6 +3,7 @@ import datetime
 import logging
 from django.utils import timezone
 from rest_framework import generics, permissions
+from django.utils.translation import activate, get_language_from_request
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 
@@ -32,6 +33,9 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
     queryset = Devotional.objects.all()
 
     def get_object(self):
+        # Activate requested language from query or header
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         church = self.get_church()
         
         date_str = self.request.query_params.get('date')
@@ -48,7 +52,14 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
             target_date = timezone.localdate(timezone=tz)
 
         try:
-            return Devotional.objects.get(day__church=church, day__date=target_date)
+            obj = Devotional.objects.filter(day__church=church, day__date=target_date)
+            # Filter by language_code, fallback to 'en'
+            devotional = obj.filter(language_code=lang).first()
+            if not devotional:
+                devotional = obj.filter(language_code='en').first()
+            if not devotional:
+                devotional = obj.first()
+            return devotional
         except Devotional.DoesNotExist:
             logging.error(f"Devotional not found for {target_date} for church {church.name}")
             return None
@@ -71,8 +82,12 @@ class DevotionalsByFastView(generics.ListAPIView):
     pagination_class = LargeResultsSetPagination
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         fast = Fast.objects.get(id=self.kwargs['fast_id'])
-        return Devotional.objects.filter(day__fast=fast)
+        qs = Devotional.objects.filter(day__fast=fast)
+        qs_lang = qs.filter(language_code=lang)
+        return qs_lang if qs_lang.exists() else qs.filter(language_code='en')
         
     def get_paginated_response(self, data):
         """
@@ -93,6 +108,11 @@ class DevotionalDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
     queryset = Devotional.objects.all()
 
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
+
 
 class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
     """
@@ -107,5 +127,9 @@ class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
     queryset = Devotional.objects.all()
 
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         church = self.get_church()
-        return Devotional.objects.filter(day__church=church)
+        qs = Devotional.objects.filter(day__church=church)
+        qs_lang = qs.filter(language_code=lang)
+        return qs_lang if qs_lang.exists() else qs.filter(language_code='en')

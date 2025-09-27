@@ -13,6 +13,7 @@ from django.contrib import messages
 import logging
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
+from parler.admin import TranslatableAdmin
 from hub.models import (
     Church,
     Day,
@@ -96,7 +97,7 @@ class DevotionalAdmin(admin.ModelAdmin):
 
 
 @admin.register(DevotionalSet, site=admin.site)
-class DevotionalSetAdmin(admin.ModelAdmin):
+class DevotionalSetAdmin(TranslatableAdmin):
     list_display = ('title', 'fast', 'number_of_days', 'image_preview', 'created_at')
     search_fields = ('title', 'description', 'fast__name')
     list_filter = ('fast', 'created_at', 'updated_at')
@@ -146,7 +147,7 @@ class DevotionalSetAdmin(admin.ModelAdmin):
 
 
 @admin.register(Fast, site=admin.site)
-class FastAdmin(admin.ModelAdmin):
+class FastAdmin(TranslatableAdmin):
     list_display = (
         "get_name",
         "church_link",
@@ -157,7 +158,7 @@ class FastAdmin(admin.ModelAdmin):
         "participant_count",
     )
     list_display_links = ["get_name"]
-    ordering = ("-year", "church", "name")
+    ordering = ("-year", "church")
     list_filter = ("church", "year")
     sortable_by = ("get_name", "participant_count")
 

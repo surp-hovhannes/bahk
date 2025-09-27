@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions
+from django.utils.translation import activate, get_language_from_request
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
 from ..models import Fast, Church, Day, Profile, FastParticipantMap
 from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer, DaySerializer, FastParticipantMapSerializer
@@ -90,6 +91,8 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
         return f'fast_list_qs:{church_id}:{start_date}:{end_date}:{tz}:{participant_count}'
 
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         church = self.get_church()
         tz = self.get_timezone()
         today = timezone.localdate(timezone=tz)

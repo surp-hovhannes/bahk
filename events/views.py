@@ -17,6 +17,7 @@ from .serializers import (
     EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer,
     UserActivityFeedSerializer, UserActivityFeedSummarySerializer
 )
+from django.utils.translation import activate, get_language_from_request
 
 
 class EventListView(generics.ListAPIView):
@@ -27,6 +28,8 @@ class EventListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Event.objects.select_related(
             'event_type', 'user', 'content_type'
         ).order_by('-timestamp')
@@ -104,6 +107,11 @@ class EventDetailView(generics.RetrieveAPIView):
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
+
 
 class MyEventsView(generics.ListAPIView):
     """
@@ -113,6 +121,8 @@ class MyEventsView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         return Event.objects.filter(
             user=self.request.user
         ).select_related(
@@ -128,6 +138,11 @@ class EventTypeListView(generics.ListAPIView):
     serializer_class = EventTypeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
+
 
 class EventStatsView(APIView):
     """
@@ -136,6 +151,8 @@ class EventStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
         now = timezone.now()
         
         # Calculate date ranges
@@ -215,6 +232,8 @@ class UserEventStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, user_id=None):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
         # Default to current user if no user_id provided
         if user_id is None:
             user_id = request.user.id
@@ -282,6 +301,8 @@ class FastEventStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, fast_id):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
         try:
             from hub.models import Fast
             fast = Fast.objects.get(id=fast_id)
@@ -490,6 +511,8 @@ class UserActivityFeedView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         user = self.request.user
         
         queryset = UserActivityFeed.objects.filter(
@@ -541,6 +564,8 @@ class UserActivityFeedSummaryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
         user = request.user
         
         # Get basic counts
@@ -582,6 +607,8 @@ class UserMilestonesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
         user = request.user
         
         # Get all milestone activity feed items
@@ -633,6 +660,8 @@ class MarkActivityReadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
         user = request.user
         activity_ids = request.data.get('activity_ids', [])
         mark_all = request.data.get('mark_all', False)
@@ -687,6 +716,8 @@ class GenerateActivityFeedView(APIView):
     permission_classes = [permissions.IsAdminUser]
     
     def post(self, request):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
         user_id = request.data.get('user_id')
         days_back = request.data.get('days_back', 30)
         

@@ -29,6 +29,8 @@ django-redis==5.4.0
 hiredis==2.3.2
 newrelic
 sentry-sdk[django]
+# Multilingual translations
+django-parler>=2.3
 # Map generation packages
 matplotlib==3.10.1
 shapely==2.0.7

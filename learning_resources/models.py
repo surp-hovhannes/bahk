@@ -15,8 +15,9 @@ from learning_resources.utils import (
     article_image_upload_path,
     recipe_image_upload_path,
 )
+from parler.models import TranslatableModel, TranslatedFields
 
-class Video(models.Model):
+class Video(TranslatableModel):
     CATEGORY_CHOICES = [
         ('general', 'General'),
         ('devotional', 'Devotional'),
@@ -25,14 +26,17 @@ class Video(models.Model):
         ('evening_prayers', 'Evening Prayers'),
     ]
 
-    title = models.CharField(max_length=200)
-    description = models.TextField()
+    translations = TranslatedFields(
+        title=models.CharField(max_length=200),
+        description=models.TextField(),
+    )
     category = models.CharField(
         max_length=20,
         choices=CATEGORY_CHOICES,
         default='general',
         db_index=True
     )
+    language_code = models.CharField(max_length=5, default='en')
     thumbnail = models.ImageField(
         upload_to=video_thumbnail_upload_path,
         help_text='Recommended size: 720x1280 pixels (portrait)',
@@ -111,10 +115,10 @@ class Video(models.Model):
         ordering = ['-created_at']
         verbose_name_plural = 'Videos'
 
-class Article(models.Model):
-    title = models.CharField(max_length=200)
-    body = models.TextField(
-        help_text='Content in Markdown format'
+class Article(TranslatableModel):
+    translations = TranslatedFields(
+        title=models.CharField(max_length=200),
+        body=models.TextField(help_text='Content in Markdown format'),
     )
     image = models.ImageField(
         upload_to=article_image_upload_path,
@@ -198,9 +202,21 @@ class Article(models.Model):
         verbose_name_plural = 'Articles'
 
 
-class Recipe(models.Model):
-    title = models.CharField(max_length=200)
-    description = models.TextField(null=True, blank=True)
+class Recipe(TranslatableModel):
+    translations = TranslatedFields(
+        title=models.CharField(max_length=200),
+        description=models.TextField(null=True, blank=True),
+        time_required=models.CharField("Time required to make recipe", max_length=64),
+        serves=models.CharField("Number of servings", max_length=32),
+        ingredients=models.TextField(
+            help_text='Recipe ingredients in Markdown format',
+            verbose_name='Ingredients'
+        ),
+        directions=models.TextField(
+            help_text='Recipe directions in Markdown format',
+            verbose_name='Directions'
+        ),
+    )
     image = models.ImageField(
         upload_to=recipe_image_upload_path,
         help_text='Main recipe image. Recommended size: 1600x1200 pixels (4:3)'
@@ -216,17 +232,7 @@ class Recipe(models.Model):
     # Cache the thumbnail URL to avoid S3 calls
     cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
     cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
-    # recipe-specific fields
-    time_required = models.CharField("Time required to make recipe", max_length=64)
-    serves = models.CharField("Number of servings", max_length=32)
-    ingredients = models.TextField(
-        help_text='Recipe ingredients in Markdown format',
-        verbose_name='Ingredients'  # This overrides the label
-    )
-    directions = models.TextField(
-        help_text='Recipe directions in Markdown format',
-        verbose_name='Directions'  # This overrides the label
-    )
+    # Non-translated fields remain here (none additional)
 
     def save(self, **kwargs):
         # First save the model to ensure the image is properly saved and uploaded to S3

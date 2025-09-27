@@ -15,6 +15,7 @@ from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
 from django.conf import settings
 from django.utils.functional import cached_property
+from django.utils.translation import get_language
 
 from hub import models
 from hub.mixins import ThumbnailCacheMixin
@@ -180,6 +181,9 @@ def update_thumbnail_cache(sender, instance, **kwargs):
 
 class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     church = ChurchSerializer()
+    name = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+    culmination_feast = serializers.SerializerMethodField()
     participant_count = serializers.SerializerMethodField()
     countdown = serializers.SerializerMethodField()
     days_to_feast = serializers.SerializerMethodField()
@@ -316,6 +320,18 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         """Use prefetched data without making additional queries"""
         return super().to_representation(instance)
 
+    def _lang(self):
+        return self.context.get('lang') or get_language() or 'en'
+
+    def get_name(self, obj):
+        return obj.safe_translation_getter('name', language_code=self._lang(), any_language=True)
+
+    def get_description(self, obj):
+        return obj.safe_translation_getter('description', language_code=self._lang(), any_language=True)
+
+    def get_culmination_feast(self, obj):
+        return obj.safe_translation_getter('culmination_feast', language_code=self._lang(), any_language=True)
+
     @cached_property
     def _user_fast_ids(self):
         """Cache the list of fast IDs the user has joined"""
@@ -426,8 +442,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     
 
 class DevotionalSerializer(serializers.ModelSerializer):
-    title = serializers.CharField(source='video.title')
-    description = serializers.CharField(source='video.description')
+    title = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
     thumbnail_small = serializers.SerializerMethodField()
     video = serializers.SerializerMethodField()
@@ -468,6 +484,21 @@ class DevotionalSerializer(serializers.ModelSerializer):
 
     def get_video(self, obj):
         return obj.video.video.url if obj.video and obj.video.video else None
+
+    def _lang(self):
+        return self.context.get('lang') or get_language() or 'en'
+
+    def get_title(self, obj):
+        if obj.video:
+            return obj.video.safe_translation_getter('title', language_code=self._lang(), any_language=True)
+        return None
+
+    def get_description(self, obj):
+        # Keep API compatibility: use video's description
+        if obj.video:
+            return obj.video.safe_translation_getter('description', language_code=self._lang(), any_language=True)
+        # Fallback to devotional description if no video
+        return obj.safe_translation_getter('description', language_code=self._lang(), any_language=True)
 
 class FastParticipantMapSerializer(serializers.ModelSerializer):
     """Serializer for the FastParticipantMap model."""
