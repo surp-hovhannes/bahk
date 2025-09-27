@@ -187,9 +187,10 @@ class FastAdmin(TranslatableAdmin):
     get_days.short_description = "Days"
 
     def get_description(self, fast):
-        if not fast.description:
+        description = fast.safe_translation_getter('description', any_language=True)
+        if not description:
             return ""
-        t = Truncator(fast.description)
+        t = Truncator(description)
         return t.chars(25)
 
     get_description.short_description = "Description"

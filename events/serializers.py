@@ -161,9 +161,7 @@ class UserActivityFeedSerializer(serializers.ModelSerializer, ThumbnailCacheMixi
             'target_type', 'target_id', 'target_thumbnail'
         ]
         read_only_fields = ['id', 'created_at', 'age_display']
-        extra_kwargs = {
-            'title': {"allow_blank": False},
-        }
+        extra_kwargs = {}
 
     def _lang(self):
         return self.context.get('lang') or get_language() or 'en'

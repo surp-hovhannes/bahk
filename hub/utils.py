@@ -160,7 +160,7 @@ def send_fast_reminders():
             days__date__gte=tomorrow,  # Only consider days from tomorrow onwards
             days__date__lte=three_days_from_now  # Changed from lt to lte to include 3 days from now
         ).filter(
-            ~Q(name__icontains="Friday Fasts") & ~Q(name__icontains="Wednesday Fasts")
+            ~Q(translations__name__icontains="Friday Fasts") & ~Q(translations__name__icontains="Wednesday Fasts")
         ).distinct()
 
         # Find the earliest fast
@@ -182,7 +182,7 @@ def send_fast_reminders():
 
         # Send reminder only for the earliest fast if no promotional emails have been assigned to it
         if earliest_fast and not earliest_fast.promo_emails.exists():
-            subject = f'Upcoming Fast: {earliest_fast.name}'
+            subject = f'Upcoming Fast: {earliest_fast.safe_translation_getter("name", any_language=True)}'
             from_email = f"Fast and Pray <{settings.EMAIL_HOST_USER}>"
             serialized_fast = FastSerializer(earliest_fast).data
             html_content = render_to_string('email/upcoming_fasts_reminder.html', {

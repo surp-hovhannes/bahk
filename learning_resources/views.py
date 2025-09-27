@@ -428,9 +428,9 @@ class DevotionalSetListView(BookmarkOptimizedMixin, generics.ListAPIView):
         # Apply search filter if provided
         if search is not None:
             queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(description__icontains=search) |
-                Q(fast__name__icontains=search)
+                Q(translations__title__icontains=search) |
+                Q(translations__description__icontains=search) |
+                Q(fast__translations__name__icontains=search)
             )
         return queryset.order_by('-created_at')
 
