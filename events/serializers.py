@@ -166,13 +166,7 @@ class UserActivityFeedSerializer(serializers.ModelSerializer, ThumbnailCacheMixi
     def _lang(self):
         return self.context.get('lang') or get_language() or 'en'
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Replace title/description with translated values per requested lang
-        lang = self._lang()
-        data['title'] = instance.safe_translation_getter('title', language_code=lang, any_language=True)
-        data['description'] = instance.safe_translation_getter('description', language_code=lang, any_language=True)
-        return data
+    # With non-translated fields retained, default representation is fine
     
     def get_age_display(self, obj):
         """Show how long ago the activity occurred."""

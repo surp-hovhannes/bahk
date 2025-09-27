@@ -389,7 +389,7 @@ class Event(models.Model):
         return ip
 
 
-class UserActivityFeed(TranslatableModel):
+class UserActivityFeed(models.Model):
     """
     Tracks user activity feed items with read/unread status.
     This provides a unified feed of all relevant activities for a user.
@@ -451,10 +451,8 @@ class UserActivityFeed(TranslatableModel):
     target = GenericForeignKey('content_type', 'object_id')
     
     # Activity details (translated)
-    translations = TranslatedFields(
-        title=models.CharField(max_length=255, help_text="Activity title"),
-        description=models.TextField(blank=True, help_text="Activity description"),
-    )
+    title = models.CharField(max_length=255, help_text="Activity title")
+    description = models.TextField(blank=True, help_text="Activity description")
     
     # Read status
     is_read = models.BooleanField(
@@ -1010,7 +1008,7 @@ class UserMilestone(models.Model):
         return milestone
 
 
-class Announcement(TranslatableModel):
+class Announcement(models.Model):
     """
     System announcements that appear in user activity feeds.
     """
@@ -1022,10 +1020,8 @@ class Announcement(TranslatableModel):
         ('archived', 'Archived'),
     ]
     
-    translations = TranslatedFields(
-        title=models.CharField(max_length=255, help_text="Announcement title"),
-        description=models.TextField(help_text="Short description of the announcement"),
-    )
+    title = models.CharField(max_length=255, help_text="Announcement title")
+    description = models.TextField(help_text="Short description of the announcement")
     
     url = models.URLField(
         max_length=2048,

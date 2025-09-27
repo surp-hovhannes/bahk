@@ -56,8 +56,8 @@ class Migration(migrations.Migration):
                         ('created_at', models.DateTimeField(auto_now_add=True)),
                         ('updated_at', models.DateTimeField(auto_now=True)),
                         ('total_recipients', models.PositiveIntegerField(default=0, help_text='Total number of users who received this announcement')),
-                        ('description', models.TextField(help_text='Short description of the announcement')),
                         ('title', models.CharField(help_text='Announcement title', max_length=255)),
+                        ('description', models.TextField(help_text='Short description of the announcement')),
                         ('created_by', models.ForeignKey(blank=True, help_text='User who created this announcement', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_announcements', to='auth.user')),
                         ('target_all_users', models.BooleanField(default=True, help_text='Send to all users')),
                     ],
@@ -73,22 +73,6 @@ class Migration(migrations.Migration):
                 ),
             ]
         ),
-        migrations.RemoveField(
-            model_name='announcement',
-            name='description',
-        ),
-        migrations.RemoveField(
-            model_name='announcement',
-            name='title',
-        ),
-        migrations.RemoveField(
-            model_name='useractivityfeed',
-            name='description',
-        ),
-        migrations.RemoveField(
-            model_name='useractivityfeed',
-            name='title',
-        ),
         migrations.CreateModel(
             name='UserActivityFeedTranslation',
             fields=[
@@ -96,7 +80,7 @@ class Migration(migrations.Migration):
                 ('language_code', models.CharField(db_index=True, max_length=15, verbose_name='Language')),
                 ('title', models.CharField(help_text='Activity title', max_length=255)),
                 ('description', models.TextField(blank=True, help_text='Activity description')),
-                ('master', parler.fields.TranslationsForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='translations', to='events.useractivityfeed')),
+                ('master', models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='translations', to='events.useractivityfeed')),
             ],
             options={
                 'verbose_name': 'user activity feed Translation',
@@ -115,7 +99,7 @@ class Migration(migrations.Migration):
                 ('language_code', models.CharField(db_index=True, max_length=15, verbose_name='Language')),
                 ('title', models.CharField(help_text='Announcement title', max_length=255)),
                 ('description', models.TextField(help_text='Short description of the announcement')),
-                ('master', parler.fields.TranslationsForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='translations', to='events.announcement')),
+                ('master', models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='translations', to='events.announcement')),
             ],
             options={
                 'verbose_name': 'announcement Translation',
