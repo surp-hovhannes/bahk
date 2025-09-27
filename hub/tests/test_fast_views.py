@@ -186,7 +186,8 @@ class FastListViewTest(TestCase):
         # First request - should hit database
         queryset1 = list(view.get_queryset())
         
-        # Modify a fast
+        # Modify a fast (explicitly set English translation)
+        self.fasts[0].set_current_language('en')
         self.fasts[0].name = "Updated Fast"
         self.fasts[0].save()
         

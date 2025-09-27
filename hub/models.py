@@ -4,6 +4,7 @@ import logging
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import constraints
@@ -94,7 +95,7 @@ class Fast(TranslatableModel):
             if self.pk:
                 conflict_qs = conflict_qs.exclude(pk=self.pk)
             if conflict_qs.exists():
-                raise ValidationError("Fast with this name, church, and year already exists.")
+                raise IntegrityError("Fast with this name, church, and year already exists.")
         # First check if this is a new instance or if the image field has changed
         is_new_image = (
             self._state.adding
