@@ -28,11 +28,7 @@ class Migration(migrations.Migration):
             model_name='useractivityfeedtranslation',
             name='master',
         ),
-        migrations.AddField(
-            model_name='announcement',
-            name='target_churches',
-            field=models.ManyToManyField(blank=True, help_text='Send to specific churches (if not targeting all users)', to='hub.church'),
-        ),
+        # target_churches already exists from 0009 SeparateDatabaseAndState creation
         migrations.AlterField(
             model_name='announcement',
             name='publish_at',

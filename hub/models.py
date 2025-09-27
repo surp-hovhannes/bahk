@@ -83,6 +83,18 @@ class Fast(TranslatableModel):
     tracker = FieldTracker(fields=["image"])
 
     def save(self, **kwargs):
+        # Enforce uniqueness of (church, year, name) at application level using English name
+        try:
+            name_for_unique = self.safe_translation_getter('name', language_code='en', any_language=True)
+        except Exception:
+            name_for_unique = None
+        if name_for_unique and self.church_id and self.year:
+            conflict_qs = Fast.objects.filter(church_id=self.church_id, year=self.year)
+            conflict_qs = conflict_qs.filter(translations__language_code='en', translations__name=name_for_unique)
+            if self.pk:
+                conflict_qs = conflict_qs.exclude(pk=self.pk)
+            if conflict_qs.exists():
+                raise ValidationError("Fast with this name, church, and year already exists.")
         # First check if this is a new instance or if the image field has changed
         is_new_image = (
             self._state.adding
@@ -170,7 +182,8 @@ class Fast(TranslatableModel):
         return f"fastModal_{self.id}"
 
     def __str__(self):
-        s = self.name
+        name = self.safe_translation_getter('name', any_language=True) or ''
+        s = name
         if self.year:
             s += f" ({self.year})"
         return s
