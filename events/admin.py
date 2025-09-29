@@ -374,6 +374,17 @@ class EventAdmin(admin.ModelAdmin):
             }
         )
         events_by_day = daily_aggregates['events_by_day']
+        # Fallback: if empty due to edge window/timezone, compute directly
+        if sum(events_by_day.values()) == 0:
+            fallback_qs = Event.objects.filter(
+                timestamp__gte=start_of_window,
+                timestamp__lt=end_of_today,
+                event_type__category='analytics'
+            ).exclude(user__is_staff=True)
+            from django.db.models.functions import TruncDate
+            for row in fallback_qs.annotate(date=TruncDate('timestamp')).values('date').annotate(c=Count('id')):
+                date_str = row['date'].strftime('%Y-%m-%d') if hasattr(row['date'], 'strftime') else str(row['date'])
+                events_by_day[date_str] = row['c']
         fast_joins_by_day = daily_aggregates['fast_joins_by_day']
         fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
         

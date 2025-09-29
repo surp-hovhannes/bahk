@@ -101,10 +101,10 @@ class AnalyticsQueryOptimizer:
             else:
                 date_str = str(stat['date'])
             
-            if date_str in events_by_day:  # Only include dates in our window
-                events_by_day[date_str] = stat['total_events']
-                fast_joins_by_day[date_str] = stat['fast_joins']
-                fast_leaves_by_day[date_str] = stat['fast_leaves']
+            # Update counts (query is already filtered to window, so no need to check if date is in window)
+            events_by_day[date_str] = stat['total_events']
+            fast_joins_by_day[date_str] = stat['fast_joins']
+            fast_leaves_by_day[date_str] = stat['fast_leaves']
         
         result = {
             'events_by_day': events_by_day,
