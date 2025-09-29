@@ -197,8 +197,10 @@ class FastListViewTest(TestCase):
         # Second request - should hit database again
         queryset2 = list(view.get_queryset())
         
-        # Verify results are different
-        self.assertNotEqual(queryset1[0].name, queryset2[0].name)
+        # Verify the specific fast's name changed
+        before_names = {f.id: f.name for f in queryset1}
+        after_names = {f.id: f.name for f in queryset2}
+        self.assertNotEqual(before_names[self.fasts[0].id], after_names[self.fasts[0].id])
         
     def test_list_fasts_with_different_church(self):
         """Test listing fasts for a different church."""
