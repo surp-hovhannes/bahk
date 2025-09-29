@@ -57,10 +57,11 @@ class DevotionalSetModelTest(TestCase):
         )
         
         # Create some days and devotionals for the fast
-        video = Video.objects.create(
-            title="Test Video",
-            description="Test description"
-        )
+        video = Video(language_code='en')
+        video.set_current_language('en')
+        video.title = "Test Video"
+        video.description = "Test description"
+        video.save()
         
         day1 = Day.objects.create(
             date="2024-01-01",
@@ -258,10 +259,11 @@ class DevotionalSetIntegrationTest(TestCase):
         )
         
         # Create video for devotionals
-        video = Video.objects.create(
-            title="Test Devotional Video",
-            description="Video for testing"
-        )
+        video = Video(language_code='en')
+        video.set_current_language('en')
+        video.title = "Test Devotional Video"
+        video.description = "Video for testing"
+        video.save()
         
         # Create days and devotionals
         day1 = Day.objects.create(
@@ -308,16 +310,17 @@ class VideoDetailViewTest(APITestCase):
         cache.clear()
         
         # Create test videos
-        self.video1 = Video.objects.create(
-            title="Test Video 1",
-            description="This is a test video description",
-            category="general"
-        )
-        self.video2 = Video.objects.create(
-            title="Test Video 2", 
-            description="Another test video description",
-            category="devotional"
-        )
+        self.video1 = Video(language_code='en', category="general")
+        self.video1.set_current_language('en')
+        self.video1.title = "Test Video 1"
+        self.video1.description = "This is a test video description"
+        self.video1.save()
+        
+        self.video2 = Video(language_code='en', category="devotional")
+        self.video2.set_current_language('en')
+        self.video2.title = "Test Video 2"
+        self.video2.description = "Another test video description"
+        self.video2.save()
         
     def test_video_detail_endpoint_success(self):
         """Test successful video detail retrieval"""
@@ -694,11 +697,11 @@ class DetailViewIntegrationTest(APITestCase):
         )
         
         # Create test content
-        self.video = Video.objects.create(
-            title="Integration Test Video",
-            description="Video for integration testing",
-            category="tutorial"
-        )
+        self.video = Video(language_code='en', category="tutorial")
+        self.video.set_current_language('en')
+        self.video.title = "Integration Test Video"
+        self.video.description = "Video for integration testing"
+        self.video.save()
         
         self.article = Article.objects.create(
             title="Integration Test Article",
