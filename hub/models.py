@@ -490,7 +490,8 @@ class DevotionalSet(TranslatableModel):
         return self._number_of_days_cache
 
     def __str__(self):
-        return f"{self.title} ({self.number_of_days} days)"
+        title = self.safe_translation_getter('title', any_language=True) or f'DevotionalSet {self.id}'
+        return f"{title} ({self.number_of_days} days)"
     
     class Meta:
         ordering = ['-created_at']

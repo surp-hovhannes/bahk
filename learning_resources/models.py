@@ -109,7 +109,7 @@ class Video(TranslatableModel):
                 super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
 
     def __str__(self):
-        return self.title
+        return self.safe_translation_getter('title', any_language=True) or f'Video {self.id}'
 
     class Meta:
         ordering = ['-created_at']
@@ -195,7 +195,7 @@ class Article(TranslatableModel):
                 super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
 
     def __str__(self):
-        return self.title
+        return self.safe_translation_getter('title', any_language=True) or f'Article {self.id}'
 
     class Meta:
         ordering = ['-created_at']
@@ -273,7 +273,7 @@ class Recipe(TranslatableModel):
                 super().save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
 
     def __str__(self):
-        return self.title
+        return self.safe_translation_getter('title', any_language=True) or f'Recipe {self.id}'
 
     class Meta:
         ordering = ['-created_at']
