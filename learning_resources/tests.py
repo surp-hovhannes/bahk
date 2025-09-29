@@ -35,8 +35,8 @@ class DevotionalSetModelTest(TestCase):
             fast=self.fast
         )
         
-        self.assertEqual(devotional_set.title, "Test Devotional Set")
-        self.assertEqual(devotional_set.description, "A test devotional set")
+        self.assertEqual(devotional_set.safe_translation_getter('title', any_language=True), "Test Devotional Set")
+        self.assertEqual(devotional_set.safe_translation_getter('description', any_language=True), "A test devotional set")
         self.assertEqual(devotional_set.fast, self.fast)
         self.assertIsNotNone(devotional_set.created_at)
         self.assertIsNotNone(devotional_set.updated_at)

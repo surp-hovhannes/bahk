@@ -353,8 +353,8 @@ class Bookmark(models.Model):
         if self.content_type_name == 'devotional':
             # For devotionals, use the associated video's information
             if hasattr(content, 'video') and content.video:
-                representation['title'] = content.video.title
-                representation['description'] = content.video.description
+                representation['title'] = content.video.safe_translation_getter('title', any_language=True)
+                representation['description'] = content.video.safe_translation_getter('description', any_language=True)
                 # Handle thumbnail URL with proper error handling
                 try:
                     representation['thumbnail_url'] = (
@@ -371,9 +371,17 @@ class Bookmark(models.Model):
         else:
             # Add common fields for other content types
             if hasattr(content, 'title'):
-                representation['title'] = content.title
+                # Check if the content is a translatable model
+                if hasattr(content, 'safe_translation_getter'):
+                    representation['title'] = content.safe_translation_getter('title', any_language=True)
+                else:
+                    representation['title'] = content.title
             if hasattr(content, 'description'):
-                representation['description'] = content.description
+                # Check if the content is a translatable model
+                if hasattr(content, 'safe_translation_getter'):
+                    representation['description'] = content.safe_translation_getter('description', any_language=True)
+                else:
+                    representation['description'] = content.description
             if hasattr(content, 'thumbnail') or hasattr(content, 'cached_thumbnail_url'):
                 representation['thumbnail_url'] = getattr(content, 'cached_thumbnail_url', None)
         

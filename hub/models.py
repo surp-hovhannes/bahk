@@ -361,7 +361,11 @@ class Day(models.Model):
     )
 
     def __str__(self):
-        return f'{self.date.strftime("%Y-%m-%d")} ({f"{self.fast.name}, " if self.fast else ""}{self.church.name})'
+        fast_name = ""
+        if self.fast:
+            fast_name = self.fast.safe_translation_getter('name', any_language=True) or ""
+            fast_name = f"{fast_name}, " if fast_name else ""
+        return f'{self.date.strftime("%Y-%m-%d")} ({fast_name}{self.church.name})'
 
     class Meta:
         indexes = [

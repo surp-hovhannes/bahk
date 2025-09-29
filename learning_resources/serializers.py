@@ -158,7 +158,7 @@ class RecipeSerializer(ArticleSerializer):
 
 
 class DevotionalSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
-    fast_name = serializers.CharField(source='fast.name', read_only=True)
+    fast_name = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     number_of_days = serializers.ReadOnlyField()
     is_bookmarked = serializers.SerializerMethodField()
@@ -196,6 +196,11 @@ class DevotionalSetSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
 
     def get_description(self, obj):
         return obj.safe_translation_getter('description', language_code=self._lang(), any_language=True)
+
+    def get_fast_name(self, obj):
+        if obj.fast:
+            return obj.fast.safe_translation_getter('name', language_code=self._lang(), any_language=True)
+        return None
 
 
 class BookmarkSerializer(serializers.ModelSerializer):

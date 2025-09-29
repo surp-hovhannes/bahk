@@ -138,9 +138,17 @@ class BookmarkAdmin(admin.ModelAdmin):
         """Display the title of the bookmarked content if available."""
         content = obj.content_object
         if content and hasattr(content, 'title'):
-            return content.title
+            # Check if the content is a translatable model
+            if hasattr(content, 'safe_translation_getter'):
+                return content.safe_translation_getter('title', any_language=True)
+            else:
+                return content.title
         elif content and hasattr(content, 'name'):
-            return content.name
+            # Check if the content is a translatable model
+            if hasattr(content, 'safe_translation_getter'):
+                return content.safe_translation_getter('name', any_language=True)
+            else:
+                return content.name
         return f"{obj.content_type.model} #{obj.object_id}"
     content_title.short_description = 'Content Title'
     
