@@ -238,8 +238,7 @@ class EventAdmin(admin.ModelAdmin):
             from django.db.models.functions import TruncDate
             for row in fallback_qs.annotate(date=TruncDate('timestamp')).values('date').annotate(c=Count('id')):
                 date_str = row['date'].strftime('%Y-%m-%d') if hasattr(row['date'], 'strftime') else str(row['date'])
-                if date_str in events_by_day:
-                    events_by_day[date_str] = row['c']
+                events_by_day[date_str] = row['c']
         fast_joins_by_day = daily_aggregates['fast_joins_by_day']
         fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
         
