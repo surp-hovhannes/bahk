@@ -268,14 +268,17 @@ USE_TZ = True
 # django-parler configuration
 PARLER_LANGUAGES = {
     None: (
-        { 'code': 'en' },  # English
-        { 'code': 'hy' },  # Armenian
+        { 'code': 'en' },   # English (canonical)
+        { 'code': 'en-us' },# US English to match LANGUAGE_CODE and legacy data
+        { 'code': 'hy' },   # Armenian
     ),
     'default': {
         'fallbacks': ['en'],
         'hide_untranslated': False,
     }
 }
+PARLER_DEFAULT_LANGUAGE_CODE = 'en'
+PARLER_ADMIN_LANGUAGE_CODE = 'en'
 
 
 # Static files (CSS, JavaScript, Images)
