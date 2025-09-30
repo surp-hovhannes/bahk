@@ -77,7 +77,7 @@ class DevotionalAdmin(admin.ModelAdmin):
     list_display = ("title", "fast", "date", "order")
     list_filter = ("day__fast", "day__date")
     ordering = ("day__date",)
-    search_fields = ("video__title", "description")
+    search_fields = ("video__title", "video__description")
     raw_id_fields = ("video", "day")
 
     def title(self, obj):
