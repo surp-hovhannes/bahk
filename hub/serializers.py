@@ -7,6 +7,7 @@ from django.contrib.auth.models import Group, User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework import serializers
+from django.utils.translation import activate, get_language
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -313,8 +314,15 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
                  'total_number_of_days', 'current_day_number', 'modal_id']
         
     def to_representation(self, instance):
-        """Use prefetched data without making additional queries"""
-        return super().to_representation(instance)
+        # Activate language from context
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        # Replace user-facing fields with translated values
+        data['name'] = getattr(instance, 'name_i18n', instance.name)
+        data['description'] = getattr(instance, 'description_i18n', instance.description)
+        data['culmination_feast'] = getattr(instance, 'culmination_feast_i18n', instance.culmination_feast)
+        return data
 
     @cached_property
     def _user_fast_ids(self):
@@ -426,8 +434,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     
 
 class DevotionalSerializer(serializers.ModelSerializer):
-    title = serializers.CharField(source='video.title')
-    description = serializers.CharField(source='video.description')
+    title = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
     thumbnail_small = serializers.SerializerMethodField()
     video = serializers.SerializerMethodField()
@@ -468,6 +476,22 @@ class DevotionalSerializer(serializers.ModelSerializer):
 
     def get_video(self, obj):
         return obj.video.video.url if obj.video and obj.video.video else None
+
+    def get_title(self, obj):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        # Prefer video title translation; fallback
+        return getattr(obj.video, 'title_i18n', obj.video.title) if obj.video else None
+
+    def get_description(self, obj):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        # Prefer devotional description translation (model field), fallback to video description translation
+        if getattr(obj, 'description', None):
+            return getattr(obj, 'description_i18n', obj.description)
+        if obj.video:
+            return getattr(obj.video, 'description_i18n', obj.video.description)
+        return None
 
 class FastParticipantMapSerializer(serializers.ModelSerializer):
     """Serializer for the FastParticipantMap model."""

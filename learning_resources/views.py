@@ -13,6 +13,7 @@ from .serializers import (
 )
 from .cache import BookmarkCacheManager
 from hub.models import DevotionalSet
+from django.utils.translation import activate, get_language_from_request
 
 
 class BookmarkOptimizedMixin:
@@ -129,6 +130,9 @@ class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
+        # Activate requested language for _i18n virtual fields
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Video.objects.all()
         search = self.request.query_params.get('search', None)
         category = self.request.query_params.get('category', 'general')
@@ -142,6 +146,10 @@ class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
                 Q(title__icontains=search) |
                 Q(description__icontains=search)
             )
+        # Video language-specific filtering if provided
+        language_code = self.request.query_params.get('language_code')
+        if language_code:
+            queryset = queryset.filter(language_code=language_code)
         return queryset.order_by('-created_at')
 
 class ArticleListView(BookmarkOptimizedMixin, generics.ListAPIView):
@@ -184,6 +192,8 @@ class ArticleListView(BookmarkOptimizedMixin, generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Article.objects.all()
         search = self.request.query_params.get('search', None)
         if search is not None:
@@ -238,6 +248,8 @@ class RecipeListView(BookmarkOptimizedMixin, generics.ListAPIView):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Recipe.objects.all()
         search = self.request.query_params.get('search', None)
         if search is not None:
