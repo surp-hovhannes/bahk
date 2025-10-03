@@ -1,40 +1,3 @@
-## Multilingual Support (django-modeltrans)
-
-Bahk uses `django-modeltrans` to provide JSON-based translations for selected models. The default language is English; Armenian (`hy`) is enabled and more can be added easily.
-
-- Request a specific language via query string: `?lang=en` or `?lang=hy`.
-- Or use the `Accept-Language` HTTP header; views will activate the requested language.
-- Translated model fields are accessed using virtual `_i18n` properties (e.g., `name_i18n`), which automatically fall back to the default language if a translation is missing.
-
-Adding/Editing Translations
-
-```python
-fast.name_hy = "Մեծ Պահք"
-fast.save()
-```
-
-Enable/Configure Languages in `bahk/settings.py`:
-
-```python
-LANGUAGE_CODE = 'en'
-LANGUAGES = (
-    ('en', 'English'),
-    ('hy', 'Armenian'),
-)
-MODELTRANS_AVAILABLE_LANGUAGES = ['en', 'hy']
-```
-
-No schema migration is needed to add a new language; simply update `LANGUAGES` and begin saving translations.
-
-Seed Data
-
-```bash
-python manage.py seed_multilingual_data
-```
-
-Database Notes
-
-- Production is expected to use PostgreSQL (preferred for JSONB). Tests may use SQLite and will still function using Django's built-in `JSONField`.
 # Bahk
 
 Bahk is an app for Christians curious about how, when, and why to fast.
@@ -140,6 +103,18 @@ you are fasting `Fast3` with one faithful (you, `user3`).
 You'll see that each of the three fasts has a different set of information: `Fast1` has a culmination feast countdown,
 a description, and a "Learn More ..." button to the St. John's website. `Fast2` has a culmination feast countdown and a
 description. `Fast3` only has a description.
+
+## Multilingual Support (django-modeltrans)
+
+Bahk uses `django-modeltrans` to provide JSON-based translations for selected models. The default language is English; Armenian (`hy`) is enabled and more can be added easily.
+
+- Request a specific language via query string: `?lang=en` or `?lang=hy`.
+- Or use the `Accept-Language` HTTP header; views will activate the requested language.
+- Translated model fields are accessed using virtual `_i18n` properties (e.g., `name_i18n`), which automatically fall back to the default language if a translation is missing.
+
+Database Notes
+
+- Production is expected to use PostgreSQL (preferred for JSONB). Tests may use SQLite and will still function using Django's built-in `JSONField`.
 
 ## Contact Us!
 
