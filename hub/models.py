@@ -13,6 +13,7 @@ from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit, Transpose
 from model_utils.tracker import FieldTracker
+from modeltrans.fields import TranslationField
 
 import bahk.settings as settings
 from hub.constants import (
@@ -66,6 +67,13 @@ class Fast(models.Model):
     # Cache the thumbnail URL to avoid S3 calls
     cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
     cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'name',
+        'description',
+        'culmination_feast',
+    ))
 
     # 2048 chars is the maximum URL length on Google Chrome
     url = models.URLField(
@@ -390,6 +398,12 @@ class DevotionalSet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'title',
+        'description',
+    ))
+
     # Track changes to the image field
     tracker = FieldTracker(fields=["image"])
 
@@ -502,6 +516,13 @@ class Devotional(models.Model):
         null=True,
         blank=True,
     )
+    # Language of this devotional content
+    language_code = models.CharField(max_length=5, default='en')
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'description',
+    ))
 
     def save(self, *args, **kwargs):
         # Set video category to 'devotional' before saving
@@ -512,7 +533,7 @@ class Devotional(models.Model):
 
     class Meta:
         ordering = ["day__date", "order"]
-        unique_together = [["day", "order"]]
+        unique_together = (("day", "order", "language_code"),)
 
 
 # Signal handlers to invalidate DevotionalSet cache when devotionals change

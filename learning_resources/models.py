@@ -7,6 +7,7 @@ from imagekit.processors import ResizeToFill
 from django.utils import timezone
 import logging
 from s3_file_field.fields import S3FileField
+from modeltrans.fields import TranslationField
 
 from learning_resources.constants import DAYS_TO_CACHE_THUMBNAIL
 from learning_resources.utils import (
@@ -45,6 +46,8 @@ class Video(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Original audio language for the video
+    language_code = models.CharField(max_length=5, default='en')
     
     # Generate a smaller version of the thumbnail for previews
     thumbnail_small = ImageSpecField(
@@ -111,6 +114,12 @@ class Video(models.Model):
         ordering = ['-created_at']
         verbose_name_plural = 'Videos'
 
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'title',
+        'description',
+    ))
+
 class Article(models.Model):
     title = models.CharField(max_length=200)
     body = models.TextField(
@@ -131,6 +140,12 @@ class Article(models.Model):
     # Cache the thumbnail URL to avoid S3 calls
     cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
     cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'title',
+        'body',
+    ))
 
     def save(self, *args, **kwargs):
         # Track if the image has changed
@@ -227,6 +242,16 @@ class Recipe(models.Model):
         help_text='Recipe directions in Markdown format',
         verbose_name='Directions'  # This overrides the label
     )
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'title',
+        'description',
+        'time_required',
+        'serves',
+        'ingredients',
+        'directions',
+    ))
 
     def save(self, **kwargs):
         # First save the model to ensure the image is properly saved and uploaded to S3

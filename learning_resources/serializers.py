@@ -3,6 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from hub.mixins import ThumbnailCacheMixin
 from .models import Article, Recipe, Video, Bookmark
+from django.utils.translation import activate
 from .cache import BookmarkCacheManager
 from hub.models import DevotionalSet
 
@@ -71,6 +72,14 @@ class VideoSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSeriali
                 return None
         return None
 
+    def to_representation(self, instance):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        data['title'] = getattr(instance, 'title_i18n', instance.title)
+        data['description'] = getattr(instance, 'description_i18n', instance.description)
+        return data
+
 class ArticleSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
     thumbnail_url = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
@@ -97,6 +106,16 @@ class ArticleSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSeria
                 return None
         return None 
     
+    def to_representation(self, instance):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        data['title'] = getattr(instance, 'title_i18n', instance.title)
+        # Only Article has body; guard for Recipe which subclasses ArticleSerializer
+        if hasattr(instance, 'body'):
+            data['body'] = getattr(instance, 'body_i18n', instance.body)
+        return data
+    
 class RecipeSerializer(ArticleSerializer):
     class Meta:
         model = Recipe
@@ -105,6 +124,19 @@ class RecipeSerializer(ArticleSerializer):
             'time_required', 'serves', 'ingredients', 'directions', 'is_bookmarked'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
+
+    def to_representation(self, instance):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        # Override translations for recipe-specific fields
+        data['title'] = getattr(instance, 'title_i18n', instance.title)
+        data['description'] = getattr(instance, 'description_i18n', instance.description)
+        data['time_required'] = getattr(instance, 'time_required_i18n', instance.time_required)
+        data['serves'] = getattr(instance, 'serves_i18n', instance.serves)
+        data['ingredients'] = getattr(instance, 'ingredients_i18n', instance.ingredients)
+        data['directions'] = getattr(instance, 'directions_i18n', instance.directions)
+        return data
 
 
 class DevotionalSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
@@ -135,6 +167,14 @@ class DevotionalSetSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
             except (AttributeError, ValueError, OSError):
                 return None
         return None
+
+    def to_representation(self, instance):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        data['title'] = getattr(instance, 'title_i18n', instance.title)
+        data['description'] = getattr(instance, 'description_i18n', instance.description)
+        return data
 
 
 class BookmarkSerializer(serializers.ModelSerializer):

@@ -10,6 +10,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.utils.translation import activate, get_language_from_request
 
 from .models import Event, EventType, UserActivityFeed
 from .serializers import (
@@ -27,6 +28,9 @@ class EventListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Activate language for _i18n fields
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         queryset = Event.objects.select_related(
             'event_type', 'user', 'content_type'
         ).order_by('-timestamp')
@@ -103,6 +107,11 @@ class EventDetailView(generics.RetrieveAPIView):
     queryset = Event.objects.select_related('event_type', 'user', 'content_type')
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
 
 
 class MyEventsView(generics.ListAPIView):
@@ -113,6 +122,8 @@ class MyEventsView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
+        activate(lang)
         return Event.objects.filter(
             user=self.request.user
         ).select_related(
@@ -127,6 +138,11 @@ class EventTypeListView(generics.ListAPIView):
     queryset = EventType.objects.filter(is_active=True).order_by('category', 'name')
     serializer_class = EventTypeSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+        return super().get(request, *args, **kwargs)
 
 
 class EventStatsView(APIView):

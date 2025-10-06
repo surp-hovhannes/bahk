@@ -104,6 +104,18 @@ You'll see that each of the three fasts has a different set of information: `Fas
 a description, and a "Learn More ..." button to the St. John's website. `Fast2` has a culmination feast countdown and a
 description. `Fast3` only has a description.
 
+## Multilingual Support (django-modeltrans)
+
+Bahk uses `django-modeltrans` to provide JSON-based translations for selected models. The default language is English; Armenian (`hy`) is enabled and more can be added easily.
+
+- Request a specific language via query string: `?lang=en` or `?lang=hy`.
+- Or use the `Accept-Language` HTTP header; views will activate the requested language.
+- Translated model fields are accessed using virtual `_i18n` properties (e.g., `name_i18n`), which automatically fall back to the default language if a translation is missing.
+
+Database Notes
+
+- Production is expected to use PostgreSQL (preferred for JSONB). Tests may use SQLite and will still function using Django's built-in `JSONField`.
+
 ## Contact Us!
 
 Bahk is maintained by Dn. Andrew Ylitalo and Fr. Mesrop Ash of [St. John Armenian Church](https://stjohnarmenianchurch.com/)
