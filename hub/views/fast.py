@@ -318,6 +318,87 @@ class FastByDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
         return queryset
 
 
+@method_decorator(cache_page(CACHE_TTL), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
+class FastByFeastDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
+    """
+    API view to list fasts based on their culmination feast date.
+
+    This view inherits from `ChurchContextMixin`, which determines the church context. The fasts are filtered 
+    by the church and the specified culmination feast date.
+
+    Inherits:
+        - ChurchContextMixin: Provides the church context for filtering.
+        - TimezoneMixin: Provides the timezone context for serializers.
+        - ListAPIView: Standard DRF view for listing model instances.
+
+    Permissions:
+        - AllowAny: Any user, authenticated or not, can access this view.
+
+    Query Parameters:
+        - date: Required. A string representing the feast date in `yyyy-mm-dd` format.
+        - tz: Optional. A string representing the timezone offset from UTC in the IANA format (e.g., America/New_York).
+        - church_id: Optional. A string representing the church id. Required if unauthenticated.
+
+    Returns:
+        - A list of fasts filtered by the church and culmination feast date.
+    """
+    serializer_class = FastSerializer
+    permission_classes = [permissions.AllowAny]  # Allow any user to access this view
+
+    def get_queryset(self):
+        church = self.get_church()
+        date_str = self.request.query_params.get('date')
+        tz = self.get_timezone()
+        
+        if not date_str:
+            raise ValidationError("date query parameter is required.")
+        
+        # Generate cache key
+        cache_key = get_cache_key('fast_by_feast_date', church.id, date_str, tz.zone)
+        
+        # Try to get serialized data from cache
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            # If found in cache, filter the queryset by the cached IDs
+            return Fast.objects.filter(id__in=cached_data)
+
+        try:
+            feast_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValidationError("Invalid date format. Expected format: yyyy-mm-dd.")
+
+        # Get current date for annotations
+        today = timezone.localdate(timezone=tz)
+
+        # Optimize queryset with select_related and prefetch_related
+        queryset = Fast.objects.annotate(
+            participant_count=Count('profiles', distinct=True),
+            total_days=Count('days', distinct=True),
+            start_date=Min('days__date'),
+            end_date=Max('days__date'),
+            current_day_count=Count(
+                'days',
+                filter=Q(days__date__lte=today),
+                distinct=True
+            )
+        ).filter(
+            church=church,
+            culmination_feast_date=feast_date
+        ).select_related(
+            'church'
+        ).prefetch_related(
+            'days',
+            'profiles'
+        )
+        
+        # Cache the list of Fast IDs instead of the queryset
+        fast_ids = list(queryset.values_list('id', flat=True))
+        cache.set(cache_key, fast_ids, CACHE_TTL)
+        
+        return queryset
+
+
 class JoinFastView(generics.UpdateAPIView):
     """
     API view for a user to join a specific fast.

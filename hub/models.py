@@ -50,6 +50,23 @@ class Fast(models.Model):
         blank=True,
         help_text="You can enter in day/month/year format, e.g., 8/15/24",
     )
+    culmination_feast_salutation = models.CharField(
+        max_length=256,
+        null=True,
+        blank=True,
+        help_text="Greeting or salutation for the culmination feast"
+    )
+    culmination_feast_message = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Message for the culmination feast"
+    )
+    culmination_feast_message_attribution = models.CharField(
+        max_length=256,
+        null=True,
+        blank=True,
+        help_text="Attribution or author of the culmination feast message"
+    )
     # auto-saved to be the year of the first day of the fast
     year = models.IntegerField(
         validators=[MinValueValidator(2024), MaxValueValidator(3000)],
@@ -163,6 +180,7 @@ class Fast(models.Model):
         ]
         indexes = [
             models.Index(fields=["church"]),
+            models.Index(fields=["culmination_feast_date"]),
         ]
 
     @property

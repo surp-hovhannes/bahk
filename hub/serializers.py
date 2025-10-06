@@ -307,7 +307,9 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     class Meta:
         model = models.Fast
         fields = ['id', 'name', 'church', 'description', 'culmination_feast', 
-                 'culmination_feast_date', 'year', 'image', 'thumbnail', 'url',
+                 'culmination_feast_date', 'culmination_feast_salutation',
+                 'culmination_feast_message', 'culmination_feast_message_attribution',
+                 'year', 'image', 'thumbnail', 'url',
                  'participant_count', 'countdown', 'days_to_feast', 'start_date',
                  'end_date', 'joined', 'has_passed', 'next_fast_date',
                  'total_number_of_days', 'current_day_number', 'modal_id']
