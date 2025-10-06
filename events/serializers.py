@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.utils.html import strip_tags
 import re
 from hub.mixins import ThumbnailCacheMixin
+from django.utils.translation import activate
 
 
 class EventTypeSerializer(serializers.ModelSerializer):
@@ -66,6 +67,14 @@ class EventSerializer(serializers.ModelSerializer):
         if obj.target:
             return str(obj.target)[:100]  # Limit length
         return None
+
+    def to_representation(self, instance):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        data['title'] = getattr(instance, 'title_i18n', instance.title)
+        data['description'] = getattr(instance, 'description_i18n', instance.description)
+        return data
 
 
 class EventListSerializer(EventSerializer):
@@ -234,6 +243,14 @@ class UserActivityFeedSerializer(serializers.ModelSerializer, ThumbnailCacheMixi
                 pass
         
         return None
+
+    def to_representation(self, instance):
+        lang = self.context.get('lang') or (self.context.get('request').query_params.get('lang') if self.context.get('request') else None) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        data['title'] = getattr(instance, 'title_i18n', instance.title)
+        data['description'] = getattr(instance, 'description_i18n', instance.description)
+        return data
 
     # -----------------------------
     # Validation and sanitization

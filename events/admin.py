@@ -340,10 +340,9 @@ class EventAdmin(admin.ModelAdmin):
                     'error': 'Invalid date range. Must be between 1 and 365 days.'
                 }, status=400)
             
-            # Normalize to calendar-day boundaries so AJAX updates match initial load
+            # Use a rolling window of the last N days to avoid edge-of-midnight zeros
             now = timezone.now()
-            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            start_of_window = end_of_today - timedelta(days=days)
+            start_of_window = now - timedelta(days=days)
             
         except (ValueError, TypeError) as e:
             return JsonResponse({

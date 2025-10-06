@@ -160,6 +160,9 @@ class FastAdmin(admin.ModelAdmin):
     ordering = ("-year", "church", "name")
     list_filter = ("church", "year")
     sortable_by = ("get_name", "participant_count")
+    # Hide base fields that also have modeltrans virtual translation fields to
+    # avoid duplicate inputs in the admin form (e.g., "Description" shown twice)
+    exclude = ("name", "description", "culmination_feast")
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)

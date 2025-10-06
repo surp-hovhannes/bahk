@@ -202,6 +202,7 @@ class FastDetailView(TimezoneMixin, generics.RetrieveAPIView):
 
     Query Parameters:
         - tz: Optional. Timezone offset from UTC in the IANA format (e.g., America/New_York).
+        - lang: Optional. Language code for translations (e.g., en, hy). Defaults to 'en'.
     
     Returns:
         - Details of the requested fast.
@@ -219,11 +220,15 @@ class FastDetailView(TimezoneMixin, generics.RetrieveAPIView):
     def retrieve(self, request, *args, **kwargs):
         # Generate cache key using the fast ID, auth status, and timezone
         is_authenticated = request.user.is_authenticated
+        lang = request.query_params.get('lang') or 'en'
+        # Include user id when authenticated to prevent per-user fields (e.g., joined) from leaking
+        auth_segment = f"user:{request.user.id}" if is_authenticated else 'anon'
         cache_key = get_cache_key(
             'fast_detail',
             self.kwargs['pk'],
-            'auth' if is_authenticated else 'anon',
-            self.get_timezone().zone
+            auth_segment,
+            self.get_timezone().zone,
+            lang
         )
         
         # Try to get serialized data from cache
@@ -679,10 +684,10 @@ class FastOnDate(views.APIView):
     def get(self, request):
         if request.user.is_authenticated:
             fast = _get_fast_for_user_on_date(request)
-            return response.Response(FastSerializer(fast).data)
+            return response.Response(FastSerializer(fast, context={'request': request}).data)
         else:
             fast = _get_fast_on_date(request)
-            return response.Response(FastSerializer(fast).data)
+            return response.Response(FastSerializer(fast, context={'request': request}).data)
 
 
 class FastOnDateWithoutUser(views.APIView):
@@ -694,7 +699,7 @@ class FastOnDateWithoutUser(views.APIView):
 
     def get(self, request):
         fast = _get_fast_on_date(request)
-        return response.Response(FastSerializer(fast).data)
+        return response.Response(FastSerializer(fast, context={'request': request}).data)
     
 
 def _get_fast_for_user_on_date(request):

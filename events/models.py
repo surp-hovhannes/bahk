@@ -6,6 +6,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
+from modeltrans.fields import TranslationField
 from django.utils import timezone
 from django.db.models import Count
 
@@ -219,6 +220,11 @@ class Event(models.Model):
         blank=True,
         help_text="Detailed description of the event"
     )
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'title',
+        'description',
+    ))
     
     # Flexible data storage for event-specific information
     data = models.JSONField(
@@ -458,6 +464,11 @@ class UserActivityFeed(models.Model):
         blank=True,
         help_text="Activity description"
     )
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'title',
+        'description',
+    ))
     
     # Read status
     is_read = models.BooleanField(
@@ -1033,6 +1044,11 @@ class Announcement(models.Model):
     description = models.TextField(
         help_text="Short description of the announcement"
     )
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'title',
+        'description',
+    ))
     
     url = models.URLField(
         max_length=2048,

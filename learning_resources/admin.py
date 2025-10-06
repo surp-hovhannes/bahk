@@ -23,19 +23,9 @@ class VideoAdmin(admin.ModelAdmin):
     search_fields = ('title', 'description')
     list_filter = ('category', 'created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'thumbnail_preview')
-    fieldsets = (
-        (None, {
-            'fields': ('title', 'description', 'category')
-        }),
-        ('Media', {
-            'fields': ('video', 'thumbnail', 'thumbnail_preview'),
-            'description': 'Large video files will be automatically uploaded in chunks. Please wait for the upload to complete.'
-        }),
-        ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        })
-    )
+    # Hide base fields that also have modeltrans virtual translation fields to
+    # avoid duplicate inputs in the admin form
+    exclude = ('title', 'description')
 
     def thumbnail_preview(self, obj):
         if obj.thumbnail:
@@ -52,18 +42,9 @@ class ArticleAdmin(MarkdownxModelAdmin):
     search_fields = ('title', 'body')
     list_filter = ('created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'image_preview')
-    fieldsets = (
-        (None, {
-            'fields': ('title', 'body')
-        }),
-        ('Media', {
-            'fields': ('image', 'image_preview')
-        }),
-        ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        })
-    )
+    # Hide base fields that also have modeltrans virtual translation fields to
+    # avoid duplicate inputs in the admin form
+    exclude = ('title', 'body')
 
     def image_preview(self, obj):
         if obj.image:
@@ -81,18 +62,9 @@ class RecipeAdmin(MarkdownxModelAdmin):
     search_fields = ('title', 'directions', 'ingredients')
     list_filter = ('created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'image_preview')
-    fieldsets = (
-        (None, {
-            'fields': ('title', 'description', 'time_required', 'serves', 'directions', 'ingredients',),
-        }),
-        ('Media', {
-            'fields': ('image', 'image_preview')
-        }),
-        ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        })
-    )
+    # Hide base fields that also have modeltrans virtual translation fields to
+    # avoid duplicate inputs in the admin formx
+    exclude = ('title', 'description', 'time_required', 'serves', 'directions', 'ingredients')
 
     def image_preview(self, obj):
         if obj.image:
