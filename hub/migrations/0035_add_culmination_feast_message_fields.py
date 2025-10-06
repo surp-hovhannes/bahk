@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0033_add_culmination_feast_date_index'),
+        ('hub', '0034_add_culmination_feast_date_index'),
     ]
 
     operations = [

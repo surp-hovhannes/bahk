@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0032_profile_utm_fields'),
+        ('hub', '0033_alter_devotional_unique_together_devotional_i18n_and_more'),
     ]
 
     operations = [

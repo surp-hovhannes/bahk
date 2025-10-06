@@ -90,6 +90,9 @@ class Fast(models.Model):
         'name',
         'description',
         'culmination_feast',
+        'culmination_feast_salutation',
+        'culmination_feast_message',
+        'culmination_feast_message_attribution',
     ))
 
     # 2048 chars is the maximum URL length on Google Chrome
