@@ -358,9 +358,10 @@ class FastStatsSerializer(serializers.Serializer):
         # Only count days that have already occurred (not future dates)
         from django.db.models import Count, Q
         from django.utils import timezone
+        import pytz
         
         # Get timezone from context, default to UTC
-        tz = self.context.get('tz')
+        tz = self.context.get('tz') or pytz.UTC
         today = timezone.localdate(timezone=tz)
         
         # Single query with aggregation - much more efficient
@@ -374,9 +375,10 @@ class FastStatsSerializer(serializers.Serializer):
         # Count fasts where the end date has passed
         from django.db.models import Max
         from django.utils import timezone
+        import pytz
         
         # Get timezone from context, default to UTC
-        tz = self.context.get('tz')
+        tz = self.context.get('tz') or pytz.UTC
         today = timezone.localdate(timezone=tz)
         
         # Annotate each fast with its end_date (max date of its days)
