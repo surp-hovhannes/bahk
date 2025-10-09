@@ -324,9 +324,9 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         data['name'] = getattr(instance, 'name_i18n', instance.name)
         data['description'] = getattr(instance, 'description_i18n', instance.description)
         data['culmination_feast'] = getattr(instance, 'culmination_feast_i18n', instance.culmination_feast)
-        data['culmination_feast_salutation'] = getattr(instance, 'culmination_feast_salutation_i18n', instance.culmination_feast_salutation)
-        data['culmination_feast_message'] = getattr(instance, 'culmination_feast_message_i18n', instance.culmination_feast_message)
-        data['culmination_feast_message_attribution'] = getattr(instance, 'culmination_feast_message_attribution_i18n', instance.culmination_feast_message_attribution)
+        data['culmination_feast_salutation'] = getattr(instance, 'culmination_feast_salutation_i18n', getattr(instance, 'culmination_feast_salutation', None))
+        data['culmination_feast_message'] = getattr(instance, 'culmination_feast_message_i18n', getattr(instance, 'culmination_feast_message', None))
+        data['culmination_feast_message_attribution'] = getattr(instance, 'culmination_feast_message_attribution_i18n', getattr(instance, 'culmination_feast_message_attribution', None))
         return data
 
     @cached_property
