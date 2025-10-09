@@ -579,11 +579,11 @@ class FastStatsView(views.APIView):
     This view returns statistics about the specified user's fasting participation.
     
     Caching:
-        - Cached for 15 minutes per user
+        - Cached for 15 minutes per user with user-specific cache key
         - Cache is invalidated when:
           * User joins or leaves a fast
           * User uses a checklist
-        - Uses vary_on_headers('Authorization') for per-user caching
+        - Uses manual caching with predictable cache key: bahk:fast_stats:{user_id}
 
     Permissions:
         - IsAuthenticated: Only authenticated users can access this view.
@@ -597,9 +597,15 @@ class FastStatsView(views.APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
-    @method_decorator(cache_page(60 * 15))  # Cache for 15 minutes
-    @method_decorator(vary_on_headers('Authorization'))  # Per-user cache
     def get(self, request):
+        # Use user-specific cache key for reliable invalidation
+        cache_key = f"bahk:fast_stats:{request.user.id}"
+        
+        # Try to get cached data
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return response.Response(cached_data)
+        
         # Optimized: Prefetch related data to avoid N+1 queries
         # This ensures that when the serializer calls obj.fasts.aggregate(),
         # it has efficient access to the related data
@@ -615,7 +621,12 @@ class FastStatsView(views.APIView):
         
         # Pass timezone in context for date filtering
         serialized_stats = FastStatsSerializer(optimized_profile, context={'tz': user_tz})
-        return response.Response(serialized_stats.data)
+        data = serialized_stats.data
+        
+        # Cache the result for 15 minutes
+        cache.set(cache_key, data, CACHE_TTL)
+        
+        return response.Response(data)
 
 
 class FastOnDate(views.APIView):

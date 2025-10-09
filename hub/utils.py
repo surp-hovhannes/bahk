@@ -73,13 +73,9 @@ def invalidate_fast_stats_cache(user):
     Args:
         user: User object whose stats cache should be invalidated
     """
-    if hasattr(cache, 'delete_pattern'):
-        # Invalidate all cache entries for this user's stats endpoint
-        # The cache key includes the Authorization header, so we match by pattern
-        cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*.fasts/stats/.*")
-    else:
-        # Fallback - less efficient but works
-        cache.clear()
+    # Use the same cache key format as FastStatsView
+    cache_key = f"bahk:fast_stats:{user.id}"
+    cache.delete(cache_key)
 
 
 def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
