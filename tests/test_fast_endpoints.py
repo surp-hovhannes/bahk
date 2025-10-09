@@ -132,6 +132,48 @@ class FastEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         print(f"Leave fast endpoint response time: {leave_time:.3f}s")
     
+    def test_join_and_leave_fast_validation(self):
+        """Test validation errors for join and leave operations."""
+        self.client.force_authenticate(user=self.user1)
+        
+        # Test joining without fast_id
+        response = self.client.put(self.fast_join_url, {})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('fast_id is required', response.json()['detail'])
+        
+        # Test joining with non-existent fast_id
+        response = self.client.put(self.fast_join_url, {'fast_id': 99999})
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('Fast not found', response.json()['detail'])
+        
+        # Join the fast first
+        response = self.client.put(self.fast_join_url, {'fast_id': self.fast.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Test joining the same fast again (should fail)
+        response = self.client.put(self.fast_join_url, {'fast_id': self.fast.id})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already part of this fast', response.json()['detail'])
+        
+        # Leave the fast
+        response = self.client.put(self.fast_leave_url, {'fast_id': self.fast.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Test leaving without fast_id
+        response = self.client.put(self.fast_leave_url, {})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('fast_id is required', response.json()['detail'])
+        
+        # Test leaving with non-existent fast_id
+        response = self.client.put(self.fast_leave_url, {'fast_id': 99999})
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('Fast not found', response.json()['detail'])
+        
+        # Test leaving a fast the user is not part of
+        response = self.client.put(self.fast_leave_url, {'fast_id': self.fast.id})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('not part of this fast', response.json()['detail'])
+    
     @tag('performance')
     def test_fast_participants_endpoint(self):
         """Test the fast participants endpoint."""

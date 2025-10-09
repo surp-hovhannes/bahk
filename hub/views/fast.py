@@ -348,16 +348,47 @@ class JoinFastView(generics.UpdateAPIView):
     def get_object(self):
         return self.request.user.profile
 
-    def perform_update(self, serializer):
-        fast = Fast.objects.get(id=self.request.data.get('fast_id'))
+    def update(self, request, *args, **kwargs):
+        """Override update to add validation before performing the update."""
+        fast_id = request.data.get('fast_id')
+        
+        # Validate fast_id is provided
+        if not fast_id:
+            return response.Response(
+                {"detail": "fast_id is required."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if fast exists
+        try:
+            fast = Fast.objects.get(id=fast_id)
+        except Fast.DoesNotExist:
+            return response.Response(
+                {"detail": "Fast not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if user is already part of this fast
+        profile = self.get_object()
+        if fast in profile.fasts.all():
+            return response.Response(
+                {"detail": "You are already part of this fast."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Store fast for use in perform_update
+        self._fast = fast
+        
+        # Call parent update method which will call perform_update
+        return super().update(request, *args, **kwargs)
 
-        if not fast:
-            return response.Response({"detail": "Fast not found."}, status=status.HTTP_404_NOT_FOUND)
+    def perform_update(self, serializer):
+        """Perform the actual update and invalidate caches."""
+        fast = self._fast
+        profile = self.get_object()
         
-        if fast in self.get_object().fasts.all():
-            return response.Response({"detail": "You are already part of this fast."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        self.get_object().fasts.add(fast)
+        # Add user to fast
+        profile.fasts.add(fast)
         serializer.save()
         
         # Invalidate the participant list cache for this fast
@@ -389,25 +420,60 @@ class LeaveFastView(generics.UpdateAPIView):
     def get_object(self):
         return self.request.user.profile
 
+    def update(self, request, *args, **kwargs):
+        """Override update to add validation before performing the update."""
+        fast_id = request.data.get('fast_id')
+        
+        # Validate fast_id is provided
+        if not fast_id:
+            return response.Response(
+                {"detail": "fast_id is required."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if fast exists
+        try:
+            fast = Fast.objects.get(id=fast_id)
+        except Fast.DoesNotExist:
+            return response.Response(
+                {"detail": "Fast not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if user is part of this fast
+        profile = self.get_object()
+        if fast not in profile.fasts.all():
+            return response.Response(
+                {"detail": "You are not part of this fast."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Store fast for use in perform_update
+        self._fast = fast
+        
+        # Call parent update method which will call perform_update
+        response_obj = super().update(request, *args, **kwargs)
+        
+        # Override the default response with a custom success message
+        return response.Response(
+            {"detail": "Successfully left the fast."}, 
+            status=status.HTTP_200_OK
+        )
+
     def perform_update(self, serializer):
-        fast_id = self.request.data.get('fast_id')
-        fast = Fast.objects.filter(id=fast_id).first()
-
-        if not fast:
-            return response.Response({"detail": "Fast not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if fast not in self.get_object().fasts.all():
-            return response.Response({"detail": "You are not part of this fast."}, status=status.HTTP_400_BAD_REQUEST)
-
-        self.get_object().fasts.remove(fast)
+        """Perform the actual update and invalidate caches."""
+        fast = self._fast
+        profile = self.get_object()
+        
+        # Remove user from fast
+        profile.fasts.remove(fast)
+        serializer.save()
         
         # Invalidate the participant list cache for this fast
-        invalidate_fast_participants_cache(fast_id)
+        invalidate_fast_participants_cache(fast.id)
         
         # Invalidate the stats cache for this user
         invalidate_fast_stats_cache(self.request.user)
-        
-        return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
 
 
 def vary_on_query_params(*params):
