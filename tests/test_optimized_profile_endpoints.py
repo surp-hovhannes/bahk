@@ -136,11 +136,23 @@ class OptimizedProfileEndpointTests(APITestCase):
         # Verify response correctness
         self.assertEqual(response_25_fasts.status_code, status.HTTP_200_OK)
         data = response_25_fasts.data
+        
+        # Check all fields are present
+        self.assertIn('joined_fasts', data)
+        self.assertIn('total_fasts', data)
+        self.assertIn('total_fast_days', data)
+        self.assertIn('completed_fasts', data)
+        self.assertIn('checklist_uses', data)
+        
         self.assertEqual(data['total_fasts'], 25)
         # First batch: 5 fasts * 10 days = 50 days
         # Second batch: 20 fasts * 15 days = 300 days
         # Total: 350 days
         self.assertEqual(data['total_fast_days'], 5 * 10 + 20 * 15)
+        # All fasts created by create_fasts_with_days have ended (all days in past)
+        self.assertEqual(data['completed_fasts'], 25)
+        # No checklist events created in this test
+        self.assertEqual(data['checklist_uses'], 0)
     
     @tag('performance', 'slow')
     def test_optimized_fast_stats_performance(self):

@@ -579,6 +579,8 @@ class FastStatsView(views.APIView):
         - Array of fast ids that the user has joined
         - Total number of fasts the user has joined
         - Total number of fast days the user has participated in
+        - Number of completed fasts
+        - Number of checklist uses
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -588,12 +590,16 @@ class FastStatsView(views.APIView):
         # it has efficient access to the related data
         user_profile = request.user.profile
         
+        # Get user's timezone for accurate date calculations
+        user_tz = pytz.timezone(user_profile.timezone) if user_profile.timezone else pytz.UTC
+        
         # Prefetch the fasts and their days to optimize the serializer queries
         optimized_profile = Profile.objects.select_related('user', 'church').prefetch_related(
             Prefetch('fasts', queryset=Fast.objects.prefetch_related('days'))
         ).get(id=user_profile.id)
         
-        serialized_stats = FastStatsSerializer(optimized_profile)
+        # Pass timezone in context for date filtering
+        serialized_stats = FastStatsSerializer(optimized_profile, context={'tz': user_tz})
         return response.Response(serialized_stats.data)
 
 
