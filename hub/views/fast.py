@@ -18,7 +18,7 @@ from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count, Min, Max, Sum, Prefetch
 from rest_framework.pagination import LimitOffsetPagination
-from ..utils import invalidate_fast_participants_cache
+from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache
 from functools import wraps
 from hub.tasks import generate_participant_map
 import sentry_sdk
@@ -362,6 +362,9 @@ class JoinFastView(generics.UpdateAPIView):
         
         # Invalidate the participant list cache for this fast
         invalidate_fast_participants_cache(fast.id)
+        
+        # Invalidate the stats cache for this user
+        invalidate_fast_stats_cache(self.request.user)
 
 
 class LeaveFastView(generics.UpdateAPIView):
@@ -400,6 +403,9 @@ class LeaveFastView(generics.UpdateAPIView):
         
         # Invalidate the participant list cache for this fast
         invalidate_fast_participants_cache(fast_id)
+        
+        # Invalidate the stats cache for this user
+        invalidate_fast_stats_cache(self.request.user)
         
         return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
 
@@ -571,6 +577,13 @@ class FastStatsView(views.APIView):
     API view to retrieve statistics about users fasting participation
 
     This view returns statistics about the specified user's fasting participation.
+    
+    Caching:
+        - Cached for 15 minutes per user
+        - Cache is invalidated when:
+          * User joins or leaves a fast
+          * User uses a checklist
+        - Uses vary_on_headers('Authorization') for per-user caching
 
     Permissions:
         - IsAuthenticated: Only authenticated users can access this view.
@@ -584,6 +597,8 @@ class FastStatsView(views.APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @method_decorator(cache_page(60 * 15))  # Cache for 15 minutes
+    @method_decorator(vary_on_headers('Authorization'))  # Per-user cache
     def get(self, request):
         # Optimized: Prefetch related data to avoid N+1 queries
         # This ensures that when the serializer calls obj.fasts.aggregate(),
