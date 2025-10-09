@@ -343,6 +343,8 @@ class FastStatsSerializer(serializers.Serializer):
     joined_fasts = serializers.SerializerMethodField()
     total_fasts = serializers.SerializerMethodField()
     total_fast_days = serializers.SerializerMethodField()
+    completed_fasts = serializers.SerializerMethodField()
+    checklist_uses = serializers.SerializerMethodField()
 
     def get_joined_fasts(self, obj):
         return obj.fasts.values_list('id', flat=True)
@@ -353,17 +355,58 @@ class FastStatsSerializer(serializers.Serializer):
     
     def get_total_fast_days(self, obj):
         # Optimized version: Use database aggregation instead of N+1 queries
-        # This replaces the inefficient sum(fast.days.count() for fast in obj.fasts.all())
-        from django.db.models import Count
+        # Only count days that have already occurred (not future dates)
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        import pytz
+        
+        # Get timezone from context, default to UTC
+        tz = self.context.get('tz') or pytz.UTC
+        today = timezone.localdate(timezone=tz)
         
         # Single query with aggregation - much more efficient
+        # Filter to only count days that have occurred (date <= today)
         result = obj.fasts.aggregate(
-            total_days=Count('days', distinct=True)
+            total_days=Count('days', filter=Q(days__date__lte=today), distinct=True)
         )
         return result['total_days'] or 0
     
+    def get_completed_fasts(self, obj):
+        # Count fasts where the end date has passed
+        from django.db.models import Max
+        from django.utils import timezone
+        import pytz
+        
+        # Get timezone from context, default to UTC
+        tz = self.context.get('tz') or pytz.UTC
+        today = timezone.localdate(timezone=tz)
+        
+        # Annotate each fast with its end_date (max date of its days)
+        # Then filter for fasts where end_date is before today
+        completed = obj.fasts.annotate(
+            end_date=Max('days__date')
+        ).filter(end_date__lt=today).count()
+        
+        return completed
+    
+    def get_checklist_uses(self, obj):
+        # Count CHECKLIST_USED events for this user
+        # Note: This depends on Event records not being deleted
+        try:
+            from events.models import Event, EventType
+            
+            checklist_count = Event.objects.filter(
+                user=obj.user,
+                event_type__code=EventType.CHECKLIST_USED
+            ).count()
+            
+            return checklist_count
+        except Exception:
+            # If events app is not available or there's an error, return 0
+            return 0
+    
     class Meta:
-        fields = ['joined_fasts', 'total_fasts', 'total_fast_days']
+        fields = ['joined_fasts', 'total_fasts', 'total_fast_days', 'completed_fasts', 'checklist_uses']
 
 
 class DaySerializer(serializers.ModelSerializer):

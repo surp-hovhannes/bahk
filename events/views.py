@@ -460,6 +460,11 @@ class TrackChecklistUsedView(APIView):
                 },
                 request=request,
             )
+            
+            # Invalidate the stats cache for this user since checklist_uses count changed
+            from hub.utils import invalidate_fast_stats_cache
+            invalidate_fast_stats_cache(request.user)
+            
             return Response({"status": "ok"})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
