@@ -354,10 +354,115 @@ All 23 tests pass successfully.
 5. **Testing**: Comprehensive test coverage for models and API
 6. **Code Quality**: PEP 8 compliance, no linter errors
 
+## Bookmark Support
+
+Prayers and prayer sets can be bookmarked by authenticated users using the existing bookmark system. The bookmark functionality is fully integrated with Redis caching for optimal performance.
+
+### Features
+
+- **Bookmarkable Models**: Both `Prayer` and `PrayerSet` models support bookmarking
+- **Generic Foreign Keys**: Uses Django's ContentType framework for flexible bookmarking
+- **Redis Caching**: Leverages existing bookmark cache system for O(1) lookups
+- **API Integration**: Full REST API support for creating, viewing, and deleting bookmarks
+
+### API Endpoints
+
+All bookmark operations use the existing learning resources bookmark endpoints:
+
+#### Create a Bookmark
+```bash
+POST /api/learning-resources/bookmarks/create/
+Content-Type: application/json
+Authorization: Bearer <token>
+
+# Bookmark a prayer
+{
+    "content_type": "prayer",
+    "object_id": 123,
+    "note": "Beautiful morning prayer"
+}
+
+# Bookmark a prayer set
+{
+    "content_type": "prayerset",
+    "object_id": 456,
+    "note": "Daily prayer collection"
+}
+```
+
+#### List User's Bookmarks
+```bash
+GET /api/learning-resources/bookmarks/
+Authorization: Bearer <token>
+
+# Filter by content type
+GET /api/learning-resources/bookmarks/?content_type=prayer
+GET /api/learning-resources/bookmarks/?content_type=prayerset
+```
+
+#### Check if Item is Bookmarked
+```bash
+GET /api/learning-resources/bookmarks/check/prayer/123/
+GET /api/learning-resources/bookmarks/check/prayerset/456/
+Authorization: Bearer <token>
+
+Response:
+{
+    "is_bookmarked": true,
+    "bookmark_id": 789
+}
+```
+
+#### Delete a Bookmark
+```bash
+DELETE /api/learning-resources/bookmarks/prayer/123/
+DELETE /api/learning-resources/bookmarks/prayerset/456/
+Authorization: Bearer <token>
+```
+
+### Serializer Integration
+
+All prayer and prayer set serializers include an `is_bookmarked` field:
+
+```json
+{
+    "id": 123,
+    "title": "Morning Prayer",
+    "text": "Lord, bless this day...",
+    "category": "morning",
+    "is_bookmarked": true,
+    ...
+}
+```
+
+The `is_bookmarked` field:
+- Returns `true` if the authenticated user has bookmarked the item
+- Returns `false` for unauthenticated users or if not bookmarked
+- Uses Redis cache for optimal performance
+- Automatically updates when bookmarks are created or deleted
+
+### Implementation Details
+
+**Modified Files:**
+- `learning_resources/serializers.py`: Added 'prayer' and 'prayerset' to allowed content types
+- `learning_resources/models.py`: Added prayer/prayerset handling in `Bookmark.get_content_representation()`
+- `learning_resources/views.py`: Added prayer/prayerset support to bookmark check and delete views
+- `prayers/serializers.py`: Integrated `BookmarkOptimizedSerializerMixin` into all serializers
+- `prayers/views.py`: Added bookmark cache context for performance optimization
+- `prayers/tests.py`: Added 12 comprehensive bookmark tests
+
+**Test Coverage:**
+- Creating bookmarks for prayers and prayer sets
+- Checking `is_bookmarked` field in API responses (authenticated and unauthenticated)
+- Deleting bookmarks
+- Duplicate bookmark prevention
+- Bookmark list includes proper content representation
+- Authentication requirements
+
 ## Future Enhancements
 
 Potential future improvements:
-1. Add bookmark support for prayers (integrate with existing bookmark system)
+1. ~~Add bookmark support for prayers (integrate with existing bookmark system)~~ ✅ **Completed**
 2. Add user-specific prayer collections
 3. Add prayer history/tracking
 4. Add prayer reminders/notifications
@@ -368,7 +473,8 @@ Potential future improvements:
 ## Notes
 
 - The URL namespace warning `?: (urls.W005)` is pre-existing and not related to this implementation
-- All tests pass successfully with no issues
+- All tests pass successfully with no issues (35 total tests including 12 bookmark tests)
 - The feature is fully integrated and ready for production use
 - Django-taggit migrations were automatically applied during setup
+- Bookmark support fully integrated with existing bookmark system and Redis caching
 

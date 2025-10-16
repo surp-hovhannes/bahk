@@ -622,6 +622,8 @@ def bookmark_delete_view(request, content_type, object_id):
             ct = ContentType.objects.get(app_label='hub', model='devotionalset')
         elif content_type.lower() in ['devotional', 'fast', 'reading']:
             ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
+        elif content_type.lower() in ['prayer', 'prayerset']:
+            ct = ContentType.objects.get(app_label='prayers', model=content_type.lower())
         else:
             ct = ContentType.objects.get(
                 app_label='learning_resources', model=content_type.lower()
@@ -715,6 +717,8 @@ def bookmark_check_view(request, content_type, object_id):
             ct = ContentType.objects.get(app_label='hub', model='devotionalset')
         elif content_type.lower() in ['devotional', 'fast', 'reading']:
             ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
+        elif content_type.lower() in ['prayer', 'prayerset']:
+            ct = ContentType.objects.get(app_label='prayers', model=content_type.lower())
         else:
             ct = ContentType.objects.get(
                 app_label='learning_resources', model=content_type.lower()

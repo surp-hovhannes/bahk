@@ -4,6 +4,7 @@ from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
 
+from learning_resources.cache import BookmarkCacheManager
 from prayers.models import Prayer, PrayerSet
 from prayers.serializers import (
     PrayerSerializer,
@@ -41,6 +42,12 @@ class PrayerListView(generics.ListAPIView):
     """
     serializer_class = PrayerSerializer
     permission_classes = [AllowAny]
+    
+    def get_serializer_context(self):
+        """Add bookmark cache data to context for performance optimization."""
+        context = super().get_serializer_context()
+        context['use_bookmark_cache'] = True
+        return context
     
     def get_queryset(self):
         """Get filtered and ordered queryset of prayers."""
@@ -135,6 +142,12 @@ class PrayerSetListView(generics.ListAPIView):
     serializer_class = PrayerSetListSerializer
     permission_classes = [AllowAny]
     
+    def get_serializer_context(self):
+        """Add bookmark cache data to context for performance optimization."""
+        context = super().get_serializer_context()
+        context['use_bookmark_cache'] = True
+        return context
+    
     def get_queryset(self):
         """Get filtered and ordered queryset of prayer sets."""
         # Activate requested language for _i18n virtual fields
@@ -181,6 +194,12 @@ class PrayerSetDetailView(generics.RetrieveAPIView):
     """
     serializer_class = PrayerSetSerializer
     permission_classes = [AllowAny]
+    
+    def get_serializer_context(self):
+        """Add bookmark cache data to context for performance optimization."""
+        context = super().get_serializer_context()
+        context['use_bookmark_cache'] = True
+        return context
     
     def get_queryset(self):
         """Optimize queryset with prefetch for prayers."""
