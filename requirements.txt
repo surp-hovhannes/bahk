@@ -31,6 +31,10 @@ newrelic
 sentry-sdk[django]
 # Translations
 django-modeltrans>=0.8
+# Tagging
+django-taggit==5.0.1
+# Drag-and-drop ordering in admin
+django-admin-sortable2==2.2.1
 # Map generation packages
 matplotlib==3.10.1
 shapely==2.0.7

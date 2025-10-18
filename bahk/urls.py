@@ -73,6 +73,7 @@ urlpatterns += [
     path("api/", include("hub.urls")),
     path("api/learning-resources/", include("learning_resources.urls")),
     path("api/events/", include("events.urls")),
+    path("api/", include("prayers.urls")),
 ]
 
 # Learning resources endpoints are handled by the include above

@@ -387,6 +387,19 @@ class Bookmark(models.Model):
                 representation['title'] = getattr(content, 'title', f'Devotional {content.id}')
                 representation['description'] = getattr(content, 'description', None)
                 representation['thumbnail_url'] = None
+        elif self.content_type_name in ['prayer', 'prayerset']:
+            # Special handling for prayer and prayerset
+            representation['title'] = content.title
+            if hasattr(content, 'text'):  # Prayer has text field
+                # Truncate prayer text to 200 chars for preview
+                representation['description'] = content.text[:200] if content.text else None
+            elif hasattr(content, 'description'):  # PrayerSet has description
+                representation['description'] = content.description
+            # PrayerSet has cached_thumbnail_url
+            if hasattr(content, 'cached_thumbnail_url'):
+                representation['thumbnail_url'] = content.cached_thumbnail_url
+            else:
+                representation['thumbnail_url'] = None
         else:
             # Add common fields for other content types
             if hasattr(content, 'title'):

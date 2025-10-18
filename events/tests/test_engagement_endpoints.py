@@ -15,6 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from events.models import Event, EventType
 from hub.models import Fast, Church, Profile, Day, Devotional, Video
+from prayers.models import PrayerSet
 
 User = get_user_model()
 
@@ -81,6 +82,12 @@ class EngagementTrackingEndpointsTest(APITestCase):
             video=self.video,
             description='Test devotional',
             order=1
+        )
+        
+        # Create test prayer set
+        self.prayer_set = PrayerSet.objects.create(
+            title='Test Prayer Set',
+            church=self.church
         )
         
         # Set up authentication
@@ -195,6 +202,75 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(devotional_event.data['devotional_id'], self.devotional.id)
         self.assertEqual(devotional_event.data['fast_id'], self.fast.id)
         self.assertEqual(devotional_event.data['day'], '2024-03-01')
+    
+    def test_track_prayer_set_viewed_success(self):
+        """Test successful prayer set viewed tracking."""
+        url = reverse('events:track-prayer-set-viewed')
+        data = {'prayer_set_id': self.prayer_set.id}
+        
+        initial_event_count = Event.objects.count()
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        
+        # Check that event was created
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
+        
+        prayer_set_event = Event.objects.filter(
+            event_type__code=EventType.PRAYER_SET_VIEWED,
+            user=self.user
+        ).first()
+        
+        self.assertIsNotNone(prayer_set_event)
+        self.assertEqual(prayer_set_event.title, 'Prayer set viewed')
+        self.assertEqual(prayer_set_event.target, self.prayer_set)
+        self.assertEqual(prayer_set_event.data['prayer_set_id'], self.prayer_set.id)
+        self.assertEqual(prayer_set_event.data['church_id'], self.church.id)
+        self.assertEqual(prayer_set_event.data['church_name'], self.church.name)
+    
+    def test_track_prayer_set_viewed_missing_prayer_set_id(self):
+        """Test prayer set tracking with missing prayer_set_id."""
+        url = reverse('events:track-prayer-set-viewed')
+        data = {}  # Missing prayer_set_id
+        
+        initial_event_count = Event.objects.count()
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('prayer_set_id is required', response.data['error'])
+        
+        # No event should be created
+        self.assertEqual(Event.objects.count(), initial_event_count)
+    
+    def test_track_prayer_set_viewed_invalid_prayer_set_id(self):
+        """Test prayer set tracking with invalid prayer_set_id."""
+        url = reverse('events:track-prayer-set-viewed')
+        data = {'prayer_set_id': 99999}  # Non-existent prayer set
+        
+        initial_event_count = Event.objects.count()
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Invalid prayer_set_id', response.data['error'])
+        
+        # No event should be created
+        self.assertEqual(Event.objects.count(), initial_event_count)
+    
+    def test_track_prayer_set_viewed_unauthenticated(self):
+        """Test that prayer set tracking requires authentication."""
+        # Remove authentication
+        self.client.credentials()
+        
+        url = reverse('events:track-prayer-set-viewed')
+        data = {'prayer_set_id': self.prayer_set.id}
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
     
     def test_track_checklist_used_success(self):
         """Test successful checklist used tracking."""

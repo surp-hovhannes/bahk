@@ -209,7 +209,7 @@ class BookmarkCreateSerializer(serializers.ModelSerializer):
         """Validate that the content type is allowed for bookmarking."""
         allowed_models = [
             'video', 'article', 'recipe', 'devotionalset', 
-            'devotional', 'fast', 'reading'
+            'devotional', 'fast', 'reading', 'prayer', 'prayerset'
         ]
         
         if value.lower() not in allowed_models:
@@ -227,6 +227,10 @@ class BookmarkCreateSerializer(serializers.ModelSerializer):
             elif value.lower() in ['devotional', 'fast', 'reading']:
                 content_type = ContentType.objects.get(
                     app_label='hub', model=value.lower()
+                )
+            elif value.lower() in ['prayer', 'prayerset']:
+                content_type = ContentType.objects.get(
+                    app_label='prayers', model=value.lower()
                 )
             else:
                 content_type = ContentType.objects.get(

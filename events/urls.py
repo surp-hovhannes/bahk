@@ -31,6 +31,7 @@ urlpatterns = [
     
     # Engagement tracking endpoints
     path('track/devotional-viewed/', views.TrackDevotionalViewedView.as_view(), name='track-devotional-viewed'),
+    path('track/prayer-set-viewed/', views.TrackPrayerSetViewedView.as_view(), name='track-prayer-set-viewed'),
     path('track/checklist-used/', views.TrackChecklistUsedView.as_view(), name='track-checklist-used'),
     
     # Admin utilities
