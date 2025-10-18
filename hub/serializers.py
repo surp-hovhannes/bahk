@@ -308,7 +308,9 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     class Meta:
         model = models.Fast
         fields = ['id', 'name', 'church', 'description', 'culmination_feast', 
-                 'culmination_feast_date', 'year', 'image', 'thumbnail', 'url',
+                 'culmination_feast_date', 'culmination_feast_salutation',
+                 'culmination_feast_message', 'culmination_feast_message_attribution',
+                 'year', 'image', 'thumbnail', 'url',
                  'participant_count', 'countdown', 'days_to_feast', 'start_date',
                  'end_date', 'joined', 'has_passed', 'next_fast_date',
                  'total_number_of_days', 'current_day_number', 'modal_id']
@@ -322,6 +324,9 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         data['name'] = getattr(instance, 'name_i18n', instance.name)
         data['description'] = getattr(instance, 'description_i18n', instance.description)
         data['culmination_feast'] = getattr(instance, 'culmination_feast_i18n', instance.culmination_feast)
+        data['culmination_feast_salutation'] = getattr(instance, 'culmination_feast_salutation_i18n', getattr(instance, 'culmination_feast_salutation', None))
+        data['culmination_feast_message'] = getattr(instance, 'culmination_feast_message_i18n', getattr(instance, 'culmination_feast_message', None))
+        data['culmination_feast_message_attribution'] = getattr(instance, 'culmination_feast_message_attribution_i18n', getattr(instance, 'culmination_feast_message_attribution', None))
         return data
 
     @cached_property

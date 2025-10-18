@@ -438,3 +438,60 @@ def send_daily_fast_push_notification_task():
         logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for daily fasts')
     else:
         logger.info("Push Notification: No users to notify for daily fasts")
+
+
+@shared_task
+def send_culmination_feast_push_notification_task():
+    """
+    Send push notifications to users on the culmination feast date of their joined fasts.
+    
+    This task finds all fasts where today is the culmination feast date and sends
+    a push notification to all users who have joined those fasts. The notification
+    uses the culmination_feast_salutation if available, otherwise falls back to a
+    default message.
+    """
+    today = timezone.now().date()
+    
+    # Find all fasts where today is the culmination feast date
+    fasts_with_feast_today = Fast.objects.filter(culmination_feast_date=today)
+    
+    if not fasts_with_feast_today.exists():
+        logger.info("Push Notification: No culmination feast dates for today")
+        return
+    
+    # Process each fast with a feast today
+    for fast in fasts_with_feast_today:
+        # Skip weekly fasts; they have no culmination feast
+        if is_weekly_fast(fast):
+            logger.info(f"Push Notification: Skipping weekly fast {fast.name} for feast notifications")
+            continue
+        
+        # Get users who have joined this fast
+        users_to_notify = User.objects.filter(profile__fasts=fast).distinct()
+        
+        if not users_to_notify.exists():
+            logger.info(f"Push Notification: No users to notify for culmination feast of {fast.name}")
+            continue
+        
+        # Determine the message content
+        if fast.culmination_feast_salutation:
+            message = fast.culmination_feast_salutation
+        elif fast.culmination_feast:
+            message = f"Today we celebrate {fast.culmination_feast}"
+        else:
+            # Fallback if neither salutation nor feast name exists
+            message = "Today is a special feast day!"
+        
+        # Prepare notification data
+        data = {
+            "fast_id": fast.id,
+            "fast_name": fast.name,
+            "culmination_feast": fast.culmination_feast or "",
+        }
+        
+        # Send the push notification
+        send_push_notification_task(message, data, users_to_notify, 'culmination_feast')
+        logger.info(
+            f'Push Notification: Culmination feast notification sent to {len(users_to_notify)} users '
+            f'for {fast.name} ({fast.culmination_feast or "unnamed feast"})'
+        )
