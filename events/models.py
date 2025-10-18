@@ -28,6 +28,7 @@ class EventType(models.Model):
     # Engagement events for retention calculations
     DEVOTIONAL_VIEWED = 'devotional_viewed'
     CHECKLIST_USED = 'checklist_used'
+    PRAYER_SET_VIEWED = 'prayer_set_viewed'
     
     # Event type constants
     USER_JOINED_FAST = 'user_joined_fast'
@@ -69,6 +70,7 @@ class EventType(models.Model):
         (SCREEN_VIEW, 'Screen View'),
         (DEVOTIONAL_VIEWED, 'Devotional Viewed'),
         (CHECKLIST_USED, 'Checklist Used'),
+        (PRAYER_SET_VIEWED, 'Prayer Set Viewed'),
     ]
     
     # Core fields
