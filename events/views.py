@@ -418,6 +418,41 @@ class TrackDevotionalViewedView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class TrackPrayerSetViewedView(APIView):
+    """
+    Track when a user views/opens a prayer set. We do not record which prayers they read, only that it happened.
+    POST body: { "prayer_set_id": number }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        prayer_set_id = request.data.get('prayer_set_id')
+        if not prayer_set_id:
+            return Response({"error": "prayer_set_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from prayers.models import PrayerSet
+            prayer_set = PrayerSet.objects.get(id=int(prayer_set_id))
+        except (ValueError, PrayerSet.DoesNotExist):
+            return Response({"error": "Invalid prayer_set_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            Event.create_event(
+                event_type_code=EventType.PRAYER_SET_VIEWED,
+                user=request.user,
+                target=prayer_set,
+                title="Prayer set viewed",
+                data={
+                    'prayer_set_id': prayer_set.id,
+                    'church_id': prayer_set.church.id if prayer_set.church else None,
+                    'church_name': prayer_set.church.name if prayer_set.church else None,
+                },
+                request=request,
+            )
+            return Response({"status": "ok"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class TrackChecklistUsedView(APIView):
     """
     Track a generic fasting checklist interaction without capturing specific items.
@@ -460,6 +495,11 @@ class TrackChecklistUsedView(APIView):
                 },
                 request=request,
             )
+            
+            # Invalidate the stats cache for this user since checklist_uses count changed
+            from hub.utils import invalidate_fast_stats_cache
+            invalidate_fast_stats_cache(request.user)
+            
             return Response({"status": "ok"})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

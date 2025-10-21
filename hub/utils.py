@@ -61,6 +61,23 @@ def invalidate_fast_participants_cache(fast_id):
         cache.clear()
 
 
+def invalidate_fast_stats_cache(user):
+    """
+    Invalidate the cached fast stats for a specific user.
+    
+    This should be called when:
+    - User joins or leaves a fast
+    - User completes a checklist action
+    - Any action that affects user's fast statistics
+    
+    Args:
+        user: User object whose stats cache should be invalidated
+    """
+    # Use the same cache key format as FastStatsView
+    cache_key = f"bahk:fast_stats:{user.id}"
+    cache.delete(cache_key)
+
+
 def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
     """Scrapes readings from sacredtradition.am""" 
     if church not in SUPPORTED_CHURCHES:

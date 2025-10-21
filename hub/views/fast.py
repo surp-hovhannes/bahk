@@ -18,7 +18,7 @@ from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count, Min, Max, Sum, Prefetch
 from rest_framework.pagination import LimitOffsetPagination
-from ..utils import invalidate_fast_participants_cache
+from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache
 from functools import wraps
 from hub.tasks import generate_participant_map
 import sentry_sdk
@@ -429,20 +429,54 @@ class JoinFastView(generics.UpdateAPIView):
     def get_object(self):
         return self.request.user.profile
 
-    def perform_update(self, serializer):
-        fast = Fast.objects.get(id=self.request.data.get('fast_id'))
+    def update(self, request, *args, **kwargs):
+        """Override update to add validation before performing the update."""
+        fast_id = request.data.get('fast_id')
+        
+        # Validate fast_id is provided
+        if not fast_id:
+            return response.Response(
+                {"detail": "fast_id is required."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if fast exists
+        try:
+            fast = Fast.objects.get(id=fast_id)
+        except Fast.DoesNotExist:
+            return response.Response(
+                {"detail": "Fast not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if user is already part of this fast
+        profile = self.get_object()
+        if fast in profile.fasts.all():
+            return response.Response(
+                {"detail": "You are already part of this fast."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Store fast for use in perform_update
+        self._fast = fast
+        
+        # Call parent update method which will call perform_update
+        return super().update(request, *args, **kwargs)
 
-        if not fast:
-            return response.Response({"detail": "Fast not found."}, status=status.HTTP_404_NOT_FOUND)
+    def perform_update(self, serializer):
+        """Perform the actual update and invalidate caches."""
+        fast = self._fast
+        profile = self.get_object()
         
-        if fast in self.get_object().fasts.all():
-            return response.Response({"detail": "You are already part of this fast."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        self.get_object().fasts.add(fast)
+        # Add user to fast
+        profile.fasts.add(fast)
         serializer.save()
         
         # Invalidate the participant list cache for this fast
         invalidate_fast_participants_cache(fast.id)
+        
+        # Invalidate the stats cache for this user
+        invalidate_fast_stats_cache(self.request.user)
 
 
 class LeaveFastView(generics.UpdateAPIView):
@@ -467,22 +501,60 @@ class LeaveFastView(generics.UpdateAPIView):
     def get_object(self):
         return self.request.user.profile
 
+    def update(self, request, *args, **kwargs):
+        """Override update to add validation before performing the update."""
+        fast_id = request.data.get('fast_id')
+        
+        # Validate fast_id is provided
+        if not fast_id:
+            return response.Response(
+                {"detail": "fast_id is required."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if fast exists
+        try:
+            fast = Fast.objects.get(id=fast_id)
+        except Fast.DoesNotExist:
+            return response.Response(
+                {"detail": "Fast not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if user is part of this fast
+        profile = self.get_object()
+        if fast not in profile.fasts.all():
+            return response.Response(
+                {"detail": "You are not part of this fast."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Store fast for use in perform_update
+        self._fast = fast
+        
+        # Call parent update method which will call perform_update
+        response_obj = super().update(request, *args, **kwargs)
+        
+        # Override the default response with a custom success message
+        return response.Response(
+            {"detail": "Successfully left the fast."}, 
+            status=status.HTTP_200_OK
+        )
+
     def perform_update(self, serializer):
-        fast_id = self.request.data.get('fast_id')
-        fast = Fast.objects.filter(id=fast_id).first()
-
-        if not fast:
-            return response.Response({"detail": "Fast not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if fast not in self.get_object().fasts.all():
-            return response.Response({"detail": "You are not part of this fast."}, status=status.HTTP_400_BAD_REQUEST)
-
-        self.get_object().fasts.remove(fast)
+        """Perform the actual update and invalidate caches."""
+        fast = self._fast
+        profile = self.get_object()
+        
+        # Remove user from fast
+        profile.fasts.remove(fast)
+        serializer.save()
         
         # Invalidate the participant list cache for this fast
-        invalidate_fast_participants_cache(fast_id)
+        invalidate_fast_participants_cache(fast.id)
         
-        return response.Response({"detail": "Successfully left the fast."}, status=status.HTTP_200_OK)
+        # Invalidate the stats cache for this user
+        invalidate_fast_stats_cache(self.request.user)
 
 
 def vary_on_query_params(*params):
@@ -652,6 +724,13 @@ class FastStatsView(views.APIView):
     API view to retrieve statistics about users fasting participation
 
     This view returns statistics about the specified user's fasting participation.
+    
+    Caching:
+        - Cached for 15 minutes per user with user-specific cache key
+        - Cache is invalidated when:
+          * User joins or leaves a fast
+          * User uses a checklist
+        - Uses manual caching with predictable cache key: bahk:fast_stats:{user_id}
 
     Permissions:
         - IsAuthenticated: Only authenticated users can access this view.
@@ -660,22 +739,41 @@ class FastStatsView(views.APIView):
         - Array of fast ids that the user has joined
         - Total number of fasts the user has joined
         - Total number of fast days the user has participated in
+        - Number of completed fasts
+        - Number of checklist uses
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Use user-specific cache key for reliable invalidation
+        cache_key = f"bahk:fast_stats:{request.user.id}"
+        
+        # Try to get cached data
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return response.Response(cached_data)
+        
         # Optimized: Prefetch related data to avoid N+1 queries
         # This ensures that when the serializer calls obj.fasts.aggregate(),
         # it has efficient access to the related data
         user_profile = request.user.profile
+        
+        # Get user's timezone for accurate date calculations
+        user_tz = pytz.timezone(user_profile.timezone) if user_profile.timezone else pytz.UTC
         
         # Prefetch the fasts and their days to optimize the serializer queries
         optimized_profile = Profile.objects.select_related('user', 'church').prefetch_related(
             Prefetch('fasts', queryset=Fast.objects.prefetch_related('days'))
         ).get(id=user_profile.id)
         
-        serialized_stats = FastStatsSerializer(optimized_profile)
-        return response.Response(serialized_stats.data)
+        # Pass timezone in context for date filtering
+        serialized_stats = FastStatsSerializer(optimized_profile, context={'tz': user_tz})
+        data = serialized_stats.data
+        
+        # Cache the result for 15 minutes
+        cache.set(cache_key, data, CACHE_TTL)
+        
+        return response.Response(data)
 
 
 class FastOnDate(views.APIView):
