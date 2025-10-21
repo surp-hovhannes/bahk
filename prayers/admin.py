@@ -50,8 +50,8 @@ class PrayerAdmin(admin.ModelAdmin):
 class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
     """Admin interface for PrayerSet model."""
     
-    list_display = ('title', 'church', 'prayer_count', 'image_preview', 'created_at')
-    list_filter = ('church', 'created_at', 'updated_at')
+    list_display = ('title', 'category', 'church', 'prayer_count', 'image_preview', 'created_at')
+    list_filter = ('church', 'category', 'created_at', 'updated_at')
     search_fields = ('title', 'description')
     raw_id_fields = ('church',)
     readonly_fields = ('created_at', 'updated_at', 'image_preview', 'prayer_count')
@@ -59,7 +59,7 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
     
     fieldsets = (
         (None, {
-            'fields': ('title', 'title_hy', 'description', 'description_hy', 'church')
+            'fields': ('title', 'title_hy', 'description', 'description_hy', 'category', 'church')
         }),
         ('Media', {
             'fields': ('image', 'image_preview')

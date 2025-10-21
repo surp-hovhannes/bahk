@@ -130,6 +130,7 @@ class PrayerSetListView(generics.ListAPIView):
         - search (str): Optional. Filter prayer sets by matching text in title or description.
                        Case-insensitive partial matches are supported.
         - church (int): Optional. Filter prayer sets by church ID.
+        - category (str): Optional. Filter prayer sets by category (morning, evening, general).
 
     Returns:
         A JSON response with paginated prayer set results (without full prayer details).
@@ -138,6 +139,7 @@ class PrayerSetListView(generics.ListAPIView):
         GET /api/prayer-sets/
         GET /api/prayer-sets/?search=morning
         GET /api/prayer-sets/?church=1
+        GET /api/prayer-sets/?category=morning
     """
     serializer_class = PrayerSetListSerializer
     permission_classes = [AllowAny]
@@ -173,6 +175,11 @@ class PrayerSetListView(generics.ListAPIView):
                 queryset = queryset.filter(church_id=int(church_id))
             except ValueError:
                 return PrayerSet.objects.none()
+        
+        # Filter by category
+        category = self.request.query_params.get('category', None)
+        if category:
+            queryset = queryset.filter(category=category)
         
         return queryset.order_by('-created_at')
 

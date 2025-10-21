@@ -103,10 +103,20 @@ class PrayerSetModelTests(TestCase):
         prayer_set = PrayerSet.objects.create(
             title='Morning Prayers',
             description='Collection of morning prayers',
+            category='morning',
             church=self.church
         )
         self.assertEqual(prayer_set.title, 'Morning Prayers')
+        self.assertEqual(prayer_set.category, 'morning')
         self.assertEqual(prayer_set.church, self.church)
+    
+    def test_prayer_set_default_category(self):
+        """Test that prayer set defaults to 'general' category."""
+        prayer_set = PrayerSet.objects.create(
+            title='General Prayers',
+            church=self.church
+        )
+        self.assertEqual(prayer_set.category, 'general')
     
     def test_prayer_set_with_prayers(self):
         """Test adding prayers to a prayer set."""
@@ -402,6 +412,28 @@ class PrayerSetAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 1)
         self.assertEqual(response.data['results'][0]['title'], 'Daily Prayers')
+    
+    def test_prayer_set_filter_by_category(self):
+        """Test filtering prayer sets by category."""
+        # Create additional prayer sets with different categories
+        PrayerSet.objects.create(
+            title='Morning Prayer Set',
+            category='morning',
+            church=self.church
+        )
+        PrayerSet.objects.create(
+            title='Evening Prayer Set',
+            category='evening',
+            church=self.church
+        )
+        
+        url = reverse('prayers:prayer-set-list')
+        response = self.client.get(url, {'category': 'morning'})
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['title'], 'Morning Prayer Set')
+        self.assertEqual(response.data['results'][0]['category'], 'morning')
 
 
 class PrayerBookmarkTests(APITestCase):

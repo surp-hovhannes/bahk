@@ -62,7 +62,7 @@ class PrayerSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSer
     class Meta:
         model = PrayerSet
         fields = [
-            'id', 'title', 'description', 'church', 'church_name',
+            'id', 'title', 'description', 'category', 'church', 'church_name',
             'image', 'thumbnail_url', 'prayers', 'prayer_count',
             'created_at', 'updated_at', 'is_bookmarked'
         ]
@@ -121,7 +121,7 @@ class PrayerSetListSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
     class Meta:
         model = PrayerSet
         fields = [
-            'id', 'title', 'description', 'church', 'church_name',
+            'id', 'title', 'description', 'category', 'church', 'church_name',
             'thumbnail_url', 'prayer_count', 'created_at', 'updated_at', 'is_bookmarked'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
