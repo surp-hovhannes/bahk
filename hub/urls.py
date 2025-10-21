@@ -29,6 +29,13 @@ from .views.user import (
 )
 from .views.church import ChurchListView, ChurchDetailView
 from .views.readings import GetDailyReadingsForDate, ReadingContextFeedbackView
+from .views.patristic_quotes import (
+    PatristicQuoteListView,
+    PatristicQuoteDetailView,
+    PatristicQuotesByChurchView,
+    PatristicQuotesByFastView,
+    PatristicQuoteOfTheDayView,
+)
 from .views.web import (
     home, 
     test_email_view, 
@@ -89,6 +96,13 @@ urlpatterns = [
     path('devotionals/<int:pk>/', DevotionalDetailView.as_view(), name='devotional-detail'),
     path('devotionals/by-fast/<int:fast_id>/', DevotionalsByFastView.as_view(), name='devotional-by-fast'),
     path('devotionals/by-date/', DevotionalByDateView.as_view(), name='devotional-on-date'),
+
+    # Patristic Quotes endpoints
+    path('patristic-quotes/', PatristicQuoteListView.as_view(), name='patristic-quote-list'),
+    path('patristic-quotes/<int:pk>/', PatristicQuoteDetailView.as_view(), name='patristic-quote-detail'),
+    path('patristic-quotes/by-church/<int:church_id>/', PatristicQuotesByChurchView.as_view(), name='patristic-quotes-by-church'),
+    path('patristic-quotes/by-fast/<int:fast_id>/', PatristicQuotesByFastView.as_view(), name='patristic-quotes-by-fast'),
+    path('patristic-quotes/quote-of-the-day/', PatristicQuoteOfTheDayView.as_view(), name='patristic-quote-of-the-day'),
 
     # Web endpoints
     path("web/", home, name="web_home"),

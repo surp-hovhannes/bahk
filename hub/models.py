@@ -14,6 +14,7 @@ from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit, Transpose
 from model_utils.tracker import FieldTracker
 from modeltrans.fields import TranslationField
+from taggit.managers import TaggableManager
 
 import bahk.settings as settings
 from hub.constants import (
@@ -796,3 +797,54 @@ class ReadingContext(models.Model):
 
     def __str__(self):
         return f"Context for {self.reading}: {self.text[:100]}"
+
+
+class PatristicQuote(models.Model):
+    """Model for storing patristic quotes from Church Fathers and Saints."""
+    
+    text = models.TextField(
+        help_text="Quote text in Markdown format"
+    )
+    attribution = models.CharField(
+        max_length=256,
+        help_text="Source or author of the quote (e.g., 'St. John Chrysostom', 'The Desert Fathers')"
+    )
+    churches = models.ManyToManyField(
+        Church,
+        related_name='patristic_quotes',
+        help_text='Churches this quote belongs to'
+    )
+    fasts = models.ManyToManyField(
+        Fast,
+        blank=True,
+        related_name='patristic_quotes',
+        help_text='Optional fasts this quote is associated with'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Tags using django-taggit
+    tags = TaggableManager(
+        blank=True,
+        help_text='Tags for categorizing quotes (e.g., prayer, fasting, humility)'
+    )
+    
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'text',
+        'attribution',
+    ))
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Patristic Quote'
+        verbose_name_plural = 'Patristic Quotes'
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['attribution']),
+        ]
+    
+    def __str__(self):
+        # Return first 50 characters of the quote text
+        from django.utils.text import Truncator
+        return f"{Truncator(self.text).chars(50)} - {self.attribution}"
