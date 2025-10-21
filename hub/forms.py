@@ -40,7 +40,9 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
     class Meta:
         model = Fast
         # "image" is excluded because it is not clear how to save an image with a form
-        fields = ["name", "church", "year", "description", "culmination_feast", "culmination_feast_date", "url"]
+        fields = ["name", "church", "year", "description", "culmination_feast", 
+                  "culmination_feast_date", "culmination_feast_salutation",
+                  "culmination_feast_message", "culmination_feast_message_attribution", "url"]
 
     def clean_last_day(self):
         """Ensure last day is 

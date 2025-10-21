@@ -308,7 +308,9 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     class Meta:
         model = models.Fast
         fields = ['id', 'name', 'church', 'description', 'culmination_feast', 
-                 'culmination_feast_date', 'year', 'image', 'thumbnail', 'url',
+                 'culmination_feast_date', 'culmination_feast_salutation',
+                 'culmination_feast_message', 'culmination_feast_message_attribution',
+                 'year', 'image', 'thumbnail', 'url',
                  'participant_count', 'countdown', 'days_to_feast', 'start_date',
                  'end_date', 'joined', 'has_passed', 'next_fast_date',
                  'total_number_of_days', 'current_day_number', 'modal_id']
@@ -322,6 +324,9 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         data['name'] = getattr(instance, 'name_i18n', instance.name)
         data['description'] = getattr(instance, 'description_i18n', instance.description)
         data['culmination_feast'] = getattr(instance, 'culmination_feast_i18n', instance.culmination_feast)
+        data['culmination_feast_salutation'] = getattr(instance, 'culmination_feast_salutation_i18n', getattr(instance, 'culmination_feast_salutation', None))
+        data['culmination_feast_message'] = getattr(instance, 'culmination_feast_message_i18n', getattr(instance, 'culmination_feast_message', None))
+        data['culmination_feast_message_attribution'] = getattr(instance, 'culmination_feast_message_attribution_i18n', getattr(instance, 'culmination_feast_message_attribution', None))
         return data
 
     @cached_property
@@ -551,3 +556,43 @@ class FastParticipantMapSerializer(serializers.ModelSerializer):
             age_hours = (now - instance.last_updated).total_seconds() / 3600
             representation['age_hours'] = round(age_hours, 1)
         return representation
+
+
+class PatristicQuoteSerializer(serializers.ModelSerializer):
+    """Serializer for PatristicQuote model."""
+    
+    tags = serializers.SerializerMethodField()
+    church_names = serializers.SerializerMethodField()
+    fast_names = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = models.PatristicQuote
+        fields = [
+            'id', 'text', 'attribution', 'churches', 'church_names',
+            'fasts', 'fast_names', 'tags', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_tags(self, obj):
+        """Return list of tag names."""
+        return [tag.name for tag in obj.tags.all()]
+    
+    def get_church_names(self, obj):
+        """Return list of church names."""
+        return [church.name for church in obj.churches.all()]
+    
+    def get_fast_names(self, obj):
+        """Return list of fast names."""
+        return [str(fast) for fast in obj.fasts.all()]
+    
+    def to_representation(self, instance):
+        """Add translation support."""
+        lang = self.context.get('lang') or (
+            self.context.get('request').query_params.get('lang') 
+            if self.context.get('request') else None
+        ) or 'en'
+        activate(lang)
+        data = super().to_representation(instance)
+        data['text'] = getattr(instance, 'text_i18n', instance.text)
+        data['attribution'] = getattr(instance, 'attribution_i18n', instance.attribution)
+        return data
