@@ -4,6 +4,7 @@ from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
 
+from learning_resources.cache import BookmarkCacheManager
 from prayers.models import Prayer, PrayerSet
 from prayers.serializers import (
     PrayerSerializer,
@@ -41,6 +42,12 @@ class PrayerListView(generics.ListAPIView):
     """
     serializer_class = PrayerSerializer
     permission_classes = [AllowAny]
+    
+    def get_serializer_context(self):
+        """Add bookmark cache data to context for performance optimization."""
+        context = super().get_serializer_context()
+        context['use_bookmark_cache'] = True
+        return context
     
     def get_queryset(self):
         """Get filtered and ordered queryset of prayers."""
@@ -123,6 +130,7 @@ class PrayerSetListView(generics.ListAPIView):
         - search (str): Optional. Filter prayer sets by matching text in title or description.
                        Case-insensitive partial matches are supported.
         - church (int): Optional. Filter prayer sets by church ID.
+        - category (str): Optional. Filter prayer sets by category (morning, evening, general).
 
     Returns:
         A JSON response with paginated prayer set results (without full prayer details).
@@ -131,9 +139,16 @@ class PrayerSetListView(generics.ListAPIView):
         GET /api/prayer-sets/
         GET /api/prayer-sets/?search=morning
         GET /api/prayer-sets/?church=1
+        GET /api/prayer-sets/?category=morning
     """
     serializer_class = PrayerSetListSerializer
     permission_classes = [AllowAny]
+    
+    def get_serializer_context(self):
+        """Add bookmark cache data to context for performance optimization."""
+        context = super().get_serializer_context()
+        context['use_bookmark_cache'] = True
+        return context
     
     def get_queryset(self):
         """Get filtered and ordered queryset of prayer sets."""
@@ -161,6 +176,11 @@ class PrayerSetListView(generics.ListAPIView):
             except ValueError:
                 return PrayerSet.objects.none()
         
+        # Filter by category
+        category = self.request.query_params.get('category', None)
+        if category:
+            queryset = queryset.filter(category=category)
+        
         return queryset.order_by('-created_at')
 
 
@@ -181,6 +201,12 @@ class PrayerSetDetailView(generics.RetrieveAPIView):
     """
     serializer_class = PrayerSetSerializer
     permission_classes = [AllowAny]
+    
+    def get_serializer_context(self):
+        """Add bookmark cache data to context for performance optimization."""
+        context = super().get_serializer_context()
+        context['use_bookmark_cache'] = True
+        return context
     
     def get_queryset(self):
         """Optimize queryset with prefetch for prayers."""

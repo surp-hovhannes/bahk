@@ -4,13 +4,11 @@ from django.utils.html import format_html
 
 from prayers.models import Prayer, PrayerSet, PrayerSetMembership
 
-# TODO: Enable drag-and-drop ordering by installing django-admin-sortable2==2.2.1
-# from adminsortable2.admin import SortableAdminBase, SortableInlineAdminMixin
+from adminsortable2.admin import SortableAdminBase, SortableInlineAdminMixin
 
 
-class PrayerSetMembershipInline(admin.TabularInline):
+class PrayerSetMembershipInline(SortableInlineAdminMixin, admin.TabularInline):
     """Inline admin for managing prayers within a prayer set."""
-    # TODO: Add SortableInlineAdminMixin when package is installed
     model = PrayerSetMembership
     extra = 1
     fields = ('prayer', 'order')
@@ -49,12 +47,11 @@ class PrayerAdmin(admin.ModelAdmin):
 
 
 @admin.register(PrayerSet)
-class PrayerSetAdmin(admin.ModelAdmin):
+class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
     """Admin interface for PrayerSet model."""
-    # TODO: Add SortableAdminBase when package is installed
     
-    list_display = ('title', 'church', 'prayer_count', 'image_preview', 'created_at')
-    list_filter = ('church', 'created_at', 'updated_at')
+    list_display = ('title', 'category', 'church', 'prayer_count', 'image_preview', 'created_at')
+    list_filter = ('church', 'category', 'created_at', 'updated_at')
     search_fields = ('title', 'description')
     raw_id_fields = ('church',)
     readonly_fields = ('created_at', 'updated_at', 'image_preview', 'prayer_count')
@@ -62,7 +59,7 @@ class PrayerSetAdmin(admin.ModelAdmin):
     
     fieldsets = (
         (None, {
-            'fields': ('title', 'title_hy', 'description', 'description_hy', 'church')
+            'fields': ('title', 'title_hy', 'description', 'description_hy', 'category', 'church')
         }),
         ('Media', {
             'fields': ('image', 'image_preview')

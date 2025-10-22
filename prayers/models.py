@@ -81,11 +81,24 @@ class Prayer(models.Model):
 class PrayerSet(models.Model):
     """Model for an ordered collection of prayers."""
     
+    CATEGORY_CHOICES = [
+        ('morning', 'Morning Prayer'),
+        ('evening', 'Evening Prayer'),
+        ('general', 'General Prayer')
+    ]
+    
     title = models.CharField(max_length=128)
     description = models.TextField(
         null=True,
         blank=True,
         help_text='Description of the prayer set'
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='general',
+        db_index=True,
+        help_text='Category of prayer set'
     )
     church = models.ForeignKey(
         Church,
@@ -134,6 +147,7 @@ class PrayerSet(models.Model):
         verbose_name_plural = 'Prayer Sets'
         indexes = [
             models.Index(fields=['church', 'created_at']),
+            models.Index(fields=['church', 'category']),
         ]
     
     def __str__(self):

@@ -97,6 +97,16 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'send-culmination-feast-notifications-daily': {
+        'task': 'notifications.tasks.send_culmination_feast_push_notification_task',
+        'schedule': crontab(hour=8, minute=30),  # 8:30 AM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-culmination-feast-notifications',
+            }
+        }
+    },
 }
 
 # Initialize Sentry for Celery worker processes

@@ -1,11 +1,13 @@
 """Tests for prayers app."""
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 
 from hub.models import Church, Fast
+from learning_resources.models import Bookmark
 from prayers.models import Prayer, PrayerSet, PrayerSetMembership
 
 
@@ -101,10 +103,20 @@ class PrayerSetModelTests(TestCase):
         prayer_set = PrayerSet.objects.create(
             title='Morning Prayers',
             description='Collection of morning prayers',
+            category='morning',
             church=self.church
         )
         self.assertEqual(prayer_set.title, 'Morning Prayers')
+        self.assertEqual(prayer_set.category, 'morning')
         self.assertEqual(prayer_set.church, self.church)
+    
+    def test_prayer_set_default_category(self):
+        """Test that prayer set defaults to 'general' category."""
+        prayer_set = PrayerSet.objects.create(
+            title='General Prayers',
+            church=self.church
+        )
+        self.assertEqual(prayer_set.category, 'general')
     
     def test_prayer_set_with_prayers(self):
         """Test adding prayers to a prayer set."""
@@ -400,4 +412,301 @@ class PrayerSetAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 1)
         self.assertEqual(response.data['results'][0]['title'], 'Daily Prayers')
+    
+    def test_prayer_set_filter_by_category(self):
+        """Test filtering prayer sets by category."""
+        # Create additional prayer sets with different categories
+        PrayerSet.objects.create(
+            title='Morning Prayer Set',
+            category='morning',
+            church=self.church
+        )
+        PrayerSet.objects.create(
+            title='Evening Prayer Set',
+            category='evening',
+            church=self.church
+        )
+        
+        url = reverse('prayers:prayer-set-list')
+        response = self.client.get(url, {'category': 'morning'})
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['title'], 'Morning Prayer Set')
+        self.assertEqual(response.data['results'][0]['category'], 'morning')
+
+
+class PrayerBookmarkTests(APITestCase):
+    """Test cases for Prayer and PrayerSet bookmarking functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+        self.church = Church.objects.create(name='Test Church')
+        
+        # Create test prayer
+        self.prayer = Prayer.objects.create(
+            title='Morning Prayer',
+            text='Lord, bless this day.',
+            category='morning',
+            church=self.church
+        )
+        
+        # Create test prayer set
+        self.prayer_set = PrayerSet.objects.create(
+            title='Daily Prayers',
+            description='A collection of daily prayers',
+            church=self.church
+        )
+        
+        # Add prayer to prayer set
+        PrayerSetMembership.objects.create(
+            prayer_set=self.prayer_set,
+            prayer=self.prayer,
+            order=1
+        )
+    
+    def test_create_prayer_bookmark(self):
+        """Test creating a bookmark for a prayer."""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('bookmark-create')
+        data = {
+            'content_type': 'prayer',
+            'object_id': self.prayer.id,
+            'note': 'Beautiful morning prayer'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['content_type_name'], 'prayer')
+        self.assertEqual(response.data['object_id'], self.prayer.id)
+        self.assertEqual(response.data['note'], 'Beautiful morning prayer')
+        
+        # Verify bookmark was created in database
+        bookmark = Bookmark.objects.get(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id
+        )
+        self.assertIsNotNone(bookmark)
+    
+    def test_create_prayerset_bookmark(self):
+        """Test creating a bookmark for a prayer set."""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('bookmark-create')
+        data = {
+            'content_type': 'prayerset',
+            'object_id': self.prayer_set.id,
+            'note': 'Great collection'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['content_type_name'], 'prayerset')
+        self.assertEqual(response.data['object_id'], self.prayer_set.id)
+        
+        # Verify bookmark was created in database
+        bookmark = Bookmark.objects.get(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(PrayerSet),
+            object_id=self.prayer_set.id
+        )
+        self.assertIsNotNone(bookmark)
+    
+    def test_prayer_is_bookmarked_field_authenticated(self):
+        """Test that is_bookmarked field shows correctly for authenticated users."""
+        # Create bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('prayers:prayer-detail', kwargs={'pk': self.prayer.pk})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_bookmarked'])
+    
+    def test_prayer_is_bookmarked_field_unauthenticated(self):
+        """Test that is_bookmarked field returns False for unauthenticated users."""
+        url = reverse('prayers:prayer-detail', kwargs={'pk': self.prayer.pk})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['is_bookmarked'])
+    
+    def test_prayerset_is_bookmarked_field(self):
+        """Test that is_bookmarked field shows correctly for prayer sets."""
+        # Create bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(PrayerSet),
+            object_id=self.prayer_set.id
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('prayers:prayer-set-detail', kwargs={'pk': self.prayer_set.pk})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_bookmarked'])
+    
+    def test_prayerset_list_is_bookmarked_field(self):
+        """Test that is_bookmarked field shows correctly in prayer set list view."""
+        # Create bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(PrayerSet),
+            object_id=self.prayer_set.id
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('prayers:prayer-set-list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['results'][0]['is_bookmarked'])
+    
+    def test_delete_prayer_bookmark(self):
+        """Test deleting a prayer bookmark."""
+        # Create bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('bookmark-delete', kwargs={
+            'content_type': 'prayer',
+            'object_id': self.prayer.id
+        })
+        response = self.client.delete(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        
+        # Verify bookmark was deleted
+        bookmark_exists = Bookmark.objects.filter(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id
+        ).exists()
+        self.assertFalse(bookmark_exists)
+    
+    def test_duplicate_bookmark_prevention(self):
+        """Test that users cannot bookmark the same prayer twice."""
+        # Create first bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id
+        )
+        
+        # Try to create duplicate bookmark
+        self.client.force_authenticate(user=self.user)
+        url = reverse('bookmark-create')
+        data = {
+            'content_type': 'prayer',
+            'object_id': self.prayer.id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already bookmarked', str(response.data))
+    
+    def test_bookmark_check_endpoint_prayer(self):
+        """Test checking if a prayer is bookmarked."""
+        # Create bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('bookmark-check', kwargs={
+            'content_type': 'prayer',
+            'object_id': self.prayer.id
+        })
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_bookmarked'])
+    
+    def test_bookmark_list_includes_prayers(self):
+        """Test that bookmark list endpoint includes bookmarked prayers."""
+        # Create prayer bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id,
+            note='My favorite prayer'
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('bookmark-list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        
+        bookmark_data = response.data['results'][0]
+        self.assertEqual(bookmark_data['content_type_name'], 'prayer')
+        self.assertEqual(bookmark_data['object_id'], self.prayer.id)
+        self.assertEqual(bookmark_data['note'], 'My favorite prayer')
+        
+        # Check content representation
+        content = bookmark_data['content']
+        self.assertEqual(content['id'], self.prayer.id)
+        self.assertEqual(content['type'], 'prayer')
+        self.assertEqual(content['title'], 'Morning Prayer')
+        self.assertIn('Lord, bless this day.', content['description'])
+    
+    def test_bookmark_list_includes_prayersets(self):
+        """Test that bookmark list endpoint includes bookmarked prayer sets."""
+        # Create prayer set bookmark
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(PrayerSet),
+            object_id=self.prayer_set.id,
+            note='Essential prayers'
+        )
+        
+        self.client.force_authenticate(user=self.user)
+        url = reverse('bookmark-list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        
+        bookmark_data = response.data['results'][0]
+        self.assertEqual(bookmark_data['content_type_name'], 'prayerset')
+        self.assertEqual(bookmark_data['object_id'], self.prayer_set.id)
+        
+        # Check content representation
+        content = bookmark_data['content']
+        self.assertEqual(content['id'], self.prayer_set.id)
+        self.assertEqual(content['type'], 'prayerset')
+        self.assertEqual(content['title'], 'Daily Prayers')
+        self.assertEqual(content['description'], 'A collection of daily prayers')
+    
+    def test_bookmark_requires_authentication(self):
+        """Test that creating bookmarks requires authentication."""
+        url = reverse('bookmark-create')
+        data = {
+            'content_type': 'prayer',
+            'object_id': self.prayer.id
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 

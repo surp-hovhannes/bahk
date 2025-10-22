@@ -3,23 +3,25 @@ from rest_framework import serializers
 from django.utils.translation import activate
 
 from hub.mixins import ThumbnailCacheMixin
+from learning_resources.serializers import BookmarkOptimizedSerializerMixin
 from prayers.models import Prayer, PrayerSet, PrayerSetMembership
 
 
-class PrayerSerializer(serializers.ModelSerializer):
+class PrayerSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Prayer model."""
     
     tags = serializers.SerializerMethodField()
     church_name = serializers.CharField(source='church.name', read_only=True)
     fast_name = serializers.CharField(source='fast.name', read_only=True)
+    is_bookmarked = serializers.SerializerMethodField()
     
     class Meta:
         model = Prayer
         fields = [
             'id', 'title', 'text', 'category', 'church', 'church_name',
-            'fast', 'fast_name', 'tags', 'created_at', 'updated_at'
+            'fast', 'fast_name', 'tags', 'created_at', 'updated_at', 'is_bookmarked'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
     def get_tags(self, obj):
         """Return list of tag names."""
@@ -48,22 +50,23 @@ class PrayerSetMembershipSerializer(serializers.ModelSerializer):
         fields = ['id', 'prayer', 'order']
 
 
-class PrayerSetSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
+class PrayerSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
     """Serializer for PrayerSet model."""
     
     church_name = serializers.CharField(source='church.name', read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
     prayers = serializers.SerializerMethodField()
     prayer_count = serializers.SerializerMethodField()
+    is_bookmarked = serializers.SerializerMethodField()
     
     class Meta:
         model = PrayerSet
         fields = [
-            'id', 'title', 'description', 'church', 'church_name',
+            'id', 'title', 'description', 'category', 'church', 'church_name',
             'image', 'thumbnail_url', 'prayers', 'prayer_count',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'is_bookmarked'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
     def get_thumbnail_url(self, obj):
         """Get cached or generated thumbnail URL."""
@@ -107,20 +110,21 @@ class PrayerSetSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return data
 
 
-class PrayerSetListSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
+class PrayerSetListSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
     """Lightweight serializer for listing prayer sets (without full prayer details)."""
     
     church_name = serializers.CharField(source='church.name', read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
     prayer_count = serializers.SerializerMethodField()
+    is_bookmarked = serializers.SerializerMethodField()
     
     class Meta:
         model = PrayerSet
         fields = [
-            'id', 'title', 'description', 'church', 'church_name',
-            'thumbnail_url', 'prayer_count', 'created_at', 'updated_at'
+            'id', 'title', 'description', 'category', 'church', 'church_name',
+            'thumbnail_url', 'prayer_count', 'created_at', 'updated_at', 'is_bookmarked'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
     def get_thumbnail_url(self, obj):
         """Get cached or generated thumbnail URL."""

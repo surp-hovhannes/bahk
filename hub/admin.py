@@ -10,6 +10,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import Truncator
 from django.contrib import messages
+from markdownx.admin import MarkdownxModelAdmin
 import logging
 
 from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
@@ -20,6 +21,7 @@ from hub.models import (
     DevotionalSet,
     Fast,
     LLMPrompt,
+    PatristicQuote,
     Profile,
     Reading,
     ReadingContext,
@@ -617,3 +619,64 @@ class ReadingContextAdmin(admin.ModelAdmin):
         return Truncator(obj.text).chars(100)
 
     text_preview.short_description = "Text Preview"
+
+
+@admin.register(PatristicQuote, site=admin.site)
+class PatristicQuoteAdmin(MarkdownxModelAdmin):
+    """Admin interface for PatristicQuote model."""
+    
+    list_display = (
+        'text_preview',
+        'attribution',
+        'church_links',
+        'fast_links',
+        'tag_list',
+        'created_at'
+    )
+    list_filter = ('churches', 'fasts', 'tags', 'created_at', 'updated_at')
+    search_fields = ('text', 'attribution')
+    raw_id_fields = ('churches', 'fasts')
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('churches', 'fasts')
+    # Hide base fields that also have modeltrans virtual translation fields to
+    # avoid duplicate inputs in the admin form
+    exclude = ('text', 'attribution')
+    
+    fieldsets = (
+        (None, {
+            'fields': ('text_en', 'text_hy', 'attribution_en', 'attribution_hy')
+        }),
+        ('Organization', {
+            'fields': ('churches', 'fasts', 'tags')
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def text_preview(self, obj):
+        """Display first 100 characters of the quote."""
+        return Truncator(obj.text).chars(100)
+    
+    text_preview.short_description = 'Quote'
+    
+    def church_links(self, quote):
+        """Display links to associated churches."""
+        return _get_fk_links_url(quote.churches.all(), 'church')
+    
+    church_links.short_description = 'Churches'
+    
+    def fast_links(self, quote):
+        """Display links to associated fasts."""
+        if quote.fasts.exists():
+            return _get_fk_links_url(quote.fasts.all(), 'fast')
+        return '-'
+    
+    fast_links.short_description = 'Fasts'
+    
+    def tag_list(self, obj):
+        """Display tags as comma-separated list."""
+        return ', '.join(tag.name for tag in obj.tags.all())
+    
+    tag_list.short_description = 'Tags'
