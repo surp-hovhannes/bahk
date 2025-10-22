@@ -25,7 +25,7 @@ python manage.py engagement_report [OPTIONS]
 
 ## Generated Metrics
 
-The command produces four main categories of engagement metrics:
+The command produces seven main categories of engagement metrics:
 
 ### 1. New Users Over Time
 - **File**: `new_users_over_time.json/csv`
@@ -59,7 +59,7 @@ The command produces four main categories of engagement metrics:
 
 ### 3. User Activity
 - **File**: `user_activity.json/csv`
-- **Description**: Individual user activity breakdown by type
+- **Description**: Individual user activity breakdown by type with account creation date
 - **Data Structure**:
   ```json
   [
@@ -67,6 +67,7 @@ The command produces four main categories of engagement metrics:
       "user_id": 456,
       "username": "john_doe",
       "email": "john@example.com",
+      "date_joined": "2023-06-15T10:30:00Z",
       "total_items": 23,
       "by_type": {
         "prayer_request": 8,
@@ -77,16 +78,78 @@ The command produces four main categories of engagement metrics:
   ]
   ```
 
-### 4. Other Metrics
+### 4. User Activity Timeline (NEW)
+- **File**: `user_activity_timeline.json/csv`
+- **Description**: Detailed timeline of individual user activities with timestamps
+- **Use Case**: LLM analysis, detailed engagement tracking, timeliness assessment
+- **Data Structure**:
+  ```json
+  [
+    {
+      "user_id": 456,
+      "username": "john_doe",
+      "activity_type": "devotional_viewed",
+      "timestamp": "2024-01-15T14:23:45Z",
+      "title": "Devotional viewed",
+      "description": "User viewed devotional for Day 3",
+      "target_type": "devotional",
+      "target_id": 789
+    }
+  ]
+  ```
+
+### 5. User Fast Participation (NEW)
+- **File**: `user_fast_participation.json/csv`
+- **Description**: Complete history of user fast memberships with join/leave timestamps
+- **Use Case**: Tracking fast engagement trends, identifying churned users
+- **Data Structure**:
+  ```json
+  [
+    {
+      "user_id": 456,
+      "username": "john_doe",
+      "email": "john@example.com",
+      "fast_id": 123,
+      "fast_name": "Community Fast 2024",
+      "church_name": "St. Mary Church",
+      "joined_at": "2024-01-05T08:15:00Z",
+      "left_at": null,
+      "status": "active"
+    }
+  ]
+  ```
+
+### 6. Retention Cohorts (NEW)
+- **File**: `retention_cohorts.json/csv`
+- **Description**: Weekly user cohorts showing retention rates and activity levels
+- **Use Case**: Understanding user retention, cohort analysis, growth tracking
+- **Data Structure**:
+  ```json
+  [
+    {
+      "cohort_week": "2024-W03",
+      "cohort_start_date": "2024-01-15",
+      "total_users": 45,
+      "active_users": 23,
+      "retention_rate": 51.11,
+      "avg_activities_per_user": 12.5,
+      "cohort_age_weeks": 4
+    }
+  ]
+  ```
+
+### 7. Other Metrics (ENHANCED)
 - **File**: `other_metrics.json`
-- **Description**: Additional system-wide analytics
+- **Description**: Comprehensive system-wide analytics including screen views and engagement patterns
 - **Data Structure**:
   ```json
   {
     "events_by_type": {
-      "USER_JOINED_FAST": 156,
-      "USER_LEFT_FAST": 23,
-      "PRAYER_REQUEST_CREATED": 89
+      "user_joined_fast": 156,
+      "user_left_fast": 23,
+      "devotional_viewed": 342,
+      "checklist_used": 189,
+      "screen_view": 1256
     },
     "active_users": 342,
     "top_fasts_by_joins": [
@@ -95,7 +158,43 @@ The command produces four main categories of engagement metrics:
         "fast": "Community Fast 2024",
         "joins": 45
       }
-    ]
+    ],
+    "screen_views": {
+      "total": 1256,
+      "unique_users": 234,
+      "avg_per_user": 5.37,
+      "top_screens": [
+        {"screen": "fast_detail", "views": 456},
+        {"screen": "devotional_view", "views": 342}
+      ],
+      "daily_timeline": {
+        "2024-01-15": 89,
+        "2024-01-16": 92
+      }
+    },
+    "engagement_patterns": {
+      "devotionals": {
+        "total_views": 342,
+        "unique_users": 156,
+        "avg_per_user": 2.19,
+        "top_users": [
+          {"user_id": 456, "username": "john_doe", "views": 45}
+        ]
+      },
+      "checklists": {
+        "total_uses": 189,
+        "unique_users": 89,
+        "avg_per_user": 2.12,
+        "avg_days_between_uses": 3.5
+      },
+      "cross_engagement": {
+        "users_both_devotional_and_checklist": 67,
+        "users_in_fasts_with_activity": 145,
+        "users_without_fasts_with_activity": 34,
+        "avg_activities_users_with_fast": 8.5,
+        "avg_activities_users_without_fast": 3.2
+      }
+    }
   }
   ```
 
@@ -255,6 +354,131 @@ python manage.py engagement_report \
 4. **Memory Issues**
    - Reduce date range for memory-intensive operations
    - Consider running during off-peak hours
+
+## New Features for Timeliness Analysis
+
+The enhanced engagement report now includes three powerful new data sets specifically designed for analyzing user engagement timeliness and trends:
+
+### User Activity Timeline
+
+This detailed timeline provides individual activity records with precise timestamps, enabling you to:
+
+- **Analyze engagement patterns**: See exactly when users are most active
+- **Track timeliness**: Identify gaps in engagement or periods of high activity
+- **User journey mapping**: Understand the sequence of user interactions
+- **LLM-friendly format**: Clean, structured data perfect for AI analysis
+
+### User Fast Participation History
+
+Complete fast membership history with join/leave timestamps allows you to:
+
+- **Track fast lifecycle**: See how long users stay in fasts
+- **Identify churn patterns**: Users who have left fasts
+- **Measure commitment**: Time between joining and leaving
+- **Cross-reference with activity**: Correlate fast membership with engagement
+
+### Retention Cohorts
+
+Weekly cohort analysis provides insights into:
+
+- **User retention trends**: How well are you retaining users over time?
+- **Cohort comparison**: Which cohorts are most engaged?
+- **Age-based patterns**: How does engagement change as cohorts age?
+- **Activity benchmarks**: Average activity levels by cohort
+
+### Enhanced Engagement Metrics
+
+The enhanced `other_metrics` now includes:
+
+- **Screen View Analytics**: Most popular screens, viewing patterns
+- **Devotional Engagement**: Who's viewing devotionals and how often
+- **Checklist Usage**: Frequency and consistency of checklist usage
+- **Cross-Engagement Analysis**: Users engaging with multiple features
+- **Fast vs Non-Fast Users**: Activity comparison between groups
+
+## Using Reports for LLM Analysis
+
+The enhanced engagement report is optimized for Large Language Model analysis. Here's how to get the best results:
+
+### Recommended Format for LLM Analysis
+
+**For Overview Analysis:**
+```bash
+python manage.py engagement_report --format json --start 2024-01-01 --end 2024-01-31
+```
+
+Load these files into your LLM context:
+- `user_activity.json` - For understanding who is active
+- `retention_cohorts.json` - For cohort and retention analysis
+- `other_metrics.json` - For system-wide patterns
+
+**For Detailed Timeline Analysis:**
+```bash
+python manage.py engagement_report --format csv --start 2024-01-01 --end 2024-01-31
+```
+
+CSV format is more compact for timeline data:
+- `user_activity_timeline.csv` - Individual activities with timestamps
+- `user_fast_participation.csv` - Fast membership history
+
+### Sample LLM Prompts
+
+**Engagement Timeliness Analysis:**
+```
+Analyze the user_activity_timeline.csv and identify:
+1. Peak engagement times (hour of day, day of week)
+2. Users with declining engagement (increasing gaps between activities)
+3. Most engaged users (high frequency, recent activity)
+4. Users at risk of churn (no activity in past 7 days)
+```
+
+**Cohort Performance:**
+```
+Using retention_cohorts.json, compare the performance of:
+1. Recent cohorts (last 4 weeks) vs older cohorts
+2. Identify which cohort week had the best retention
+3. Calculate retention rate trends over cohort age
+4. Recommend optimal onboarding period based on retention data
+```
+
+**Feature Adoption:**
+```
+Using other_metrics.json engagement_patterns, analyze:
+1. What percentage of users engage with both devotionals and checklists?
+2. How does fast membership correlate with activity levels?
+3. Which screens are most viewed and by how many users?
+4. Identify power users based on devotional and checklist engagement
+```
+
+**Fast Participation Trends:**
+```
+Analyze user_fast_participation.csv to find:
+1. Average time users stay in a fast before leaving
+2. Which fasts have the highest retention?
+3. Users who have joined multiple fasts
+4. Identify users who left fasts recently (potential re-engagement targets)
+```
+
+### Best Practices
+
+1. **Date Range Selection**: 
+   - Use 30-90 days for monthly analysis
+   - Use 7 days for weekly check-ins
+   - Use 6-12 months for long-term trend analysis
+
+2. **File Selection**:
+   - Start with `other_metrics.json` for high-level overview
+   - Use `retention_cohorts.json` for strategic planning
+   - Dive into `user_activity_timeline` for user-specific investigations
+
+3. **CSV vs JSON**:
+   - JSON: Better for nested data, full context
+   - CSV: More compact, easier to filter/sort in spreadsheets or LLMs
+
+4. **Combining Data Sets**:
+   - Cross-reference user_id across files
+   - Join user_activity with user_fast_participation to correlate fast membership with activity
+   - Combine timeline data with cohort data for time-based segmentation
 
 ## Related Documentation
 
