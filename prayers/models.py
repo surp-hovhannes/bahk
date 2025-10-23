@@ -22,12 +22,7 @@ class Prayer(models.Model):
     CATEGORY_CHOICES = [
         ('morning', 'Morning Prayer'),
         ('evening', 'Evening Prayer'),
-        ('meal', 'Meal Prayer'),
-        ('general', 'General Prayer'),
-        ('liturgical', 'Liturgical Prayer'),
-        ('penitential', 'Penitential Prayer'),
-        ('thanksgiving', 'Thanksgiving Prayer'),
-        ('intercession', 'Intercession Prayer')
+        ('general', 'General Prayer')
     ]
     
     title = models.CharField(max_length=200)
