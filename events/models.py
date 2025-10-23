@@ -156,7 +156,7 @@ class EventType(models.Model):
             return 'milestone'
         elif code in [cls.DEVOTIONAL_AVAILABLE]:
             return 'notification'
-        elif code in [cls.APP_OPEN, cls.SESSION_START, cls.SESSION_END, cls.SCREEN_VIEW, cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED]:
+        elif code in [cls.APP_OPEN, cls.SESSION_START, cls.SESSION_END, cls.SCREEN_VIEW, cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED, cls.PRAYER_SET_VIEWED]:
             return 'analytics'
         return 'user_action'
     
@@ -170,6 +170,7 @@ class EventType(models.Model):
             cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED,
             # Engagement targets
             cls.DEVOTIONAL_VIEWED,
+            cls.PRAYER_SET_VIEWED,
             # Note: CHECKLIST_USED removed - can be used without a specific fast
         ]
 
