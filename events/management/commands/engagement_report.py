@@ -388,6 +388,7 @@ class Command(BaseCommand):
         """
         Compute fast participation history for all users.
         Includes join/leave timestamps and current status.
+        Properly handles multiple join/leave cycles by tracking the most recent activity.
         """
         from django.contrib.contenttypes.models import ContentType
         
@@ -409,19 +410,27 @@ class Command(BaseCommand):
             content_type=fast_content_type
         ).select_related('user').order_by('user_id', 'object_id', 'timestamp')
         
-        # Build maps: (user_id, fast_id) -> timestamp
-        join_map: Dict[Tuple[int, int], datetime] = {}
+        # Build chronological event sequences for each user-fast combination
+        # Structure: (user_id, fast_id) -> List[('join'|'leave', timestamp)]
+        event_sequences: Dict[Tuple[int, int], List[Tuple[str, datetime]]] = {}
+        
+        # Process join events
         for event in join_events:
             key = (event.user_id, event.object_id)
-            # Keep earliest join (in case of multiple joins)
-            if key not in join_map:
-                join_map[key] = event.timestamp
+            if key not in event_sequences:
+                event_sequences[key] = []
+            event_sequences[key].append(('join', event.timestamp))
         
-        leave_map: Dict[Tuple[int, int], datetime] = {}
+        # Process leave events
         for event in leave_events:
             key = (event.user_id, event.object_id)
-            # Keep latest leave
-            leave_map[key] = event.timestamp
+            if key not in event_sequences:
+                event_sequences[key] = []
+            event_sequences[key].append(('leave', event.timestamp))
+        
+        # Sort events chronologically for each user-fast combination
+        for key in event_sequences:
+            event_sequences[key].sort(key=lambda x: x[1])
         
         # Get current fast memberships
         from hub.models import Profile
@@ -432,9 +441,7 @@ class Command(BaseCommand):
         
         # Get fast details
         all_fast_ids = set()
-        for user_id, fast_id in join_map.keys():
-            all_fast_ids.add(fast_id)
-        for user_id, fast_id in leave_map.keys():
+        for user_id, fast_id in event_sequences.keys():
             all_fast_ids.add(fast_id)
         
         fasts = Fast.objects.filter(id__in=all_fast_ids).select_related('church')
@@ -442,27 +449,48 @@ class Command(BaseCommand):
         
         # Build participation rows
         rows: List[UserFastParticipationRow] = []
-        all_keys = set(join_map.keys()) | set(leave_map.keys())
         
         # Get user details
         User = get_user_model()
-        user_ids = {user_id for user_id, _ in all_keys}
+        user_ids = {user_id for user_id, _ in event_sequences.keys()}
         users = User.objects.filter(id__in=user_ids)
         user_details = {u.id: u for u in users}
         
-        for user_id, fast_id in sorted(all_keys):
+        for (user_id, fast_id), events in event_sequences.items():
             user = user_details.get(user_id)
             fast = fast_details.get(fast_id)
             
             if not user or not fast:
                 continue
             
-            joined_at = join_map.get((user_id, fast_id))
-            left_at = leave_map.get((user_id, fast_id))
+            # Determine the most recent join and leave based on event sequence
+            most_recent_join = None
+            most_recent_leave = None
             
-            # Determine status: if user is currently in the fast, they're active
+            # Track the current state as we process events chronologically
+            current_state = None
+            for event_type, timestamp in events:
+                if event_type == 'join':
+                    most_recent_join = timestamp
+                    current_state = 'joined'
+                elif event_type == 'leave':
+                    most_recent_leave = timestamp
+                    current_state = 'left'
+            
+            # Determine status based on current membership and event history
             is_currently_member = user_id in current_fast_map and fast_id in current_fast_map[user_id]
-            status = "active" if is_currently_member else "left"
+            
+            # If user is currently a member, they're active regardless of leave history
+            # If user is not currently a member, check if they have a recent leave event
+            if is_currently_member:
+                status = "active"
+            elif most_recent_leave and (not most_recent_join or most_recent_leave > most_recent_join):
+                status = "left"
+            elif most_recent_join and (not most_recent_leave or most_recent_join > most_recent_leave):
+                # This shouldn't happen if user is not currently a member, but handle gracefully
+                status = "left"
+            else:
+                status = "unknown"
             
             rows.append(
                 UserFastParticipationRow(
@@ -472,8 +500,8 @@ class Command(BaseCommand):
                     fast_id=fast_id,
                     fast_name=str(fast),
                     church_name=fast.church.name if fast.church else None,
-                    joined_at=joined_at.isoformat() if joined_at else "",
-                    left_at=left_at.isoformat() if left_at else None,
+                    joined_at=most_recent_join.isoformat() if most_recent_join else "",
+                    left_at=most_recent_leave.isoformat() if most_recent_leave else None,
                     status=status,
                 )
             )
