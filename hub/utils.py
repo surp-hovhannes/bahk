@@ -79,15 +79,50 @@ def invalidate_fast_stats_cache(user):
 
 
 def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
-    """Scrapes readings from sacredtradition.am""" 
+    """Scrapes readings from sacredtradition.am for both English and Armenian."""
     if church not in SUPPORTED_CHURCHES:
         logging.error("Web-scraping for readings only set up for the following churches: %r. %s not supported.",
                       SUPPORTED_CHURCHES, church)
         return []
 
     date_str = date_obj.strftime(date_format)
+    
+    # Scrape both English and Armenian versions
+    readings_en = _scrape_readings_for_language(date_str, "en", max_num_readings)
+    readings_hy = _scrape_readings_for_language(date_str, "hy", max_num_readings)
+    
+    # Combine readings - match by chapter/verse and include both book names
+    readings = []
+    for reading_en in readings_en:
+        # Find matching Armenian reading
+        reading_hy = next(
+            (r for r in readings_hy 
+             if r["start_chapter"] == reading_en["start_chapter"] 
+             and r["start_verse"] == reading_en["start_verse"]
+             and r["end_chapter"] == reading_en["end_chapter"]
+             and r["end_verse"] == reading_en["end_verse"]),
+            None
+        )
+        
+        reading = {
+            "book": reading_en["book"],
+            "book_hy": reading_hy["book"] if reading_hy else None,
+            "start_chapter": reading_en["start_chapter"],
+            "start_verse": reading_en["start_verse"],
+            "end_chapter": reading_en["end_chapter"],
+            "end_verse": reading_en["end_verse"],
+        }
+        readings.append(reading)
+    
+    return readings
 
-    url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={date_str}"
+
+def _scrape_readings_for_language(date_str, language_code, max_num_readings=40):
+    """Helper function to scrape readings for a specific language."""
+    # iL=2 for English, iL=3 for Armenian
+    iL_param = "2" if language_code == "en" else "3"
+    url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={iL_param}&ymd={date_str}"
+    
     try:
         response = urllib.request.urlopen(url)
     except urllib.error.URLError:

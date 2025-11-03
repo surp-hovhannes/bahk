@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 import logging
 
 from django.core.management.base import BaseCommand
+from django.utils.translation import activate
 
 import hub.models as models
 from hub.utils import scrape_readings
@@ -33,6 +34,20 @@ class Command(BaseCommand):
         for date_obj in daterange(start_date, end_date):
             day, _ = models.Day.objects.get_or_create(church=church, date=date_obj)
             readings = scrape_readings(date_obj, church)
-            for reading in readings:
-                reading.update({"day": day})
-                models.Reading.objects.get_or_create(**reading)
+            for reading_data in readings:
+                reading_data.update({"day": day})
+                # Create reading with both translations
+                reading, created = models.Reading.objects.get_or_create(
+                    day=reading_data["day"],
+                    book=reading_data["book"],
+                    start_chapter=reading_data["start_chapter"],
+                    start_verse=reading_data["start_verse"],
+                    end_chapter=reading_data["end_chapter"],
+                    end_verse=reading_data["end_verse"],
+                )
+                # Save Armenian translation if available
+                if reading_data.get("book_hy"):
+                    activate("hy")
+                    reading.book = reading_data["book_hy"]
+                    reading.save()
+                    activate("en")  # Restore default language

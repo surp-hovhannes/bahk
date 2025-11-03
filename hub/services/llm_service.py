@@ -13,7 +13,7 @@ class LLMService(ABC):
     """Base class for LLM services."""
     
     @abstractmethod
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None) -> Optional[str]:
+    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = "en") -> Optional[str]:
         """Generate context for a reading using the LLM service."""
         pass
 
@@ -23,7 +23,7 @@ class AnthropicService(LLMService):
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None) -> Optional[str]:
+    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = "en") -> Optional[str]:
         """Generate context using Claude."""
         if not settings.ANTHROPIC_API_KEY:
             logger.error("ANTHROPIC_API_KEY is not configured.")
@@ -59,7 +59,7 @@ class OpenAIService(LLMService):
     def __init__(self):
         openai.api_key = settings.OPENAI_API_KEY
     
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None) -> Optional[str]:
+    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = "en") -> Optional[str]:
         """Generate context using OpenAI."""
         if not settings.OPENAI_API_KEY:
             logger.error("OPENAI_API_KEY is not configured.")

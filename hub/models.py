@@ -582,6 +582,10 @@ class Reading(models.Model):
     end_verse = models.IntegerField(
         verbose_name="End Verse", help_text="May be same as end verse"
     )
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'book',
+    ))
 
     class Meta:
         constraints = [
@@ -719,6 +723,12 @@ class LLMPrompt(models.Model):
         help_text="If True, this prompt is the one currently used for generation",
     )
 
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'text',
+    ))
+
     def save(self, *args, **kwargs):
         """Override save to ensure only one prompt can be active at a time."""
         if self.active:
@@ -786,6 +796,11 @@ class ReadingContext(models.Model):
     active = models.BooleanField(
         default=True, help_text="Whether the context is currently active"
     )
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=(
+        'text',
+    ))
 
     def save(self, *args, **kwargs):
         if self.active:

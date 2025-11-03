@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 
 from django.conf import settings
+from django.utils.translation import activate, get_language_from_request
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
@@ -97,6 +98,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         else:
             date_obj = datetime.today().date()
 
+        # Activate requested language for translation fields
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+
         if request.user.is_authenticated:
             church = request.user.profile.church
         else:
@@ -108,36 +113,62 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         if not day.readings.exists():
             # import readings for this date into db
             readings = scrape_readings(date_obj, church)
-            for reading in readings:
-                reading.update({"day": day})
-                Reading.objects.get_or_create(**reading)
+            for reading_data in readings:
+                reading_data.update({"day": day})
+                # Create reading with both translations
+                reading, created = Reading.objects.get_or_create(
+                    day=reading_data["day"],
+                    book=reading_data["book"],
+                    start_chapter=reading_data["start_chapter"],
+                    start_verse=reading_data["start_verse"],
+                    end_chapter=reading_data["end_chapter"],
+                    end_verse=reading_data["end_verse"],
+                )
+                # Save Armenian translation if available
+                if created and reading_data.get("book_hy"):
+                    activate("hy")
+                    reading.book = reading_data["book_hy"]
+                    reading.save()
+                    activate(lang)  # Restore requested language
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
 
         formatted_readings = []
         for reading in day.readings.all():
+            # Get translated book name
+            book_name = getattr(reading, 'book_i18n', reading.book)
+            
             # Trigger context generation if missing
-            if reading.active_context is None:
+            active_context = reading.active_context
+            if active_context is None:
                 logging.warning("No context found for reading %s", str(reading))
-                logging.info("Enqueue context generation for reading %s", reading.id)
-                generate_reading_context_task.delay(reading.id)
+                logging.info("Enqueue context generation for reading %s in language %s", reading.id, lang)
+                generate_reading_context_task.delay(reading.id, language_code=lang)
                 context_dict = {
                     "context": "",
                     "context_thumbs_up": 0,
                     "context_thumbs_down": 0,
                 }
             else:
+                # Check if translation exists for requested language
+                context_text = getattr(active_context, 'text_i18n', active_context.text)
+                if not context_text or not context_text.strip():
+                    # Translation missing, trigger generation
+                    logging.info("Context translation missing for reading %s in language %s, enqueueing generation", reading.id, lang)
+                    generate_reading_context_task.delay(reading.id, language_code=lang)
+                    context_text = ""
+                
                 context_dict = {
-                    "context": reading.active_context.text,
-                    "context_thumbs_up": reading.active_context.thumbs_up,
-                    "context_thumbs_down": reading.active_context.thumbs_down,
+                    "context": context_text,
+                    "context_thumbs_up": active_context.thumbs_up,
+                    "context_thumbs_down": active_context.thumbs_down,
                 }
 
             formatted_readings.append(
                 {
                     "id": reading.id,
-                    "book": reading.book,
+                    "book": book_name,
                     "startChapter": reading.start_chapter,
                     "startVerse": reading.start_verse,
                     "endChapter": reading.end_chapter,
