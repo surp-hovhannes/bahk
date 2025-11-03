@@ -8,6 +8,7 @@ from datetime import datetime
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -85,6 +86,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
     def get(self, request, *args, **kwargs):
         date_format = "%Y-%m-%d"
 
+        # Get and activate requested language
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+
         if date_str := self.request.query_params.get(
             "date", datetime.today().strftime(date_format)
         ):
@@ -110,34 +115,62 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             readings = scrape_readings(date_obj, church)
             for reading in readings:
                 reading.update({"day": day})
-                Reading.objects.get_or_create(**reading)
+                # Extract book translations if present
+                book_en = reading.pop("book_en", reading.get("book"))
+                book_hy = reading.pop("book_hy", None)
+
+                # Create or get the reading
+                reading_obj, created = Reading.objects.get_or_create(**reading)
+
+                # If created, set the translations
+                if created and book_hy:
+                    reading_obj.book_en = book_en
+                    reading_obj.book_hy = book_hy
+                    reading_obj.save()
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
 
         formatted_readings = []
         for reading in day.readings.all():
-            # Trigger context generation if missing
-            if reading.active_context is None:
+            # Get translated book name
+            book_translated = getattr(reading, 'book_i18n', reading.book)
+
+            # Check if context exists and if the requested language translation is available
+            active_context = reading.active_context
+            if active_context is None:
+                # No context at all, trigger generation for requested language
                 logging.warning("No context found for reading %s", str(reading))
-                logging.info("Enqueue context generation for reading %s", reading.id)
-                generate_reading_context_task.delay(reading.id)
+                logging.info("Enqueue context generation for reading %s in language %s", reading.id, lang)
+                generate_reading_context_task.delay(reading.id, language_code=lang)
                 context_dict = {
                     "context": "",
                     "context_thumbs_up": 0,
                     "context_thumbs_down": 0,
                 }
             else:
+                # Check if the requested language translation exists
+                context_text = getattr(active_context, 'text_i18n', active_context.text)
+
+                # If the translation is missing or empty (falls back to default), trigger generation
+                if not context_text or context_text == active_context.text and lang != 'en':
+                    logging.info(
+                        "Context translation missing for reading %s in language %s, enqueuing generation",
+                        reading.id,
+                        lang
+                    )
+                    generate_reading_context_task.delay(reading.id, language_code=lang)
+
                 context_dict = {
-                    "context": reading.active_context.text,
-                    "context_thumbs_up": reading.active_context.thumbs_up,
-                    "context_thumbs_down": reading.active_context.thumbs_down,
+                    "context": context_text or "",
+                    "context_thumbs_up": active_context.thumbs_up,
+                    "context_thumbs_down": active_context.thumbs_down,
                 }
 
             formatted_readings.append(
                 {
                     "id": reading.id,
-                    "book": reading.book,
+                    "book": book_translated,
                     "startChapter": reading.start_chapter,
                     "startVerse": reading.start_verse,
                     "endChapter": reading.end_chapter,

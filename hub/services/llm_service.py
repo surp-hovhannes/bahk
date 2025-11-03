@@ -11,19 +11,28 @@ logger = logging.getLogger(__name__)
 
 class LLMService(ABC):
     """Base class for LLM services."""
-    
+
     @abstractmethod
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None) -> Optional[str]:
-        """Generate context for a reading using the LLM service."""
+    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
+        """Generate context for a reading using the LLM service.
+
+        Args:
+            reading: The Reading instance to generate context for
+            llm_prompt: Optional LLMPrompt to use (defaults to active prompt)
+            language_code: Language code for the context ('en' or 'hy')
+
+        Returns:
+            Generated context text or None if generation fails
+        """
         pass
 
 class AnthropicService(LLMService):
     """Service for Anthropic's Claude API."""
-    
+
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-    
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None) -> Optional[str]:
+
+    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
         """Generate context using Claude."""
         if not settings.ANTHROPIC_API_KEY:
             logger.error("ANTHROPIC_API_KEY is not configured.")
@@ -35,12 +44,19 @@ class AnthropicService(LLMService):
                 logger.error("No active LLM prompt found.")
                 return None
 
+        # Build the user message with language instruction if not English
+        user_message = f"Please provide context for the following passage: {reading.passage_reference}"
+        if language_code == 'hy':
+            user_message += "\n\nPlease respond in Armenian."
+        elif language_code != 'en':
+            user_message += f"\n\nPlease respond in language code: {language_code}"
+
         try:
             response = self.client.messages.create(
                 model=llm_prompt.model,
                 system=llm_prompt.prompt,
                 messages=[
-                    {"role": "user", "content": f"Please provide context for the following passage: {reading.passage_reference}"}
+                    {"role": "user", "content": user_message}
                 ],
                 max_tokens=1000,
                 temperature=0.35,
@@ -55,11 +71,11 @@ class AnthropicService(LLMService):
 
 class OpenAIService(LLMService):
     """Service for OpenAI's API."""
-    
+
     def __init__(self):
         openai.api_key = settings.OPENAI_API_KEY
-    
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None) -> Optional[str]:
+
+    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
         """Generate context using OpenAI."""
         if not settings.OPENAI_API_KEY:
             logger.error("OPENAI_API_KEY is not configured.")
@@ -67,8 +83,14 @@ class OpenAIService(LLMService):
 
         llm_prompt = llm_prompt or LLMPrompt.objects.get(active=True)
         llm_prompt_combined = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
+
+        # Build the user prompt with language instruction if not English
         user_prompt_with_passage = f"Contextualize the passage {reading.passage_reference}, by summarizing the passages preceding it."
-        
+        if language_code == 'hy':
+            user_prompt_with_passage += "\n\nPlease respond in Armenian."
+        elif language_code != 'en':
+            user_prompt_with_passage += f"\n\nPlease respond in language code: {language_code}"
+
         try:
             response = openai.chat.completions.create(
                 model=llm_prompt.model,

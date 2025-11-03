@@ -469,6 +469,17 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_verse",
     )
     actions = ["force_regenerate_context", "compare_prompts"]
+    # Hide base field that also has modeltrans virtual translation field
+    exclude = ("book",)
+
+    fieldsets = (
+        (None, {
+            'fields': ('day', 'start_chapter', 'start_verse', 'end_chapter', 'end_verse')
+        }),
+        ('Translations', {
+            'fields': ('book_en', 'book_hy')
+        }),
+    )
 
     def compare_prompts(self, request, queryset):
         """Redirect to a page to compare different LLM prompts for selected readings."""
@@ -614,6 +625,17 @@ class ReadingContextAdmin(admin.ModelAdmin):
     search_fields = ("text", "reading__book")
     ordering = ("-time_of_generation",)
     raw_id_fields = ("reading", "prompt")
+    # Hide base field that also has modeltrans virtual translation field
+    exclude = ("text",)
+
+    fieldsets = (
+        (None, {
+            'fields': ('reading', 'prompt', 'active', 'thumbs_up', 'thumbs_down', 'time_of_generation')
+        }),
+        ('Context Translations', {
+            'fields': ('text_en', 'text_hy')
+        }),
+    )
 
     def text_preview(self, obj):
         return Truncator(obj.text).chars(100)

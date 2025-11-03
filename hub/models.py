@@ -583,6 +583,9 @@ class Reading(models.Model):
         verbose_name="End Verse", help_text="May be same as end verse"
     )
 
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=('book',))
+
     class Meta:
         constraints = [
             constraints.UniqueConstraint(
@@ -786,6 +789,9 @@ class ReadingContext(models.Model):
     active = models.BooleanField(
         default=True, help_text="Whether the context is currently active"
     )
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=('text',))
 
     def save(self, *args, **kwargs):
         if self.active:

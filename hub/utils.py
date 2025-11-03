@@ -79,7 +79,7 @@ def invalidate_fast_stats_cache(user):
 
 
 def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
-    """Scrapes readings from sacredtradition.am""" 
+    """Scrapes readings from sacredtradition.am in both English and Armenian."""
     if church not in SUPPORTED_CHURCHES:
         logging.error("Web-scraping for readings only set up for the following churches: %r. %s not supported.",
                       SUPPORTED_CHURCHES, church)
@@ -87,76 +87,118 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
 
     date_str = date_obj.strftime(date_format)
 
-    url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL=2&ymd={date_str}"
-    try:
-        response = urllib.request.urlopen(url)
-    except urllib.error.URLError:
-        logging.error("Invalid url %s", url)
-        return []
+    def scrape_language(language_code):
+        """Helper function to scrape readings for a specific language.
 
-    if response.status != 200:
-        logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
-        return []
+        Args:
+            language_code: 2 for English, 3 for Armenian
+        """
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        try:
+            response = urllib.request.urlopen(url)
+        except urllib.error.URLError:
+            logging.error("Invalid url %s", url)
+            return []
 
-    data = response.read()
-    html_content = data.decode("utf-8")
+        if response.status != 200:
+            logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
+            return []
 
-    book_start = html_content.find("<b>")
-    
-    readings = []
-    ct = 0
-    while book_start != -1:
-        # prevent infinite loop
-        if ct > max_num_readings:
-            logging.error("Reached maximum number of readings: %d. Breaking to avoid infinite loop.", max_num_readings)
-            break
-        ct += 1
+        data = response.read()
+        html_content = data.decode("utf-8")
 
-        i1 = book_start + len("<b>")
-        i2 = html_content.find("</b>")
-        reading_str = html_content[i1:i2]
-
-        # advance to next section of web text early to prevent infinite loop in case of failure later on
-        html_content = html_content[i2 + 1:]
         book_start = html_content.find("<b>")
 
-        if "," in reading_str:
-            # TODO: if comma found, second reading appended to first, as for Daniel 3.1-23 and Azariah 1-68
-            # for now, omit second reading
-            reading_str = reading_str.split(",")[0]
-        
-        groups = re.search(PARSER_REGEX, reading_str)
+        readings = []
+        ct = 0
+        while book_start != -1:
+            # prevent infinite loop
+            if ct > max_num_readings:
+                logging.error("Reached maximum number of readings: %d. Breaking to avoid infinite loop.", max_num_readings)
+                break
+            ct += 1
 
-        # skip reading if does not match parser regex
-        if groups is None:
-            logging.error("Could not parse reading %s at %s with regex %s", reading_str, url, PARSER_REGEX)
-            continue
+            i1 = book_start + len("<b>")
+            i2 = html_content.find("</b>")
+            reading_str = html_content[i1:i2]
 
-        try:
-            # parse groups
-            book = groups.group(1)
-            # remove decimal if start chapter provided; otherwise, part of book with 1 chapter
-            start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
-            start_verse = groups.group(3)
-            # remove decimal if end chapter provided; otherwise, must be the same as the start chapter
-            end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter
-            end_verse = groups.group(5) if groups.group(5) is not None else start_verse
+            # advance to next section of web text early to prevent infinite loop in case of failure later on
+            html_content = html_content[i2 + 1:]
+            book_start = html_content.find("<b>")
 
-            readings.append({
-                "book": book,
-                "start_chapter": int(start_chapter),
-                "start_verse": int(start_verse),
-                "end_chapter": int(end_chapter),
-                "end_verse": int(end_verse)
-            })
-        except Exception:
-            logging.error(
-                "Could not parse reading with text %s with regex %s from %s. Skipping.",
-                reading_str, PARSER_REGEX, url, exc_info=True
-            )
-            continue
-    
-    return readings
+            if "," in reading_str:
+                # TODO: if comma found, second reading appended to first, as for Daniel 3.1-23 and Azariah 1-68
+                # for now, omit second reading
+                reading_str = reading_str.split(",")[0]
+
+            groups = re.search(PARSER_REGEX, reading_str)
+
+            # skip reading if does not match parser regex
+            if groups is None:
+                logging.error("Could not parse reading %s at %s with regex %s", reading_str, url, PARSER_REGEX)
+                continue
+
+            try:
+                # parse groups
+                book = groups.group(1)
+                # remove decimal if start chapter provided; otherwise, part of book with 1 chapter
+                start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
+                start_verse = groups.group(3)
+                # remove decimal if end chapter provided; otherwise, must be the same as the start chapter
+                end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter
+                end_verse = groups.group(5) if groups.group(5) is not None else start_verse
+
+                readings.append({
+                    "book": book,
+                    "start_chapter": int(start_chapter),
+                    "start_verse": int(start_verse),
+                    "end_chapter": int(end_chapter),
+                    "end_verse": int(end_verse)
+                })
+            except Exception:
+                logging.error(
+                    "Could not parse reading with text %s with regex %s from %s. Skipping.",
+                    reading_str, PARSER_REGEX, url, exc_info=True
+                )
+                continue
+
+        return readings
+
+    # Scrape English (iL=2) and Armenian (iL=3)
+    english_readings = scrape_language(2)
+    armenian_readings = scrape_language(3)
+
+    # Combine the readings with both translations
+    # Assuming the readings are in the same order, we match them by index
+    combined_readings = []
+    for i, en_reading in enumerate(english_readings):
+        reading_data = {
+            "book": en_reading["book"],
+            "book_en": en_reading["book"],
+            "start_chapter": en_reading["start_chapter"],
+            "start_verse": en_reading["start_verse"],
+            "end_chapter": en_reading["end_chapter"],
+            "end_verse": en_reading["end_verse"]
+        }
+
+        # Add Armenian translation if available
+        if i < len(armenian_readings):
+            hy_reading = armenian_readings[i]
+            # Verify the readings match (same chapter/verse structure)
+            if (hy_reading["start_chapter"] == en_reading["start_chapter"] and
+                hy_reading["start_verse"] == en_reading["start_verse"] and
+                hy_reading["end_chapter"] == en_reading["end_chapter"] and
+                hy_reading["end_verse"] == en_reading["end_verse"]):
+                reading_data["book_hy"] = hy_reading["book"]
+            else:
+                logging.warning(
+                    "Armenian reading %d does not match English reading structure. Skipping Armenian translation.",
+                    i
+                )
+
+        combined_readings.append(reading_data)
+
+    return combined_readings
 
 
 def send_fast_reminders():
