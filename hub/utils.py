@@ -19,7 +19,7 @@ from hub.serializers import FastSerializer
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-PARSER_REGEX = r"^([A-za-z1-4\'\. ]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
+PARSER_REGEX = r"^([\w\u0531-\u058A\u0400-\u04FF1-4\'\.\s]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
 SUPPORTED_CHURCHES = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME)
 
 
