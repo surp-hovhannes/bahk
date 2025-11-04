@@ -44,17 +44,39 @@ class AnthropicService(LLMService):
                 logger.error("No active LLM prompt found.")
                 return None
 
-        # Build the user message with language instruction if not English
-        user_message = f"Please provide context for the following passage: {reading.passage_reference}"
+        # Build the user message with strong language instruction if not English
+        base_message = f"Please provide context for the following passage: {reading.passage_reference}"
+        
+        # Modify system prompt for non-English languages
         if language_code == 'hy':
-            user_message += "\n\nPlease respond in Armenian."
+            # Add language instruction to BOTH system prompt and user message
+            system_prompt = (
+                "CRITICAL: You MUST respond ONLY in Armenian language (Հայերեն). "
+                "All instructions below apply, but your response must be entirely in Armenian.\n\n"
+                f"{llm_prompt.prompt}"
+            )
+            user_message = (
+                "CRITICAL INSTRUCTION: Respond ONLY in Armenian (Հայերեն).\n\n"
+                f"{base_message}"
+            )
         elif language_code != 'en':
-            user_message += f"\n\nPlease respond in language code: {language_code}"
+            system_prompt = (
+                f"CRITICAL: You MUST respond ONLY in language code: {language_code}. "
+                f"All instructions below apply, but your response must be in that language.\n\n"
+                f"{llm_prompt.prompt}"
+            )
+            user_message = (
+                f"CRITICAL INSTRUCTION: Respond ONLY in language code: {language_code}.\n\n"
+                f"{base_message}"
+            )
+        else:
+            system_prompt = llm_prompt.prompt
+            user_message = base_message
 
         try:
             response = self.client.messages.create(
                 model=llm_prompt.model,
-                system=llm_prompt.prompt,
+                system=system_prompt,
                 messages=[
                     {"role": "user", "content": user_message}
                 ],
@@ -82,14 +104,35 @@ class OpenAIService(LLMService):
             return None
 
         llm_prompt = llm_prompt or LLMPrompt.objects.get(active=True)
-        llm_prompt_combined = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
-
-        # Build the user prompt with language instruction if not English
-        user_prompt_with_passage = f"Contextualize the passage {reading.passage_reference}, by summarizing the passages preceding it."
+        
+        # Build the user prompt with strong language instruction if not English
+        base_prompt = f"Contextualize the passage {reading.passage_reference}, by summarizing the passages preceding it."
+        
+        # Modify system prompt for non-English languages
         if language_code == 'hy':
-            user_prompt_with_passage += "\n\nPlease respond in Armenian."
+            # Add language instruction to BOTH system prompt and user message
+            llm_prompt_combined = (
+                "CRITICAL: You MUST respond ONLY in Armenian language (Հայերեն). "
+                "All instructions below apply, but your response must be entirely in Armenian.\n\n"
+                f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
+            )
+            user_prompt_with_passage = (
+                "CRITICAL INSTRUCTION: Respond ONLY in Armenian (Հայերեն).\n\n"
+                f"{base_prompt}"
+            )
         elif language_code != 'en':
-            user_prompt_with_passage += f"\n\nPlease respond in language code: {language_code}"
+            llm_prompt_combined = (
+                f"CRITICAL: You MUST respond ONLY in language code: {language_code}. "
+                f"All instructions below apply, but your response must be in that language.\n\n"
+                f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
+            )
+            user_prompt_with_passage = (
+                f"CRITICAL INSTRUCTION: Respond ONLY in language code: {language_code}.\n\n"
+                f"{base_prompt}"
+            )
+        else:
+            llm_prompt_combined = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
+            user_prompt_with_passage = base_prompt
 
         try:
             response = openai.chat.completions.create(
