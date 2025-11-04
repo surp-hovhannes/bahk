@@ -38,8 +38,6 @@ def _update_context_translations(
             existing_text = getattr(context, f'text_{lang}', None)
             if not existing_text or not existing_text.strip() or force_regeneration:
                 setattr(context, f'text_{lang}', context_text)
-                if context.text == context_text:
-                    context.text = ''
     context.save()
 
 
