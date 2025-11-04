@@ -32,7 +32,7 @@ def _update_context_translations(
     """Update existing context with missing or regenerated translations."""
     for lang, context_text in generated_contexts.items():
         if lang == 'en':
-            if not context.text or force_regeneration:
+            if not context.text or not context.text.strip() or force_regeneration:
                 context.text = context_text
         else:
             existing_text = getattr(context, f'text_{lang}', None)
