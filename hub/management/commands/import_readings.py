@@ -35,14 +35,11 @@ class Command(BaseCommand):
             readings = scrape_readings(date_obj, church)
             for reading in readings:
                 reading.update({"day": day})
-                # Extract book translations if present
                 book_en = reading.pop("book_en", reading.get("book"))
                 book_hy = reading.pop("book_hy", None)
 
-                # Create or get the reading
                 reading_obj, created = models.Reading.objects.get_or_create(**reading)
 
-                # If created, set the translations
                 if created and book_hy:
                     reading_obj.book_en = book_en
                     reading_obj.book_hy = book_hy

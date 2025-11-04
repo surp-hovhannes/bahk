@@ -162,9 +162,7 @@ class FastAdmin(admin.ModelAdmin):
     ordering = ("-year", "church", "name")
     list_filter = ("church", "year")
     sortable_by = ("get_name", "participant_count")
-    # Hide base fields that also have modeltrans virtual translation fields to
-    # avoid duplicate inputs in the admin form (e.g., "Description" shown twice)
-    exclude = ("name", "description", "culmination_feast")
+    exclude = ("name", "description", "culmination_feast")  # Avoid duplicate with translation fields
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -469,8 +467,7 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_verse",
     )
     actions = ["force_regenerate_context", "compare_prompts"]
-    # Hide base field that also has modeltrans virtual translation field
-    exclude = ("book",)
+    exclude = ("book",)  # Avoid duplicate with translation fields
 
     fieldsets = (
         (None, {
@@ -626,8 +623,7 @@ class ReadingContextAdmin(admin.ModelAdmin):
     ordering = ("-time_of_generation",)
     raw_id_fields = ("reading", "prompt")
     readonly_fields = ("time_of_generation",)
-    # Hide base field that also has modeltrans virtual translation field
-    exclude = ("text",)
+    exclude = ("text",)  # Avoid duplicate with translation fields
 
     fieldsets = (
         (None, {
@@ -661,9 +657,7 @@ class PatristicQuoteAdmin(MarkdownxModelAdmin):
     raw_id_fields = ('churches', 'fasts')
     readonly_fields = ('created_at', 'updated_at')
     filter_horizontal = ('churches', 'fasts')
-    # Hide base fields that also have modeltrans virtual translation fields to
-    # avoid duplicate inputs in the admin form
-    exclude = ('text', 'attribution')
+    exclude = ('text', 'attribution')  # Avoid duplicate with translation fields
     
     fieldsets = (
         (None, {

@@ -8,8 +8,60 @@ from hub.models import LLMPrompt, Reading, ReadingContext
 
 logger = logging.getLogger(__name__)
 
-# Get available languages from settings
 AVAILABLE_LANGUAGES = getattr(settings, 'MODELTRANS_AVAILABLE_LANGUAGES', ['en', 'hy'])
+
+
+def _check_all_translations_present(context: ReadingContext, languages: list[str]) -> bool:
+    """Check if context has translations for all languages."""
+    for lang in languages:
+        if lang == 'en':
+            text = context.text
+        else:
+            text = getattr(context, f'text_{lang}', None)
+        
+        if not text or not text.strip():
+            return False
+    return True
+
+
+def _update_context_translations(
+    context: ReadingContext, 
+    generated_contexts: dict[str, str], 
+    force_regeneration: bool
+) -> None:
+    """Update existing context with missing or regenerated translations."""
+    for lang, context_text in generated_contexts.items():
+        if lang == 'en':
+            if not context.text or force_regeneration:
+                context.text = context_text
+        else:
+            existing_text = getattr(context, f'text_{lang}', None)
+            if not existing_text or not existing_text.strip() or force_regeneration:
+                setattr(context, f'text_{lang}', context_text)
+                if context.text == context_text:
+                    context.text = ''
+    context.save()
+
+
+def _create_context_with_translations(
+    reading: Reading,
+    llm_prompt: LLMPrompt,
+    generated_contexts: dict[str, str]
+) -> ReadingContext:
+    """Create new context with all translations."""
+    english_text = generated_contexts.get('en', '')
+    context = ReadingContext(
+        reading=reading,
+        text=english_text,
+        prompt=llm_prompt,
+    )
+    
+    for lang, context_text in generated_contexts.items():
+        if lang != 'en':
+            setattr(context, f'text_{lang}', context_text)
+    
+    context.save()
+    return context
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -21,32 +73,25 @@ def generate_reading_context_task(
     Args:
         reading_id: ID of the Reading to generate context for
         force_regeneration: If True, regenerate even if context exists
-        language_code: Deprecated - kept for backwards compatibility. All languages are generated.
+        language_code: DEPRECATED - Ignored. All languages are always generated.
     """
+    if language_code is not None:
+        logger.warning(
+            "language_code parameter is deprecated and will be removed in a future version. "
+            "All languages are now generated automatically."
+        )
+
     try:
         reading = Reading.objects.get(pk=reading_id)
     except Reading.DoesNotExist:
         logger.error("Reading with id %s not found.", reading_id)
         return
 
-    # Check if context exists and has all translations
     active_context = reading.active_context
-    if active_context is not None and not force_regeneration:
-        # Check if all languages have translations
-        all_languages_present = True
-        for lang in AVAILABLE_LANGUAGES:
-            if lang == 'en':
-                context_text = active_context.text
-            else:
-                context_text = getattr(active_context, f'text_{lang}', None)
-            
-            if not context_text or not context_text.strip():
-                all_languages_present = False
-                break
-        
-        if all_languages_present:
+    if active_context and not force_regeneration:
+        if _check_all_translations_present(active_context, AVAILABLE_LANGUAGES):
             logger.info(
-                "Reading %s already has context for all languages, skipping generation (force_regeneration=False).",
+                "Reading %s already has context for all languages, skipping.",
                 reading_id
             )
             return
@@ -54,10 +99,8 @@ def generate_reading_context_task(
     llm_prompt = LLMPrompt.objects.get(active=True)
 
     try:
-        # Get the appropriate service using the prompt's method
         service = llm_prompt.get_llm_service()
         
-        # Generate context for all available languages
         generated_contexts = {}
         for lang in AVAILABLE_LANGUAGES:
             context_text = service.generate_context(reading, llm_prompt, lang)
@@ -66,57 +109,24 @@ def generate_reading_context_task(
             else:
                 logger.warning(
                     "Failed to generate context for Reading %s in language %s",
-                    reading_id,
-                    lang
+                    reading_id, lang
                 )
         
         if not generated_contexts:
             logger.error("Failed to generate context for Reading %s in any language", reading_id)
             raise self.retry(exc=Exception("Context generation failed for all languages"))
         
-        # Create or update context with all translations
-        if active_context is not None:
-            # Update existing context with missing translations
-            for lang, context_text in generated_contexts.items():
-                if lang == 'en':
-                    # Only update if empty or if force_regeneration
-                    if not active_context.text or force_regeneration:
-                        active_context.text = context_text
-                else:
-                    # Only update if empty or if force_regeneration
-                    existing_text = getattr(active_context, f'text_{lang}', None)
-                    if not existing_text or not existing_text.strip() or force_regeneration:
-                        setattr(active_context, f'text_{lang}', context_text)
-                        # Ensure the base text field doesn't contain the translation
-                        if active_context.text == context_text:
-                            active_context.text = ''
-            
-            active_context.save()
+        if active_context:
+            _update_context_translations(active_context, generated_contexts, force_regeneration)
             logger.info(
                 "Context translations updated for Reading %s (languages: %s)",
-                reading_id,
-                ', '.join(generated_contexts.keys())
+                reading_id, ', '.join(generated_contexts.keys())
             )
         else:
-            # Create new context with all translations
-            # Start with English in the base text field
-            english_text = generated_contexts.get('en', '')
-            context = ReadingContext(
-                reading=reading,
-                text=english_text,
-                prompt=llm_prompt,
-            )
-            
-            # Set all other language translations
-            for lang, context_text in generated_contexts.items():
-                if lang != 'en':
-                    setattr(context, f'text_{lang}', context_text)
-            
-            context.save()
+            _create_context_with_translations(reading, llm_prompt, generated_contexts)
             logger.info(
-                "Context generated and saved for Reading %s in languages: %s",
-                reading_id,
-                ', '.join(generated_contexts.keys())
+                "Context generated for Reading %s in languages: %s",
+                reading_id, ', '.join(generated_contexts.keys())
             )
     except ValueError as e:
         logger.error(f"Error selecting LLM service: {e}")
