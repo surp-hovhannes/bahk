@@ -625,6 +625,7 @@ class ReadingContextAdmin(admin.ModelAdmin):
     search_fields = ("text", "reading__book")
     ordering = ("-time_of_generation",)
     raw_id_fields = ("reading", "prompt")
+    readonly_fields = ("time_of_generation",)
     # Hide base field that also has modeltrans virtual translation field
     exclude = ("text",)
 

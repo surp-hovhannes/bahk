@@ -136,30 +136,43 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             # Get translated book name
             book_translated = getattr(reading, 'book_i18n', reading.book)
 
-            # Check if context exists and if the requested language translation is available
+            # Check if context exists and has all translations
             active_context = reading.active_context
             if active_context is None:
-                # No context at all, trigger generation for requested language
+                # No context at all, trigger generation for all languages
                 logging.warning("No context found for reading %s", str(reading))
-                logging.info("Enqueue context generation for reading %s in language %s", reading.id, lang)
-                generate_reading_context_task.delay(reading.id, language_code=lang)
+                logging.info("Enqueue context generation for reading %s (all languages)", reading.id)
+                generate_reading_context_task.delay(reading.id)
                 context_dict = {
                     "context": "",
                     "context_thumbs_up": 0,
                     "context_thumbs_down": 0,
                 }
             else:
-                # Check if the requested language translation exists
+                # Get the requested language translation
                 context_text = getattr(active_context, 'text_i18n', active_context.text)
 
-                # If the translation is missing or empty (falls back to default), trigger generation
-                if not context_text or context_text == active_context.text and lang != 'en':
+                # Check if all languages have translations
+                from django.conf import settings
+                available_languages = getattr(settings, 'MODELTRANS_AVAILABLE_LANGUAGES', ['en', 'hy'])
+                all_languages_present = True
+                for available_lang in available_languages:
+                    if available_lang == 'en':
+                        lang_text = active_context.text
+                    else:
+                        lang_text = getattr(active_context, f'text_{available_lang}', None)
+                    
+                    if not lang_text or not lang_text.strip():
+                        all_languages_present = False
+                        break
+
+                # If any translation is missing, trigger generation for all languages
+                if not all_languages_present:
                     logging.info(
-                        "Context translation missing for reading %s in language %s, enqueuing generation",
-                        reading.id,
-                        lang
+                        "Context translations missing for reading %s, enqueuing generation for all languages",
+                        reading.id
                     )
-                    generate_reading_context_task.delay(reading.id, language_code=lang)
+                    generate_reading_context_task.delay(reading.id)
 
                 context_dict = {
                     "context": context_text or "",
