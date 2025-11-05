@@ -293,13 +293,15 @@ class GenerateReadingContextTaskTests(TestCase):
         # Should return None and log error
         self.assertIsNone(result)
 
-    @patch('hub.tasks.llm_tasks.LLMPrompt.objects.get')
-    def test_no_active_prompt(self, mock_get):
+    def test_no_active_prompt(self):
         """Test when no active prompt exists."""
-        mock_get.side_effect = LLMPrompt.DoesNotExist()
+        # Deactivate the prompt created in setUp
+        self.llm_prompt.active = False
+        self.llm_prompt.save()
         
-        with self.assertRaises(LLMPrompt.DoesNotExist):
-            generate_reading_context_task(self.reading.id)
+        # Task should return None and log error when no active prompt exists
+        result = generate_reading_context_task(self.reading.id)
+        self.assertIsNone(result)
 
     @patch('hub.services.llm_service.OpenAIService.generate_context')
     def test_skip_when_all_translations_exist(self, mock_generate):
