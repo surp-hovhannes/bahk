@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.tasks import generate_reading_context_task
-from hub.utils import scrape_readings
+from hub.utils import get_user_profile_safe, scrape_readings
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -103,7 +103,8 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             date_obj = datetime.today().date()
 
         if request.user.is_authenticated:
-            church = request.user.profile.church
+            profile = get_user_profile_safe(request.user)
+            church = profile.church if profile else Church.objects.get(pk=Church.get_default_pk())
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 
