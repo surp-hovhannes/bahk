@@ -40,8 +40,10 @@ class Command(BaseCommand):
 
                 reading_obj, created = models.Reading.objects.get_or_create(**reading)
 
-                if created and book_hy:
+                # Update translations if they are missing (whether created or already exists)
+                if book_hy and not reading_obj.book_hy:
                     reading_obj.book_en = book_en
                     reading_obj.book_hy = book_hy
-                    reading_obj.save()
-                    logging.info(f"Created reading with translations: {reading_obj}")
+                    reading_obj.save(update_fields=['book_en', 'book_hy'])
+                    action = "Created" if created else "Updated"
+                    logging.info(f"{action} reading with translations: {reading_obj}")

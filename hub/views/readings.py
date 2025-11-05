@@ -123,11 +123,11 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                 # Create or get the reading
                 reading_obj, created = Reading.objects.get_or_create(**reading)
 
-                # If created, set the translations
-                if created and book_hy:
+                # Set translations if they are missing (whether created or already exists)
+                if book_hy and not reading_obj.book_hy:
                     reading_obj.book_en = book_en
                     reading_obj.book_hy = book_hy
-                    reading_obj.save()
+                    reading_obj.save(update_fields=['book_en', 'book_hy'])
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
