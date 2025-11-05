@@ -116,18 +116,27 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             readings = scrape_readings(date_obj, church)
             for reading in readings:
                 reading.update({"day": day})
-                # Extract book translations if present
+                # Extract and remove all book-related fields to handle them separately
                 book_en = reading.pop("book_en", reading.get("book"))
                 book_hy = reading.pop("book_hy", None)
+                # Remove 'book' from the dict to avoid using it in get_or_create lookup
+                reading.pop("book", None)
 
-                # Create or get the reading
-                reading_obj, created = Reading.objects.get_or_create(**reading)
+                # Use explicit lookup with book_en to match the uniqueness constraint
+                # (modeltrans treats 'book' as 'book_en' in the database)
+                reading_obj, created = Reading.objects.get_or_create(
+                    day=reading["day"],
+                    book=book_en,  # This becomes book_en in the database
+                    start_chapter=reading["start_chapter"],
+                    start_verse=reading["start_verse"],
+                    end_chapter=reading["end_chapter"],
+                    end_verse=reading["end_verse"]
+                )
 
-                # Set translations if they are missing (whether created or already exists)
+                # Set translations if they are missing
                 if book_hy and not reading_obj.book_hy:
-                    reading_obj.book_en = book_en
                     reading_obj.book_hy = book_hy
-                    reading_obj.save(update_fields=['book_en', 'book_hy'])
+                    reading_obj.save(update_fields=['book_hy'])
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
