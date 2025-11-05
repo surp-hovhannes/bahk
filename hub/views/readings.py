@@ -241,6 +241,19 @@ class ReadingContextFeedbackView(APIView):
     def post(self, request, pk):
         reading = get_object_or_404(Reading, pk=pk)
         active_context = reading.active_context
+        
+        # Check if active context exists
+        if active_context is None:
+            # Trigger context generation if not already in progress
+            generate_reading_context_task.delay(reading.id)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "No context available for this reading. Context generation has been queued."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
         feedback_type = request.data.get("feedback_type")
         if feedback_type == "up":
             active_context.thumbs_up += 1
