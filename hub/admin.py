@@ -507,7 +507,7 @@ class ReadingAdmin(admin.ModelAdmin):
     )
 
     def church_link(self, reading):
-        if not reading.day and not reading.day.church:
+        if not reading.day or not reading.day.church:
             return ""
         url = reverse("admin:hub_church_change", args=[reading.day.church.pk])
         return format_html('<a href="{}">{}</a>', url, reading.day.church.name)
