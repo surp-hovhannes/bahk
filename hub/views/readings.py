@@ -8,6 +8,7 @@ from datetime import datetime
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -15,7 +16,7 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.tasks import generate_reading_context_task
-from hub.utils import scrape_readings
+from hub.utils import get_user_profile_safe, scrape_readings
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -85,6 +86,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
     def get(self, request, *args, **kwargs):
         date_format = "%Y-%m-%d"
 
+        # Get and activate requested language
+        lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
+        activate(lang)
+
         if date_str := self.request.query_params.get(
             "date", datetime.today().strftime(date_format)
         ):
@@ -98,7 +103,8 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             date_obj = datetime.today().date()
 
         if request.user.is_authenticated:
-            church = request.user.profile.church
+            profile = get_user_profile_safe(request.user)
+            church = profile.church if profile else Church.objects.get(pk=Church.get_default_pk())
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 
@@ -110,17 +116,42 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             readings = scrape_readings(date_obj, church)
             for reading in readings:
                 reading.update({"day": day})
-                Reading.objects.get_or_create(**reading)
+                # Extract and remove all book-related fields to handle them separately
+                book_en = reading.pop("book_en", reading.get("book"))
+                book_hy = reading.pop("book_hy", None)
+                # Remove 'book' from the dict to avoid using it in get_or_create lookup
+                reading.pop("book", None)
+
+                # Use explicit lookup with book_en to match the uniqueness constraint
+                # (modeltrans treats 'book' as 'book_en' in the database)
+                reading_obj, created = Reading.objects.get_or_create(
+                    day=reading["day"],
+                    book=book_en,  # This becomes book_en in the database
+                    start_chapter=reading["start_chapter"],
+                    start_verse=reading["start_verse"],
+                    end_chapter=reading["end_chapter"],
+                    end_verse=reading["end_verse"]
+                )
+
+                # Set translations if they are missing
+                if book_hy and not reading_obj.book_hy:
+                    reading_obj.book_hy = book_hy
+                    reading_obj.save(update_fields=['book_hy'])
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
 
         formatted_readings = []
         for reading in day.readings.all():
-            # Trigger context generation if missing
-            if reading.active_context is None:
+            # Get translated book name
+            book_translated = getattr(reading, 'book_i18n', reading.book)
+
+            # Check if context exists and has all translations
+            active_context = reading.active_context
+            if active_context is None:
+                # No context at all, trigger generation for all languages
                 logging.warning("No context found for reading %s", str(reading))
-                logging.info("Enqueue context generation for reading %s", reading.id)
+                logging.info("Enqueue context generation for reading %s (all languages)", reading.id)
                 generate_reading_context_task.delay(reading.id)
                 context_dict = {
                     "context": "",
@@ -128,16 +159,41 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "context_thumbs_down": 0,
                 }
             else:
+                # Get the requested language translation
+                context_text = getattr(active_context, 'text_i18n', active_context.text)
+
+                # Check if all languages have translations
+                from django.conf import settings
+                available_languages = getattr(settings, 'MODELTRANS_AVAILABLE_LANGUAGES', ['en', 'hy'])
+                all_languages_present = True
+                for available_lang in available_languages:
+                    if available_lang == 'en':
+                        lang_text = active_context.text
+                    else:
+                        lang_text = getattr(active_context, f'text_{available_lang}', None)
+                    
+                    if not lang_text or not lang_text.strip():
+                        all_languages_present = False
+                        break
+
+                # If any translation is missing, trigger generation for all languages
+                if not all_languages_present:
+                    logging.info(
+                        "Context translations missing for reading %s, enqueuing generation for all languages",
+                        reading.id
+                    )
+                    generate_reading_context_task.delay(reading.id)
+
                 context_dict = {
-                    "context": reading.active_context.text,
-                    "context_thumbs_up": reading.active_context.thumbs_up,
-                    "context_thumbs_down": reading.active_context.thumbs_down,
+                    "context": context_text or "",
+                    "context_thumbs_up": active_context.thumbs_up,
+                    "context_thumbs_down": active_context.thumbs_down,
                 }
 
             formatted_readings.append(
                 {
                     "id": reading.id,
-                    "book": reading.book,
+                    "book": book_translated,
                     "startChapter": reading.start_chapter,
                     "startVerse": reading.start_verse,
                     "endChapter": reading.end_chapter,
@@ -194,6 +250,19 @@ class ReadingContextFeedbackView(APIView):
     def post(self, request, pk):
         reading = get_object_or_404(Reading, pk=pk)
         active_context = reading.active_context
+        
+        # Check if active context exists
+        if active_context is None:
+            # Trigger context generation if not already in progress
+            generate_reading_context_task.delay(reading.id)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "No context available for this reading. Context generation has been queued."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
         feedback_type = request.data.get("feedback_type")
         if feedback_type == "up":
             active_context.thumbs_up += 1

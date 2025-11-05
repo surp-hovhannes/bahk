@@ -70,7 +70,10 @@ class AdminDashboardTests(TestCase):
         )
         
         # Create test events with different categories and users
+        # Use fixed timestamps that are guaranteed to be within query windows
+        # Set base time to noon today to avoid edge cases when tests run near midnight
         now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
         
         # User engagement events (should appear in User Engagement Dashboard)
         self.user_login_event = Event.create_event(
@@ -79,7 +82,7 @@ class AdminDashboardTests(TestCase):
             title='Regular user logged in'
         )
         # Update timestamp manually
-        self.user_login_event.timestamp = now - timedelta(hours=2)
+        self.user_login_event.timestamp = today_noon - timedelta(hours=2)
         self.user_login_event.save()
         
         self.fast_join_event = Event.create_event(
@@ -89,7 +92,7 @@ class AdminDashboardTests(TestCase):
             title='User joined fast'
         )
         # Update timestamp manually
-        self.fast_join_event.timestamp = now - timedelta(hours=1)
+        self.fast_join_event.timestamp = today_noon - timedelta(hours=1)
         self.fast_join_event.save()
         
         # Analytics events (should appear in App Analytics Dashboard)
@@ -100,7 +103,7 @@ class AdminDashboardTests(TestCase):
             data={'platform': 'ios', 'app_version': '1.0'}
         )
         # Update timestamp manually
-        self.app_open_event.timestamp = now - timedelta(minutes=30)
+        self.app_open_event.timestamp = today_noon - timedelta(minutes=30)
         self.app_open_event.save()
         
         self.screen_view_event = Event.create_event(
@@ -110,7 +113,7 @@ class AdminDashboardTests(TestCase):
             data={'screen': 'fasts_list'}
         )
         # Update timestamp manually
-        self.screen_view_event.timestamp = now - timedelta(minutes=15)
+        self.screen_view_event.timestamp = today_noon - timedelta(minutes=15)
         self.screen_view_event.save()
         
         # Staff user events (should be excluded from both dashboards)
@@ -120,7 +123,7 @@ class AdminDashboardTests(TestCase):
             title='Staff user logged in'
         )
         # Update timestamp manually
-        self.staff_login_event.timestamp = now - timedelta(minutes=45)
+        self.staff_login_event.timestamp = today_noon - timedelta(minutes=45)
         self.staff_login_event.save()
         
         self.staff_app_open_event = Event.create_event(
@@ -129,7 +132,7 @@ class AdminDashboardTests(TestCase):
             title='Staff app opened'
         )
         # Update timestamp manually
-        self.staff_app_open_event.timestamp = now - timedelta(minutes=10)
+        self.staff_app_open_event.timestamp = today_noon - timedelta(minutes=10)
         self.staff_app_open_event.save()
         
         # Set up admin client

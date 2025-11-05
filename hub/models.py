@@ -583,6 +583,9 @@ class Reading(models.Model):
         verbose_name="End Verse", help_text="May be same as end verse"
     )
 
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=('book',))
+
     class Meta:
         constraints = [
             constraints.UniqueConstraint(
@@ -703,6 +706,8 @@ class LLMPrompt(models.Model):
         ("gpt-4.1", "GPT 4.1"),
         ("gpt-o4-mini", "GPT o4 Mini (Reasoning $$$)"),
         ("gpt-4o-mini", "GPT 4o Mini"),
+        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
         ("claude-3-7-sonnet-20250219", "Claude 3.7 Sonnet"),
         ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet")
     ]
@@ -786,6 +791,9 @@ class ReadingContext(models.Model):
     active = models.BooleanField(
         default=True, help_text="Whether the context is currently active"
     )
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=('text',))
 
     def save(self, *args, **kwargs):
         if self.active:

@@ -29,7 +29,7 @@ class ReadingContextTaskTests(TestCase):
         )
 
     def test_context_generation_with_gpt(self):
-        """Test context generation with GPT model."""
+        """Test context generation with GPT model for all languages."""
         prompt = LLMPrompt.objects.create(
             model="gpt-4.1-mini",
             role="Test role",
@@ -37,13 +37,23 @@ class ReadingContextTaskTests(TestCase):
             active=True
         )
 
-        with patch.object(OpenAIService, 'generate_context', return_value="GPT generated context"):
+        # Mock generate_context to return different values for each language
+        def mock_generate_context(reading, llm_prompt, language_code):
+            if language_code == 'en':
+                return "GPT generated context in English"
+            elif language_code == 'hy':
+                return "GPT generated context in Armenian"
+            return "GPT generated context"
+
+        with patch.object(OpenAIService, 'generate_context', side_effect=mock_generate_context):
             generate_reading_context_task.run(self.reading.id)
             self.reading.refresh_from_db()
-            self.assertEqual(self.reading.contexts.first().text, "GPT generated context")
+            context = self.reading.contexts.first()
+            self.assertEqual(context.text, "GPT generated context in English")
+            self.assertEqual(context.text_hy, "GPT generated context in Armenian")
 
     def test_context_generation_with_claude(self):
-        """Test context generation with Claude model."""
+        """Test context generation with Claude model for all languages."""
         prompt = LLMPrompt.objects.create(
             model="claude-3-7-sonnet-20250219",
             role="Test role",
@@ -51,13 +61,23 @@ class ReadingContextTaskTests(TestCase):
             active=True
         )
 
-        with patch.object(AnthropicService, 'generate_context', return_value="Claude generated context"):
+        # Mock generate_context to return different values for each language
+        def mock_generate_context(reading, llm_prompt, language_code):
+            if language_code == 'en':
+                return "Claude generated context in English"
+            elif language_code == 'hy':
+                return "Claude generated context in Armenian"
+            return "Claude generated context"
+
+        with patch.object(AnthropicService, 'generate_context', side_effect=mock_generate_context):
             generate_reading_context_task.run(self.reading.id)
             self.reading.refresh_from_db()
-            self.assertEqual(self.reading.contexts.first().text, "Claude generated context")
+            context = self.reading.contexts.first()
+            self.assertEqual(context.text, "Claude generated context in English")
+            self.assertEqual(context.text_hy, "Claude generated context in Armenian")
 
     def test_skip_generation_if_exists(self):
-        """Test that generation is skipped if context exists and force_regeneration is False."""
+        """Test that generation is skipped if context exists for all languages and force_regeneration is False."""
         prompt = LLMPrompt.objects.create(
             model="gpt-4.1-mini",
             role="Test role",
@@ -65,12 +85,14 @@ class ReadingContextTaskTests(TestCase):
             active=True
         )
 
-        # Create initial context
+        # Create initial context with all languages
         context = ReadingContext.objects.create(
             reading=self.reading,
-            text="Initial context",
+            text="Initial context in English",
             prompt=prompt
         )
+        context.text_hy = "Initial context in Armenian"
+        context.save()
 
         with patch.object(OpenAIService, 'generate_context') as mock_generate:
             generate_reading_context_task.run(self.reading.id)
@@ -92,10 +114,20 @@ class ReadingContextTaskTests(TestCase):
             prompt=prompt
         )
 
-        with patch.object(OpenAIService, 'generate_context', return_value="New context"):
+        # Mock generate_context to return different values for each language
+        def mock_generate_context(reading, llm_prompt, language_code):
+            if language_code == 'en':
+                return "New context in English"
+            elif language_code == 'hy':
+                return "New context in Armenian"
+            return "New context"
+
+        with patch.object(OpenAIService, 'generate_context', side_effect=mock_generate_context):
             generate_reading_context_task.run(self.reading.id, force_regeneration=True)
             self.reading.refresh_from_db()
-            self.assertEqual(self.reading.active_context.text, "New context")
+            context = self.reading.active_context
+            self.assertEqual(context.text, "New context in English")
+            self.assertEqual(context.text_hy, "New context in Armenian")
 
 
 class DailyReadingsAPITests(APITestCase):
@@ -112,11 +144,20 @@ class DailyReadingsAPITests(APITestCase):
             end_chapter=3,
             end_verse=18,
         )
-        # Pre-populate context
-        ReadingContext.objects.create(
+        # Create an active LLMPrompt for context generation
+        self.prompt = LLMPrompt.objects.create(
+            model="gpt-4.1-mini",
+            role="Test role",
+            prompt="Test prompt",
+            active=True
+        )
+        # Pre-populate context with all languages to avoid triggering generation
+        context = ReadingContext.objects.create(
             reading=self.reading,
             text="Existing context",
         )
+        context.text_hy = "Existing context in Armenian"
+        context.save()
 
     def test_daily_readings_api_includes_context_fields(self):
         url = reverse("daily-readings") + f"?date={self.day.date.isoformat()}"

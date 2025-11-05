@@ -162,9 +162,7 @@ class FastAdmin(admin.ModelAdmin):
     ordering = ("-year", "church", "name")
     list_filter = ("church", "year")
     sortable_by = ("get_name", "participant_count")
-    # Hide base fields that also have modeltrans virtual translation fields to
-    # avoid duplicate inputs in the admin form (e.g., "Description" shown twice)
-    exclude = ("name", "description", "culmination_feast")
+    exclude = ("name", "description", "culmination_feast")  # Avoid duplicate with translation fields
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -469,6 +467,16 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_verse",
     )
     actions = ["force_regenerate_context", "compare_prompts"]
+    exclude = ("book",)  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('day', 'start_chapter', 'start_verse', 'end_chapter', 'end_verse')
+        }),
+        ('Translations', {
+            'fields': ('book_en', 'book_hy')
+        }),
+    )
 
     def compare_prompts(self, request, queryset):
         """Redirect to a page to compare different LLM prompts for selected readings."""
@@ -499,7 +507,7 @@ class ReadingAdmin(admin.ModelAdmin):
     )
 
     def church_link(self, reading):
-        if not reading.day and not reading.day.church:
+        if not reading.day or not reading.day.church:
             return ""
         url = reverse("admin:hub_church_change", args=[reading.day.church.pk])
         return format_html('<a href="{}">{}</a>', url, reading.day.church.name)
@@ -614,6 +622,17 @@ class ReadingContextAdmin(admin.ModelAdmin):
     search_fields = ("text", "reading__book")
     ordering = ("-time_of_generation",)
     raw_id_fields = ("reading", "prompt")
+    readonly_fields = ("time_of_generation",)
+    exclude = ("text",)  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('reading', 'prompt', 'active', 'thumbs_up', 'thumbs_down', 'time_of_generation')
+        }),
+        ('Context Translations', {
+            'fields': ('text_en', 'text_hy')
+        }),
+    )
 
     def text_preview(self, obj):
         return Truncator(obj.text).chars(100)
@@ -638,9 +657,7 @@ class PatristicQuoteAdmin(MarkdownxModelAdmin):
     raw_id_fields = ('churches', 'fasts')
     readonly_fields = ('created_at', 'updated_at')
     filter_horizontal = ('churches', 'fasts')
-    # Hide base fields that also have modeltrans virtual translation fields to
-    # avoid duplicate inputs in the admin form
-    exclude = ('text', 'attribution')
+    exclude = ('text', 'attribution')  # Avoid duplicate with translation fields
     
     fieldsets = (
         (None, {
