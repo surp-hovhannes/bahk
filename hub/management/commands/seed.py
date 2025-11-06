@@ -126,18 +126,24 @@ class Command(BaseCommand):
             ),
         ]
 
-        # Create Days for each Fast
+        # Create Days for each Fast with non-overlapping dates
         all_days = []
+        day_offset = 0  # Track the starting day offset for each fast
+        
         for n, fast in enumerate(fasts):
             fast_days = []
-            for i in range((n + 1) * 7):  # Different durations for each fast
+            num_days = (n + 1) * 7  # Different durations for each fast (7, 14, 21)
+            
+            for i in range(num_days):
                 day = models.Day.objects.create(
-                    date=date.today() + timedelta(days=i), 
+                    date=date.today() + timedelta(days=day_offset + i), 
                     fast=fast, 
                     church=fast.church
                 )
                 fast_days.append(day)
                 all_days.append(day)
+            
+            day_offset += num_days  # Move offset forward for next fast
             fast.save(update_fields=["year"])  # saving fast with day(s) updates the year field
 
         # Create Users and Profiles
