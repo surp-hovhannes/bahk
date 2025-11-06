@@ -212,3 +212,96 @@ class FeedbackEndpointTests(APITestCase):
         self.context.refresh_from_db()
         self.assertEqual(self.context.thumbs_down, 2)
         mock_delay.assert_called_once_with(self.reading.id, force_regeneration=True)
+
+
+class ReadingTranslationTests(APITestCase):
+    """Tests for reading translation handling when scraping readings."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.prompt = LLMPrompt.objects.create(
+            model="gpt-4.1-mini",
+            role="Test role",
+            prompt="Test prompt",
+            active=True
+        )
+
+    @patch("hub.views.readings.scrape_readings")
+    @patch("hub.views.readings.generate_reading_context_task.delay")
+    def test_readings_with_translations_are_saved_correctly(self, mock_task, mock_scrape):
+        """Test that readings with Armenian translations are saved correctly using i18n field."""
+        # Mock scraped readings with translations
+        mock_scrape.return_value = [
+            {
+                "book": "Genesis",
+                "book_en": "Genesis",
+                "book_hy": "Ծննդոց",
+                "start_chapter": 1,
+                "start_verse": 1,
+                "end_chapter": 1,
+                "end_verse": 5,
+            },
+            {
+                "book": "Matthew",
+                "book_en": "Matthew",
+                "book_hy": "Մատթէոս",
+                "start_chapter": 5,
+                "start_verse": 1,
+                "end_chapter": 5,
+                "end_verse": 12,
+            }
+        ]
+
+        test_date = date(2025, 11, 6)
+        url = reverse("daily-readings") + f"?date={test_date.isoformat()}"
+        
+        # Make request - this should trigger scraping and saving
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["readings"]), 2)
+        
+        # Verify readings were created with translations
+        day = Day.objects.get(date=test_date, church=self.church)
+        readings = day.readings.all()
+        self.assertEqual(readings.count(), 2)
+        
+        # Check first reading
+        genesis = readings.get(book="Genesis")
+        self.assertEqual(genesis.book, "Genesis")
+        self.assertEqual(genesis.book_hy, "Ծննդոց")
+        
+        # Check second reading
+        matthew = readings.get(book="Matthew")
+        self.assertEqual(matthew.book, "Matthew")
+        self.assertEqual(matthew.book_hy, "Մատթէոս")
+        
+        # Verify translations can be retrieved
+        self.assertEqual(genesis.book_i18n, "Genesis")  # Default language
+        
+    def test_reading_translation_field_update(self):
+        """Test that updating book_hy translation works with i18n field."""
+        day = TestDataFactory.create_day(date=date.today(), church=self.church)
+        
+        # Create reading without translation
+        reading = Reading.objects.create(
+            day=day,
+            book="Exodus",
+            start_chapter=20,
+            start_verse=1,
+            end_chapter=20,
+            end_verse=17,
+        )
+        
+        # Verify no Armenian translation initially
+        self.assertIsNone(reading.book_hy)
+        
+        # Set Armenian translation and save with i18n field
+        reading.book_hy = "Ելից"
+        reading.save(update_fields=['i18n'])
+        
+        # Refresh and verify translation was saved
+        reading.refresh_from_db()
+        self.assertEqual(reading.book_hy, "Ելից")
+        self.assertEqual(reading.book, "Exodus")
