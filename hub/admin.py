@@ -20,6 +20,7 @@ from hub.models import (
     Devotional,
     DevotionalSet,
     Fast,
+    Feast,
     LLMPrompt,
     PatristicQuote,
     Profile,
@@ -345,6 +346,43 @@ class FastAdmin(admin.ModelAdmin):
         )
 
         return TemplateResponse(request, "duplicate_fast_with_new_dates.html", context)
+
+
+@admin.register(Feast, site=admin.site)
+class FeastAdmin(admin.ModelAdmin):
+    list_display = (
+        "get_name",
+        "date",
+        "church_link",
+    )
+    list_display_links = ["get_name", "date"]
+    ordering = ("-date", "church", "name")
+    list_filter = ("church", "date")
+    search_fields = ("name", "name_en", "name_hy")
+    exclude = ("name",)  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('date', 'church')
+        }),
+        ('Translations', {
+            'fields': ('name_en', 'name_hy')
+        }),
+    )
+
+    def get_name(self, feast):
+        return feast.name
+
+    get_name.short_description = "Feast Name"
+    get_name.admin_order_field = "name"
+
+    def church_link(self, feast):
+        if not feast.church:
+            return ""
+        url = reverse("admin:hub_church_change", args=[feast.church.pk])
+        return format_html('<a href="{}">{}</a>', url, feast.church.name)
+
+    church_link.short_description = "Church"
 
 
 @admin.register(Profile, site=admin.site)

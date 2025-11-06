@@ -201,6 +201,112 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
     return combined_readings
 
 
+def scrape_feast(date_obj, church, date_format="%Y%m%d"):
+    """Scrapes feast day name from sacredtradition.am in both English and Armenian.
+
+    Args:
+        date_obj: Date object to scrape feast for
+        church: Church object
+        date_format: Format string for date in URL (default: "%Y%m%d")
+
+    Returns:
+        Dictionary with 'name', 'name_en', and 'name_hy' keys, or None if no feast found
+    """
+    if church not in SUPPORTED_CHURCHES:
+        logging.error("Web-scraping for feasts only set up for the following churches: %r. %s not supported.",
+                      SUPPORTED_CHURCHES, church)
+        return None
+
+    date_str = date_obj.strftime(date_format)
+
+    def scrape_feast_language(language_code):
+        """Helper function to scrape feast name for a specific language.
+
+        Args:
+            language_code: 2 for English, 3 for Armenian
+
+        Returns:
+            Feast name string or None if not found
+        """
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        try:
+            response = urllib.request.urlopen(url)
+        except urllib.error.URLError:
+            logging.error("Invalid url %s", url)
+            return None
+
+        if response.status != 200:
+            logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
+            return None
+
+        data = response.read()
+        html_content = data.decode("utf-8")
+
+        # Look for the dname class container
+        dname_start = html_content.find('class="dname"')
+        if dname_start == -1:
+            logging.debug("No feast (dname class) found for date %s", date_str)
+            return None
+
+        # Find the opening tag (could be <div>, <span>, <a>, etc.)
+        # Go back to find the start of the tag
+        tag_start = html_content.rfind('<', 0, dname_start)
+        if tag_start == -1:
+            logging.error("Could not find opening tag for dname class")
+            return None
+
+        # Find the tag name
+        tag_end = html_content.find('>', dname_start)
+        if tag_end == -1:
+            logging.error("Could not find closing bracket of opening tag")
+            return None
+
+        # Extract tag name (e.g., 'div', 'span', 'a')
+        tag_name_match = re.search(r'<(\w+)', html_content[tag_start:tag_end + 1])
+        if not tag_name_match:
+            logging.error("Could not determine tag name for dname class")
+            return None
+
+        tag_name = tag_name_match.group(1)
+
+        # Find the content between the opening and closing tags
+        content_start = tag_end + 1
+        closing_tag = f'</{tag_name}>'
+        content_end = html_content.find(closing_tag, content_start)
+
+        if content_end == -1:
+            logging.error("Could not find closing tag for dname element")
+            return None
+
+        feast_name = html_content[content_start:content_end].strip()
+
+        # Remove any HTML tags that might be inside
+        feast_name = re.sub(r'<[^>]+>', '', feast_name).strip()
+
+        if not feast_name:
+            logging.debug("Empty feast name found for date %s", date_str)
+            return None
+
+        return feast_name
+
+    # Scrape English (iL=2) and Armenian (iL=3)
+    english_feast = scrape_feast_language(2)
+    armenian_feast = scrape_feast_language(3)
+
+    # Return None if no feast found in either language
+    if not english_feast and not armenian_feast:
+        return None
+
+    # Build result dictionary
+    feast_data = {
+        "name": english_feast or armenian_feast,  # Default to English, fallback to Armenian
+        "name_en": english_feast,
+        "name_hy": armenian_feast
+    }
+
+    return feast_data
+
+
 def send_fast_reminders():
     today = datetime.today().date()
     tomorrow = today + timedelta(days=1)

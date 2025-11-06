@@ -647,6 +647,37 @@ class Reading(models.Model):
         return s
 
 
+class Feast(models.Model):
+    """Stores details for a feast day."""
+
+    date = models.DateField()
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name="feasts",
+        default=Church.get_default_pk,
+    )
+    name = models.CharField(max_length=256)
+
+    # Translations for user-facing fields
+    i18n = TranslationField(fields=('name',))
+
+    class Meta:
+        constraints = [
+            constraints.UniqueConstraint(
+                fields=["date", "church"],
+                name="unique_feast_per_day_church",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["church", "date"]),
+            models.Index(fields=["date"]),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.date.strftime("%Y-%m-%d")}, {self.church.name})'
+
+
 class FastParticipantMap(models.Model):
     """Stores metadata about the generated participant maps."""
 
