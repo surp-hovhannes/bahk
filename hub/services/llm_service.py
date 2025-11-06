@@ -211,8 +211,13 @@ class AnthropicService(LLMService):
                 logger.error("No active LLM prompt found for feasts.")
                 return None
 
+        # Include Armenian name if available
+        feast_info = f"Feast: {feast.name}"
+        if feast.name_hy:
+            feast_info += f"\nArmenian name: {feast.name_hy}"
+        
         base_message = (
-            f"Provide context for the feast: {feast.name}\n\n"
+            f"Provide context for the following feast:\n{feast_info}\n\n"
             "Return your response as JSON with two fields:\n"
             '- "short_text": A 2-sentence summary\n'
             '- "text": A detailed explanation (multiple paragraphs)\n\n'
@@ -298,8 +303,13 @@ class OpenAIService(LLMService):
                 logger.error("No active LLM prompt found for feasts.")
                 return None
 
+        # Include Armenian name if available
+        feast_info = f"Feast: {feast.name}"
+        if feast.name_hy:
+            feast_info += f"\nArmenian name: {feast.name_hy}"
+        
         base_prompt = (
-            f"Provide context for the feast: {feast.name}\n\n"
+            f"Provide context for the following feast:\n{feast_info}\n\n"
             "Return your response as JSON with two fields:\n"
             '- "short_text": A 2-sentence summary\n'
             '- "text": A detailed explanation (multiple paragraphs)\n\n'
