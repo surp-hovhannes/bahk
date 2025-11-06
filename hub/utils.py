@@ -259,6 +259,94 @@ def send_fast_reminders():
             logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {earliest_fast.name}')
 
 
+def scrape_feast(date_obj, church, date_format="%Y%m%d"):
+    """Scrapes feast name from sacredtradition.am in both English and Armenian.
+    
+    Args:
+        date_obj: datetime.date object for the date to scrape
+        church: Church object
+        date_format: Format string for date in URL
+        
+    Returns:
+        Dict with 'name', 'name_en', 'name_hy' keys or None if no feast found
+    """
+    if church not in SUPPORTED_CHURCHES:
+        logging.error("Web-scraping for feasts only set up for the following churches: %r. %s not supported.",
+                      SUPPORTED_CHURCHES, church)
+        return None
+
+    date_str = date_obj.strftime(date_format)
+    
+    def scrape_feast_for_language(language_code):
+        """Helper function to scrape feast for a specific language.
+        
+        Args:
+            language_code: 2 for English, 3 for Armenian
+        """
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        
+        req = urllib.request.Request(url, headers={'User-agent': 'Mozilla/5.0'})
+        
+        try:
+            response = urllib.request.urlopen(req)
+        except urllib.error.URLError:
+            logging.error("Invalid url %s", url)
+            return None
+
+        if response.status != 200:
+            logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
+            return None
+
+        data = response.read()
+        html_content = data.decode("utf-8")
+
+        # Look for elements with class="dname" or class=dname (with or without quotes)
+        # Match various HTML tags with class dname
+        import re
+        
+        # First, find the opening tag with class=dname (handles both quoted and unquoted)
+        opening_pattern = r'<([a-z]+)[^>]*class=["\']?dname["\']?[^>]*>'
+        opening_match = re.search(opening_pattern, html_content, re.DOTALL | re.IGNORECASE)
+        
+        if not opening_match:
+            return None
+        
+        tag_name = opening_match.group(1)
+        start_pos = opening_match.end()
+        
+        # Find the corresponding closing tag
+        closing_pattern = f'</{tag_name}>'
+        closing_match = re.search(closing_pattern, html_content[start_pos:], re.IGNORECASE)
+        
+        if not closing_match:
+            return None
+        
+        # Extract content between opening and closing tags
+        feast_html = html_content[start_pos:start_pos + closing_match.start()]
+        
+        # Remove any nested HTML tags
+        feast_name = re.sub(r'<[^>]+>', '', feast_html).strip()
+        
+        return feast_name if feast_name else None
+    
+    # Scrape both English and Armenian
+    name_en = scrape_feast_for_language(2)  # English
+    name_hy = scrape_feast_for_language(3)  # Armenian
+    
+    # If no feast found in either language, return None
+    if not name_en and not name_hy:
+        return None
+    
+    # Use English as default, fallback to Armenian if English not available
+    default_name = name_en if name_en else name_hy
+    
+    return {
+        "name": default_name,
+        "name_en": name_en,
+        "name_hy": name_hy,
+    }
+
+
 def test_email():
     try:
         send_mail(

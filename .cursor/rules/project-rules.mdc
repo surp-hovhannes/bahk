@@ -52,10 +52,19 @@ alwaysApply: true
   - Use asynchronous views and background tasks (via Celery) for I/O-bound or long-running operations.
   - Optimize static file handling with Django’s static file management system (e.g., WhiteNoise or CDN integration).
 
+  Feature Development
+  - Clarify feature scope early and keep changes cohesive to simplify review and rollout.
+  - Add or update migrations whenever models change, keeping them small and easy to audit.
+  - Create a new Django app when a feature benefits from its own bounded context rather than growing an existing app.
+  - Cover new behavior with automated tests (unit, integration, or end-to-end as appropriate) and ensure `python manage.py test --exclude-tag=performance --settings=tests.test_settings` passes before asking for review.
+  - Document notable user-facing or operational impacts with updated docs, changelog entries, or inline comments.
+  - Prefer feature flags or configuration toggles for risky changes so they can be rolled out gradually.
+
   Key Conventions
   1. Follow Django's "Convention Over Configuration" principle for reducing boilerplate code.
   2. Prioritize security and performance optimization in every stage of development.
   3. Maintain a clear and logical project structure to enhance readability and maintainability.
+  4. Add docstrings when they clarify intent for modules, classes, or functions with non-trivial behavior.
   
   Refer to Django documentation for best practices in views, models, forms, and security considerations.
 

@@ -20,13 +20,15 @@ from hub.models import (
     Devotional,
     DevotionalSet,
     Fast,
+    Feast,
+    FeastContext,
     LLMPrompt,
     PatristicQuote,
     Profile,
     Reading,
     ReadingContext,
 )
-from hub.tasks import generate_reading_context_task
+from hub.tasks import generate_reading_context_task, generate_feast_context_task
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
 
@@ -517,11 +519,27 @@ class ReadingAdmin(admin.ModelAdmin):
 
 @admin.register(LLMPrompt, site=admin.site)
 class LLMPromptAdmin(admin.ModelAdmin):
-    list_display = ("id", "model", "active", "context_count", "role", "prompt_preview")
-    list_filter = ("model", "active")
+    list_display = ("id", "model", "applies_to", "active", "context_count", "role", "prompt_preview")
+    list_filter = ("model", "applies_to", "active")
     search_fields = ("role", "prompt")
     ordering = ("id", "active")
     actions = ["duplicate_prompt", "make_active"]
+    
+    fieldsets = (
+        (None, {
+            'fields': ('model', 'applies_to', 'role', 'prompt', 'active')
+        }),
+        ('Important Notes', {
+            'description': (
+                '<strong>For Feasts:</strong> The prompt must instruct the LLM to return a JSON response '
+                'with two fields: <code>"text"</code> (detailed explanation) and <code>"short_text"</code> '
+                '(2-sentence summary). Example instruction: "Return your response as JSON with two fields: '
+                '\\"short_text\\": A 2-sentence summary, and \\"text\\": A detailed explanation."<br><br>'
+                '<strong>For Readings:</strong> The prompt should return plain text context for the Bible passage.'
+            ),
+            'fields': ()
+        }),
+    )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -555,6 +573,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
             model=prompt.model,
             role=prompt.role,
             prompt=prompt.prompt,
+            applies_to=prompt.applies_to,
             active=False  # Set as inactive by default
         )
         # Redirect to the change form for the new prompt
@@ -578,9 +597,10 @@ class LLMPromptAdmin(admin.ModelAdmin):
 
         prompt = queryset.first()
         
-        # First, deactivate the current active prompt
+        # First, deactivate the current active prompt for this applies_to type
         current_active = LLMPrompt.objects.filter(
-            active=True
+            active=True,
+            applies_to=prompt.applies_to
         ).first()
         
         if current_active:
@@ -588,7 +608,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
             current_active.save()
             self.message_user(
                 request,
-                f"Deactivated previous active prompt '{current_active.role}' for model '{current_active.model}'.",
+                f"Deactivated previous active prompt '{current_active.role}' for {current_active.applies_to}.",
             )
         
         # Then activate the selected prompt
@@ -597,7 +617,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
         
         self.message_user(
             request,
-            f"Successfully made prompt '{prompt.role}' for model '{prompt.model}' active.",
+            f"Successfully made prompt '{prompt.role}' for {prompt.applies_to} active.",
         )
     
     make_active.short_description = "Make selected prompt active"
@@ -638,6 +658,127 @@ class ReadingContextAdmin(admin.ModelAdmin):
         return Truncator(obj.text).chars(100)
 
     text_preview.short_description = "Text Preview"
+
+
+class FeastYearFilter(admin.SimpleListFilter):
+    """Custom filter to filter feasts by year."""
+
+    title = "Year"
+    parameter_name = "year"
+
+    def lookups(self, request, model_admin):
+        """Return years that have feasts."""
+        years = Feast.objects.dates("day__date", "year", order="DESC")
+        return [(year.year, year.year) for year in years]
+
+    def queryset(self, request, queryset):
+        """Filter queryset by year."""
+        if self.value():
+            return queryset.filter(
+                day__date__year=self.value()
+            )
+
+
+@admin.register(Feast, site=admin.site)
+class FeastAdmin(admin.ModelAdmin):
+    list_display = (
+        "church_link",
+        "day",
+        "__str__",
+        "name",
+    )
+    list_display_links = (
+        "church_link",
+        "day",
+        "__str__",
+    )
+    list_filter = (
+        FeastYearFilter,
+        "day__church",
+    )
+    search_fields = ("name", "name_en", "name_hy")
+    ordering = ("day",)
+    raw_id_fields = ("day",)
+    actions = ["force_regenerate_context"]
+    exclude = ("name",)  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('day',)
+        }),
+        ('Translations', {
+            'fields': ('name_en', 'name_hy')
+        }),
+    )
+
+    def force_regenerate_context(self, request, queryset):
+        """Force enqueues context regeneration for selected feasts."""
+        count = queryset.count()
+        for feast in queryset:
+            generate_feast_context_task.delay(feast.id, force_regeneration=True)
+        self.message_user(
+            request, f"Initiated forced regeneration for {count} feasts."
+        )
+
+    force_regenerate_context.short_description = (
+        "Force regenerate AI context for selected feasts"
+    )
+
+    def church_link(self, feast):
+        if not feast.day or not feast.day.church:
+            return ""
+        url = reverse("admin:hub_church_change", args=[feast.day.church.pk])
+        return format_html('<a href="{}">{}</a>', url, feast.day.church.name)
+
+    church_link.short_description = "Church"
+
+
+@admin.register(FeastContext, site=admin.site)
+class FeastContextAdmin(admin.ModelAdmin):
+    list_display = (
+        "feast",
+        "prompt",
+        "active",
+        "thumbs_up",
+        "thumbs_down",
+        "time_of_generation",
+        "text_preview",
+        "short_text_preview",
+    )
+    list_display_links = (
+        "feast",
+        "prompt",
+    )
+    list_filter = ("active", "prompt__model", "feast__day__date")
+    search_fields = ("text", "short_text", "feast__name")
+    ordering = ("-time_of_generation",)
+    raw_id_fields = ("feast", "prompt")
+    readonly_fields = ("time_of_generation",)
+    exclude = ("text", "short_text")  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('feast', 'prompt', 'active', 'thumbs_up', 'thumbs_down', 'time_of_generation')
+        }),
+        ('Context Translations', {
+            'description': (
+                '<strong>Note:</strong> These contexts are auto-generated from the LLM prompt. '
+                'The <code>text</code> field contains the detailed explanation, and <code>short_text</code> '
+                'contains a 2-sentence summary. Both are generated in a single API call using JSON format.'
+            ),
+            'fields': ('text_en', 'text_hy', 'short_text_en', 'short_text_hy')
+        }),
+    )
+
+    def text_preview(self, obj):
+        return Truncator(obj.text).chars(100)
+
+    text_preview.short_description = "Text Preview"
+
+    def short_text_preview(self, obj):
+        return Truncator(obj.short_text).chars(50)
+
+    short_text_preview.short_description = "Short Text Preview"
 
 
 @admin.register(PatristicQuote, site=admin.site)
