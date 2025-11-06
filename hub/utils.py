@@ -230,7 +230,14 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
         """
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
         try:
-            response = urllib.request.urlopen(url)
+            # Add User-Agent header to mimic browser request
+            req = urllib.request.Request(
+                url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            )
+            response = urllib.request.urlopen(req)
         except urllib.error.URLError:
             logging.error("Invalid url %s", url)
             return None
