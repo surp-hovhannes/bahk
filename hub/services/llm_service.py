@@ -5,7 +5,7 @@ import anthropic
 import openai
 from django.conf import settings
 
-from hub.models import LLMPrompt, Reading
+from hub.models import LLMPrompt, Reading, Feast
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +58,15 @@ class LLMService(ABC):
     """Base class for LLM services."""
 
     @abstractmethod
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
-        """Generate context for a reading in the specified language.
+    def generate_context(self, obj, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
+        """Generate context for a reading or feast in the specified language.
         
         Modifies the system and user prompts to enforce language output when
         language_code is not 'en'. Currently supports 'en' (English) and 'hy' (Armenian),
         with fallback support for other language codes.
         
         Args:
-            reading: The Reading instance to generate context for
+            obj: The Reading or Feast instance to generate context for
             llm_prompt: Optional LLMPrompt to use (defaults to active prompt)
             language_code: Language code for the context ('en', 'hy', or other ISO codes)
             
@@ -81,19 +81,34 @@ class AnthropicService(LLMService):
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
+    def generate_context(self, obj, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
         """Generate context using Claude."""
         if not settings.ANTHROPIC_API_KEY:
             logger.error("ANTHROPIC_API_KEY is not configured.")
             return None
 
         if llm_prompt is None:
-            llm_prompt = LLMPrompt.objects.filter(active=True).first()
+            # Get active prompt for the appropriate model_type
+            if isinstance(obj, Reading):
+                llm_prompt = LLMPrompt.objects.filter(active=True, model_type='readings').first()
+            elif isinstance(obj, Feast):
+                llm_prompt = LLMPrompt.objects.filter(active=True, model_type='feasts').first()
+            else:
+                llm_prompt = LLMPrompt.objects.filter(active=True).first()
+            
             if not llm_prompt:
                 logger.error("No active LLM prompt found.")
                 return None
 
-        base_message = f"Please provide context for the following passage: {reading.passage_reference}"
+        # Build base message based on object type
+        if isinstance(obj, Reading):
+            base_message = f"Please provide context for the following passage: {obj.passage_reference}"
+        elif isinstance(obj, Feast):
+            base_message = f"Please provide context for the following feast: {obj.name}"
+        else:
+            logger.error(f"Unsupported object type: {type(obj)}")
+            return None
+
         system_prompt, user_message = _build_language_prompts(
             base_message, llm_prompt.prompt, language_code
         )
@@ -122,19 +137,34 @@ class OpenAIService(LLMService):
     def __init__(self):
         openai.api_key = settings.OPENAI_API_KEY
 
-    def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
+    def generate_context(self, obj, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
         """Generate context using OpenAI."""
         if not settings.OPENAI_API_KEY:
             logger.error("OPENAI_API_KEY is not configured.")
             return None
 
         if llm_prompt is None:
-            llm_prompt = LLMPrompt.objects.filter(active=True).first()
+            # Get active prompt for the appropriate model_type
+            if isinstance(obj, Reading):
+                llm_prompt = LLMPrompt.objects.filter(active=True, model_type='readings').first()
+            elif isinstance(obj, Feast):
+                llm_prompt = LLMPrompt.objects.filter(active=True, model_type='feasts').first()
+            else:
+                llm_prompt = LLMPrompt.objects.filter(active=True).first()
+            
             if not llm_prompt:
                 logger.error("No active LLM prompt found.")
                 return None
 
-        base_prompt = f"Contextualize the passage {reading.passage_reference}, by summarizing the passages preceding it."
+        # Build base prompt based on object type
+        if isinstance(obj, Reading):
+            base_prompt = f"Contextualize the passage {obj.passage_reference}, by summarizing the passages preceding it."
+        elif isinstance(obj, Feast):
+            base_prompt = f"Contextualize the feast {obj.name}, providing historical and theological context."
+        else:
+            logger.error(f"Unsupported object type: {type(obj)}")
+            return None
+
         llm_prompt_text = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
         system_prompt, user_message = _build_language_prompts(
             base_prompt, llm_prompt_text, language_code
