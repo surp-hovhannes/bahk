@@ -235,7 +235,7 @@ class AnthropicService(LLMService):
                 messages=[
                     {"role": "user", "content": user_message}
                 ],
-                max_tokens=1200,
+                max_tokens=2000,  # Increased for Armenian text which uses more tokens
                 temperature=0.35,
             )
             if response and response.content:
@@ -328,7 +328,7 @@ class OpenAIService(LLMService):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
-                max_tokens=1200,
+                max_tokens=2000,  # Increased for Armenian text which uses more tokens
                 temperature=0.35,
                 top_p=1,
                 store=True
