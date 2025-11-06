@@ -20,6 +20,8 @@ from hub.models import (
     Devotional,
     DevotionalSet,
     Fast,
+    Feast,
+    FeastContext,
     LLMPrompt,
     PatristicQuote,
     Profile,
@@ -517,8 +519,8 @@ class ReadingAdmin(admin.ModelAdmin):
 
 @admin.register(LLMPrompt, site=admin.site)
 class LLMPromptAdmin(admin.ModelAdmin):
-    list_display = ("id", "model", "active", "context_count", "role", "prompt_preview")
-    list_filter = ("model", "active")
+    list_display = ("id", "model", "model_type", "active", "context_count", "role", "prompt_preview")
+    list_filter = ("model", "model_type", "active")
     search_fields = ("role", "prompt")
     ordering = ("id", "active")
     actions = ["duplicate_prompt", "make_active"]
@@ -526,7 +528,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         return queryset.annotate(
-            context_count=models.Count('readingcontext', distinct=True)
+            context_count=models.Count('readingcontext', distinct=True) + models.Count('feastcontext', distinct=True)
         )
 
     def context_count(self, obj):
@@ -553,6 +555,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
         # Create a new prompt with the same data
         new_prompt = LLMPrompt.objects.create(
             model=prompt.model,
+            model_type=prompt.model_type,
             role=prompt.role,
             prompt=prompt.prompt,
             active=False  # Set as inactive by default
@@ -578,9 +581,10 @@ class LLMPromptAdmin(admin.ModelAdmin):
 
         prompt = queryset.first()
         
-        # First, deactivate the current active prompt
+        # First, deactivate the current active prompt of the same model_type
         current_active = LLMPrompt.objects.filter(
-            active=True
+            active=True,
+            model_type=prompt.model_type
         ).first()
         
         if current_active:
@@ -631,6 +635,77 @@ class ReadingContextAdmin(admin.ModelAdmin):
         }),
         ('Context Translations', {
             'fields': ('text_en', 'text_hy')
+        }),
+    )
+
+    def text_preview(self, obj):
+        return Truncator(obj.text).chars(100)
+
+    text_preview.short_description = "Text Preview"
+
+
+@admin.register(Feast, site=admin.site)
+class FeastAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "date",
+        "church_link",
+    )
+    list_display_links = (
+        "name",
+        "date",
+    )
+    list_filter = ("church", "date")
+    search_fields = ("name",)
+    ordering = ("-date", "church", "name")
+    exclude = ("name",)  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('date', 'church')
+        }),
+        ('Translations', {
+            'fields': ('name_en', 'name_hy')
+        }),
+    )
+
+    def church_link(self, feast):
+        if not feast.church:
+            return ""
+        url = reverse("admin:hub_church_change", args=[feast.church.pk])
+        return format_html('<a href="{}">{}</a>', url, feast.church.name)
+
+    church_link.short_description = "Church"
+
+
+@admin.register(FeastContext, site=admin.site)
+class FeastContextAdmin(admin.ModelAdmin):
+    list_display = (
+        "feast",
+        "prompt",
+        "active",
+        "thumbs_up",
+        "thumbs_down",
+        "time_of_generation",
+        "text_preview",
+    )
+    list_display_links = (
+        "feast",
+        "prompt",
+    )
+    list_filter = ("active", "prompt__model", "feast__date")
+    search_fields = ("text", "feast__name")
+    ordering = ("-time_of_generation",)
+    raw_id_fields = ("feast", "prompt")
+    readonly_fields = ("time_of_generation",)
+    exclude = ("text", "short_text")  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('feast', 'prompt', 'active', 'thumbs_up', 'thumbs_down', 'time_of_generation')
+        }),
+        ('Context Translations', {
+            'fields': ('text_en', 'text_hy', 'short_text_en', 'short_text_hy')
         }),
     )
 

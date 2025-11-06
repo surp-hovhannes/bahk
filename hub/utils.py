@@ -201,6 +201,111 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
     return combined_readings
 
 
+def scrape_feast(date_obj, church, date_format="%Y%m%d"):
+    """Scrapes feast name from sacredtradition.am in both English and Armenian."""
+    if church not in SUPPORTED_CHURCHES:
+        logging.error("Web-scraping for feasts only set up for the following churches: %r. %s not supported.",
+                      SUPPORTED_CHURCHES, church)
+        return None
+
+    date_str = date_obj.strftime(date_format)
+
+    def scrape_language(language_code):
+        """Helper function to scrape feast name for a specific language.
+
+        Args:
+            language_code: 2 for English, 3 for Armenian
+        """
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        try:
+            response = urllib.request.urlopen(url)
+        except urllib.error.URLError:
+            logging.error("Invalid url %s", url)
+            return None
+
+        if response.status != 200:
+            logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
+            return None
+
+        data = response.read()
+        html_content = data.decode("utf-8")
+
+        # Look for element with class "dname"
+        # Try to find class="dname" or class='dname'
+        dname_start = html_content.find('class="dname"')
+        if dname_start == -1:
+            dname_start = html_content.find("class='dname'")
+        
+        if dname_start == -1:
+            logging.warning("Could not find feast name (dname) in HTML from %s", url)
+            return None
+
+        # Find the opening tag
+        tag_start = html_content.rfind('<', 0, dname_start)
+        if tag_start == -1:
+            logging.warning("Could not find opening tag for dname element from %s", url)
+            return None
+
+        # Find the closing tag
+        tag_end = html_content.find('>', dname_start)
+        if tag_end == -1:
+            logging.warning("Could not find closing tag for dname element from %s", url)
+            return None
+
+        # Find the content - look for the next > after the opening tag
+        content_start = tag_end + 1
+        # Find the closing tag for this element
+        tag_name = html_content[tag_start + 1:tag_end].split()[0]  # Get tag name (e.g., 'div', 'span')
+        closing_tag = f"</{tag_name}>"
+        content_end = html_content.find(closing_tag, content_start)
+        
+        if content_end == -1:
+            # If no closing tag found, try to find the next opening tag or end of string
+            next_tag = html_content.find('<', content_start)
+            if next_tag != -1:
+                content_end = next_tag
+            else:
+                content_end = len(html_content)
+
+        feast_name = html_content[content_start:content_end].strip()
+        
+        # Clean up HTML entities if any
+        feast_name = feast_name.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+        feast_name = feast_name.replace('&quot;', '"').replace('&#39;', "'")
+        
+        # Remove any remaining HTML tags if any
+        feast_name = re.sub(r'<[^>]+>', '', feast_name)
+        
+        # Clean up whitespace
+        feast_name = ' '.join(feast_name.split())
+        
+        if not feast_name:
+            logging.warning("Feast name is empty from %s", url)
+            return None
+
+        return feast_name
+
+    # Scrape English (iL=2) and Armenian (iL=3)
+    english_feast = scrape_language(2)
+    armenian_feast = scrape_language(3)
+
+    # Return feast data with both translations
+    if not english_feast:
+        logging.warning("Could not scrape English feast name for date %s", date_str)
+        return None
+
+    feast_data = {
+        "name": english_feast,
+        "name_en": english_feast,
+    }
+
+    # Add Armenian translation if available
+    if armenian_feast:
+        feast_data["name_hy"] = armenian_feast
+
+    return feast_data
+
+
 def send_fast_reminders():
     today = datetime.today().date()
     tomorrow = today + timedelta(days=1)
