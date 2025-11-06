@@ -12,8 +12,8 @@ from app_management.models import Changelog
 from learning_resources.models import Video, Article, Recipe, Bookmark
 from events.models import EventType
 
-# Default prompt template for LLM context generation
-PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings. 
+# Default prompt template for LLM context generation (Readings)
+READING_PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings. 
 
 When provided with a biblical passage reference, provide concise but meaningful context by:
 1. Summarizing the key themes and events leading up to the passage
@@ -22,6 +22,21 @@ When provided with a biblical passage reference, provide concise but meaningful 
 4. Connecting the passage to broader biblical narratives when relevant
 
 Keep your response focused, informative, and appropriate for both new and experienced readers of scripture. Limit responses to 2-3 paragraphs."""
+
+# Default prompt template for feast context generation
+FEAST_PROMPT_TEMPLATE = """You are a knowledgeable guide on Christian feast days, saints, and church history.
+
+When asked about a feast, provide context that helps readers understand:
+1. Why the saints or events are commemorated together (if multiple)
+2. The historical and spiritual significance of each saint or event
+3. The theological themes and lessons from their lives or the feast
+4. How this feast connects to broader Christian tradition
+
+Important: Your response must be valid JSON with exactly two fields:
+- "short_text": A 2-sentence summary of the feast
+- "text": A detailed explanation with multiple paragraphs covering the points above
+
+Return ONLY the JSON object. Do not wrap it in markdown code blocks. Do not add any text before or after the JSON."""
 
 # Sample content for seeding
 SAMPLE_CONTEXT = """This passage comes during a pivotal moment in John's Gospel, where Jesus's public ministry is reaching its climax. The context leading up to this passage shows Jesus performing miraculous signs and teaching about the nature of God's love for humanity.
@@ -50,33 +65,53 @@ class Command(BaseCommand):
 
     def clear_data(self):
         """Clear all existing data and reset sequences."""
+        from django.db import connection
+        
+        def table_exists(table_name):
+            """Check if a table exists in the database."""
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=%s",
+                    [table_name]
+                )
+                return cursor.fetchone() is not None
+        
+        def safe_delete(model_class, model_name, table_name):
+            """Safely delete all objects from a model, checking if table exists first."""
+            if table_exists(table_name):
+                model_class.objects.all().delete()
+            else:
+                self.stdout.write(self.style.WARNING(f"Table {table_name} doesn't exist yet, skipping..."))
+        
         # Clear in reverse dependency order
-        models.ReadingContext.objects.all().delete()
-        models.Reading.objects.all().delete()
-        models.Devotional.objects.all().delete()
-        models.DevotionalSet.objects.all().delete()
-        models.FastParticipantMap.objects.all().delete()
-        models.Day.objects.all().delete()
-        models.Fast.objects.all().delete()
-        models.Profile.objects.all().delete()
-        models.User.objects.all().delete()
-        models.Church.objects.all().delete()
-        models.LLMPrompt.objects.all().delete()
-        models.GeocodingCache.objects.all().delete()
+        safe_delete(models.FeastContext, "FeastContext", "hub_feastcontext")
+        safe_delete(models.Feast, "Feast", "hub_feast")
+        safe_delete(models.ReadingContext, "ReadingContext", "hub_readingcontext")
+        safe_delete(models.Reading, "Reading", "hub_reading")
+        safe_delete(models.Devotional, "Devotional", "hub_devotional")
+        safe_delete(models.DevotionalSet, "DevotionalSet", "hub_devotionalset")
+        safe_delete(models.FastParticipantMap, "FastParticipantMap", "hub_fastparticipantmap")
+        safe_delete(models.Day, "Day", "hub_day")
+        safe_delete(models.Fast, "Fast", "hub_fast")
+        safe_delete(models.Profile, "Profile", "hub_profile")
+        safe_delete(models.User, "User", "auth_user")
+        safe_delete(models.Church, "Church", "hub_church")
+        safe_delete(models.LLMPrompt, "LLMPrompt", "hub_llmprompt")
+        safe_delete(models.GeocodingCache, "GeocodingCache", "hub_geocodingcache")
         
         # Clear other apps
-        DeviceToken.objects.all().delete()
-        PromoEmail.objects.all().delete()
-        Changelog.objects.all().delete()
+        safe_delete(DeviceToken, "DeviceToken", "notifications_devicetoken")
+        safe_delete(PromoEmail, "PromoEmail", "notifications_promoemail")
+        safe_delete(Changelog, "Changelog", "app_management_changelog")
 
         # Clear learning resources (bookmarks first due to foreign keys)
-        Bookmark.objects.all().delete()
-        Video.objects.all().delete()
-        Article.objects.all().delete()
-        Recipe.objects.all().delete()
+        safe_delete(Bookmark, "Bookmark", "learning_resources_bookmark")
+        safe_delete(Video, "Video", "learning_resources_video")
+        safe_delete(Article, "Article", "learning_resources_article")
+        safe_delete(Recipe, "Recipe", "learning_resources_recipe")
 
         # Clear events data
-        EventType.objects.all().delete()
+        safe_delete(EventType, "EventType", "events_eventtype")
 
     def populate_db(self):
         # Create Churches
@@ -86,16 +121,34 @@ class Command(BaseCommand):
 
         # Create LLM Prompts
         llm_prompts = [
+            # Reading prompts
             models.LLMPrompt.objects.create(
                 model="gpt-4o-mini",
                 role="You are a helpful assistant providing concise biblical context.",
-                prompt=PROMPT_TEMPLATE,
+                prompt=READING_PROMPT_TEMPLATE,
+                applies_to="readings",
                 active=True,
             ),
             models.LLMPrompt.objects.create(
                 model="claude-3-5-sonnet-20241022",
                 role="You are a biblical scholar and theologian.",
                 prompt="Provide scholarly biblical context for the given passage.",
+                applies_to="readings",
+                active=False,
+            ),
+            # Feast prompts
+            models.LLMPrompt.objects.create(
+                model="gpt-4o-mini",
+                role="You are a knowledgeable guide on Christian feast days and saints.",
+                prompt=FEAST_PROMPT_TEMPLATE,
+                applies_to="feasts",
+                active=True,
+            ),
+            models.LLMPrompt.objects.create(
+                model="claude-haiku-4-5-20251001",
+                role="You are a church historian and hagiographer.",
+                prompt=FEAST_PROMPT_TEMPLATE,
+                applies_to="feasts",
                 active=False,
             ),
         ]
@@ -167,6 +220,10 @@ class Command(BaseCommand):
         # Create Readings and Reading Contexts
         readings = self._create_readings(all_days)
         self._create_reading_contexts(readings, llm_prompts)
+
+        # Create Feasts and Feast Contexts
+        feasts = self._create_feasts(all_days)
+        self._create_feast_contexts(feasts, llm_prompts)
 
         # Create Fast Participant Maps
         self._create_fast_participant_maps(fasts)
@@ -396,13 +453,65 @@ class Command(BaseCommand):
 
     def _create_reading_contexts(self, readings, llm_prompts):
         """Create reading contexts for readings."""
+        # Filter to get only reading prompts
+        reading_prompts = [p for p in llm_prompts if p.applies_to == "readings"]
+        
         for i, reading in enumerate(readings):
             models.ReadingContext.objects.create(
                 reading=reading,
                 text=f"{SAMPLE_CONTEXT}\n\nThis specific context is for {reading.passage_reference}.",
-                prompt=llm_prompts[i % len(llm_prompts)],
+                prompt=reading_prompts[i % len(reading_prompts)] if reading_prompts else None,
                 thumbs_up=i % 3,
                 thumbs_down=max(0, (i % 4) - 2),
+                active=True,
+            )
+
+    def _create_feasts(self, days):
+        """Create sample feasts for some days."""
+        feasts = []
+        feast_names = [
+            ("Feast of the Nativity", "Ծննդյան տոն"),
+            ("Feast of the Holy Archangels", "Սուրբ հրեշտակապետների տոն"),
+            ("Saint Stephen the Proto-Martyr", "Սուրբ Ստեփաննոս Նախավկա"),
+            ("Feast of Epiphany", "Աստվածայայտնություն"),
+            ("Presentation of Jesus at the Temple", "Տեառնընդառաջ"),
+        ]
+        
+        for i, day in enumerate(days[:5]):  # Create feasts for first 5 days
+            name_en, name_hy = feast_names[i % len(feast_names)]
+            
+            feast = models.Feast.objects.create(
+                day=day,
+                name=name_en,
+            )
+            feast.name_hy = name_hy
+            feast.save(update_fields=['i18n'])
+            feasts.append(feast)
+        
+        return feasts
+
+    def _create_feast_contexts(self, feasts, llm_prompts):
+        """Create feast contexts for feasts."""
+        # Filter to get only feast prompts
+        feast_prompts = [p for p in llm_prompts if p.applies_to == "feasts"]
+        
+        sample_short_text = "This feast commemorates important saints and events in Christian tradition. It serves as a reminder of God's work through faithful servants."
+        sample_text = """This feast day celebrates significant figures in Christian history who devoted their lives to serving God and the Church.
+
+**Historical Significance:**
+The saints commemorated on this day represent different periods and regions of early Christianity, demonstrating the universal nature of Christian witness across time and geography. Their lives exemplify various aspects of Christian devotion, from martyrdom to pastoral leadership.
+
+**Spiritual Lessons:**
+These saints teach us about perseverance in faith, the importance of spiritual leadership, and the power of witness in the face of adversity. Their example continues to inspire Christians today to live lives of dedication and service."""
+        
+        for i, feast in enumerate(feasts):
+            models.FeastContext.objects.create(
+                feast=feast,
+                text=f"{sample_text}\n\nThis specific context is for {feast.name}.",
+                short_text=f"{sample_short_text}",
+                prompt=feast_prompts[i % len(feast_prompts)] if feast_prompts else None,
+                thumbs_up=i % 2,
+                thumbs_down=max(0, (i % 3) - 1),
                 active=True,
             )
 
