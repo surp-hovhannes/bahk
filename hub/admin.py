@@ -695,6 +695,7 @@ class FeastAdmin(admin.ModelAdmin):
     list_filter = (
         FeastYearFilter,
         "day__church",
+        "designation",
     )
     search_fields = ("name", "name_en", "name_hy")
     ordering = ("day",)
@@ -705,6 +706,9 @@ class FeastAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {
             'fields': ('day',)
+        }),
+        ('Classification', {
+            'fields': ('designation',)
         }),
         ('Translations', {
             'fields': ('name_en', 'name_hy')

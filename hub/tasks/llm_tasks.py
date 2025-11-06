@@ -5,6 +5,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from hub.models import LLMPrompt, Reading, ReadingContext, Feast, FeastContext
+from hub.services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -282,3 +283,56 @@ def generate_feast_context_task(
     except ValueError as e:
         logger.error(f"Error selecting LLM service: {e}")
         raise self.retry(exc=e)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def determine_feast_designation_task(self, feast_id: int):
+    """Determine and set the designation for a Feast instance using AI.
+    
+    Args:
+        feast_id: ID of the Feast to determine designation for
+    """
+    try:
+        feast = Feast.objects.get(pk=feast_id)
+    except Feast.DoesNotExist:
+        logger.error("Feast with id %s not found.", feast_id)
+        return
+
+    # Skip if designation is already set (don't overwrite manual assignments)
+    if feast.designation:
+        logger.info("Feast %s already has designation '%s', skipping.", feast_id, feast.designation)
+        return
+
+    # Determine which LLM service to use based on active prompt or default
+    model_name = None
+    llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='feasts').first()
+    if llm_prompt:
+        model_name = llm_prompt.model
+    
+    try:
+        service = get_llm_service(model_name if model_name else 'claude-sonnet-4-5-20250929')
+        designation = service.determine_feast_designation(feast, model_name)
+        
+        if designation:
+            # Verify it's a valid choice
+            valid_choices = [choice[0] for choice in Feast.Designation.choices]
+            if designation in valid_choices:
+                feast.designation = designation
+                feast.save(update_fields=['designation'])
+                logger.info(
+                    "Determined designation '%s' for Feast %s (%s)",
+                    designation, feast_id, feast.name
+                )
+            else:
+                logger.warning(
+                    "Invalid designation returned: '%s' for Feast %s. Valid choices: %s",
+                    designation, feast_id, valid_choices
+                )
+        else:
+            logger.warning("Could not determine designation for Feast %s (%s)", feast_id, feast.name)
+    except ValueError as e:
+        logger.error(f"Error selecting LLM service for designation: {e}")
+        # Don't retry on ValueError, just log the error
+    except Exception as e:
+        logger.exception(f"Error determining designation for Feast {feast_id}: {e}")
+        # Don't retry on general exceptions, just log the error

@@ -183,6 +183,7 @@ class GetFeastForDate(generics.GenericAPIView):
         feast_data = {
             "id": feast.id,
             "name": name_translated,
+            "designation": feast.designation,
             **context_dict,
         }
 

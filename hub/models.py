@@ -650,8 +650,37 @@ class Reading(models.Model):
 class Feast(models.Model):
     """Stores details for a feast day."""
 
+    class Designation(models.TextChoices):
+        SUNDAYS_DOMINICAL = (
+            'Sundays, Dominical Feast Days',
+            'Sundays, Dominical Feast Days'
+        )
+        ST_GREGORY_APOSTLES = (
+            'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets',
+            'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets'
+        )
+        PATRIARCHS_VARTAPETS = (
+            'Patriarchs, Vartapets',
+            'Patriarchs, Vartapets'
+        )
+        NATIVITY_MOTHER_OF_GOD = (
+            'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord',
+            'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord'
+        )
+        MARTYRS = (
+            'Martyrs',
+            'Martyrs'
+        )
+
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="feasts")
     name = models.CharField(max_length=256)
+    designation = models.CharField(
+        max_length=256,
+        choices=Designation.choices,
+        null=True,
+        blank=True,
+        help_text="Classification of the feast, automatically determined by AI"
+    )
 
     # Translations for user-facing fields
     i18n = TranslationField(fields=('name',))

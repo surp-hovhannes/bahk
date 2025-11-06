@@ -158,6 +158,19 @@ class LLMService(ABC):
         """
         pass
 
+    @abstractmethod
+    def determine_feast_designation(self, feast: Feast, model_name: str = None) -> Optional[str]:
+        """Determine the designation for a feast based on its name.
+        
+        Args:
+            feast: The Feast instance to determine designation for
+            model_name: Optional model name to use (defaults to checking active feast prompt or using default)
+            
+        Returns:
+            Designation value (one of the valid choices) or None if determination fails
+        """
+        pass
+
 class AnthropicService(LLMService):
     """Service for Anthropic's Claude API."""
 
@@ -246,6 +259,80 @@ class AnthropicService(LLMService):
             return None
         except Exception as e:
             logger.error(f"Error generating feast context with Claude: {e}")
+            return None
+
+    def determine_feast_designation(self, feast: Feast, model_name: str = None) -> Optional[str]:
+        """Determine the designation for a feast using Claude."""
+        if not settings.ANTHROPIC_API_KEY:
+            logger.error("ANTHROPIC_API_KEY is not configured.")
+            return None
+
+        # Determine model to use
+        if model_name is None:
+            llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='feasts').first()
+            if llm_prompt and "claude" in llm_prompt.model:
+                model_name = llm_prompt.model
+            else:
+                model_name = 'claude-sonnet-4-5-20250929'  # Default fallback
+
+        # Hardcoded prompt for designation determination
+        designation_options = [
+            'Sundays, Dominical Feast Days',
+            'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets',
+            'Patriarchs, Vartapets',
+            'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord',
+            'Martyrs'
+        ]
+        
+        feast_info = f"Feast name: {feast.name}"
+        if feast.name_hy:
+            feast_info += f"\nArmenian name: {feast.name_hy}"
+        
+        system_prompt = (
+            "You are a classification expert for Armenian Orthodox Church feasts. "
+            "Determine the appropriate designation category for a feast based solely on its name."
+        )
+        
+        user_message = (
+            f"{feast_info}\n\n"
+            "Based on the feast name above, determine which of the following designation categories it belongs to:\n"
+            f"1. {designation_options[0]}\n"
+            f"2. {designation_options[1]}\n"
+            f"3. {designation_options[2]}\n"
+            f"4. {designation_options[3]}\n"
+            f"5. {designation_options[4]}\n\n"
+            "Return ONLY the exact designation text from the list above, with no additional explanation or formatting."
+        )
+
+        try:
+            response = self.client.messages.create(
+                model=model_name,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_message}
+                ],
+                max_tokens=200,
+                temperature=0.1,  # Lower temperature for more deterministic classification
+            )
+            if response and response.content:
+                response_text = response.content[0].text.strip()
+                # Clean up the response and check if it matches one of the options
+                response_text = response_text.strip('"\'')  # Remove quotes if present
+                # Check if response matches any of the valid options
+                for option in designation_options:
+                    if option.lower() == response_text.lower():
+                        return option
+                # Try partial match
+                for option in designation_options:
+                    if option.lower() in response_text.lower() or response_text.lower() in option.lower():
+                        logger.info(f"Partial match found: '{response_text}' -> '{option}'")
+                        return option
+                logger.warning(f"Could not match designation response: '{response_text}'")
+                return None
+            logger.error("No content returned from Claude API for designation.")
+            return None
+        except Exception as e:
+            logger.error(f"Error determining feast designation with Claude: {e}")
             return None
 
 class OpenAIService(LLMService):
@@ -340,6 +427,81 @@ class OpenAIService(LLMService):
             logger.error("OpenAI response contained no choices")
         except Exception as exc:
             logger.exception("OpenAI API call failed for feast context: %s", exc)
+        return None
+
+    def determine_feast_designation(self, feast: Feast, model_name: str = None) -> Optional[str]:
+        """Determine the designation for a feast using OpenAI."""
+        if not settings.OPENAI_API_KEY:
+            logger.error("OPENAI_API_KEY is not configured.")
+            return None
+
+        # Determine model to use
+        if model_name is None:
+            llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='feasts').first()
+            if llm_prompt and "gpt" in llm_prompt.model:
+                model_name = llm_prompt.model
+            else:
+                model_name = 'gpt-4o-mini'  # Default fallback
+
+        # Hardcoded prompt for designation determination
+        designation_options = [
+            'Sundays, Dominical Feast Days',
+            'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets',
+            'Patriarchs, Vartapets',
+            'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord',
+            'Martyrs'
+        ]
+        
+        feast_info = f"Feast name: {feast.name}"
+        if feast.name_hy:
+            feast_info += f"\nArmenian name: {feast.name_hy}"
+        
+        system_prompt = (
+            "You are a classification expert for Armenian Orthodox Church feasts. "
+            "Determine the appropriate designation category for a feast based solely on its name."
+        )
+        
+        user_message = (
+            f"{feast_info}\n\n"
+            "Based on the feast name above, determine which of the following designation categories it belongs to:\n"
+            f"1. {designation_options[0]}\n"
+            f"2. {designation_options[1]}\n"
+            f"3. {designation_options[2]}\n"
+            f"4. {designation_options[3]}\n"
+            f"5. {designation_options[4]}\n\n"
+            "Return ONLY the exact designation text from the list above, with no additional explanation or formatting."
+        )
+
+        try:
+            response = openai.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                max_tokens=200,
+                temperature=0.1,  # Lower temperature for more deterministic classification
+                top_p=1,
+            )
+            if response.choices:
+                response_text = response.choices[0].message.content.strip()
+                # Clean up the response and check if it matches one of the options
+                response_text = response_text.strip('"\'')  # Remove quotes if present
+                # Check if response matches any of the valid options
+                for option in designation_options:
+                    if option.lower() == response_text.lower():
+                        return option
+                # Try partial match
+                for option in designation_options:
+                    if option.lower() in response_text.lower() or response_text.lower() in option.lower():
+                        logger.info(f"Partial match found: '{response_text}' -> '{option}'")
+                        return option
+                logger.warning(f"Could not match designation response: '{response_text}'")
+                return None
+            logger.error("OpenAI response contained no choices for designation.")
+            return None
+        except Exception as exc:
+            logger.exception("OpenAI API call failed for designation: %s", exc)
         return None
 
 def get_llm_service(model_name: str) -> LLMService:

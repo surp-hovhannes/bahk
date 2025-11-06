@@ -268,3 +268,59 @@ class FeastModelTests(TestCase):
         feast.save(update_fields=['i18n'])
         feast.refresh_from_db()
         self.assertIsNone(feast.name_hy)
+
+    def test_feast_designation_field(self):
+        """Test that designation field exists and can be set."""
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        feast = Feast.objects.create(
+            day=day,
+            name="Christmas",
+        )
+
+        # Designation should be None by default
+        self.assertIsNone(feast.designation)
+
+        # Set designation
+        feast.designation = Feast.Designation.NATIVITY_MOTHER_OF_GOD
+        feast.save()
+
+        feast.refresh_from_db()
+        self.assertEqual(feast.designation, Feast.Designation.NATIVITY_MOTHER_OF_GOD)
+
+    def test_feast_designation_choices(self):
+        """Test that all designation choices are valid."""
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        feast = Feast.objects.create(
+            day=day,
+            name="Test Feast",
+        )
+
+        # Test all designation choices
+        designations = [
+            Feast.Designation.SUNDAYS_DOMINICAL,
+            Feast.Designation.ST_GREGORY_APOSTLES,
+            Feast.Designation.PATRIARCHS_VARTAPETS,
+            Feast.Designation.NATIVITY_MOTHER_OF_GOD,
+            Feast.Designation.MARTYRS,
+        ]
+
+        for designation in designations:
+            feast.designation = designation
+            feast.save()
+            feast.refresh_from_db()
+            self.assertEqual(feast.designation, designation)
+
+    def test_feast_designation_nullable(self):
+        """Test that designation can be None/null."""
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        feast = Feast.objects.create(
+            day=day,
+            name="Test Feast",
+            designation=Feast.Designation.MARTYRS,
+        )
+
+        # Clear designation
+        feast.designation = None
+        feast.save()
+        feast.refresh_from_db()
+        self.assertIsNone(feast.designation)
