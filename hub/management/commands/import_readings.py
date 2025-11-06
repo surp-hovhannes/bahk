@@ -55,6 +55,6 @@ class Command(BaseCommand):
                 # Update translations if they are missing
                 if book_hy and not reading_obj.book_hy:
                     reading_obj.book_hy = book_hy
-                    reading_obj.save(update_fields=['book_hy'])
+                    reading_obj.save(update_fields=['i18n'])
                     action = "Created" if created else "Updated"
                     logging.info(f"{action} reading with translations: {reading_obj}")

@@ -136,7 +136,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                 # Set translations if they are missing
                 if book_hy and not reading_obj.book_hy:
                     reading_obj.book_hy = book_hy
-                    reading_obj.save(update_fields=['book_hy'])
+                    reading_obj.save(update_fields=['i18n'])
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
