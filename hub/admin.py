@@ -20,6 +20,8 @@ from hub.models import (
     Devotional,
     DevotionalSet,
     Fast,
+    Feast,
+    FeastContext,
     LLMPrompt,
     PatristicQuote,
     Profile,
@@ -517,20 +519,19 @@ class ReadingAdmin(admin.ModelAdmin):
 
 @admin.register(LLMPrompt, site=admin.site)
 class LLMPromptAdmin(admin.ModelAdmin):
-    list_display = ("id", "model", "active", "context_count", "role", "prompt_preview")
-    list_filter = ("model", "active")
+    list_display = ("id", "model", "applies_to", "active", "context_count", "role", "prompt_preview")
+    list_filter = ("model", "applies_to", "active")
     search_fields = ("role", "prompt")
     ordering = ("id", "active")
     actions = ["duplicate_prompt", "make_active"]
 
-    def get_queryset(self, request):
-        queryset = super().get_queryset(request)
-        return queryset.annotate(
-            context_count=models.Count('readingcontext', distinct=True)
-        )
-
     def context_count(self, obj):
-        return obj.context_count
+        # Manually count contexts based on applies_to
+        if obj.applies_to == 'readings':
+            return obj.readingcontext_set.count()
+        elif obj.applies_to == 'feasts':
+            return obj.feastcontext_set.count()
+        return 0
     context_count.short_description = "Contexts"
     context_count.admin_order_field = 'context_count'
 
@@ -553,6 +554,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
         # Create a new prompt with the same data
         new_prompt = LLMPrompt.objects.create(
             model=prompt.model,
+            applies_to=prompt.applies_to,
             role=prompt.role,
             prompt=prompt.prompt,
             active=False  # Set as inactive by default
@@ -631,6 +633,72 @@ class ReadingContextAdmin(admin.ModelAdmin):
         }),
         ('Context Translations', {
             'fields': ('text_en', 'text_hy')
+        }),
+    )
+
+    def text_preview(self, obj):
+        return Truncator(obj.text).chars(100)
+
+    text_preview.short_description = "Text Preview"
+
+
+@admin.register(Feast, site=admin.site)
+class FeastAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "date",
+        "church",
+    )
+    list_display_links = (
+        "name",
+        "date",
+    )
+    list_filter = (
+        "date",
+        "church",
+    )
+    search_fields = ("name",)
+    ordering = ("-date",)
+    exclude = ("name",)  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('date', 'church')
+        }),
+        ('Feast Name Translations', {
+            'fields': ('name_en', 'name_hy')
+        }),
+    )
+
+
+@admin.register(FeastContext, site=admin.site)
+class FeastContextAdmin(admin.ModelAdmin):
+    list_display = (
+        "feast",
+        "prompt",
+        "active",
+        "thumbs_up",
+        "thumbs_down",
+        "time_of_generation",
+        "text_preview",
+    )
+    list_display_links = (
+        "feast",
+        "prompt",
+    )
+    list_filter = ("active", "prompt__model", "feast__date")
+    search_fields = ("text", "feast__name")
+    ordering = ("-time_of_generation",)
+    raw_id_fields = ("feast", "prompt")
+    readonly_fields = ("time_of_generation",)
+    exclude = ("text", "short_text")  # Avoid duplicate with translation fields
+
+    fieldsets = (
+        (None, {
+            'fields': ('feast', 'prompt', 'active', 'thumbs_up', 'thumbs_down', 'time_of_generation')
+        }),
+        ('Context Translations', {
+            'fields': ('text_en', 'text_hy', 'short_text_en', 'short_text_hy')
         }),
     )
 

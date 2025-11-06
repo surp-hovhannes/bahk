@@ -201,6 +201,74 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
     return combined_readings
 
 
+def scrape_feasts(date_obj, church, date_format="%Y%m%d"):
+    """Scrapes feast names from sacredtradition.am in both English and Armenian."""
+    if church not in SUPPORTED_CHURCHES:
+        logging.error("Web-scraping for feasts only set up for the following churches: %r. %s not supported.",
+                      SUPPORTED_CHURCHES, church)
+        return None
+
+    date_str = date_obj.strftime(date_format)
+
+    def scrape_language(language_code):
+        """Helper function to scrape feast name for a specific language.
+
+        Args:
+            language_code: 2 for English, 3 for Armenian
+        Returns:
+            str: The feast name, or None if not found
+        """
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        try:
+            response = urllib.request.urlopen(url)
+        except urllib.error.URLError:
+            logging.error("Invalid url %s", url)
+            return None
+
+        if response.status != 200:
+            logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
+            return None
+
+        data = response.read()
+        html_content = data.decode("utf-8")
+
+        # Look for element with class "dname"
+        # Pattern: <element class="dname">feast name</element>
+        # We'll search for class="dname" or class='dname' and then extract the content
+        dname_pattern = r'class=["\']dname["\'][^>]*>([^<]+)<'
+        match = re.search(dname_pattern, html_content)
+        
+        if match:
+            feast_name = match.group(1).strip()
+            return feast_name
+        else:
+            # Try alternative pattern in case the HTML structure is different
+            # Look for any element containing dname class
+            alt_pattern = r'<[^>]*class=["\'][^"\']*dname[^"\']*["\'][^>]*>([^<]+)<'
+            alt_match = re.search(alt_pattern, html_content)
+            if alt_match:
+                feast_name = alt_match.group(1).strip()
+                return feast_name
+        
+        logging.warning("Could not find feast name with class 'dname' in %s", url)
+        return None
+
+    # Scrape English (iL=2) and Armenian (iL=3)
+    english_feast = scrape_language(2)
+    armenian_feast = scrape_language(3)
+
+    # Return feast data with both translations
+    feast_data = {
+        "name": english_feast,
+        "name_en": english_feast,
+    }
+
+    if armenian_feast:
+        feast_data["name_hy"] = armenian_feast
+
+    return feast_data if english_feast else None
+
+
 def send_fast_reminders():
     today = datetime.today().date()
     tomorrow = today + timedelta(days=1)
