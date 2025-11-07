@@ -69,12 +69,9 @@ class Command(BaseCommand):
         
         def table_exists(table_name):
             """Check if a table exists in the database."""
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name=%s",
-                    [table_name]
-                )
-                return cursor.fetchone() is not None
+            # Use Django's introspection API for database-agnostic table checking
+            table_names = connection.introspection.table_names()
+            return table_name in table_names
         
         def safe_delete(model_class, model_name, table_name):
             """Safely delete all objects from a model, checking if table exists first."""
