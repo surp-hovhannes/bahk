@@ -67,7 +67,7 @@ class GetFeastForDate(generics.GenericAPIView):
 
         if request.user.is_authenticated:
             profile = get_user_profile_safe(request.user)
-            church = profile.church if profile else Church.objects.get(pk=Church.get_default_pk())
+            church = profile.church if (profile and profile.church) else Church.objects.get(pk=Church.get_default_pk())
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 
