@@ -184,9 +184,9 @@ class AnthropicService(LLMService):
             return None
 
         if llm_prompt is None:
-            llm_prompt = LLMPrompt.objects.filter(active=True).first()
+            llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='readings').first()
             if not llm_prompt:
-                logger.error("No active LLM prompt found.")
+                logger.error("No active LLM prompt found for readings.")
                 return None
 
         base_message = f"Please provide context for the following passage: {reading.passage_reference}"
@@ -348,9 +348,9 @@ class OpenAIService(LLMService):
             return None
 
         if llm_prompt is None:
-            llm_prompt = LLMPrompt.objects.filter(active=True).first()
+            llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='readings').first()
             if not llm_prompt:
-                logger.error("No active LLM prompt found.")
+                logger.error("No active LLM prompt found for readings.")
                 return None
 
         base_prompt = f"Contextualize the passage {reading.passage_reference}, by summarizing the passages preceding it."

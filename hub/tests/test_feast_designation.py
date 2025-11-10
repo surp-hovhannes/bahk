@@ -337,6 +337,61 @@ class FeastDesignationSignalTests(TestCase):
         # But since we're mocking, the designation won't actually be set
         # This test mainly verifies the integration doesn't break
 
+    @override_settings(
+        CELERY_TASK_ALWAYS_EAGER=True,
+        CELERY_TASK_EAGER_PROPAGATES=True,
+    )
+    @patch('hub.signals.determine_feast_designation_task.delay')
+    def test_signal_does_not_trigger_twice_on_create_and_translation_update(self, mock_task_delay):
+        """Test that signal only triggers once when feast is created and translation is set immediately.
+        
+        This test verifies the fix for the double post_save trigger issue where get_or_create
+        followed by a conditional save would trigger the signal twice.
+        """
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        
+        # Simulate the pattern from views/feasts.py and import_feasts.py:
+        # get_or_create followed by setting translation and saving
+        feast_obj, created = Feast.objects.get_or_create(
+            day=day,
+            defaults={"name": "Test Feast"}
+        )
+        
+        # Verify feast was created
+        self.assertTrue(created)
+        
+        # Set translation and save (simulating the pattern we fixed)
+        feast_obj.name_hy = "Փորձարկման տոն"
+        feast_obj.save()
+        
+        # Verify task was only called once (on creation, not on translation update)
+        mock_task_delay.assert_called_once_with(feast_obj.id)
+
+    @override_settings(
+        CELERY_TASK_ALWAYS_EAGER=True,
+        CELERY_TASK_EAGER_PROPAGATES=True,
+    )
+    @patch('hub.signals.determine_feast_designation_task.delay')
+    def test_signal_does_not_trigger_on_update_only(self, mock_task_delay):
+        """Test that signal does not trigger when updating an existing feast."""
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        
+        # Create feast first (this will trigger the signal)
+        feast = Feast.objects.create(
+            day=day,
+            name="Existing Feast",
+        )
+        
+        # Clear the mock to reset call count
+        mock_task_delay.reset_mock()
+        
+        # Update the feast (should NOT trigger designation task)
+        feast.name_hy = "Գոյություն ունեցող տոն"
+        feast.save(update_fields=['i18n'])
+        
+        # Verify task was NOT called on update
+        mock_task_delay.assert_not_called()
+
 
 class FeastDesignationAPITests(TestCase):
     """Tests for API response including designation."""

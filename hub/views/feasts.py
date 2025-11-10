@@ -94,10 +94,20 @@ class GetFeastForDate(generics.GenericAPIView):
                         defaults={"name": name_en}
                     )
                     
-                    # Update translations if they are missing
+                    # Set translation if available and missing
+                    # For new feasts, set it immediately after creation to avoid second save
+                    # For existing feasts, only update if translation is missing
                     if name_hy and not feast_obj.name_hy:
                         feast_obj.name_hy = name_hy
-                        feast_obj.save(update_fields=['i18n'])
+                        # Only save if feast was just created (to set translation) 
+                        # or if it existed and needs translation update
+                        if created:
+                            # For new feasts, save immediately after setting translation
+                            # This triggers post_save once with both name and translation set
+                            feast_obj.save()
+                        else:
+                            # For existing feasts, save with update_fields to only update i18n
+                            feast_obj.save(update_fields=['i18n'])
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()

@@ -43,15 +43,17 @@ def handle_fast_participant_change(sender, instance, action, **kwargs):
 def handle_feast_save(sender, instance, created, **kwargs):
     """
     Signal handler that triggers designation determination when a feast is created
-    or updated (if designation is not already set).
+    (if designation is not already set).
     
     Also triggers icon matching when a feast is created.
     
-    Only triggers if designation is not already set to avoid overwriting manual assignments.
+    Only triggers designation task on creation to avoid duplicate enqueuing when
+    translations are updated immediately after creation.
     The task itself will also check and skip if designation is already set.
     """
-    # Only trigger if designation is not already set
-    if not instance.designation:
+    # Only trigger designation task on creation, not on updates
+    # This prevents duplicate task enqueuing when translations are set immediately after creation
+    if created and not instance.designation:
         # Trigger designation determination task
         # The task will handle the actual determination and will skip if designation is already set
         determine_feast_designation_task.delay(instance.id)

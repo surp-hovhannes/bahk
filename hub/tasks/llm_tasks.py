@@ -95,9 +95,9 @@ def generate_reading_context_task(
             )
             return
 
-    llm_prompt = LLMPrompt.objects.filter(active=True).first()
+    llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='readings').first()
     if not llm_prompt:
-        logger.error("No active LLM prompt found.")
+        logger.error("No active LLM prompt found for readings.")
         return
 
     try:
