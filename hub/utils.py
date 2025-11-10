@@ -476,13 +476,11 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
     elif translation_updated:
         action = "updated"
         status = "success"
-    elif existing_feast:
+    else:
         # Feast existed and no updates were made
+        # feast_created=False means the feast already existed
         action = "skipped"
         status = "skipped"
-    else:
-        action = "created"
-        status = "success"
     
     if status == "skipped":
         return (
