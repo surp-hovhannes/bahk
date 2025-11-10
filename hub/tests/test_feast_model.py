@@ -324,3 +324,34 @@ class FeastModelTests(TestCase):
         feast.save()
         feast.refresh_from_db()
         self.assertIsNone(feast.designation)
+
+    def test_feast_icon_field(self):
+        """Test that icon field exists and can be set."""
+        from icons.models import Icon
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        test_image = SimpleUploadedFile(
+            name='test_icon.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+        icon = Icon.objects.create(
+            title="Test Icon",
+            church=self.church,
+            image=test_image
+        )
+        feast = Feast.objects.create(
+            day=day,
+            name="Christmas",
+        )
+
+        # Icon should be None by default
+        self.assertIsNone(feast.icon)
+
+        # Set icon
+        feast.icon = icon
+        feast.save()
+
+        feast.refresh_from_db()
+        self.assertEqual(feast.icon, icon)

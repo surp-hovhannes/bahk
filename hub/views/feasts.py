@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from hub.models import Church, Day, Feast
 from hub.tasks import generate_feast_context_task
 from hub.utils import get_user_profile_safe, scrape_feast
+from icons.serializers import IconSerializer
 
 
 class GetFeastForDate(generics.GenericAPIView):
@@ -180,10 +181,17 @@ class GetFeastForDate(generics.GenericAPIView):
                 "context_thumbs_down": active_context.thumbs_down,
             }
 
+        # Serialize icon if it exists
+        icon_data = None
+        if feast.icon:
+            icon_serializer = IconSerializer(feast.icon, context={'request': request})
+            icon_data = icon_serializer.data
+
         feast_data = {
             "id": feast.id,
             "name": name_translated,
             "designation": feast.designation,
+            "icon": icon_data,
             **context_dict,
         }
 

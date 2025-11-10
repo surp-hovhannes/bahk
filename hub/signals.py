@@ -3,6 +3,7 @@ from django.dispatch import receiver
 from django.core.cache import cache
 from hub.models import Profile, Feast
 from hub.tasks.llm_tasks import determine_feast_designation_task
+from hub.tasks.icon_tasks import match_icon_to_feast_task
 
 @receiver(m2m_changed, sender=Profile.fasts.through)
 def handle_fast_participant_change(sender, instance, action, **kwargs):
@@ -44,6 +45,8 @@ def handle_feast_save(sender, instance, created, **kwargs):
     Signal handler that triggers designation determination when a feast is created
     or updated (if designation is not already set).
     
+    Also triggers icon matching when a feast is created.
+    
     Only triggers if designation is not already set to avoid overwriting manual assignments.
     The task itself will also check and skip if designation is already set.
     """
@@ -52,3 +55,7 @@ def handle_feast_save(sender, instance, created, **kwargs):
         # Trigger designation determination task
         # The task will handle the actual determination and will skip if designation is already set
         determine_feast_designation_task.delay(instance.id)
+    
+    # Trigger icon matching when feast is created
+    if created:
+        match_icon_to_feast_task.delay(instance.id)

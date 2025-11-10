@@ -2,6 +2,7 @@
 DAYS_TO_CACHE_THUMBNAIL = 7
 NUMBER_PARTICIPANTS_TO_SHOW_WEB = 6  # number of participant thumbnails to show on fast card on web version
 DATE_FORMAT_STRING = "%m/%d/%Y"  # format string for dates (month, day, year)
+ICON_MATCH_CONFIDENCE_THRESHOLD = 'high'  # Minimum confidence level required for icon matching to feasts
 
 CATENA_HOME_PAGE_URL = "https://catenabible.com/"
 CATENA_ABBREV_FOR_BOOK = {

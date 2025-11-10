@@ -681,6 +681,14 @@ class Feast(models.Model):
         blank=True,
         help_text="Classification of the feast, automatically determined by AI"
     )
+    icon = models.ForeignKey(
+        'icons.Icon',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='feasts',
+        help_text="Matched icon for this feast"
+    )
 
     # Translations for user-facing fields
     i18n = TranslationField(fields=('name',))
