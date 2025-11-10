@@ -3,10 +3,12 @@ from datetime import date
 
 from django.db import IntegrityError
 from django.test import TestCase
+from django.test.utils import tag
 
 from hub.models import Church, Day, Feast
 
 
+@tag('slow')
 class FeastModelTests(TestCase):
     """Tests for the Feast model."""
 

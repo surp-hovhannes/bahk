@@ -10,6 +10,7 @@ import time
 import logging
 from django.conf import settings
 from django.test import TestCase
+from django.test.utils import tag
 from unittest import skipIf
 
 # Configure logging
@@ -37,6 +38,7 @@ SKIP_REASON = "AWS Location API key or Place Index not configured in application
 class AWSLocationServiceTests(TestCase):
     """Tests for AWS Location Service integration."""
     
+    @tag('slow', 'integration')
     def test_aws_credentials(self):
         """Test that AWS credentials are properly configured"""
         logger.info("Testing AWS credentials...")
@@ -61,6 +63,7 @@ class AWSLocationServiceTests(TestCase):
         
         logger.info("AWS credentials are configured ✓")
     
+    @tag('slow', 'integration')
     def test_hardcoded_locations(self):
         """Test geocoding with hardcoded locations"""
         logger.info("Testing hardcoded locations...")
@@ -80,6 +83,7 @@ class AWSLocationServiceTests(TestCase):
             self.assertIsNotNone(coordinates, f"Failed to geocode {location}")
             logger.info(f"✓ Successfully geocoded {location} → {coordinates} (took {duration:.2f}s)")
     
+    @tag('slow', 'integration')
     def test_aws_geocoding(self):
         """Test geocoding with AWS Location Service"""
         logger.info("Testing AWS Location Service geocoding...")
@@ -155,6 +159,7 @@ class AWSLocationServiceTests(TestCase):
         
         self.assertGreater(success_count, 0, "No successful AWS geocoding calls")
     
+    @tag('slow', 'integration')
     def test_geocoding_cache(self):
         """Test the GeocodingCache model"""
         logger.info("Testing GeocodingCache functionality...")

@@ -2,6 +2,7 @@
 from datetime import date
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, override_settings
+from django.test.utils import tag
 from django.db.models.signals import post_save
 
 from hub.models import Church, Day, Feast, LLMPrompt
@@ -14,6 +15,7 @@ from hub.signals import handle_feast_save
     CELERY_TASK_ALWAYS_EAGER=True,
     CELERY_TASK_EAGER_PROPAGATES=True,
 )
+@tag('slow', 'integration')
 class FeastDesignationTaskTests(TestCase):
     """Tests for the designation determination Celery task."""
 
@@ -130,6 +132,7 @@ class FeastDesignationTaskTests(TestCase):
         self.assertEqual(call_args[0][1], "claude-sonnet-4-5-20250929")
 
 
+@tag('slow', 'integration')
 class FeastDesignationLLMServiceTests(TestCase):
     """Tests for LLM service designation determination methods."""
 
@@ -245,6 +248,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         self.assertIsNone(result)
 
 
+@tag('slow', 'integration')
 class FeastDesignationSignalTests(TestCase):
     """Tests for the feast designation signal handler."""
 
@@ -393,6 +397,7 @@ class FeastDesignationSignalTests(TestCase):
         mock_task_delay.assert_not_called()
 
 
+@tag('slow', 'integration')
 class FeastDesignationAPITests(TestCase):
     """Tests for API response including designation."""
 
