@@ -93,7 +93,7 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
         Args:
             language_code: 2 for English, 3 for Armenian
         """
-        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
         try:
             response = urllib.request.urlopen(url)
         except urllib.error.URLError:
@@ -283,7 +283,7 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
         Args:
             language_code: 2 for English, 3 for Armenian
         """
-        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
         
         req = urllib.request.Request(url, headers={'User-agent': 'Mozilla/5.0'})
         
