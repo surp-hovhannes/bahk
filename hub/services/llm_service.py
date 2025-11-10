@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 import logging
 import anthropic
-import openai
+from openai import OpenAI
 from django.conf import settings
 
 from hub.models import LLMPrompt, Reading
@@ -120,7 +120,7 @@ class OpenAIService(LLMService):
     """Service for OpenAI's API."""
 
     def __init__(self):
-        openai.api_key = settings.OPENAI_API_KEY
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
     def generate_context(self, reading: Reading, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[str]:
         """Generate context using OpenAI."""
@@ -141,7 +141,9 @@ class OpenAIService(LLMService):
         )
 
         try:
-            response = openai.chat.completions.create(
+            if not self.client:
+                self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            response = self.client.chat.completions.create(
                 model=llm_prompt.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
