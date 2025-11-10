@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 
 from django.conf import settings
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics, status
@@ -14,7 +15,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from hub.models import Church, Day, Feast
+from hub.models import Church, Day, Feast, FeastContext
 from hub.tasks import generate_feast_context_task
 from hub.utils import get_user_profile_safe, get_or_create_feast_for_date
 from icons.serializers import IconSerializer
@@ -228,18 +229,24 @@ class FeastContextFeedbackView(APIView):
         
         feedback_type = request.data.get("feedback_type")
         if feedback_type == "up":
-            active_context.thumbs_up += 1
-            active_context.save(update_fields=["thumbs_up"])
+            # Use atomic increment to prevent race conditions
+            FeastContext.objects.filter(pk=active_context.pk).update(
+                thumbs_up=F('thumbs_up') + 1
+            )
             return Response({"status": "success", "regenerate": False})
         elif feedback_type == "down":
-            active_context.thumbs_down += 1
+            # Use atomic increment to prevent race conditions
+            FeastContext.objects.filter(pk=active_context.pk).update(
+                thumbs_down=F('thumbs_down') + 1
+            )
+            # Refresh the object to get the updated value for threshold check
+            active_context.refresh_from_db()
             threshold = getattr(settings, "FEAST_CONTEXT_REGENERATION_THRESHOLD", 5)
             regenerate = False
             if active_context.thumbs_down >= threshold:
                 regenerate = True
                 # Force regeneration via Celery task
                 generate_feast_context_task.delay(feast.id, force_regeneration=True)
-            active_context.save(update_fields=["thumbs_down"])
             return Response({"status": "success", "regenerate": regenerate})
         else:
             return Response(
