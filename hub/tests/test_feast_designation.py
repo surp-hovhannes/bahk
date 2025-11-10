@@ -445,3 +445,30 @@ class FeastDesignationAPITests(TestCase):
         self.assertIn('feast', response.data)
         self.assertIn('designation', response.data['feast'])
         self.assertIsNone(response.data['feast']['designation'])
+
+    @patch('hub.views.feasts.get_or_create_feast_for_date')
+    def test_view_uses_check_fast_false(self, mock_get_or_create):
+        """Test that GetFeastForDate view uses check_fast=False."""
+        from hub.views.feasts import GetFeastForDate
+        from rest_framework.test import APIRequestFactory
+
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        feast = Feast.objects.create(day=day, name="Test Feast")
+
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        factory = APIRequestFactory()
+        # Format date as YYYY-MM-DD string as expected by the view
+        date_str = self.test_date.strftime("%Y-%m-%d")
+        request = factory.get(f'/feasts/?date={date_str}')
+        view = GetFeastForDate.as_view()
+
+        response = view(request)
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify get_or_create_feast_for_date was called with check_fast=False
+        mock_get_or_create.assert_called_once_with(
+            self.test_date,
+            self.church,
+            check_fast=False
+        )

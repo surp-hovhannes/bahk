@@ -8,6 +8,7 @@ from .mapping_tasks import generate_participant_map, update_current_fast_maps
 from .geocoding_tasks import batch_geocode_profiles, geocode_profile_location
 from .llm_tasks import generate_reading_context_task, generate_feast_context_task
 from .icon_tasks import match_icon_to_feast_task
+from .feast_tasks import create_feast_date_task
 from celery import shared_task
 
 @shared_task
@@ -25,5 +26,6 @@ __all__ = [
     'generate_reading_context_task',
     'generate_feast_context_task',
     'match_icon_to_feast_task',
+    'create_feast_date_task',
     'add'
 ] 

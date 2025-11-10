@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Feast
 from hub.tasks import generate_feast_context_task
-from hub.utils import get_user_profile_safe, scrape_feast
+from hub.utils import get_user_profile_safe, get_or_create_feast_for_date
 from icons.serializers import IconSerializer
 
 
@@ -72,48 +72,15 @@ class GetFeastForDate(generics.GenericAPIView):
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 
-        day, _ = Day.objects.get_or_create(date=date_obj, church=church)
+        # Use the shared utility function to get or create feast
+        # Note: check_fast=False because the view should still return feasts even if a Fast exists
+        feast_obj, _, _ = get_or_create_feast_for_date(date_obj, church, check_fast=False)
+        
+        # Get the day for the date (needed for the rest of the view logic)
+        day = Day.objects.get(date=date_obj, church=church)
 
-        # If no feast exists for the requested day/church, scrape and persist it
-        if not day.feasts.exists():
-            feast_data = scrape_feast(date_obj, church)
-            
-            if feast_data:
-                # Extract name fields
-                name_en = feast_data.get("name_en", feast_data.get("name"))
-                name_hy = feast_data.get("name_hy", None)
-                
-                if not name_en:
-                    # If no English name, try to use name field directly
-                    name_en = feast_data.get("name")
-                
-                if name_en:
-                    # Get or create feast with English name
-                    feast_obj, created = Feast.objects.get_or_create(
-                        day=day,
-                        defaults={"name": name_en}
-                    )
-                    
-                    # Set translation if available and missing
-                    # For new feasts, set it immediately after creation to avoid second save
-                    # For existing feasts, only update if translation is missing
-                    if name_hy and not feast_obj.name_hy:
-                        feast_obj.name_hy = name_hy
-                        # Only save if feast was just created (to set translation) 
-                        # or if it existed and needs translation update
-                        if created:
-                            # For new feasts, save immediately after setting translation
-                            # This triggers post_save once with both name and translation set
-                            feast_obj.save()
-                        else:
-                            # For existing feasts, save with update_fields to only update i18n
-                            feast_obj.save(update_fields=['i18n'])
-
-        # Now ensure we have up-to-date queryset
-        day.refresh_from_db()
-
-        # Get the feast for this day (if any)
-        feast = day.feasts.first()
+        # Use the feast from the utility function, or get it from the day if None
+        feast = feast_obj if feast_obj else day.feasts.first()
         
         if feast is None:
             # No feast on this day

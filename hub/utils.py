@@ -12,7 +12,7 @@ from django.utils.html import strip_tags
 from django.core.cache import cache
 
 import bahk.settings as settings
-from hub.models import Church, Day, Fast, Profile
+from hub.models import Church, Day, Fast, Feast, Profile
 from hub.serializers import FastSerializer
 
 
@@ -345,6 +345,167 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
         "name_en": name_en,
         "name_hy": name_hy,
     }
+
+
+def get_or_create_feast_for_date(date_obj, church, check_fast=True):
+    """
+    Get or create a Feast for a given date and church.
+    
+    This function handles the common logic for creating feasts:
+    1. Gets or creates a Day for the date and church
+    2. Optionally checks if a Fast is associated (skips feast lookup if so)
+    3. Checks if a Feast already exists
+    4. If not, scrapes and creates the feast
+    
+    Args:
+        date_obj: datetime.date object for the date
+        church: Church object
+        check_fast: If True, skip feast lookup if Day has a Fast associated
+        
+    Returns:
+        Tuple of (feast_obj, created, status_dict) where:
+        - feast_obj: Feast instance or None if no feast found/created
+        - created: Boolean indicating if feast was created (False if existed or skipped)
+        - status_dict: Dict with status information (status, reason, etc.)
+    """
+    # Get or create Day for the date
+    day, day_created = Day.objects.get_or_create(
+        date=date_obj,
+        church=church,
+        defaults={}
+    )
+    
+    # Check if a Fast is associated with this day - if so, skip feast lookup
+    if check_fast and day.fast:
+        return (
+            None,
+            False,
+            {
+                "status": "skipped",
+                "reason": "fast_associated",
+                "fast_name": day.fast.name,
+                "date": str(date_obj)
+            }
+        )
+    
+    # Check if feast already exists for this day
+    existing_feast = day.feasts.first() if day.feasts.exists() else None
+    
+    # Scrape feast data (always scrape to potentially update existing feast with missing translations)
+    feast_data = scrape_feast(date_obj, church)
+    
+    if not feast_data:
+        # If no feast data and feast already exists, return existing feast
+        if existing_feast:
+            return (
+                existing_feast,
+                False,
+                {
+                    "status": "skipped",
+                    "reason": "feast_already_exists",
+                    "date": str(date_obj)
+                }
+            )
+        return (
+            None,
+            False,
+            {
+                "status": "skipped",
+                "reason": "no_feast_data",
+                "date": str(date_obj)
+            }
+        )
+    
+    # Extract name fields
+    name_en = feast_data.get("name_en", feast_data.get("name"))
+    name_hy = feast_data.get("name_hy", None)
+    
+    if not name_en:
+        # If no English name, try to use name field directly
+        name_en = feast_data.get("name")
+    
+    if not name_en:
+        # If no feast name and feast already exists, return existing feast
+        if existing_feast:
+            return (
+                existing_feast,
+                False,
+                {
+                    "status": "skipped",
+                    "reason": "feast_already_exists",
+                    "date": str(date_obj)
+                }
+            )
+        return (
+            None,
+            False,
+            {
+                "status": "skipped",
+                "reason": "no_feast_name",
+                "date": str(date_obj)
+            }
+        )
+    
+    # Get or create feast with English name
+    feast_obj, feast_created = Feast.objects.get_or_create(
+        day=day,
+        defaults={"name": name_en}
+    )
+    
+    # Set translation if available and missing
+    # For new feasts, set it immediately after creation to avoid second save
+    # For existing feasts, only update if translation is missing
+    translation_updated = False
+    if name_hy and not feast_obj.name_hy:
+        feast_obj.name_hy = name_hy
+        translation_updated = True
+        # Only save if feast was just created (to set translation) 
+        # or if it existed and needs translation update
+        if feast_created:
+            # For new feasts, save immediately after setting translation
+            # This triggers post_save once with both name and translation set
+            feast_obj.save()
+        else:
+            # For existing feasts, save with update_fields to only update i18n
+            feast_obj.save(update_fields=['i18n'])
+    
+    # Determine action: created, updated (with translation), or skipped (no changes)
+    if feast_created:
+        action = "created"
+        status = "success"
+    elif translation_updated:
+        action = "updated"
+        status = "success"
+    elif existing_feast:
+        # Feast existed and no updates were made
+        action = "skipped"
+        status = "skipped"
+    else:
+        action = "created"
+        status = "success"
+    
+    if status == "skipped":
+        return (
+            feast_obj,
+            False,
+            {
+                "status": "skipped",
+                "reason": "feast_already_exists",
+                "date": str(date_obj)
+            }
+        )
+    
+    return (
+        feast_obj,
+        feast_created,
+        {
+            "status": "success",
+            "action": action,
+            "feast_id": feast_obj.id,
+            "feast_name": feast_obj.name,
+            "date": str(date_obj)
+        }
+    )
 
 
 def test_email():
