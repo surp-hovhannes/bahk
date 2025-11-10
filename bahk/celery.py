@@ -37,6 +37,16 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'create-feast-date-daily': {
+        'task': 'hub.tasks.create_feast_date_task',
+        'schedule': crontab(hour=0, minute=5),  # 5 minutes past midnight
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-feast-date-creation',
+            }
+        }
+    },
     'update-current-fast-maps-once-per-day': {
         'task': 'hub.tasks.update_current_fast_maps',
         'schedule': crontab(hour=1, minute=0),

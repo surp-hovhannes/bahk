@@ -12,7 +12,7 @@ from django.utils.html import strip_tags
 from django.core.cache import cache
 
 import bahk.settings as settings
-from hub.models import Church, Day, Fast, Profile
+from hub.models import Church, Day, Fast, Feast, Profile
 from hub.serializers import FastSerializer
 
 
@@ -93,7 +93,7 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
         Args:
             language_code: 2 for English, 3 for Armenian
         """
-        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM1103&iL={language_code}&ymd={date_str}"
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
         try:
             response = urllib.request.urlopen(url)
         except urllib.error.URLError:
@@ -257,6 +257,253 @@ def send_fast_reminders():
             email.attach_alternative(html_content, "text/html")
             email.send()
             logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {earliest_fast.name}')
+
+
+def scrape_feast(date_obj, church, date_format="%Y%m%d"):
+    """Scrapes feast name from sacredtradition.am in both English and Armenian.
+    
+    Args:
+        date_obj: datetime.date object for the date to scrape
+        church: Church object
+        date_format: Format string for date in URL
+        
+    Returns:
+        Dict with 'name', 'name_en', 'name_hy' keys or None if no feast found
+    """
+    if church not in SUPPORTED_CHURCHES:
+        logging.error("Web-scraping for feasts only set up for the following churches: %r. %s not supported.",
+                      SUPPORTED_CHURCHES, church)
+        return None
+
+    date_str = date_obj.strftime(date_format)
+    
+    def scrape_feast_for_language(language_code):
+        """Helper function to scrape feast for a specific language.
+        
+        Args:
+            language_code: 2 for English, 3 for Armenian
+        """
+        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
+        
+        req = urllib.request.Request(url, headers={'User-agent': 'Mozilla/5.0'})
+        
+        try:
+            response = urllib.request.urlopen(req)
+        except urllib.error.URLError:
+            logging.error("Invalid url %s", url)
+            return None
+
+        if response.status != 200:
+            logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
+            return None
+
+        data = response.read()
+        html_content = data.decode("utf-8")
+
+        # Look for elements with class="dname" or class=dname (with or without quotes)
+        # Match various HTML tags with class dname
+        import re
+        
+        # First, find the opening tag with class=dname (handles both quoted and unquoted)
+        opening_pattern = r'<([a-z]+)[^>]*class=["\']?dname["\']?[^>]*>'
+        opening_match = re.search(opening_pattern, html_content, re.DOTALL | re.IGNORECASE)
+        
+        if not opening_match:
+            return None
+        
+        tag_name = opening_match.group(1)
+        start_pos = opening_match.end()
+        
+        # Find the corresponding closing tag
+        closing_pattern = f'</{tag_name}>'
+        closing_match = re.search(closing_pattern, html_content[start_pos:], re.IGNORECASE)
+        
+        if not closing_match:
+            return None
+        
+        # Extract content between opening and closing tags
+        feast_html = html_content[start_pos:start_pos + closing_match.start()]
+        
+        # Remove any nested HTML tags
+        feast_name = re.sub(r'<[^>]+>', '', feast_html).strip()
+        
+        return feast_name if feast_name else None
+    
+    # Scrape both English and Armenian
+    name_en = scrape_feast_for_language(2)  # English
+    name_hy = scrape_feast_for_language(3)  # Armenian
+    
+    # If no feast found in either language, return None
+    if not name_en and not name_hy:
+        return None
+    
+    # Use English as default, fallback to Armenian if English not available
+    default_name = name_en if name_en else name_hy
+    
+    return {
+        "name": default_name,
+        "name_en": name_en,
+        "name_hy": name_hy,
+    }
+
+
+def get_or_create_feast_for_date(date_obj, church, check_fast=True):
+    """
+    Get or create a Feast for a given date and church.
+    
+    This function handles the common logic for creating feasts:
+    1. Gets or creates a Day for the date and church
+    2. Optionally checks if a Fast is associated (skips feast lookup if so)
+    3. Checks if a Feast already exists
+    4. If not, scrapes and creates the feast
+    
+    Args:
+        date_obj: datetime.date object for the date
+        church: Church object
+        check_fast: If True, skip feast lookup if Day has a Fast associated
+        
+    Returns:
+        Tuple of (feast_obj, created, status_dict) where:
+        - feast_obj: Feast instance or None if no feast found/created
+        - created: Boolean indicating if feast was created (False if existed or skipped)
+        - status_dict: Dict with status information (status, reason, etc.)
+    """
+    # Get or create Day for the date
+    day, day_created = Day.objects.get_or_create(
+        date=date_obj,
+        church=church,
+        defaults={}
+    )
+    
+    # Check if a Fast is associated with this day - if so, skip feast lookup
+    if check_fast and day.fast:
+        return (
+            None,
+            False,
+            {
+                "status": "skipped",
+                "reason": "fast_associated",
+                "fast_name": day.fast.name,
+                "date": str(date_obj)
+            }
+        )
+    
+    # Check if feast already exists for this day
+    existing_feast = day.feasts.first() if day.feasts.exists() else None
+    
+    # Scrape feast data (always scrape to potentially update existing feast with missing translations)
+    feast_data = scrape_feast(date_obj, church)
+    
+    if not feast_data:
+        # If no feast data and feast already exists, return existing feast
+        if existing_feast:
+            return (
+                existing_feast,
+                False,
+                {
+                    "status": "skipped",
+                    "reason": "feast_already_exists",
+                    "date": str(date_obj)
+                }
+            )
+        return (
+            None,
+            False,
+            {
+                "status": "skipped",
+                "reason": "no_feast_data",
+                "date": str(date_obj)
+            }
+        )
+    
+    # Extract name fields
+    name_en = feast_data.get("name_en", feast_data.get("name"))
+    name_hy = feast_data.get("name_hy", None)
+    
+    if not name_en:
+        # If no English name, try to use name field directly
+        name_en = feast_data.get("name")
+    
+    if not name_en:
+        # If no feast name and feast already exists, return existing feast
+        if existing_feast:
+            return (
+                existing_feast,
+                False,
+                {
+                    "status": "skipped",
+                    "reason": "feast_already_exists",
+                    "date": str(date_obj)
+                }
+            )
+        return (
+            None,
+            False,
+            {
+                "status": "skipped",
+                "reason": "no_feast_name",
+                "date": str(date_obj)
+            }
+        )
+    
+    # Get or create feast with English name
+    feast_obj, feast_created = Feast.objects.get_or_create(
+        day=day,
+        defaults={"name": name_en}
+    )
+    
+    # Set translation if available and missing
+    # For new feasts, set it immediately after creation to avoid second save
+    # For existing feasts, only update if translation is missing
+    translation_updated = False
+    if name_hy and not feast_obj.name_hy:
+        feast_obj.name_hy = name_hy
+        translation_updated = True
+        # Only save if feast was just created (to set translation) 
+        # or if it existed and needs translation update
+        if feast_created:
+            # For new feasts, save immediately after setting translation
+            # This triggers post_save once with both name and translation set
+            feast_obj.save()
+        else:
+            # For existing feasts, save with update_fields to only update i18n
+            feast_obj.save(update_fields=['i18n'])
+    
+    # Determine action: created, updated (with translation), or skipped (no changes)
+    if feast_created:
+        action = "created"
+        status = "success"
+    elif translation_updated:
+        action = "updated"
+        status = "success"
+    else:
+        # Feast existed and no updates were made
+        # feast_created=False means the feast already existed
+        action = "skipped"
+        status = "skipped"
+    
+    if status == "skipped":
+        return (
+            feast_obj,
+            False,
+            {
+                "status": "skipped",
+                "reason": "feast_already_exists",
+                "date": str(date_obj)
+            }
+        )
+    
+    return (
+        feast_obj,
+        feast_created,
+        {
+            "status": "success",
+            "action": action,
+            "feast_id": feast_obj.id,
+            "feast_name": feast_obj.name,
+            "date": str(date_obj)
+        }
+    )
 
 
 def test_email():

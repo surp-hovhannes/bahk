@@ -169,17 +169,66 @@ class IconMatchView(views.APIView):
             icon_descriptions.append(description)
         
         # Create LLM prompt
-        system_prompt = """You are an assistant helping to match icon descriptions to user requests.
-Given a list of available icons and a user's request, return the IDs of the most appropriate icons.
-Return your response as a JSON array of icon IDs in order of relevance, like: [3, 7, 1]
-Only return icon IDs that are in the provided list."""
-        
-        user_message = f"""User request: "{prompt}"
+        system_prompt = """
+You match a user's natural-language request to the most relevant icons.
 
-Available icons:
+INPUT:
+- A list of icons. Each icon has: ID, Title, and Tags.
+- A user request.
+- A maximum number of results (N).
+
+OUTPUT FORMAT (STRICT):
+Return a JSON array of match objects. Each object must follow this exact format:
+
+[
+  {
+    "id": 3,
+    "confidence": "high"
+  },
+  {
+    "id": 12,
+    "confidence": "medium"
+  }
+]
+
+Rules for Output:
+- Do NOT include any text outside the JSON.
+- Do NOT include extra keys or commentary.
+- If no icons are meaningfully relevant, return: []
+- Return at most N matches.
+
+CONFIDENCE SCORING:
+Assign confidence based on clarity of match:
+- "high": The icon's title or tags clearly and directly match the request, with minimal ambiguity.
+- "medium": The match is plausible and relevant, but not exact.
+- "low": Only return "low" confidence if it is still clearly related; otherwise do not return it at all.
+
+RELEVANCE RULES:
+- Prefer icons whose Title strongly matches the user request.
+- Next, consider strong Tag matches.
+- Ignore weak or tangential keyword overlap.
+- Only return IDs that appear in the provided list.
+- NEVER guess or invent icons.
+
+TIEBREAKERS:
+If multiple icons seem similar in relevance:
+1) Exact title match or near-synonym wins.
+2) More specific tags beat general tags.
+3) Well-known canonical association beats broad thematic similarity.
+
+If unsure whether an icon is relevant:
+DO NOT RETURN IT.
+"""
+        
+        allowed_ids = [icon.id for icon in icons]
+
+        user_message = f"""User request: "{prompt}"
+Allowed icon IDs: {allowed_ids}
+
+Available icons (ID, Title, Tags):
 {chr(10).join(icon_descriptions)}
 
-Return the IDs of the {max_results} most relevant icons as a JSON array."""
+Return up to {max_results} most relevant icons as a JSON array of objects with "id" and "confidence" fields."""
         
         try:
             # Check if OpenAI API key is configured
@@ -189,6 +238,11 @@ Return the IDs of the {max_results} most relevant icons as a JSON array."""
                 logger.warning("OPENAI_API_KEY not configured, falling back to simple tag matching")
                 # Fallback to simple tag/title matching
                 matched_ids = self._simple_match_icons(icons, prompt, max_results)
+                # Convert to expected format with default confidence
+                matched_results = [
+                    {'id': icon_id, 'confidence': 'medium'}
+                    for icon_id in matched_ids
+                ]
             else:
                 client = OpenAI(api_key=settings.OPENAI_API_KEY)
                 
@@ -281,22 +335,55 @@ Return the IDs of the {max_results} most relevant icons as a JSON array."""
                 # Try to parse as JSON array
                 import json
                 try:
-                    matched_ids = json.loads(llm_response)
-                    if not isinstance(matched_ids, list):
-                        matched_ids = [matched_ids]
+                    parsed_response = json.loads(llm_response)
+                    if not isinstance(parsed_response, list):
+                        parsed_response = [parsed_response]
+                    
+                    # Handle new format: array of objects with 'id' and 'confidence'
+                    matched_results = []
+                    valid_confidence_levels = {'high', 'medium', 'low'}
+                    for item in parsed_response:
+                        if isinstance(item, dict):
+                            # New format: {"id": 3, "confidence": "high"}
+                            if 'id' in item:
+                                confidence = item.get('confidence', 'medium')
+                                # Validate confidence level
+                                if confidence not in valid_confidence_levels:
+                                    logger.warning(f"Invalid confidence '{confidence}', defaulting to 'medium'")
+                                    confidence = 'medium'
+                                matched_results.append({
+                                    'id': item['id'],
+                                    'confidence': confidence
+                                })
+                        elif isinstance(item, (int, str)):
+                            # Backward compatibility: just an ID
+                            matched_results.append({
+                                'id': int(item),
+                                'confidence': 'medium'  # Default if not provided
+                            })
+                    
+                    # Limit to max_results
+                    matched_results = matched_results[:max_results]
+                    
                 except json.JSONDecodeError:
                     # Fallback: extract numbers from response
                     import re
                     matched_ids = [int(x) for x in re.findall(r'\d+', llm_response)]
-                
-                # Limit to max_results
-                matched_ids = matched_ids[:max_results]
+                    matched_results = [
+                        {'id': icon_id, 'confidence': 'medium'}
+                        for icon_id in matched_ids[:max_results]
+                    ]
             
         except Exception as e:
             logger.error(f"Error in icon matching: {e}", exc_info=True)
             # Fallback to simple matching if LLM fails
             try:
                 matched_ids = self._simple_match_icons(icons, prompt, max_results)
+                # Convert to expected format with default confidence
+                matched_results = [
+                    {'id': icon_id, 'confidence': 'medium'}
+                    for icon_id in matched_ids
+                ]
             except Exception as fallback_error:
                 logger.error(f"Fallback matching also failed: {fallback_error}")
                 return Response(
@@ -304,14 +391,17 @@ Return the IDs of the {max_results} most relevant icons as a JSON array."""
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         
-        # Build response
+        # Build response using matched_results with confidence from LLM
         matches = []
-        for icon_id in matched_ids:
+        for match_result in matched_results:
+            icon_id = match_result['id']
+            confidence = match_result['confidence']
+            
             try:
                 icon = Icon.objects.select_related('church').prefetch_related('tags').get(id=icon_id)
                 match_data = {
                     'icon_id': icon.id,
-                    'confidence': 'high' if matches == [] else 'medium' if len(matches) == 1 else 'low'
+                    'confidence': confidence
                 }
                 
                 if return_format == 'full':

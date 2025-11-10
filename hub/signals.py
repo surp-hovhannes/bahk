@@ -1,7 +1,9 @@
-from django.db.models.signals import m2m_changed
+from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 from django.core.cache import cache
-from hub.models import Profile
+from hub.models import Profile, Feast
+from hub.tasks.llm_tasks import determine_feast_designation_task
+from hub.tasks.icon_tasks import match_icon_to_feast_task
 
 @receiver(m2m_changed, sender=Profile.fasts.through)
 def handle_fast_participant_change(sender, instance, action, **kwargs):
@@ -35,3 +37,27 @@ def handle_fast_participant_change(sender, instance, action, **kwargs):
             keys = cache.keys(pattern) if hasattr(cache, 'keys') else []
             if keys:
                 cache.delete_many(keys)
+
+
+@receiver(post_save, sender=Feast)
+def handle_feast_save(sender, instance, created, **kwargs):
+    """
+    Signal handler that triggers designation determination when a feast is created
+    (if designation is not already set).
+    
+    Also triggers icon matching when a feast is created.
+    
+    Only triggers designation task on creation to avoid duplicate enqueuing when
+    translations are updated immediately after creation.
+    The task itself will also check and skip if designation is already set.
+    """
+    # Only trigger designation task on creation, not on updates
+    # This prevents duplicate task enqueuing when translations are set immediately after creation
+    if created and not instance.designation:
+        # Trigger designation determination task
+        # The task will handle the actual determination and will skip if designation is already set
+        determine_feast_designation_task.delay(instance.id)
+    
+    # Trigger icon matching when feast is created
+    if created:
+        match_icon_to_feast_task.delay(instance.id)
