@@ -231,7 +231,7 @@ Return the IDs of the {max_results} most relevant icons as a JSON array."""
                                         {"role": "system", "content": system_prompt},
                                         {"role": "user", "content": user_message},
                                     ],
-                                    max_tokens=200,
+                                    max_completion_tokens=500,
                                 )
                                 logger.info(f"Successfully used model: {model} (without temperature)")
                                 break
@@ -260,7 +260,7 @@ Return the IDs of the {max_results} most relevant icons as a JSON array."""
                                         {"role": "system", "content": system_prompt},
                                         {"role": "user", "content": user_message},
                                     ],
-                                    max_tokens=200,
+                                    max_completion_tokens=500,
                                 )
                                 logger.info(f"Successfully used model: {model} (without temperature)")
                                 break
