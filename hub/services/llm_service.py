@@ -411,7 +411,9 @@ class OpenAIService(LLMService):
         )
 
         try:
-            response = openai.chat.completions.create(
+            if not self.client:
+                self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            response = self.client.chat.completions.create(
                 model=llm_prompt.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -475,7 +477,9 @@ class OpenAIService(LLMService):
         )
 
         try:
-            response = openai.chat.completions.create(
+            if not self.client:
+                self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            response = self.client.chat.completions.create(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},

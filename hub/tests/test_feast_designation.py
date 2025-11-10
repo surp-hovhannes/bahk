@@ -163,8 +163,8 @@ class FeastDesignationLLMServiceTests(TestCase):
         self.assertEqual(result, Feast.Designation.MARTYRS)
 
     @patch('hub.services.llm_service.settings')
-    @patch('hub.services.llm_service.openai')
-    def test_openai_service_determine_designation_success(self, mock_openai, mock_settings):
+    @patch('hub.services.llm_service.OpenAI')
+    def test_openai_service_determine_designation_success(self, mock_openai_class, mock_settings):
         """Test OpenAIService determine_feast_designation with successful response."""
         mock_settings.OPENAI_API_KEY = "test-key"
         
@@ -174,11 +174,13 @@ class FeastDesignationLLMServiceTests(TestCase):
             name="Saint Stephen",
         )
 
-        # Mock the OpenAI response
+        # Mock the OpenAI client and response
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = Feast.Designation.MARTYRS
-        mock_openai.chat.completions.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
 
         service = OpenAIService()
         result = service.determine_feast_designation(feast)
