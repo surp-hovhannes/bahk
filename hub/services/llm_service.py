@@ -17,6 +17,19 @@ _LANGUAGE_INSTRUCTION_PREFIX = "CRITICAL: You MUST respond ONLY in"
 _USER_LANGUAGE_PREFIX = "CRITICAL INSTRUCTION: Respond ONLY in"
 
 
+def _calculate_similarity(a: str, b: str) -> float:
+    """Calculate string similarity ratio between two strings.
+    
+    Args:
+        a: First string (should be lowercased)
+        b: Second string (should be lowercased)
+        
+    Returns:
+        Similarity ratio between 0.0 and 1.0
+    """
+    return SequenceMatcher(None, a, b).ratio()
+
+
 def _find_feast_in_reference_data(feast) -> Optional[dict]:
     """
     Search the feasts.json file for a matching feast entry.
@@ -62,9 +75,9 @@ def _find_feast_in_reference_data(feast) -> Optional[dict]:
     else:
         logger.debug(f"Searching for feast reference: {feast.name} (no date available)")
 
-    # Helper function to calculate string similarity
-    def similarity(a: str, b: str) -> float:
-        return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    # Cache lowercased feast names to avoid repeated .lower() calls
+    feast_name_lower = feast.name.lower()
+    feast_name_hy_lower = feast.name_hy.lower() if hasattr(feast, 'name_hy') and feast.name_hy else None
 
     # Search all entries, using name similarity as primary criterion
     best_match = None
@@ -74,13 +87,14 @@ def _find_feast_in_reference_data(feast) -> Optional[dict]:
 
     for entry in feasts_data:
         entry_name = entry.get('name', '')
+        entry_name_lower = entry_name.lower()
         
         # Calculate name similarity
-        name_score = similarity(feast.name, entry_name)
+        name_score = _calculate_similarity(feast_name_lower, entry_name_lower)
 
         # Also check Armenian name if available
-        if hasattr(feast, 'name_hy') and feast.name_hy:
-            hy_score = similarity(feast.name_hy, entry_name)
+        if feast_name_hy_lower:
+            hy_score = _calculate_similarity(feast_name_hy_lower, entry_name_lower)
             name_score = max(name_score, hy_score)
 
         # Apply date boost if available and dates match
