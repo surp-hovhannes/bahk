@@ -345,9 +345,8 @@ class AnthropicService(LLMService):
         # Search for matching feast in reference data
         try:
             feast_reference = _find_feast_in_reference_data(feast)
-            logger.info(f"Feast reference lookup result: {feast_reference is not None}")
             if feast_reference:
-                logger.info(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
+                logger.debug(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
                 reference_context = (
                     f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
                     f"Feast Name: {feast_reference.get('name', 'N/A')}\n"
@@ -358,23 +357,12 @@ class AnthropicService(LLMService):
                     reference_context += f"\nSource: {feast_reference['source_url']}"
 
                 base_message += reference_context
-                logger.info("Reference context added to base_message")
-            else:
-                logger.info("No feast reference data found")
         except Exception as e:
             logger.error(f"Error during feast reference lookup: {e}", exc_info=True)
-
-        # Log base_message to verify reference context is included
-        if 'REFERENCE INFORMATION' in base_message:
-            logger.info("base_message contains REFERENCE INFORMATION")
-        else:
-            logger.info("base_message does NOT contain REFERENCE INFORMATION")
 
         system_prompt, user_message = _build_language_prompts(
             base_message, llm_prompt.prompt, language_code
         )
-        logger.info(f"System prompt: {system_prompt}")
-        logger.info(f"User message: {user_message}")
         user_content = [
             {
                 "type": "text",
@@ -549,9 +537,8 @@ class OpenAIService(LLMService):
         # Search for matching feast in reference data
         try:
             feast_reference = _find_feast_in_reference_data(feast)
-            logger.info(f"Feast reference lookup result: {feast_reference is not None}")
             if feast_reference:
-                logger.info(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
+                logger.debug(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
                 reference_context = (
                     f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
                     f"Feast Name: {feast_reference.get('name', 'N/A')}\n"
@@ -562,17 +549,8 @@ class OpenAIService(LLMService):
                     reference_context += f"\nSource: {feast_reference['source_url']}"
 
                 base_prompt += reference_context
-                logger.info("Reference context added to base_prompt")
-            else:
-                logger.info("No feast reference data found")
         except Exception as e:
             logger.error(f"Error during feast reference lookup: {e}", exc_info=True)
-
-        # Log base_prompt to verify reference context is included
-        if 'REFERENCE INFORMATION' in base_prompt:
-            logger.info("base_prompt contains REFERENCE INFORMATION")
-        else:
-            logger.info("base_prompt does NOT contain REFERENCE INFORMATION")
         
         llm_prompt_text = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
         system_prompt, user_message = _build_language_prompts(
