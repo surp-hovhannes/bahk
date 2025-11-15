@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 _LANGUAGE_INSTRUCTION_PREFIX = "CRITICAL: You MUST respond ONLY in"
 _USER_LANGUAGE_PREFIX = "CRITICAL INSTRUCTION: Respond ONLY in"
 
+# Constants for feast reference data matching
+MIN_FEAST_NAME_SIMILARITY_THRESHOLD = 0.5  # Minimum similarity score to consider a feast match
+DATE_MATCH_CONFIDENCE_BOOST = 0.15  # Boost score by this amount if dates match
+
 
 def _calculate_similarity(a: str, b: str) -> float:
     """Calculate string similarity ratio between two strings.
@@ -83,7 +87,6 @@ def _find_feast_in_reference_data(feast) -> Optional[dict]:
     best_match = None
     best_score = 0.0
     best_date_match = None
-    DATE_BOOST = 0.15  # Boost score by this amount if dates match (confidence boost)
 
     for entry in feasts_data:
         entry_name = entry.get('name', '')
@@ -105,7 +108,7 @@ def _find_feast_in_reference_data(feast) -> Optional[dict]:
             entry_month = entry.get('month')
             entry_day = entry.get('day')
             if entry_month == feast_month and entry_day == feast_day:
-                final_score = min(name_score + DATE_BOOST, 1.0)  # Cap at 1.0
+                final_score = min(name_score + DATE_MATCH_CONFIDENCE_BOOST, 1.0)  # Cap at 1.0
                 date_match = True
 
         # Keep track of best match
@@ -114,10 +117,8 @@ def _find_feast_in_reference_data(feast) -> Optional[dict]:
             best_match = entry
             best_date_match = date_match if has_date else None
 
-    # Return the best match if similarity is above threshold (50% since dates aren't required)
-    MIN_SCORE_THRESHOLD = 0.5
-    
-    if best_match and best_score >= MIN_SCORE_THRESHOLD:
+    # Return the best match if similarity is above threshold
+    if best_match and best_score >= MIN_FEAST_NAME_SIMILARITY_THRESHOLD:
         if has_date:
             date_info = f" (date match: {best_date_match})"
         else:
