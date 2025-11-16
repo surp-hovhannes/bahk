@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.utils import IntegrityError
 from django.test import TestCase, TransactionTestCase
+from django.test.utils import tag
 from tests.fixtures.test_data import TestDataFactory
 
 from hub.models import Church, Day, Fast, Profile
@@ -240,6 +241,7 @@ class ModelConstraintTests(TransactionTestCase):
         """Stop the patcher."""
         self.patcher.stop()
     
+    @tag('slow')
     def test_constraint_unique_fast_name_church(self):
         """Tests that two fasts with the same name, church, and year cannot be created."""
         fast_name = "fast"

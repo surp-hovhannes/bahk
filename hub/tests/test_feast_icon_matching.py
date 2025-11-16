@@ -2,6 +2,7 @@
 from datetime import date
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, override_settings
+from django.test.utils import tag
 from django.db.models.signals import post_save
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -16,6 +17,7 @@ from icons.models import Icon
     CELERY_TASK_ALWAYS_EAGER=True,
     CELERY_TASK_EAGER_PROPAGATES=True,
 )
+@tag('slow', 'integration')
 class FeastIconMatchingTaskTests(TestCase):
     """Tests for the icon matching Celery task."""
 
@@ -225,6 +227,7 @@ class FeastIconMatchingTaskTests(TestCase):
         self.assertEqual(len(result), 0)
 
 
+@tag('slow', 'integration')
 class FeastIconMatchingSignalTests(TestCase):
     """Tests for the feast icon matching signal handler."""
 
@@ -289,6 +292,7 @@ class FeastIconMatchingSignalTests(TestCase):
         mock_task_delay.assert_not_called()
 
 
+@tag('slow', 'integration')
 class FeastIconModelTests(TestCase):
     """Tests for the icon field on Feast model."""
 
@@ -399,6 +403,7 @@ class FeastIconModelTests(TestCase):
         self.assertIn(feast1, icon.feasts.all())
 
 
+@tag('slow', 'integration')
 class FeastIconAPITests(TestCase):
     """Tests for API response including icon."""
 
