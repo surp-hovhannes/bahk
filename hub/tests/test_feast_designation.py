@@ -477,3 +477,107 @@ class FeastDesignationAPITests(TestCase):
             self.church,
             check_fast=False
         )
+
+
+class FeastContextAnthropicServiceTests(TestCase):
+    """Tests for Anthropic feast context requests."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.test_date = date(2025, 1, 6)
+        post_save.disconnect(handle_feast_save, sender=Feast)
+        self.addCleanup(lambda: post_save.connect(handle_feast_save, sender=Feast))
+        self.day = Day.objects.create(date=self.test_date, church=self.church)
+        self.feast = Feast.objects.create(
+            day=self.day,
+            name="Theophany",
+        )
+        self.prompt = LLMPrompt.objects.create(
+            model="claude-3-7-sonnet-20250219",
+            role="Feast role",
+            prompt="Feast prompt",
+            applies_to="feasts",
+            active=True,
+        )
+
+    @patch('hub.services.llm_service._find_feast_in_reference_data')
+    @patch('hub.services.llm_service.settings')
+    @patch('hub.services.llm_service.anthropic.Anthropic')
+    def test_generate_feast_context_includes_reference_data(self, mock_anthropic_class, mock_settings, mock_find_feast):
+        """Ensure reference data from feasts.json is included in context when found."""
+        mock_settings.ANTHROPIC_API_KEY = "test-key"
+        mock_settings.BASE_DIR = "/fake/path"
+
+        # Mock the feast reference data
+        mock_find_feast.return_value = {
+            "name": "Feast of the Holy Nativity and Theophany of Our Lord Jesus Christ",
+            "description": "Each year, on January 6, the Armenian Apostolic Church celebrates...",
+            "source_url": "https://armenianchurch.ge/en/kalendar-prazdnikov/description-2/january"
+        }
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock()]
+        mock_response.content[0].text = '{"text": "Detailed", "short_text": "Short."}'
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        service = AnthropicService()
+        context = service.generate_feast_context(self.feast)
+
+        self.assertEqual(context, {"text": "Detailed", "short_text": "Short."})
+
+        # Verify the API call was made with correct parameters
+        _, kwargs = mock_client.messages.create.call_args
+        user_content = kwargs['messages'][0]['content']
+
+        # Should only have text content (no document attachment)
+        self.assertEqual(len(user_content), 1)
+        self.assertEqual(user_content[0]['type'], 'text')
+
+        # Verify reference information is included in the text
+        user_text = user_content[0]['text']
+        self.assertIn('REFERENCE INFORMATION', user_text)
+        self.assertIn('Feast of the Holy Nativity and Theophany', user_text)
+        self.assertIn('Each year, on January 6', user_text)
+
+        # Verify no extra headers are sent
+        self.assertNotIn('extra_headers', kwargs)
+
+    @patch('hub.services.llm_service._find_feast_in_reference_data')
+    @patch('hub.services.llm_service.settings')
+    @patch('hub.services.llm_service.anthropic.Anthropic')
+    def test_generate_feast_context_without_reference_data(self, mock_anthropic_class, mock_settings, mock_find_feast):
+        """Ensure request works normally when no reference data is found."""
+        mock_settings.ANTHROPIC_API_KEY = "test-key"
+        mock_settings.BASE_DIR = "/fake/path"
+
+        # Mock no feast found in reference data
+        mock_find_feast.return_value = None
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock()]
+        mock_response.content[0].text = '{"text": "Detailed", "short_text": "Short."}'
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        service = AnthropicService()
+        context = service.generate_feast_context(self.feast)
+
+        self.assertEqual(context, {"text": "Detailed", "short_text": "Short."})
+
+        # Verify the API call was made
+        _, kwargs = mock_client.messages.create.call_args
+        user_content = kwargs['messages'][0]['content']
+
+        # Should only have text content
+        self.assertEqual(len(user_content), 1)
+        self.assertEqual(user_content[0]['type'], 'text')
+
+        # Verify no reference information is included
+        user_text = user_content[0]['text']
+        self.assertNotIn('REFERENCE INFORMATION', user_text)
+
+        # Verify no extra headers
+        self.assertNotIn('extra_headers', kwargs)

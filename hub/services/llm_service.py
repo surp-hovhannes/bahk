@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 import logging
+import json
+import os
+from difflib import SequenceMatcher
 import anthropic
 from openai import OpenAI
 from django.conf import settings
@@ -12,6 +15,123 @@ logger = logging.getLogger(__name__)
 # Constants for language instruction prefixes
 _LANGUAGE_INSTRUCTION_PREFIX = "CRITICAL: You MUST respond ONLY in"
 _USER_LANGUAGE_PREFIX = "CRITICAL INSTRUCTION: Respond ONLY in"
+
+# Constants for feast reference data matching
+MIN_FEAST_NAME_SIMILARITY_THRESHOLD = 0.5  # Minimum similarity score to consider a feast match
+DATE_MATCH_CONFIDENCE_BOOST = 0.15  # Boost score by this amount if dates match
+
+
+def _calculate_similarity(a: str, b: str) -> float:
+    """Calculate string similarity ratio between two strings.
+    
+    Args:
+        a: First string (should be lowercased)
+        b: Second string (should be lowercased)
+        
+    Returns:
+        Similarity ratio between 0.0 and 1.0
+    """
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def _find_feast_in_reference_data(feast) -> Optional[dict]:
+    """
+    Search the feasts.json file for a matching feast entry.
+    
+    Primary matching is based on name similarity, with date matching 
+    used as a confidence boost (not a requirement).
+
+    Args:
+        feast: A Feast model instance
+
+    Returns:
+        Dictionary with feast data if found, None otherwise
+    """
+    # Get the base directory (project root)
+    base_dir = settings.BASE_DIR
+    feasts_file_path = os.path.join(base_dir, 'data', 'feasts.json')
+
+    if not os.path.exists(feasts_file_path):
+        logger.warning(f"Feasts reference file not found at {feasts_file_path}")
+        return None
+
+    try:
+        with open(feasts_file_path, 'r', encoding='utf-8') as f:
+            feasts_data = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        logger.error(f"Error reading feasts reference file: {e}")
+        return None
+
+    # Extract feast date components if available (for confidence boost)
+    feast_month = None
+    feast_day = None
+    has_date = False
+    
+    if hasattr(feast, 'day') and feast.day and hasattr(feast.day, 'date') and feast.day.date:
+        try:
+            feast_date = feast.day.date
+            feast_month = feast_date.strftime("%B")  # Full month name (e.g., "January")
+            feast_day = feast_date.strftime("%d")    # Day with leading zero (e.g., "06")
+            has_date = True
+            logger.debug(f"Searching for feast reference: {feast.name} on {feast_month} {feast_day}")
+        except (AttributeError, ValueError) as e:
+            logger.debug(f"Could not extract date from feast {feast.id}: {e}")
+    else:
+        logger.debug(f"Searching for feast reference: {feast.name} (no date available)")
+
+    # Cache lowercased feast names to avoid repeated .lower() calls
+    feast_name_lower = feast.name.lower()
+    feast_name_hy_lower = feast.name_hy.lower() if hasattr(feast, 'name_hy') and feast.name_hy else None
+
+    # Search all entries, using name similarity as primary criterion
+    best_match = None
+    best_score = 0.0
+    best_date_match = None
+
+    for entry in feasts_data:
+        entry_name = entry.get('name', '')
+        entry_name_lower = entry_name.lower()
+        
+        # Calculate name similarity
+        name_score = _calculate_similarity(feast_name_lower, entry_name_lower)
+
+        # Also check Armenian name if available
+        if feast_name_hy_lower:
+            hy_score = _calculate_similarity(feast_name_hy_lower, entry_name_lower)
+            name_score = max(name_score, hy_score)
+
+        # Apply date boost if available and dates match
+        final_score = name_score
+        date_match = False
+        
+        if has_date and feast_month and feast_day:
+            entry_month = entry.get('month')
+            entry_day = entry.get('day')
+            if entry_month == feast_month and entry_day == feast_day:
+                final_score = min(name_score + DATE_MATCH_CONFIDENCE_BOOST, 1.0)  # Cap at 1.0
+                date_match = True
+
+        # Keep track of best match
+        if final_score > best_score:
+            best_score = final_score
+            best_match = entry
+            best_date_match = date_match if has_date else None
+
+    # Return the best match if similarity is above threshold
+    if best_match and best_score >= MIN_FEAST_NAME_SIMILARITY_THRESHOLD:
+        if has_date:
+            date_info = f" (date match: {best_date_match})"
+        else:
+            date_info = " (no date check)"
+        logger.info(
+            f"Found feast reference: {best_match.get('name', 'N/A')} "
+            f"(score: {best_score:.2%}{date_info})"
+        )
+        return best_match
+
+    # No good match found
+    logger.info(f"No feast reference found for: {feast.name} (best score: {best_score:.2%})")
+    return None
 
 
 def _build_language_prompts(
@@ -228,7 +348,7 @@ class AnthropicService(LLMService):
         feast_info = f"Feast: {feast.name}"
         if feast.name_hy:
             feast_info += f"\nArmenian name: {feast.name_hy}"
-        
+
         base_message = (
             f"Provide context for the following feast:\n{feast_info}\n\n"
             "Return your response as JSON with two fields:\n"
@@ -236,17 +356,41 @@ class AnthropicService(LLMService):
             '- "text": A detailed explanation (multiple paragraphs)\n\n'
             "Return ONLY the JSON object, no markdown code blocks."
         )
-        
+
+        # Search for matching feast in reference data
+        try:
+            feast_reference = _find_feast_in_reference_data(feast)
+            if feast_reference:
+                logger.debug(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
+                reference_context = (
+                    f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
+                    f"Feast Name: {feast_reference.get('name', 'N/A')}\n"
+                    f"Description: {feast_reference.get('description', 'N/A')}"
+                )
+                # Add source URL if available
+                if feast_reference.get('source_url'):
+                    reference_context += f"\nSource: {feast_reference['source_url']}"
+
+                base_message += reference_context
+        except Exception as e:
+            logger.error(f"Error during feast reference lookup: {e}", exc_info=True)
+
         system_prompt, user_message = _build_language_prompts(
             base_message, llm_prompt.prompt, language_code
         )
+        user_content = [
+            {
+                "type": "text",
+                "text": user_message
+            }
+        ]
 
         try:
             response = self.client.messages.create(
                 model=llm_prompt.model,
                 system=system_prompt,
                 messages=[
-                    {"role": "user", "content": user_message}
+                    {"role": "user", "content": user_content}
                 ],
                 max_tokens=2000,  # Increased for Armenian text which uses more tokens
                 temperature=0.35,
@@ -404,6 +548,24 @@ class OpenAIService(LLMService):
             '- "text": A detailed explanation (multiple paragraphs)\n\n'
             "Return ONLY the JSON object, no markdown code blocks."
         )
+
+        # Search for matching feast in reference data
+        try:
+            feast_reference = _find_feast_in_reference_data(feast)
+            if feast_reference:
+                logger.debug(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
+                reference_context = (
+                    f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
+                    f"Feast Name: {feast_reference.get('name', 'N/A')}\n"
+                    f"Description: {feast_reference.get('description', 'N/A')}"
+                )
+                # Add source URL if available
+                if feast_reference.get('source_url'):
+                    reference_context += f"\nSource: {feast_reference['source_url']}"
+
+                base_prompt += reference_context
+        except Exception as e:
+            logger.error(f"Error during feast reference lookup: {e}", exc_info=True)
         
         llm_prompt_text = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
         system_prompt, user_message = _build_language_prompts(
