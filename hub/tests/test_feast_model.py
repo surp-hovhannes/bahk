@@ -8,7 +8,7 @@ from django.test.utils import tag
 from hub.models import Church, Day, Feast
 
 
-@tag('slow')
+@tag('slow', 'integration')
 class FeastModelTests(TestCase):
     """Tests for the Feast model."""
 
