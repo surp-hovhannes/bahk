@@ -8,7 +8,8 @@
         max-width: 800px;
         height: 100px;
     }
-    .push-form input[type="text"] {
+    .push-form input[type="text"],
+    .push-form select {
         width: 90%;
         max-width: 800px;
     }
@@ -17,12 +18,210 @@
         font-size: 0.9em;
         margin: 5px 0;
     }
+    .form-row.inline-fields {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    .form-row.inline-fields .field-box {
+        flex: 1;
+    }
+    .route-preview {
+        background: #f0f0f0;
+        border-left: 4px solid #417690;
+        padding: 12px 15px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-family: monospace;
+        display: none;
+    }
+    .route-preview.active {
+        display: block;
+    }
+    .route-preview strong {
+        color: #333;
+        font-family: sans-serif;
+        display: block;
+        margin-bottom: 5px;
+    }
+    .route-preview code {
+        color: #417690;
+        background: #fff;
+        padding: 4px 8px;
+        border-radius: 3px;
+        display: inline-block;
+    }
+    .preset-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 10px 0;
+    }
+    .preset-btn {
+        background: #417690;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+        transition: background 0.2s;
+    }
+    .preset-btn:hover {
+        background: #2e5266;
+    }
+    .preset-btn:disabled {
+        background: #999;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+    .preset-btn .btn-spinner {
+        display: inline-block;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .link-type-selector {
+        display: flex;
+        gap: 20px;
+        margin: 10px 0;
+    }
+    .link-type-selector label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .validation-error {
+        color: #ba2121;
+        font-size: 0.9em;
+        margin-top: 5px;
+        display: none;
+    }
+    .validation-error.active {
+        display: block;
+    }
+    /* Confirmation Modal Styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-overlay.active {
+        display: flex;
+    }
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow: auto;
+        padding: 0;
+    }
+    .modal-header {
+        background: #417690;
+        color: white;
+        padding: 20px;
+        border-radius: 8px 8px 0 0;
+    }
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.5em;
+    }
+    .modal-body {
+        padding: 20px;
+    }
+    .modal-section {
+        margin-bottom: 20px;
+    }
+    .modal-section h3 {
+        color: #417690;
+        font-size: 1.1em;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 5px;
+    }
+    .modal-message-preview {
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        font-size: 1em;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    .modal-json-preview {
+        background: #2d2d2d;
+        color: #f8f8f2;
+        border-radius: 4px;
+        padding: 15px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        overflow-x: auto;
+        white-space: pre;
+    }
+    .modal-footer {
+        background: #f9f9f9;
+        padding: 15px 20px;
+        border-top: 1px solid #ddd;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        border-radius: 0 0 8px 8px;
+    }
+    .modal-btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .modal-btn-cancel {
+        background: #999;
+        color: white;
+    }
+    .modal-btn-cancel:hover {
+        background: #777;
+    }
+    .modal-btn-confirm {
+        background: #417690;
+        color: white;
+        font-weight: bold;
+    }
+    .modal-btn-confirm:hover {
+        background: #2e5266;
+    }
+    .modal-warning {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+        padding: 12px;
+        margin-bottom: 15px;
+        color: #856404;
+    }
+    .modal-warning strong {
+        display: block;
+        margin-bottom: 5px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="content-main">
-    <form method="post" class="push-form" action="{% url 'admin:notifications_devicetoken_send_push' %}">
+    <form method="post" class="push-form" action="{% url 'admin:notifications_devicetoken_send_push' %}" id="push-form">
         {% csrf_token %}
         <fieldset class="module aligned">
             <div class="form-row">
@@ -32,11 +231,118 @@
                     <p class="help-text">Enter the message to send to selected devices</p>
                 </div>
             </div>
+
+            <!-- Link Type Selector -->
             <div class="form-row">
                 <div class="field-box">
-                    <label for="data">Additional Data (optional):</label>
-                    <input type="text" name="data" id="data" placeholder='{"key": "value"}'/>
-                    <p class="help-text">Enter additional data as JSON object (optional)</p>
+                    <label>Link Type:</label>
+                    <div class="link-type-selector">
+                        <label>
+                            <input type="radio" name="link_type" value="deeplink" checked> App Deep Link
+                        </label>
+                        <label>
+                            <input type="radio" name="link_type" value="external"> External URL
+                        </label>
+                    </div>
+                    <p class="help-text">Choose whether to link to an in-app screen or an external website</p>
+                </div>
+            </div>
+
+            <!-- External URL Field -->
+            <div class="form-row" id="externalUrlBox" style="display: none;">
+                <div class="field-box">
+                    <label for="externalUrl">External URL:</label>
+                    <input type="text" id="externalUrl" placeholder="https://example.com" />
+                    <p class="help-text">Full URL to open in browser. Must include <code>https://</code> or <code>http://</code></p>
+                    <p class="validation-error" id="urlValidationError">Please enter a valid URL with https:// or http://</p>
+                </div>
+            </div>
+
+            <!-- Deep Link Fields -->
+            <div id="deepLinkFields">
+                <!-- Quick Presets -->
+                <div class="form-row">
+                    <div class="field-box">
+                        <label>Quick Presets:</label>
+                        <div class="preset-buttons">
+                            <button type="button" class="preset-btn" onclick="loadPreset('activity_feed')">Activity Feed</button>
+                            <button type="button" class="preset-btn" id="latestDevotionalBtn" onclick="loadPreset('latest_devotional')">
+                                <span class="btn-text">Latest Devotional</span>
+                                <span class="btn-spinner" style="display: none;">⟳</span>
+                            </button>
+                            <button type="button" class="preset-btn" id="nextMajorFastBtn" onclick="loadPreset('next_major_fast')">
+                                <span class="btn-text">Next Major Fast</span>
+                                <span class="btn-spinner" style="display: none;">⟳</span>
+                            </button>
+                            <button type="button" class="preset-btn" id="currentFastBtn" onclick="loadPreset('current_fast')">
+                                <span class="btn-text">Current Fast</span>
+                                <span class="btn-spinner" style="display: none;">⟳</span>
+                            </button>
+                        </div>
+                        <p class="help-text">Click a preset to automatically load the latest content IDs from the API</p>
+                    </div>
+                </div>
+
+                <div class="form-row inline-fields">
+                    <div class="field-box">
+                        <label for="payloadType">Payload type:</label>
+                        <select id="payloadType" name="payload_type">
+                            <option value="">-- Select type --</option>
+                            <option value="fast">Fast</option>
+                            <option value="devotional">Devotional</option>
+                            <option value="prayer">Prayer</option>
+                            <option value="video">Video (learn/video)</option>
+                            <option value="article">Article (learn/article)</option>
+                            <option value="recipe">Recipe (learn/recipe)</option>
+                            <option value="prayer_set">Prayer Set (prayer-set)</option>
+                            <option value="activity">Activity</option>
+                        </select>
+                        <p class="help-text">Maps to app routes. Learning resources automatically include <code>learn/</code> prefix.</p>
+                    </div>
+                    <div class="field-box" id="contentIdBox">
+                        <label for="contentId">Content ID:</label>
+                        <input type="text" id="contentId" placeholder="e.g. 48" />
+                        <p class="help-text">Numeric ID of the content. Combined with type to create the route.</p>
+                        <p class="validation-error" id="idValidationError">Content ID must be a number</p>
+                    </div>
+                </div>
+
+                <div class="form-row inline-fields" id="activityFields" style="display: none;">
+                    <div class="field-box">
+                        <label for="activityType">Activity type:</label>
+                        <input type="text" id="activityType" placeholder="e.g. announcement" />
+                        <p class="help-text">Activity type for the activity feed (e.g., announcement, celebration, milestone)</p>
+                    </div>
+                    <div class="field-box">
+                        <label for="activityTarget">Target ID (optional):</label>
+                        <input type="text" id="activityTarget" placeholder="e.g. 987" />
+                        <p class="help-text">Optional target ID to identify the specific activity item</p>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="field-box">
+                        <label for="queryParams">Query params (optional):</label>
+                        <input type="text" id="queryParams" placeholder="key1=value1&key2=value2" />
+                        <p class="help-text">Additional query parameters as <code>key=value</code> pairs separated by <code>&</code></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Route Preview -->
+            <div class="route-preview" id="routePreview">
+                <strong>App Navigation Preview:</strong>
+                <code id="previewText"></code>
+            </div>
+
+            <div class="form-row">
+                <div class="field-box">
+                    <label for="data">Generated Payload:</label>
+                    <input type="text" name="data" id="data" placeholder='{"screen": "fast/48"}' readonly />
+                    <p class="help-text">Auto-generated JSON payload. Enable manual override to edit directly.</p>
+                    <label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 5px;">
+                        <input type="checkbox" id="manualDataOverride"> Enable manual override
+                    </label>
                 </div>
             </div>
         </fieldset>
@@ -44,5 +350,545 @@
             <input type="submit" value="Send Push Notification" class="default" />
         </div>
     </form>
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="confirmationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚠️ Confirm Push Notification</h2>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning">
+                    <strong>Warning:</strong>
+                    You are about to send a push notification to selected devices. This action cannot be undone. Please review the details below carefully.
+                </div>
+
+                <div class="modal-section">
+                    <h3>📱 Message</h3>
+                    <div class="modal-message-preview" id="modalMessagePreview"></div>
+                </div>
+
+                <div class="modal-section">
+                    <h3>🔗 Navigation Data (JSON Payload)</h3>
+                    <div class="modal-json-preview" id="modalJsonPreview"></div>
+                </div>
+
+                <div class="modal-section">
+                    <h3>📊 Recipients</h3>
+                    <p id="modalRecipientInfo">Push will be sent to selected device tokens.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="modal-btn modal-btn-cancel" id="modalCancelBtn">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Send Push Notification</button>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+(function() {
+    // DOM Elements
+    const payloadType = document.getElementById('payloadType');
+    const contentId = document.getElementById('contentId');
+    const activityFields = document.getElementById('activityFields');
+    const activityType = document.getElementById('activityType');
+    const activityTarget = document.getElementById('activityTarget');
+    const queryParams = document.getElementById('queryParams');
+    const dataInput = document.getElementById('data');
+    const manualOverride = document.getElementById('manualDataOverride');
+    const form = document.getElementById('push-form');
+    const linkTypeRadios = document.querySelectorAll('input[name="link_type"]');
+    const externalUrlBox = document.getElementById('externalUrlBox');
+    const externalUrl = document.getElementById('externalUrl');
+    const deepLinkFields = document.getElementById('deepLinkFields');
+    const routePreview = document.getElementById('routePreview');
+    const previewText = document.getElementById('previewText');
+    const idValidationError = document.getElementById('idValidationError');
+    const urlValidationError = document.getElementById('urlValidationError');
+
+    // Modal elements
+    const confirmationModal = document.getElementById('confirmationModal');
+    const modalMessagePreview = document.getElementById('modalMessagePreview');
+    const modalJsonPreview = document.getElementById('modalJsonPreview');
+    const modalRecipientInfo = document.getElementById('modalRecipientInfo');
+    const modalCancelBtn = document.getElementById('modalCancelBtn');
+    const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+
+    // Flag to track if confirmation was given
+    let confirmationGiven = false;
+
+    // Route mapping: form value -> app route
+    const routeMap = {
+        'fast': 'fast',
+        'devotional': 'devotional',
+        'prayer': 'prayer',
+        'video': 'learn/video',
+        'article': 'learn/article',
+        'recipe': 'learn/recipe',
+        'prayer_set': 'prayer-set',
+    };
+
+    // Utility Functions
+    function parseQueryParams(input) {
+        const params = {};
+        if (!input.trim()) return params;
+
+        input.split('&').forEach(part => {
+            const trimmed = part.trim();
+            if (!trimmed) return;
+            const [key, value = ''] = trimmed.split('=', 2);
+            if (key) {
+                params[key.trim()] = value.trim();
+            }
+        });
+        return params;
+    }
+
+    function isValidUrl(url) {
+        const trimmed = url.trim();
+        return trimmed && (trimmed.startsWith('https://') || trimmed.startsWith('http://'));
+    }
+
+    function isValidNumber(str) {
+        return str.trim() !== '' && !isNaN(str.trim());
+    }
+
+    function validateInputs() {
+        let isValid = true;
+        const linkType = document.querySelector('input[name="link_type"]:checked').value;
+
+        // Reset validation errors
+        idValidationError.classList.remove('active');
+        urlValidationError.classList.remove('active');
+
+        if (linkType === 'external') {
+            const url = externalUrl.value.trim();
+            if (!isValidUrl(url)) {
+                urlValidationError.classList.add('active');
+                isValid = false;
+            }
+        } else {
+            const type = payloadType.value;
+            const id = contentId.value.trim();
+
+            // Only validate ID if a type is selected and it's not activity
+            if (type && type !== 'activity' && id) {
+                if (!isValidNumber(id)) {
+                    idValidationError.classList.add('active');
+                    isValid = false;
+                }
+            }
+        }
+
+        return isValid;
+    }
+
+    function buildPayload() {
+        if (manualOverride.checked) {
+            return;
+        }
+
+        const linkType = document.querySelector('input[name="link_type"]:checked').value;
+        let payload = null;
+
+        if (linkType === 'external') {
+            const url = externalUrl.value.trim();
+            if (url) {
+                payload = { url: url };
+                updatePreview(url, true);
+            } else {
+                dataInput.value = '';
+                routePreview.classList.remove('active');
+                return;
+            }
+        } else {
+            // Deep link payload
+            const type = payloadType.value;
+            const params = parseQueryParams(queryParams.value);
+
+            if (!type) {
+                dataInput.value = '';
+                routePreview.classList.remove('active');
+                return;
+            }
+
+            if (type === 'activity') {
+                const activityParams = { ...params };
+                if (activityType.value.trim()) {
+                    activityParams.activity_type = activityType.value.trim();
+                }
+                if (activityTarget.value.trim()) {
+                    activityParams.target_id = activityTarget.value.trim();
+                }
+                payload = { screen: 'activity' };
+                if (Object.keys(activityParams).length) {
+                    payload.params = activityParams;
+                }
+                updatePreview('/activity' + (payload.params ? '?' + new URLSearchParams(payload.params).toString() : ''), false);
+            } else {
+                const route = routeMap[type];
+                const id = contentId.value.trim();
+                const screenPath = id ? `${route}/${id}` : route;
+                payload = { screen: screenPath };
+                if (Object.keys(params).length) {
+                    payload.params = params;
+                }
+                updatePreview('/' + screenPath + (payload.params ? '?' + new URLSearchParams(payload.params).toString() : ''), false);
+            }
+        }
+
+        dataInput.value = payload ? JSON.stringify(payload) : '';
+    }
+
+    function updatePreview(path, isExternal) {
+        if (path) {
+            previewText.textContent = isExternal ? path : path;
+            routePreview.classList.add('active');
+        } else {
+            routePreview.classList.remove('active');
+        }
+    }
+
+    // API Helper Functions
+    async function fetchFromAPI(endpoint) {
+        try {
+            const response = await fetch(endpoint);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('API fetch error:', error);
+            throw error;
+        }
+    }
+
+    function setButtonLoading(buttonId, isLoading) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+
+        const textSpan = button.querySelector('.btn-text');
+        const spinnerSpan = button.querySelector('.btn-spinner');
+
+        if (isLoading) {
+            button.disabled = true;
+            if (textSpan) textSpan.style.display = 'none';
+            if (spinnerSpan) spinnerSpan.style.display = 'inline-block';
+        } else {
+            button.disabled = false;
+            if (textSpan) textSpan.style.display = 'inline';
+            if (spinnerSpan) spinnerSpan.style.display = 'none';
+        }
+    }
+
+    async function getLatestDevotional() {
+        const today = new Date().toISOString().split('T')[0];
+        const devotional = await fetchFromAPI(`/api/devotionals/by-date/?date=${today}`);
+        return devotional;
+    }
+
+    async function getCurrentFast() {
+        const fasts = await fetchFromAPI('/api/fasts/');
+        const today = new Date();
+        // Normalize today to just the date (no time component) for comparison
+        today.setHours(0, 0, 0, 0);
+
+        // Find a fast that is currently active (has days that include today)
+        // and is not a weekly fast
+        for (const fast of fasts) {
+            // Skip weekly fasts
+            if (fast.name && (fast.name.toLowerCase().includes('wednesday') ||
+                             fast.name.toLowerCase().includes('friday'))) {
+                continue;
+            }
+
+            // Check if fast is currently active by verifying today is between start_date and end_date
+            if (fast.start_date && fast.end_date) {
+                const startDate = new Date(fast.start_date);
+                startDate.setHours(0, 0, 0, 0);
+                const endDate = new Date(fast.end_date);
+                endDate.setHours(0, 0, 0, 0);
+
+                // Check if today falls within the fast's date range
+                if (today >= startDate && today <= endDate) {
+                    return fast;
+                }
+            }
+        }
+
+        // If no current fast is found, return null instead of any non-weekly fast
+        return null;
+    }
+
+    async function getNextMajorFast() {
+        const fasts = await fetchFromAPI('/api/fasts/');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
+
+        // Filter out weekly fasts and find the next upcoming major fast
+        const majorFasts = fasts.filter(fast => {
+            if (!fast.name) return false;
+            const name = fast.name.toLowerCase();
+            // Exclude weekly fasts
+            return !name.includes('wednesday') && !name.includes('friday');
+        });
+
+        // Sort by start date (if available) or culmination_feast_date
+        majorFasts.sort((a, b) => {
+            // Get comparison date for fast a (prefer start_date, fallback to culmination_feast_date)
+            const dateA = a.start_date ? new Date(a.start_date) : 
+                         (a.culmination_feast_date ? new Date(a.culmination_feast_date) : null);
+            
+            // Get comparison date for fast b
+            const dateB = b.start_date ? new Date(b.start_date) : 
+                         (b.culmination_feast_date ? new Date(b.culmination_feast_date) : null);
+            
+            // Handle null dates - put them at the end
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            
+            // Compare dates
+            return dateA - dateB;
+        });
+
+        // Find the first fast that hasn't ended yet (now in chronological order)
+        const upcomingFast = majorFasts.find(fast => {
+            // Use start_date if available, otherwise use culmination_feast_date
+            const comparisonDate = fast.start_date ? new Date(fast.start_date) : 
+                                  (fast.culmination_feast_date ? new Date(fast.culmination_feast_date) : null);
+            
+            if (comparisonDate) {
+                comparisonDate.setHours(0, 0, 0, 0);
+                return comparisonDate >= today;
+            }
+            return true; // Include if no date available
+        });
+
+        return upcomingFast || majorFasts[0]; // Return first if none upcoming
+    }
+
+    // Preset Functions
+    window.loadPreset = async function(presetType) {
+        // Clear manual override if enabled
+        if (manualOverride.checked) {
+            manualOverride.checked = false;
+            dataInput.setAttribute('readonly', 'readonly');
+        }
+
+        // Set to deep link mode
+        document.querySelector('input[name="link_type"][value="deeplink"]').checked = true;
+        toggleLinkType();
+
+        // Clear all fields first
+        activityType.value = '';
+        activityTarget.value = '';
+        contentId.value = '';
+        queryParams.value = '';
+
+        if (presetType === 'activity_feed') {
+            payloadType.value = 'activity';
+        } else if (presetType === 'latest_devotional') {
+            setButtonLoading('latestDevotionalBtn', true);
+            try {
+                const devotional = await getLatestDevotional();
+                payloadType.value = 'devotional';
+                contentId.value = devotional.id.toString();
+                alert(`Loaded: ${devotional.title || 'Latest Devotional'} (ID: ${devotional.id})`);
+            } catch (error) {
+                alert('Failed to load latest devotional. Please enter the ID manually.\n\nError: ' + error.message);
+            } finally {
+                setButtonLoading('latestDevotionalBtn', false);
+            }
+        } else if (presetType === 'current_fast') {
+            setButtonLoading('currentFastBtn', true);
+            try {
+                const fast = await getCurrentFast();
+                if (fast) {
+                    payloadType.value = 'fast';
+                    contentId.value = fast.id.toString();
+                    alert(`Loaded: ${fast.name} (ID: ${fast.id})`);
+                } else {
+                    alert('No current fast found. Please enter the ID manually.');
+                }
+            } catch (error) {
+                alert('Failed to load current fast. Please enter the ID manually.\n\nError: ' + error.message);
+            } finally {
+                setButtonLoading('currentFastBtn', false);
+            }
+        } else if (presetType === 'next_major_fast') {
+            setButtonLoading('nextMajorFastBtn', true);
+            try {
+                const fast = await getNextMajorFast();
+                if (fast) {
+                    payloadType.value = 'fast';
+                    contentId.value = fast.id.toString();
+                    alert(`Loaded: ${fast.name} (ID: ${fast.id})`);
+                } else {
+                    alert('No upcoming major fast found. Please enter the ID manually.');
+                }
+            } catch (error) {
+                alert('Failed to load next major fast. Please enter the ID manually.\n\nError: ' + error.message);
+            } finally {
+                setButtonLoading('nextMajorFastBtn', false);
+            }
+        }
+
+        // Trigger change event to update UI
+        payloadType.dispatchEvent(new Event('change'));
+    };
+
+    function toggleLinkType() {
+        const linkType = document.querySelector('input[name="link_type"]:checked').value;
+
+        if (linkType === 'external') {
+            externalUrlBox.style.display = 'block';
+            deepLinkFields.style.display = 'none';
+        } else {
+            externalUrlBox.style.display = 'none';
+            deepLinkFields.style.display = 'block';
+        }
+
+        buildPayload();
+        validateInputs();
+    }
+
+    // Event Listeners
+    payloadType.addEventListener('change', () => {
+        const isActivity = payloadType.value === 'activity';
+        activityFields.style.display = isActivity ? 'flex' : 'none';
+        document.getElementById('contentIdBox').style.display = isActivity ? 'none' : 'block';
+        buildPayload();
+    });
+
+    [contentId, activityType, activityTarget, queryParams, externalUrl].forEach(element => {
+        element.addEventListener('input', () => {
+            buildPayload();
+            validateInputs();
+        });
+    });
+
+    linkTypeRadios.forEach(radio => {
+        radio.addEventListener('change', toggleLinkType);
+    });
+
+    manualOverride.addEventListener('change', () => {
+        if (manualOverride.checked) {
+            dataInput.removeAttribute('readonly');
+            routePreview.classList.remove('active');
+        } else {
+            dataInput.setAttribute('readonly', 'readonly');
+            buildPayload();
+        }
+    });
+
+    // Modal Functions
+    function showConfirmationModal() {
+        const message = document.getElementById('message').value.trim();
+        const dataValue = dataInput.value.trim();
+
+        // Set message preview
+        modalMessagePreview.textContent = message || '(No message)';
+
+        // Set JSON preview with pretty formatting
+        if (dataValue) {
+            try {
+                const jsonData = JSON.parse(dataValue);
+                modalJsonPreview.textContent = JSON.stringify(jsonData, null, 2);
+            } catch (err) {
+                modalJsonPreview.textContent = dataValue;
+            }
+        } else {
+            modalJsonPreview.textContent = '(No navigation data)';
+        }
+
+        // Set recipient info (could be enhanced to show actual count)
+        const formData = new FormData(form);
+        const selectedAction = formData.get('action');
+        modalRecipientInfo.textContent = 'Push will be sent to selected device tokens.';
+
+        // Show modal
+        confirmationModal.classList.add('active');
+
+        // Focus on cancel button for safety
+        setTimeout(() => modalCancelBtn.focus(), 100);
+    }
+
+    function hideConfirmationModal() {
+        confirmationModal.classList.remove('active');
+    }
+
+    // Modal button handlers
+    modalCancelBtn.addEventListener('click', () => {
+        hideConfirmationModal();
+        confirmationGiven = false;
+    });
+
+    modalConfirmBtn.addEventListener('click', () => {
+        confirmationGiven = true;
+        hideConfirmationModal();
+        // Submit the form
+        form.submit();
+    });
+
+    // Close modal on overlay click
+    confirmationModal.addEventListener('click', (event) => {
+        if (event.target === confirmationModal) {
+            hideConfirmationModal();
+            confirmationGiven = false;
+        }
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && confirmationModal.classList.contains('active')) {
+            hideConfirmationModal();
+            confirmationGiven = false;
+        }
+    });
+
+    form.addEventListener('submit', (event) => {
+        // If confirmation already given, allow submission
+        if (confirmationGiven) {
+            confirmationGiven = false; // Reset for next time
+            return;
+        }
+
+        // Prevent default submission
+        event.preventDefault();
+
+        // Validate inputs
+        if (!validateInputs()) {
+            alert('Please fix the validation errors before sending.');
+            return;
+        }
+
+        // Validate message is not empty
+        const message = document.getElementById('message').value.trim();
+        if (!message) {
+            alert('Please enter a message before sending.');
+            return;
+        }
+
+        // Validate JSON payload
+        const dataValue = dataInput.value.trim();
+        if (dataValue) {
+            try {
+                JSON.parse(dataValue);
+            } catch (err) {
+                alert('Additional Data must be valid JSON. Please fix the payload.');
+                return;
+            }
+        }
+
+        // All validations passed, show confirmation modal
+        showConfirmationModal();
+    });
+
+    // Initialize on load
+    toggleLinkType();
+    buildPayload();
+})();
+</script>
 {% endblock %}
