@@ -117,7 +117,7 @@
         input.split('&').forEach(part => {
             const trimmed = part.trim();
             if (!trimmed) return;
-            const [key, value = ''] = trimmed.split('=');
+            const [key, value = ''] = trimmed.split('=', 2);
             if (key) {
                 params[key.trim()] = value.trim();
             }
@@ -190,7 +190,7 @@
                 JSON.parse(dataValue);
             } catch (err) {
                 event.preventDefault();
-                alert('Additional Data must be valid JSON. Please fix the payload or enable manual override to adjust.');
+                alert('Additional Data must be valid JSON. Please fix the payload.');
             }
         }
     });
