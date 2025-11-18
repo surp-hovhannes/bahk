@@ -139,7 +139,7 @@ class PrayerSet(models.Model):
         'description',
     ))
     
-    # Track changes to the image field
+    # Track changes to fields requiring custom save behavior
     tracker = FieldTracker(fields=['image'])
     
     class Meta:
@@ -343,8 +343,8 @@ class PrayerRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Track changes to the image field
-    tracker = FieldTracker(fields=['image'])
+    # Track changes to fields requiring custom save behavior
+    tracker = FieldTracker(fields=['image', 'duration_days'])
 
     # Custom manager
     objects = PrayerRequestManager()
@@ -381,7 +381,12 @@ class PrayerRequest(models.Model):
     def save(self, **kwargs):
         """Save method with expiration calculation and thumbnail caching."""
         # Calculate expiration date if not set or if duration changed
-        if not self.pk or 'duration_days' in kwargs.get('update_fields', []):
+        duration_changed = (
+            self._state.adding
+            or 'duration_days' in kwargs.get('update_fields', [])
+            or (not self._state.adding and self.tracker.has_changed('duration_days'))
+        )
+        if duration_changed:
             self.expiration_date = timezone.now() + timedelta(days=self.duration_days)
 
         # Check if this is a new instance or if the image field has changed

@@ -1,5 +1,5 @@
 """Tests for the Prayer Requests feature."""
-from datetime import date, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -342,7 +342,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         PrayerRequestPrayerLog.objects.create(
             prayer_request=prayer_request,
             user=intercessor,
-            prayed_on_date=date.today(),
+            prayed_on_date=timezone.localdate(),
         )
 
         result = send_daily_prayer_count_notifications_task()

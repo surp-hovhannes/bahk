@@ -326,7 +326,7 @@ def send_daily_prayer_count_notifications_task():
 
     This task should run daily at 11:30 PM.
     """
-    today = date.today()
+    today = timezone.localdate()
 
     # Get all prayer logs from today, grouped by prayer request
     prayer_logs_today = PrayerRequestPrayerLog.objects.filter(
