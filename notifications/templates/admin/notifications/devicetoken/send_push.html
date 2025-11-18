@@ -446,7 +446,8 @@
     }
 
     function isValidUrl(url) {
-        return url.trim() && (url.includes('https://') || url.includes('http://'));
+        const trimmed = url.trim();
+        return trimmed && (trimmed.startsWith('https://') || trimmed.startsWith('http://'));
     }
 
     function isValidNumber(str) {
@@ -590,6 +591,8 @@
     async function getCurrentFast() {
         const fasts = await fetchFromAPI('/api/fasts/');
         const today = new Date();
+        // Normalize today to just the date (no time component) for comparison
+        today.setHours(0, 0, 0, 0);
 
         // Find a fast that is currently active (has days that include today)
         // and is not a weekly fast
@@ -600,17 +603,22 @@
                 continue;
             }
 
-            // Check if fast has days (assuming days array exists in response)
-            // You may need to adjust this based on actual API response structure
-            return fast;
+            // Check if fast is currently active by verifying today is between start_date and end_date
+            if (fast.start_date && fast.end_date) {
+                const startDate = new Date(fast.start_date);
+                startDate.setHours(0, 0, 0, 0);
+                const endDate = new Date(fast.end_date);
+                endDate.setHours(0, 0, 0, 0);
+
+                // Check if today falls within the fast's date range
+                if (today >= startDate && today <= endDate) {
+                    return fast;
+                }
+            }
         }
 
-        // If no current fast, return the first non-weekly fast
-        return fasts.find(f =>
-            f.name &&
-            !f.name.toLowerCase().includes('wednesday') &&
-            !f.name.toLowerCase().includes('friday')
-        );
+        // If no current fast is found, return null instead of any non-weekly fast
+        return null;
     }
 
     async function getNextMajorFast() {
