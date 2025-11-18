@@ -204,6 +204,10 @@ class EventAdmin(admin.ModelAdmin):
             path('analytics/data/', self.admin_site.admin_view(self.analytics_data), name='events_analytics_data'),
             path('analytics/app/', self.admin_site.admin_view(self.app_analytics_view), name='events_app_analytics'),
             path('analytics/app/data/', self.admin_site.admin_view(self.app_analytics_data), name='events_app_analytics_data'),
+            path('analytics/new-users/', self.admin_site.admin_view(self.new_users_data), name='events_new_users_data'),
+            path('analytics/devotional-views/', self.admin_site.admin_view(self.devotional_views_data), name='events_devotional_views_data'),
+            path('analytics/checklist-usage/', self.admin_site.admin_view(self.checklist_usage_data), name='events_checklist_usage_data'),
+            path('analytics/prayer-views/', self.admin_site.admin_view(self.prayer_views_data), name='events_prayer_views_data'),
             path('export_csv/', self.admin_site.admin_view(self.export_csv), name='events_export_csv'),
         ]
         return custom_urls + urls
@@ -615,7 +619,372 @@ class EventAdmin(admin.ModelAdmin):
             return JsonResponse({
                 'error': 'An error occurred while generating analytics data. Please try again.'
             }, status=500)
-    
+
+    def new_users_data(self, request):
+        """
+        API endpoint for new users signed up modal.
+        Returns paginated list of new users with detailed information.
+        """
+        from django.http import JsonResponse
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        try:
+            # Get parameters
+            days = int(request.GET.get('days', 30))
+            sort = request.GET.get('sort', 'recent_first')
+            offset = int(request.GET.get('offset', 0))
+            limit = int(request.GET.get('limit', 20))
+
+            # Validate days parameter
+            if days not in [7, 30, 90]:
+                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
+
+            # Calculate date range
+            now = timezone.now()
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+
+            # Query new users in date range
+            users_qs = User.objects.filter(
+                date_joined__gte=start_of_window,
+                date_joined__lt=end_of_today,
+                is_staff=False
+            ).select_related('profile', 'profile__church')
+
+            # Apply sorting
+            if sort == 'recent_first':
+                users_qs = users_qs.order_by('-date_joined')
+            elif sort == 'oldest_first':
+                users_qs = users_qs.order_by('date_joined')
+            elif sort == 'alphabetical':
+                users_qs = users_qs.order_by('username')
+
+            # Get total count
+            total_count = users_qs.count()
+
+            # Apply pagination
+            users = users_qs[offset:offset + limit]
+
+            # Serialize data
+            items = []
+            for user in users:
+                items.append({
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'name': user.profile.name if hasattr(user, 'profile') and user.profile.name else '',
+                    'church_name': user.profile.church.name if hasattr(user, 'profile') and user.profile.church else 'No Church',
+                    'date_joined': user.date_joined.isoformat(),
+                    'date_joined_display': user.date_joined.strftime('%b %d, %Y %I:%M %p'),
+                })
+
+            # Calculate if there are more results
+            has_more = (offset + limit) < total_count
+
+            return JsonResponse({
+                'items': items,
+                'total_count': total_count,
+                'has_more': has_more,
+                'offset': offset,
+                'limit': limit,
+            })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"New users data generation failed: {str(e)}", exc_info=True)
+
+            return JsonResponse({
+                'error': 'An error occurred while loading user data. Please try again.'
+            }, status=500)
+
+    def devotional_views_data(self, request):
+        """
+        API endpoint for devotional views modal.
+        Returns paginated list of devotionals with view counts and unique users.
+        """
+        from django.http import JsonResponse
+        from django.db.models import Count
+
+        try:
+            # Get parameters
+            days = int(request.GET.get('days', 30))
+            sort = request.GET.get('sort', 'most_viewed')
+            offset = int(request.GET.get('offset', 0))
+            limit = int(request.GET.get('limit', 20))
+
+            # Validate days parameter
+            if days not in [7, 30, 90]:
+                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
+
+            # Calculate date range
+            now = timezone.now()
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+
+            # Query devotional view events
+            devotional_events = Event.objects.filter(
+                event_type__code=EventType.DEVOTIONAL_VIEWED,
+                timestamp__gte=start_of_window,
+                timestamp__lt=end_of_today
+            ).exclude(user__is_staff=True).select_related('user')
+
+            # Group by devotional and aggregate data
+            # devotional_id is stored in event.data
+            from collections import defaultdict
+            devotional_stats = defaultdict(lambda: {'views': 0, 'unique_users': set(), 'title': '', 'fast_name': '', 'last_viewed': None})
+
+            for event in devotional_events:
+                if event.data and 'devotional_id' in event.data:
+                    dev_id = event.data.get('devotional_id')
+                    devotional_stats[dev_id]['views'] += 1
+                    if event.user:
+                        devotional_stats[dev_id]['unique_users'].add(event.user.id)
+                    if not devotional_stats[dev_id]['title'] and 'title' in event.data:
+                        devotional_stats[dev_id]['title'] = event.data.get('title', f'Devotional #{dev_id}')
+                    if not devotional_stats[dev_id]['fast_name'] and 'fast_name' in event.data:
+                        devotional_stats[dev_id]['fast_name'] = event.data.get('fast_name', 'Unknown Fast')
+                    # Track last viewed time
+                    if not devotional_stats[dev_id]['last_viewed'] or event.timestamp > devotional_stats[dev_id]['last_viewed']:
+                        devotional_stats[dev_id]['last_viewed'] = event.timestamp
+
+            # Convert to list for sorting/pagination
+            items_list = []
+            for dev_id, stats in devotional_stats.items():
+                items_list.append({
+                    'devotional_id': dev_id,
+                    'title': stats['title'] or f'Devotional #{dev_id}',
+                    'fast_name': stats['fast_name'] or 'Unknown Fast',
+                    'views': stats['views'],
+                    'unique_users': len(stats['unique_users']),
+                    'last_viewed': stats['last_viewed'].isoformat() if stats['last_viewed'] else None,
+                })
+
+            # Apply sorting
+            if sort == 'most_viewed':
+                items_list.sort(key=lambda x: x['views'], reverse=True)
+            elif sort == 'least_viewed':
+                items_list.sort(key=lambda x: x['views'])
+            elif sort == 'recent_first':
+                items_list.sort(key=lambda x: x['last_viewed'] or '', reverse=True)
+
+            # Get total count
+            total_count = len(items_list)
+
+            # Apply pagination
+            items = items_list[offset:offset + limit]
+
+            # Calculate if there are more results
+            has_more = (offset + limit) < total_count
+
+            return JsonResponse({
+                'items': items,
+                'total_count': total_count,
+                'has_more': has_more,
+                'offset': offset,
+                'limit': limit,
+            })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Devotional views data generation failed: {str(e)}", exc_info=True)
+
+            return JsonResponse({
+                'error': 'An error occurred while loading devotional data. Please try again.'
+            }, status=500)
+
+    def checklist_usage_data(self, request):
+        """
+        API endpoint for checklist usage modal.
+        Returns paginated list of checklist types/fasts with usage counts.
+        """
+        from django.http import JsonResponse
+
+        try:
+            # Get parameters
+            days = int(request.GET.get('days', 30))
+            sort = request.GET.get('sort', 'most_used')
+            offset = int(request.GET.get('offset', 0))
+            limit = int(request.GET.get('limit', 20))
+
+            # Validate days parameter
+            if days not in [7, 30, 90]:
+                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
+
+            # Calculate date range
+            now = timezone.now()
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+
+            # Query checklist usage events
+            checklist_events = Event.objects.filter(
+                event_type__code=EventType.CHECKLIST_USED,
+                timestamp__gte=start_of_window,
+                timestamp__lt=end_of_today
+            ).exclude(user__is_staff=True).select_related('user')
+
+            # Group by fast/checklist type and aggregate data
+            from collections import defaultdict
+            checklist_stats = defaultdict(lambda: {'usage_count': 0, 'unique_users': set(), 'fast_name': '', 'fast_id': None})
+
+            for event in checklist_events:
+                # Get fast info from event data (if available)
+                if event.data and 'fast_id' in event.data:
+                    fast_id = event.data.get('fast_id')
+                    fast_name = event.data.get('fast_name', f'Fast #{fast_id}')
+                    key = f'fast_{fast_id}'
+                else:
+                    # General checklist (not associated with a specific fast)
+                    fast_id = None
+                    fast_name = 'General Checklist'
+                    key = 'general'
+
+                checklist_stats[key]['usage_count'] += 1
+                checklist_stats[key]['fast_name'] = fast_name
+                checklist_stats[key]['fast_id'] = fast_id
+                if event.user:
+                    checklist_stats[key]['unique_users'].add(event.user.id)
+
+            # Convert to list for sorting/pagination
+            items_list = []
+            for key, stats in checklist_stats.items():
+                items_list.append({
+                    'checklist_type': stats['fast_name'],
+                    'fast_id': stats['fast_id'],
+                    'usage_count': stats['usage_count'],
+                    'unique_users': len(stats['unique_users']),
+                })
+
+            # Apply sorting
+            if sort == 'most_used':
+                items_list.sort(key=lambda x: x['usage_count'], reverse=True)
+            elif sort == 'least_used':
+                items_list.sort(key=lambda x: x['usage_count'])
+
+            # Get total count
+            total_count = len(items_list)
+
+            # Apply pagination
+            items = items_list[offset:offset + limit]
+
+            # Calculate if there are more results
+            has_more = (offset + limit) < total_count
+
+            return JsonResponse({
+                'items': items,
+                'total_count': total_count,
+                'has_more': has_more,
+                'offset': offset,
+                'limit': limit,
+            })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Checklist usage data generation failed: {str(e)}", exc_info=True)
+
+            return JsonResponse({
+                'error': 'An error occurred while loading checklist data. Please try again.'
+            }, status=500)
+
+    def prayer_views_data(self, request):
+        """
+        API endpoint for prayer set views modal.
+        Returns paginated list of prayer sets with view counts and unique users.
+        """
+        from django.http import JsonResponse
+
+        try:
+            # Get parameters
+            days = int(request.GET.get('days', 30))
+            sort = request.GET.get('sort', 'most_viewed')
+            offset = int(request.GET.get('offset', 0))
+            limit = int(request.GET.get('limit', 20))
+
+            # Validate days parameter
+            if days not in [7, 30, 90]:
+                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
+
+            # Calculate date range
+            now = timezone.now()
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+
+            # Query prayer set view events
+            prayer_events = Event.objects.filter(
+                event_type__code=EventType.PRAYER_SET_VIEWED,
+                timestamp__gte=start_of_window,
+                timestamp__lt=end_of_today
+            ).exclude(user__is_staff=True).select_related('user')
+
+            # Group by prayer set and aggregate data
+            # prayer_set_id is stored in event.data
+            from collections import defaultdict
+            prayer_stats = defaultdict(lambda: {'views': 0, 'unique_users': set(), 'title': '', 'category': '', 'last_viewed': None})
+
+            for event in prayer_events:
+                if event.data and 'prayer_set_id' in event.data:
+                    prayer_id = event.data.get('prayer_set_id')
+                    prayer_stats[prayer_id]['views'] += 1
+                    if event.user:
+                        prayer_stats[prayer_id]['unique_users'].add(event.user.id)
+                    if not prayer_stats[prayer_id]['title'] and 'title' in event.data:
+                        prayer_stats[prayer_id]['title'] = event.data.get('title', f'Prayer Set #{prayer_id}')
+                    if not prayer_stats[prayer_id]['category'] and 'category' in event.data:
+                        prayer_stats[prayer_id]['category'] = event.data.get('category', 'General')
+                    # Track last viewed time
+                    if not prayer_stats[prayer_id]['last_viewed'] or event.timestamp > prayer_stats[prayer_id]['last_viewed']:
+                        prayer_stats[prayer_id]['last_viewed'] = event.timestamp
+
+            # Convert to list for sorting/pagination
+            items_list = []
+            for prayer_id, stats in prayer_stats.items():
+                items_list.append({
+                    'prayer_set_id': prayer_id,
+                    'title': stats['title'] or f'Prayer Set #{prayer_id}',
+                    'category': stats['category'] or 'General',
+                    'views': stats['views'],
+                    'unique_users': len(stats['unique_users']),
+                    'last_viewed': stats['last_viewed'].isoformat() if stats['last_viewed'] else None,
+                })
+
+            # Apply sorting
+            if sort == 'most_viewed':
+                items_list.sort(key=lambda x: x['views'], reverse=True)
+            elif sort == 'least_viewed':
+                items_list.sort(key=lambda x: x['views'])
+            elif sort == 'alphabetical':
+                items_list.sort(key=lambda x: x['title'])
+
+            # Get total count
+            total_count = len(items_list)
+
+            # Apply pagination
+            items = items_list[offset:offset + limit]
+
+            # Calculate if there are more results
+            has_more = (offset + limit) < total_count
+
+            return JsonResponse({
+                'items': items,
+                'total_count': total_count,
+                'has_more': has_more,
+                'offset': offset,
+                'limit': limit,
+            })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Prayer views data generation failed: {str(e)}", exc_info=True)
+
+            return JsonResponse({
+                'error': 'An error occurred while loading prayer data. Please try again.'
+            }, status=500)
+
     def export_csv(self, request):
         """
         Export events as CSV.

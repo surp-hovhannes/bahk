@@ -213,6 +213,238 @@
         color: #666;
         text-transform: uppercase;
     }
+
+    /* Clickable stat cards */
+    .stat-card.clickable {
+        cursor: pointer;
+        transition: box-shadow 0.2s, transform 0.1s;
+    }
+
+    .stat-card.clickable:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+
+    .stat-card.clickable:active {
+        transform: translateY(0);
+    }
+
+    /* Modal styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        max-width: 900px;
+        width: 100%;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .modal-header {
+        background: #417690;
+        color: white;
+        padding: 20px 24px;
+        border-radius: 8px 8px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+    }
+
+    .modal-close {
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 32px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+
+    .modal-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .modal-controls {
+        padding: 16px 24px;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #f5f5f5;
+    }
+
+    .modal-controls label {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .modal-controls select {
+        padding: 6px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .modal-controls .total-count {
+        margin-left: auto;
+        color: #666;
+        font-size: 14px;
+    }
+
+    .modal-body {
+        padding: 24px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 200px;
+    }
+
+    .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+    }
+
+    .modal-btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .modal-btn-primary {
+        background: #417690;
+        color: white;
+    }
+
+    .modal-btn-primary:hover {
+        background: #356277;
+    }
+
+    .modal-btn-cancel {
+        background: #f5f5f5;
+        color: #333;
+    }
+
+    .modal-btn-cancel:hover {
+        background: #e0e0e0;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #417690;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .loading-spinner p {
+        color: #666;
+        font-size: 14px;
+    }
+
+    /* Modal table styles */
+    .modal-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .modal-table th {
+        background: #f5f5f5;
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .modal-table td {
+        padding: 12px;
+        border-bottom: 1px solid #e0e0e0;
+        color: #666;
+    }
+
+    .modal-table tr:hover {
+        background: #f9f9f9;
+    }
+
+    .modal-table .numeric {
+        text-align: right;
+        font-weight: 500;
+        color: #333;
+    }
+
+    /* Error message */
+    .error-message {
+        padding: 20px;
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+        color: #856404;
+        text-align: center;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+
+    .empty-state p {
+        font-size: 16px;
+        margin: 0;
+    }
 </style>
 {% endblock %}
 
@@ -258,28 +490,28 @@
             </p>
         </div>
 
-        <div class="stat-card" id="stat-signups">
+        <div class="stat-card clickable" id="stat-signups" data-metric-type="new-users" onclick="openDetailModal('new-users')">
             <h3>User Signups</h3>
             <p class="stat-value" id="stat-signups-value">{{ user_signups }}</p>
-            <p class="stat-change" id="stat-signups-change">Last {{ days }} days</p>
+            <p class="stat-change" id="stat-signups-change">Last {{ days }} days • Click for details</p>
         </div>
 
-        <div class="stat-card" id="stat-devotionals">
+        <div class="stat-card clickable" id="stat-devotionals" data-metric-type="devotional-views" onclick="openDetailModal('devotional-views')">
             <h3>Devotional Views</h3>
             <p class="stat-value" id="stat-devotionals-value">{{ devotional_views }}</p>
-            <p class="stat-change" id="stat-devotionals-change">Last {{ days }} days</p>
+            <p class="stat-change" id="stat-devotionals-change">Last {{ days }} days • Click for details</p>
         </div>
 
-        <div class="stat-card" id="stat-checklists">
+        <div class="stat-card clickable" id="stat-checklists" data-metric-type="checklist-usage" onclick="openDetailModal('checklist-usage')">
             <h3>Checklist Uses</h3>
             <p class="stat-value" id="stat-checklists-value">{{ checklist_usage }}</p>
-            <p class="stat-change" id="stat-checklists-change">Last {{ days }} days</p>
+            <p class="stat-change" id="stat-checklists-change">Last {{ days }} days • Click for details</p>
         </div>
 
-        <div class="stat-card" id="stat-prayer-sets">
+        <div class="stat-card clickable" id="stat-prayer-sets" data-metric-type="prayer-views" onclick="openDetailModal('prayer-views')">
             <h3>Prayer Set Views</h3>
             <p class="stat-value" id="stat-prayer-sets-value">{{ prayer_set_views }}</p>
-            <p class="stat-change" id="stat-prayer-sets-change">Last {{ days }} days</p>
+            <p class="stat-change" id="stat-prayer-sets-change">Last {{ days }} days • Click for details</p>
         </div>
     </div>
     
@@ -376,6 +608,34 @@
 {{ checklist_usage_by_day|json_script:"checklist-usage-by-day" }}
 {{ prayer_set_views_by_day|json_script:"prayer-set-views-by-day" }}
 
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Details</h2>
+            <button class="modal-close" onclick="closeDetailModal()" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-controls">
+            <label for="modal-sort">Sort by:</label>
+            <select id="modal-sort" onchange="changeSortOrder(this.value)">
+                <option value="default">Default</option>
+            </select>
+            <span id="modal-total-count" class="total-count"></span>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading...</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="load-more-btn" class="modal-btn modal-btn-primary" onclick="loadMoreResults()" style="display: none;">
+                Load More
+            </button>
+            <button class="modal-btn modal-btn-cancel" onclick="closeDetailModal()">Close</button>
+        </div>
+    </div>
+</div>
 
 <script>
 // Chart configuration
@@ -1078,6 +1338,355 @@ function updateFastInfoCards(fastData) {
         infoContainer.appendChild(card);
     });
 }
+
+// Modal functionality for stat card details
+let currentMetricType = null;
+let currentOffset = 0;
+let currentSort = 'default';
+let currentHasMore = false;
+
+function openDetailModal(metricType) {
+    currentMetricType = metricType;
+    currentOffset = 0;
+    currentSort = 'default';
+
+    const modal = document.getElementById('detailModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    const sortSelect = document.getElementById('modal-sort');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+
+    // Set title and sort options based on metric type
+    const config = {
+        'new-users': {
+            title: 'User Signups',
+            sortOptions: [
+                { value: 'recent_first', label: 'Most Recent First' },
+                { value: 'oldest_first', label: 'Oldest First' },
+                { value: 'alphabetical', label: 'Alphabetical' }
+            ],
+            defaultSort: 'recent_first'
+        },
+        'devotional-views': {
+            title: 'Devotional Views',
+            sortOptions: [
+                { value: 'most_viewed', label: 'Most Viewed' },
+                { value: 'least_viewed', label: 'Least Viewed' },
+                { value: 'recent_first', label: 'Most Recent' }
+            ],
+            defaultSort: 'most_viewed'
+        },
+        'checklist-usage': {
+            title: 'Checklist Usage',
+            sortOptions: [
+                { value: 'most_used', label: 'Most Used' },
+                { value: 'least_used', label: 'Least Used' }
+            ],
+            defaultSort: 'most_used'
+        },
+        'prayer-views': {
+            title: 'Prayer Set Views',
+            sortOptions: [
+                { value: 'most_viewed', label: 'Most Viewed' },
+                { value: 'least_viewed', label: 'Least Viewed' },
+                { value: 'alphabetical', label: 'Alphabetical' }
+            ],
+            defaultSort: 'most_viewed'
+        }
+    };
+
+    const metricConfig = config[metricType];
+    modalTitle.textContent = metricConfig.title;
+    currentSort = metricConfig.defaultSort;
+
+    // Populate sort options
+    sortSelect.innerHTML = metricConfig.sortOptions.map(opt =>
+        `<option value="${opt.value}" ${opt.value === currentSort ? 'selected' : ''}>${opt.label}</option>`
+    ).join('');
+
+    // Show loading
+    modalBody.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading...</p></div>';
+    loadMoreBtn.style.display = 'none';
+
+    // Show modal
+    modal.classList.add('active');
+
+    // Fetch data
+    fetchModalData(metricType, 0, currentSort, false);
+}
+
+function closeDetailModal() {
+    const modal = document.getElementById('detailModal');
+    modal.classList.remove('active');
+    currentMetricType = null;
+    currentOffset = 0;
+}
+
+function fetchModalData(metricType, offset, sort, append = false) {
+    const days = document.getElementById('dateRange').value;
+    const url = `/admin/events/event/analytics/${metricType}/?days=${days}&sort=${sort}&offset=${offset}&limit=20`;
+
+    fetch(url, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            document.getElementById('modalBody').innerHTML = `<div class="error-message">${data.error}</div>`;
+            return;
+        }
+
+        renderModalContent(metricType, data, append);
+    })
+    .catch(error => {
+        console.error('Error loading modal data:', error);
+        document.getElementById('modalBody').innerHTML = '<div class="error-message">Failed to load data. Please try again.</div>';
+    });
+}
+
+function renderModalContent(metricType, data, append = false) {
+    const modalBody = document.getElementById('modalBody');
+    const totalCountEl = document.getElementById('modal-total-count');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+
+    // Update total count
+    totalCountEl.textContent = `${data.total_count} total result${data.total_count !== 1 ? 's' : ''}`;
+
+    // Show/hide load more button
+    currentHasMore = data.has_more;
+    loadMoreBtn.style.display = data.has_more ? 'inline-block' : 'none';
+
+    // Check if there are any items
+    if (data.items.length === 0 && !append) {
+        modalBody.innerHTML = '<div class="empty-state"><p>No data available for the selected period.</p></div>';
+        return;
+    }
+
+    // Render based on metric type
+    let html = '';
+
+    switch (metricType) {
+        case 'new-users':
+            html = renderNewUsersTable(data.items, append);
+            break;
+        case 'devotional-views':
+            html = renderDevotionalViewsTable(data.items, append);
+            break;
+        case 'checklist-usage':
+            html = renderChecklistUsageTable(data.items, append);
+            break;
+        case 'prayer-views':
+            html = renderPrayerViewsTable(data.items, append);
+            break;
+    }
+
+    if (append) {
+        // Append new rows to existing table
+        const tbody = modalBody.querySelector('tbody');
+        if (tbody) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const newRows = tempDiv.querySelectorAll('tr');
+            newRows.forEach(row => tbody.appendChild(row));
+        }
+    } else {
+        modalBody.innerHTML = html;
+    }
+
+    currentOffset = data.offset + data.items.length;
+}
+
+function renderNewUsersTable(items, append) {
+    if (append) {
+        // Return just the rows
+        return items.map(user => `
+            <tr>
+                <td>${user.name || user.username}</td>
+                <td>${user.email}</td>
+                <td>${user.username}</td>
+                <td>${user.church_name}</td>
+                <td>${user.date_joined_display}</td>
+            </tr>
+        `).join('');
+    }
+
+    return `
+        <table class="modal-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Username</th>
+                    <th>Church</th>
+                    <th>Joined</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(user => `
+                    <tr>
+                        <td>${user.name || user.username}</td>
+                        <td>${user.email}</td>
+                        <td>${user.username}</td>
+                        <td>${user.church_name}</td>
+                        <td>${user.date_joined_display}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderDevotionalViewsTable(items, append) {
+    if (append) {
+        return items.map(dev => `
+            <tr>
+                <td>${dev.title}</td>
+                <td>${dev.fast_name}</td>
+                <td class="numeric">${dev.views}</td>
+                <td class="numeric">${dev.unique_users}</td>
+            </tr>
+        `).join('');
+    }
+
+    return `
+        <table class="modal-table">
+            <thead>
+                <tr>
+                    <th>Devotional Title</th>
+                    <th>Fast</th>
+                    <th>Total Views</th>
+                    <th>Unique Users</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(dev => `
+                    <tr>
+                        <td>${dev.title}</td>
+                        <td>${dev.fast_name}</td>
+                        <td class="numeric">${dev.views}</td>
+                        <td class="numeric">${dev.unique_users}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderChecklistUsageTable(items, append) {
+    if (append) {
+        return items.map(checklist => `
+            <tr>
+                <td>${checklist.checklist_type}</td>
+                <td class="numeric">${checklist.usage_count}</td>
+                <td class="numeric">${checklist.unique_users}</td>
+            </tr>
+        `).join('');
+    }
+
+    return `
+        <table class="modal-table">
+            <thead>
+                <tr>
+                    <th>Checklist Type</th>
+                    <th>Total Uses</th>
+                    <th>Unique Users</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(checklist => `
+                    <tr>
+                        <td>${checklist.checklist_type}</td>
+                        <td class="numeric">${checklist.usage_count}</td>
+                        <td class="numeric">${checklist.unique_users}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderPrayerViewsTable(items, append) {
+    if (append) {
+        return items.map(prayer => `
+            <tr>
+                <td>${prayer.title}</td>
+                <td>${prayer.category}</td>
+                <td class="numeric">${prayer.views}</td>
+                <td class="numeric">${prayer.unique_users}</td>
+            </tr>
+        `).join('');
+    }
+
+    return `
+        <table class="modal-table">
+            <thead>
+                <tr>
+                    <th>Prayer Set</th>
+                    <th>Category</th>
+                    <th>Total Views</th>
+                    <th>Unique Users</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(prayer => `
+                    <tr>
+                        <td>${prayer.title}</td>
+                        <td>${prayer.category}</td>
+                        <td class="numeric">${prayer.views}</td>
+                        <td class="numeric">${prayer.unique_users}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function loadMoreResults() {
+    if (!currentMetricType || !currentHasMore) return;
+
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = 'Loading...';
+
+    fetchModalData(currentMetricType, currentOffset, currentSort, true);
+
+    // Re-enable button after a delay
+    setTimeout(() => {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = 'Load More';
+    }, 500);
+}
+
+function changeSortOrder(newSort) {
+    if (!currentMetricType) return;
+
+    currentSort = newSort;
+    currentOffset = 0;
+
+    const modalBody = document.getElementById('modalBody');
+    modalBody.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading...</p></div>';
+
+    fetchModalData(currentMetricType, 0, newSort, false);
+}
+
+// Keyboard support for modal
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('detailModal');
+        if (modal.classList.contains('active')) {
+            closeDetailModal();
+        }
+    }
+});
+
+// Click outside to close modal
+document.getElementById('detailModal').addEventListener('click', (e) => {
+    if (e.target.id === 'detailModal') {
+        closeDetailModal();
+    }
+});
 
 // Initialize charts when page loads
 document.addEventListener('DOMContentLoaded', function() {
