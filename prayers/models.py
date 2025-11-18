@@ -468,6 +468,10 @@ class PrayerRequestAcceptance(models.Model):
         related_name='accepted_prayer_requests',
         help_text='User who accepted the prayer request'
     )
+    counts_for_milestones = models.BooleanField(
+        default=True,
+        help_text='Whether this acceptance should count toward milestone tracking'
+    )
     accepted_at = models.DateTimeField(
         auto_now_add=True,
         help_text='When the user accepted the prayer request'
@@ -523,4 +527,3 @@ class PrayerRequestPrayerLog(models.Model):
 
     def __str__(self):
         return f'{self.user.email} prayed for "{self.prayer_request.title}" on {self.prayed_on_date}'
-

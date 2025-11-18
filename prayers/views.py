@@ -360,7 +360,8 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         # Create acceptance
         acceptance = PrayerRequestAcceptance.objects.create(
             prayer_request=prayer_request,
-            user=request.user
+            user=request.user,
+            counts_for_milestones=True
         )
 
         # Create event
@@ -378,7 +379,8 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         # Check for acceptance milestones (only for OTHER people's requests, not own)
         # Count acceptances where user is NOT the requester
         other_acceptances_count = PrayerRequestAcceptance.objects.filter(
-            user=request.user
+            user=request.user,
+            counts_for_milestones=True
         ).exclude(
             prayer_request__requester=request.user
         ).count()

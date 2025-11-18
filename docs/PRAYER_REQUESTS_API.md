@@ -190,7 +190,7 @@ image=<file>
 7. If approved:
    - Activity feed item created
    - Milestone created (if first request)
-   - **Requester automatically accepts their own request** (appears in accepted list)
+   - **Requester automatically accepts their own request** (appears in accepted list, but this self-acceptance is excluded from milestone counts)
 
 ---
 

@@ -165,7 +165,8 @@ Respond with a JSON object containing:
                 from prayers.models import PrayerRequestAcceptance
                 PrayerRequestAcceptance.objects.get_or_create(
                     prayer_request=prayer_request,
-                    user=prayer_request.requester
+                    user=prayer_request.requester,
+                    defaults={'counts_for_milestones': False}
                 )
 
                 logger.info(f"Prayer request {prayer_request_id} approved by LLM")
