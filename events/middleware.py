@@ -118,6 +118,10 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
             if not screen_name:
                 # Fallback to path for automatic tracking
                 screen_name = request.path
+
+            is_api_request = request.path.startswith('/api/') or self._is_api_request(request)
+            source = 'api' if is_api_request else 'app_ui'
+
             try:
                 from .models import Event, EventType
                 Event.create_event(
@@ -128,6 +132,7 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
                         'session_id': session_data.get('id') if session_data else None,
                         'screen': screen_name,
                         'path': request.path,
+                        'source': source,
                     },
                     request=request,
                 )
@@ -171,8 +176,16 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
             except (InvalidToken, TokenError, Exception):
                 # Token is invalid or expired, skip tracking
                 pass
-        
+
         return None
+
+    def _is_api_request(self, request):
+        """Detect if a request should be treated as an API call for analytics purposes."""
+        api_header = request.META.get('HTTP_X_API_REQUEST')
+        if api_header is None:
+            return False
+
+        return str(api_header).lower() in ['1', 'true', 'yes', 'on']
 
     def _ingest_utm_params(self, request, user):
         params = getattr(request, 'query_params', None) or getattr(request, 'GET', {})

@@ -483,9 +483,14 @@ class EventAdmin(admin.ModelAdmin):
             event_type__category='analytics'
         ).exclude(user__is_staff=True)
 
+        screen_view_qs = base_qs.filter(
+            event_type__code=EventType.SCREEN_VIEW,
+            data__source='app_ui'
+        )
+
         # Totals
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
-        total_screen_views = base_qs.filter(event_type__code=EventType.SCREEN_VIEW).count()
+        total_screen_views = screen_view_qs.count()
         active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
 
         # Events over time (analytics)
@@ -508,7 +513,7 @@ class EventAdmin(admin.ModelAdmin):
 
         # Most viewed screens
         top_screens = list(
-            base_qs.filter(event_type__code=EventType.SCREEN_VIEW, data__has_key='screen')
+            screen_view_qs.filter(data__has_key='screen')
             .values('data__screen').annotate(count=Count('id')).order_by('-count')[:15]
         )
 
@@ -590,13 +595,18 @@ class EventAdmin(admin.ModelAdmin):
 
         # Other metrics
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
-        total_screen_views = base_qs.filter(event_type__code=EventType.SCREEN_VIEW).count()
+        screen_view_qs = base_qs.filter(
+            event_type__code=EventType.SCREEN_VIEW,
+            data__source='app_ui'
+        )
+
+        total_screen_views = screen_view_qs.count()
         active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
         avg_session_duration = base_qs.filter(event_type__code=EventType.SESSION_END, data__has_key='duration_seconds')\
             .aggregate(avg=Avg(Cast('data__duration_seconds', FloatField())))['avg'] or 0
 
         top_screens = list(
-            base_qs.filter(event_type__code=EventType.SCREEN_VIEW, data__has_key='screen')
+            screen_view_qs.filter(data__has_key='screen')
             .values('data__screen').annotate(count=Count('id')).order_by('-count')[:15]
         )
 
