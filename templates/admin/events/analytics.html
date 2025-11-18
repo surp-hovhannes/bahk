@@ -232,30 +232,60 @@
     
     <!-- Key Statistics -->
     <div class="stats-grid">
-        <div class="stat-card">
+        <div class="stat-card" id="stat-total-events">
             <h3>Total Events</h3>
-            <p class="stat-value">{{ total_events|floatformat:0 }}</p>
-            <p class="stat-change">Last {{ days }} days: {{ events_in_period }}</p>
+            <p class="stat-value" id="stat-total-events-value">{{ total_events|floatformat:0 }}</p>
+            <p class="stat-change" id="stat-total-events-change">Last {{ days }} days: {{ events_in_period }}</p>
         </div>
-        
-        <div class="stat-card">
+
+        <div class="stat-card" id="stat-fast-joins">
             <h3>Fast Joins</h3>
-            <p class="stat-value">{{ fast_joins }}</p>
-            <p class="stat-change positive">+{{ fast_joins }} this period</p>
+            <p class="stat-value" id="stat-fast-joins-value">{{ fast_joins }}</p>
+            <p class="stat-change positive" id="stat-fast-joins-change">+{{ fast_joins }} this period</p>
         </div>
-        
-        <div class="stat-card">
+
+        <div class="stat-card" id="stat-fast-leaves">
             <h3>Fast Leaves</h3>
-            <p class="stat-value">{{ fast_leaves }}</p>
-            <p class="stat-change negative">-{{ fast_leaves }} this period</p>
+            <p class="stat-value" id="stat-fast-leaves-value">{{ fast_leaves }}</p>
+            <p class="stat-change negative" id="stat-fast-leaves-change">-{{ fast_leaves }} this period</p>
         </div>
-        
-        <div class="stat-card">
+
+        <div class="stat-card" id="stat-net-growth">
             <h3>Net Growth</h3>
-            <p class="stat-value">{{ net_joins }}</p>
-            <p class="stat-change {% if net_joins >= 0 %}positive{% else %}negative{% endif %}">
+            <p class="stat-value" id="stat-net-growth-value">{{ net_joins }}</p>
+            <p class="stat-change {% if net_joins >= 0 %}positive{% else %}negative{% endif %}" id="stat-net-growth-change">
                 {% if net_joins >= 0 %}+{% endif %}{{ net_joins }} net joins
             </p>
+        </div>
+
+        <div class="stat-card" id="stat-signups">
+            <h3>User Signups</h3>
+            <p class="stat-value" id="stat-signups-value">{{ user_signups }}</p>
+            <p class="stat-change" id="stat-signups-change">Last {{ days }} days</p>
+        </div>
+
+        <div class="stat-card" id="stat-devotionals">
+            <h3>Devotional Views</h3>
+            <p class="stat-value" id="stat-devotionals-value">{{ devotional_views }}</p>
+            <p class="stat-change" id="stat-devotionals-change">Last {{ days }} days</p>
+        </div>
+
+        <div class="stat-card" id="stat-checklists">
+            <h3>Checklist Uses</h3>
+            <p class="stat-value" id="stat-checklists-value">{{ checklist_usage }}</p>
+            <p class="stat-change" id="stat-checklists-change">Last {{ days }} days</p>
+        </div>
+
+        <div class="stat-card" id="stat-prayer-sets">
+            <h3>Prayer Set Views</h3>
+            <p class="stat-value" id="stat-prayer-sets-value">{{ prayer_set_views }}</p>
+            <p class="stat-change" id="stat-prayer-sets-change">Last {{ days }} days</p>
+        </div>
+
+        <div class="stat-card" id="stat-shares">
+            <h3>Shares</h3>
+            <p class="stat-value" id="stat-shares-value">{{ share_events }}</p>
+            <p class="stat-change" id="stat-shares-change">Last {{ days }} days</p>
         </div>
     </div>
     
@@ -264,6 +294,14 @@
         <h2 class="chart-title">📈 Events Over Time</h2>
         <div class="chart-wrapper" id="eventsOverTimeWrapper">
             <canvas id="eventsOverTimeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Feature Usage Chart -->
+    <div class="chart-container">
+        <h2 class="chart-title">✅ Feature Usage Over Time</h2>
+        <div class="chart-wrapper" id="featureUsageWrapper">
+            <canvas id="featureUsageChart"></canvas>
         </div>
     </div>
     
@@ -338,6 +376,12 @@
 {{ current_upcoming_fast_data|json_script:"current-upcoming-fast-data" }}
 {{ fast_joins|json_script:"fast-joins" }}
 {{ fast_leaves|json_script:"fast-leaves" }}
+{{ feature_usage_over_time|json_script:"feature-usage-data" }}
+{{ user_signups_by_day|json_script:"user-signups-by-day" }}
+{{ devotional_views_by_day|json_script:"devotional-views-by-day" }}
+{{ checklist_usage_by_day|json_script:"checklist-usage-by-day" }}
+{{ prayer_set_views_by_day|json_script:"prayer-set-views-by-day" }}
+{{ share_events_by_day|json_script:"share-events-by-day" }}
 
 
 <script>
@@ -373,7 +417,7 @@ const chartConfig = {
 };
 
 // Initialize charts
-let eventsOverTimeChart, fastTrendsChart, fastHistogramChart, currentUpcomingFastChart, eventTypesChart, topUsersChart;
+let eventsOverTimeChart, fastTrendsChart, fastHistogramChart, currentUpcomingFastChart, eventTypesChart, topUsersChart, featureUsageChart;
 
 // Data from Django context (parsed from json_script elements)
 const eventsByDay = JSON.parse(document.getElementById('events-by-day-data').textContent);
@@ -384,6 +428,7 @@ const hourlyData = JSON.parse(document.getElementById('hourly-data').textContent
 const currentUpcomingFastData = JSON.parse(document.getElementById('current-upcoming-fast-data').textContent);
 const FAST_JOINS = JSON.parse(document.getElementById('fast-joins').textContent);
 const FAST_LEAVES = JSON.parse(document.getElementById('fast-leaves').textContent);
+const featureUsageData = JSON.parse(document.getElementById('feature-usage-data').textContent);
 
 function initializeCharts() {
     // Events Over Time Chart
@@ -412,7 +457,40 @@ function initializeCharts() {
             }
         }
     });
-    
+
+    // Feature Usage Chart
+    const featureUsageCtx = document.getElementById('featureUsageChart').getContext('2d');
+    const featureColors = [
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 205, 86, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 99, 132, 0.8)'
+    ];
+    featureUsageChart = new Chart(featureUsageCtx, {
+        type: 'line',
+        data: {
+            labels: featureUsageData.labels,
+            datasets: featureUsageData.datasets.map((dataset, index) => ({
+                ...dataset,
+                borderColor: featureColors[index % featureColors.length],
+                backgroundColor: featureColors[index % featureColors.length].replace('0.8', '0.2'),
+                tension: 0.1,
+                fill: true,
+            })),
+        },
+        options: {
+            ...chartConfig,
+            plugins: {
+                ...chartConfig.plugins,
+                title: {
+                    display: true,
+                    text: 'Key Engagement Events Over Time'
+                }
+            },
+        }
+    });
+
     // Fast Trends Chart
     const fastCtx = document.getElementById('fastTrendsChart').getContext('2d');
     fastTrendsChart = new Chart(fastCtx, {
@@ -699,17 +777,23 @@ function updateCharts() {
     .then(response => response.json())
     .then(data => {
         // Update statistics
-        document.querySelector('.stat-card:nth-child(1) .stat-change').textContent = `Last ${days} days: ${data.events_in_period}`;
-        document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = data.fast_joins;
-        document.querySelector('.stat-card:nth-child(2) .stat-change').textContent = `+${data.fast_joins} this period`;
-        document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = data.fast_leaves;
-        document.querySelector('.stat-card:nth-child(3) .stat-change').textContent = `-${data.fast_leaves} this period`;
-        document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = data.net_joins;
-        
-        const netChangeEl = document.querySelector('.stat-card:nth-child(4) .stat-change');
+        document.getElementById('stat-total-events-change').textContent = `Last ${days} days: ${data.events_in_period}`;
+        document.getElementById('stat-fast-joins-value').textContent = data.fast_joins;
+        document.getElementById('stat-fast-joins-change').textContent = `+${data.fast_joins} this period`;
+        document.getElementById('stat-fast-leaves-value').textContent = data.fast_leaves;
+        document.getElementById('stat-fast-leaves-change').textContent = `-${data.fast_leaves} this period`;
+        document.getElementById('stat-net-growth-value').textContent = data.net_joins;
+
+        const netChangeEl = document.getElementById('stat-net-growth-change');
         netChangeEl.textContent = `${data.net_joins >= 0 ? '+' : ''}${data.net_joins} net joins`;
         netChangeEl.className = `stat-change ${data.net_joins >= 0 ? 'positive' : 'negative'}`;
-        
+
+        document.getElementById('stat-signups-value').textContent = data.user_signups;
+        document.getElementById('stat-devotionals-value').textContent = data.devotional_views;
+        document.getElementById('stat-checklists-value').textContent = data.checklist_usage;
+        document.getElementById('stat-prayer-sets-value').textContent = data.prayer_set_views;
+        document.getElementById('stat-shares-value').textContent = data.share_events;
+
         // Recreate charts with new data
         recreateCharts(data);
     })
@@ -735,12 +819,14 @@ function updateCharts() {
 function recreateCharts(data) {
     // Destroy existing charts
     if (eventsOverTimeChart) eventsOverTimeChart.destroy();
+    if (featureUsageChart) featureUsageChart.destroy();
     if (fastTrendsChart) fastTrendsChart.destroy();
     if (fastHistogramChart) fastHistogramChart.destroy();
     if (currentUpcomingFastChart) currentUpcomingFastChart.destroy();
     
     // Recreate chart containers using wrapper IDs
     document.getElementById('eventsOverTimeWrapper').innerHTML = '<canvas id="eventsOverTimeChart"></canvas>';
+    document.getElementById('featureUsageWrapper').innerHTML = '<canvas id="featureUsageChart"></canvas>';
     document.getElementById('fastTrendsWrapper').innerHTML = '<canvas id="fastTrendsChart"></canvas>';
     document.getElementById('fastHistogramWrapper').innerHTML = '<canvas id="fastHistogramChart"></canvas>';
     document.getElementById('currentUpcomingFastWrapper').innerHTML = '<canvas id="currentUpcomingFastChart"></canvas>';
@@ -769,6 +855,38 @@ function recreateCharts(data) {
                     text: 'Daily Event Volume'
                 }
             }
+        }
+    });
+
+    const featureUsageCtx = document.getElementById('featureUsageChart').getContext('2d');
+    const featureColors = [
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 205, 86, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 99, 132, 0.8)'
+    ];
+    featureUsageChart = new Chart(featureUsageCtx, {
+        type: 'line',
+        data: {
+            labels: data.feature_usage_over_time.labels,
+            datasets: data.feature_usage_over_time.datasets.map((dataset, index) => ({
+                ...dataset,
+                borderColor: featureColors[index % featureColors.length],
+                backgroundColor: featureColors[index % featureColors.length].replace('0.8', '0.2'),
+                tension: 0.1,
+                fill: true,
+            })),
+        },
+        options: {
+            ...chartConfig,
+            plugins: {
+                ...chartConfig.plugins,
+                title: {
+                    display: true,
+                    text: 'Key Engagement Events Over Time'
+                }
+            },
         }
     });
     

@@ -6,7 +6,7 @@ Provides comprehensive views for events, event types, and analytics.
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Q, Avg, FloatField
-from django.db.models.functions import Cast
+from django.db.models.functions import Cast, TruncDate
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.urls import path, reverse
@@ -244,7 +244,73 @@ class EventAdmin(admin.ModelAdmin):
         # Fast join/leave totals for the period (derived from per-day buckets to align with charts)
         fast_joins = sum(fast_joins_by_day.values())
         fast_leaves = sum(fast_leaves_by_day.values())
-        
+
+        def _build_daily_counts(queryset):
+            """Build a date-keyed dict (YYYY-MM-DD) covering the window for the queryset."""
+            counts = {date: 0 for date in events_by_day.keys()}
+            daily_rows = queryset.annotate(
+                date=TruncDate('timestamp')
+            ).values('date').annotate(count=Count('id')).order_by('date')
+
+            for row in daily_rows:
+                date_value = row['date']
+                date_str = date_value.strftime('%Y-%m-%d') if hasattr(date_value, 'strftime') else str(date_value)
+                if date_str in counts:
+                    counts[date_str] = row['count']
+
+            return counts
+
+        signups_qs = base_qs.filter(
+            event_type__code=EventType.USER_ACCOUNT_CREATED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        user_signups_by_day = _build_daily_counts(signups_qs)
+        user_signups_total = sum(user_signups_by_day.values())
+
+        devotional_qs = base_qs.filter(
+            event_type__code=EventType.DEVOTIONAL_VIEWED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        devotional_views_by_day = _build_daily_counts(devotional_qs)
+        devotional_views_total = sum(devotional_views_by_day.values())
+
+        checklist_qs = base_qs.filter(
+            event_type__code=EventType.CHECKLIST_USED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        checklist_usage_by_day = _build_daily_counts(checklist_qs)
+        checklist_usage_total = sum(checklist_usage_by_day.values())
+
+        prayer_set_qs = base_qs.filter(
+            event_type__code=EventType.PRAYER_SET_VIEWED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        prayer_set_views_by_day = _build_daily_counts(prayer_set_qs)
+        prayer_set_views_total = sum(prayer_set_views_by_day.values())
+
+        share_qs = base_qs.filter(
+            event_type__code__icontains='share',
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        share_events_by_day = _build_daily_counts(share_qs)
+        share_events_total = sum(share_events_by_day.values())
+
+        feature_usage_over_time = {
+            'labels': list(events_by_day.keys()),
+            'datasets': [
+                {'label': 'User Signups', 'data': list(user_signups_by_day.values())},
+                {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
+                {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
+                {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
+                {'label': 'Shares', 'data': list(share_events_by_day.values())},
+            ],
+        }
+
         # Recent milestones
         milestones = base_qs.filter(
             event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
@@ -319,6 +385,17 @@ class EventAdmin(admin.ModelAdmin):
             'start_date': start_date,
             'end_date': end_date,
             'days': days,
+            'user_signups': user_signups_total,
+            'devotional_views': devotional_views_total,
+            'checklist_usage': checklist_usage_total,
+            'prayer_set_views': prayer_set_views_total,
+            'share_events': share_events_total,
+            'user_signups_by_day': user_signups_by_day,
+            'devotional_views_by_day': devotional_views_by_day,
+            'checklist_usage_by_day': checklist_usage_by_day,
+            'prayer_set_views_by_day': prayer_set_views_by_day,
+            'share_events_by_day': share_events_by_day,
+            'feature_usage_over_time': feature_usage_over_time,
         }
         
         return render(request, 'admin/events/analytics.html', context)
@@ -365,7 +442,66 @@ class EventAdmin(admin.ModelAdmin):
         events_by_day = daily_aggregates['events_by_day']
         fast_joins_by_day = daily_aggregates['fast_joins_by_day']
         fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
-        
+
+        def _build_daily_counts(queryset):
+            counts = {date: 0 for date in events_by_day.keys()}
+            daily_rows = queryset.annotate(
+                date=TruncDate('timestamp')
+            ).values('date').annotate(count=Count('id')).order_by('date')
+
+            for row in daily_rows:
+                date_value = row['date']
+                date_str = date_value.strftime('%Y-%m-%d') if hasattr(date_value, 'strftime') else str(date_value)
+                if date_str in counts:
+                    counts[date_str] = row['count']
+
+            return counts
+
+        base_qs = Event.objects.select_related('event_type', 'user', 'content_type')\
+            .exclude(user__is_staff=True)\
+            .exclude(event_type__category='analytics')
+
+        signups_qs = base_qs.filter(
+            event_type__code=EventType.USER_ACCOUNT_CREATED,
+            timestamp__gte=start_of_window,
+        )
+        user_signups_by_day = _build_daily_counts(signups_qs)
+
+        devotional_qs = base_qs.filter(
+            event_type__code=EventType.DEVOTIONAL_VIEWED,
+            timestamp__gte=start_of_window,
+        )
+        devotional_views_by_day = _build_daily_counts(devotional_qs)
+
+        checklist_qs = base_qs.filter(
+            event_type__code=EventType.CHECKLIST_USED,
+            timestamp__gte=start_of_window,
+        )
+        checklist_usage_by_day = _build_daily_counts(checklist_qs)
+
+        prayer_set_qs = base_qs.filter(
+            event_type__code=EventType.PRAYER_SET_VIEWED,
+            timestamp__gte=start_of_window,
+        )
+        prayer_set_views_by_day = _build_daily_counts(prayer_set_qs)
+
+        share_qs = base_qs.filter(
+            event_type__code__icontains='share',
+            timestamp__gte=start_of_window,
+        )
+        share_events_by_day = _build_daily_counts(share_qs)
+
+        feature_usage_over_time = {
+            'labels': list(events_by_day.keys()),
+            'datasets': [
+                {'label': 'User Signups', 'data': list(user_signups_by_day.values())},
+                {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
+                {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
+                {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
+                {'label': 'Shares', 'data': list(share_events_by_day.values())},
+            ],
+        }
+
         # Fast activity trends
         fast_trends_data = {
             'labels': list(events_by_day.keys()),
@@ -415,6 +551,17 @@ class EventAdmin(admin.ModelAdmin):
                 'net_joins': fast_joins - fast_leaves,
                 'events_in_period': sum(events_by_day.values()),
                 'current_upcoming_fast_data': current_upcoming_fast_data,
+                'user_signups_by_day': user_signups_by_day,
+                'devotional_views_by_day': devotional_views_by_day,
+                'checklist_usage_by_day': checklist_usage_by_day,
+                'prayer_set_views_by_day': prayer_set_views_by_day,
+                'share_events_by_day': share_events_by_day,
+                'feature_usage_over_time': feature_usage_over_time,
+                'user_signups': sum(user_signups_by_day.values()),
+                'devotional_views': sum(devotional_views_by_day.values()),
+                'checklist_usage': sum(checklist_usage_by_day.values()),
+                'prayer_set_views': sum(prayer_set_views_by_day.values()),
+                'share_events': sum(share_events_by_day.values()),
             })
             
         except Exception as e:
