@@ -8,7 +8,8 @@
         max-width: 800px;
         height: 100px;
     }
-    .push-form input[type="text"] {
+    .push-form input[type="text"],
+    .push-form select {
         width: 90%;
         max-width: 800px;
     }
@@ -17,12 +18,20 @@
         font-size: 0.9em;
         margin: 5px 0;
     }
+    .form-row.inline-fields {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    .form-row.inline-fields .field-box {
+        flex: 1;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="content-main">
-    <form method="post" class="push-form" action="{% url 'admin:notifications_devicetoken_send_push' %}">
+    <form method="post" class="push-form" action="{% url 'admin:notifications_devicetoken_send_push' %}" id="push-form">
         {% csrf_token %}
         <fieldset class="module aligned">
             <div class="form-row">
@@ -32,11 +41,56 @@
                     <p class="help-text">Enter the message to send to selected devices</p>
                 </div>
             </div>
+            <div class="form-row inline-fields">
+                <div class="field-box">
+                    <label for="payloadType">Payload type:</label>
+                    <select id="payloadType" name="payload_type">
+                        <option value="">-- Select type --</option>
+                        <option value="fast">Fast</option>
+                        <option value="devotional">Devotional</option>
+                        <option value="prayer">Prayer</option>
+                        <option value="video">Video</option>
+                        <option value="article">Article</option>
+                        <option value="recipe">Recipe</option>
+                        <option value="prayer_set">Prayer set</option>
+                        <option value="activity">Activity</option>
+                    </select>
+                    <p class="help-text">Maps to app routes such as <code>fast/&lt;id&gt;</code>, <code>devotional/&lt;id&gt;</code>, etc. The app opens the screen that matches the route derived from this selection.</p>
+                </div>
+                <div class="field-box" id="contentIdBox">
+                    <label for="contentId">Content ID (for most types):</label>
+                    <input type="text" id="contentId" placeholder="e.g. 48" />
+                    <p class="help-text">Used for all payloads except <strong>Activity</strong>. The selected type and this ID become the <code>screen</code> value (e.g., <code>fast/48</code>).</p>
+                </div>
+            </div>
+            <div class="form-row inline-fields" id="activityFields" style="display: none;">
+                <div class="field-box">
+                    <label for="activityType">Activity type:</label>
+                    <input type="text" id="activityType" placeholder="e.g. celebration" />
+                    <p class="help-text">Appears inside the <code>params</code> object for activity payloads.</p>
+                </div>
+                <div class="field-box">
+                    <label for="activityTarget">Target ID (optional):</label>
+                    <input type="text" id="activityTarget" placeholder="Related object ID" />
+                    <p class="help-text">Optional ID used by the app to identify the target of the activity.</p>
+                </div>
+            </div>
             <div class="form-row">
                 <div class="field-box">
-                    <label for="data">Additional Data (optional):</label>
-                    <input type="text" name="data" id="data" placeholder='{"key": "value"}'/>
-                    <p class="help-text">Enter additional data as JSON object (optional)</p>
+                    <label for="queryParams">Query params (optional):</label>
+                    <input type="text" id="queryParams" placeholder="key1=value1&key2=value2" />
+                    <p class="help-text">Converted to a <code>params</code> object in the generated payload. These become query parameters on the target screen when the app handles announcement URLs.</p>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="field-box">
+                    <label for="data">Additional Data:</label>
+                    <input type="text" name="data" id="data" placeholder='{"screen": "fast/48"}' readonly />
+                    <p class="help-text">Automatically generated from the selectors above using the deep-link structure expected by the app (e.g., <code>{"screen": "fast/48"}</code> or <code>{"screen": "activity", "params": {"activity_type": "..."}}</code>).</p>
+                    <label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 5px;">
+                        <input type="checkbox" id="manualDataOverride"> Enable manual override
+                    </label>
+                    <p class="help-text">Keep this checked to hand-craft advanced payloads. When unchecked, the field is kept in sync with the selected payload and validated before sending.</p>
                 </div>
             </div>
         </fieldset>
@@ -45,4 +99,104 @@
         </div>
     </form>
 </div>
+
+<script>
+(function() {
+    const payloadType = document.getElementById('payloadType');
+    const contentId = document.getElementById('contentId');
+    const activityFields = document.getElementById('activityFields');
+    const activityType = document.getElementById('activityType');
+    const activityTarget = document.getElementById('activityTarget');
+    const queryParams = document.getElementById('queryParams');
+    const dataInput = document.getElementById('data');
+    const manualOverride = document.getElementById('manualDataOverride');
+    const form = document.getElementById('push-form');
+
+    function parseQueryParams(input) {
+        const params = {};
+        input.split('&').forEach(part => {
+            const trimmed = part.trim();
+            if (!trimmed) return;
+            const [key, value = ''] = trimmed.split('=');
+            if (key) {
+                params[key.trim()] = value.trim();
+            }
+        });
+        return params;
+    }
+
+    function buildPayload() {
+        if (manualOverride.checked) {
+            return;
+        }
+
+        const type = payloadType.value;
+        const params = parseQueryParams(queryParams.value);
+        let payload = null;
+
+        if (!type) {
+            dataInput.value = '';
+            return;
+        }
+
+        if (type === 'activity') {
+            const activityParams = { ...params };
+            if (activityType.value.trim()) {
+                activityParams.activity_type = activityType.value.trim();
+            }
+            if (activityTarget.value.trim()) {
+                activityParams.target_id = activityTarget.value.trim();
+            }
+            payload = { screen: 'activity' };
+            if (Object.keys(activityParams).length) {
+                payload.params = activityParams;
+            }
+        } else {
+            const id = contentId.value.trim();
+            const screenPath = id ? `${type}/${id}` : type;
+            payload = { screen: screenPath };
+            if (Object.keys(params).length) {
+                payload.params = params;
+            }
+        }
+
+        dataInput.value = JSON.stringify(payload);
+    }
+
+    payloadType.addEventListener('change', () => {
+        const isActivity = payloadType.value === 'activity';
+        activityFields.style.display = isActivity ? 'flex' : 'none';
+        document.getElementById('contentIdBox').style.display = isActivity ? 'none' : 'block';
+        buildPayload();
+    });
+
+    [contentId, activityType, activityTarget, queryParams].forEach(element => {
+        element.addEventListener('input', buildPayload);
+    });
+
+    manualOverride.addEventListener('change', () => {
+        if (manualOverride.checked) {
+            dataInput.removeAttribute('readonly');
+        } else {
+            dataInput.setAttribute('readonly', 'readonly');
+            buildPayload();
+        }
+    });
+
+    form.addEventListener('submit', (event) => {
+        const dataValue = dataInput.value.trim();
+        if (dataValue) {
+            try {
+                JSON.parse(dataValue);
+            } catch (err) {
+                event.preventDefault();
+                alert('Additional Data must be valid JSON. Please fix the payload or enable manual override to adjust.');
+            }
+        }
+    });
+
+    // Initialize payload on load
+    buildPayload();
+})();
+</script>
 {% endblock %}
