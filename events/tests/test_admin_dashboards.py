@@ -110,11 +110,21 @@ class AdminDashboardTests(TestCase):
             event_type_code=EventType.SCREEN_VIEW,
             user=self.regular_user,
             title='Screen viewed',
-            data={'screen': 'fasts_list'}
+            data={'screen': 'fasts_list', 'source': 'app_ui'}
         )
         # Update timestamp manually
         self.screen_view_event.timestamp = today_noon - timedelta(minutes=15)
         self.screen_view_event.save()
+
+        # API screen view should be excluded from UI metrics
+        self.api_screen_view_event = Event.create_event(
+            event_type_code=EventType.SCREEN_VIEW,
+            user=self.regular_user,
+            title='API Screen viewed',
+            data={'screen': 'api_endpoint', 'path': '/api/data/', 'source': 'api'}
+        )
+        self.api_screen_view_event.timestamp = today_noon - timedelta(minutes=20)
+        self.api_screen_view_event.save()
         
         # Staff user events (should be excluded from both dashboards)
         self.staff_login_event = Event.create_event(
@@ -196,10 +206,10 @@ class AdminDashboardTests(TestCase):
         self.assertIn('app_open_hourly', context)
         self.assertIn('top_screens', context)
         self.assertIn('platform_counts', context)
-        
+
         # Verify analytics data is present
         self.assertGreaterEqual(context['total_app_opens'], 1)
-        self.assertGreaterEqual(context['total_screen_views'], 1)
+        self.assertEqual(context['total_screen_views'], 1)
     
     def test_app_analytics_dashboard_data_endpoint(self):
         """Test the App Analytics Dashboard AJAX data endpoint."""
@@ -218,10 +228,10 @@ class AdminDashboardTests(TestCase):
         self.assertIn('avg_session_duration', data)
         self.assertIn('top_screens', data)
         self.assertIn('platform_counts', data)
-        
+
         # Verify analytics data is present
         self.assertGreaterEqual(data['total_app_opens'], 1)
-        self.assertGreaterEqual(data['total_screen_views'], 1)
+        self.assertEqual(data['total_screen_views'], 1)
     
     def test_dashboard_staff_event_exclusion(self):
         """Test that both dashboards properly exclude staff events."""
@@ -338,6 +348,12 @@ class AdminDashboardTests(TestCase):
         )
         self.assertIsNotNone(fasts_list_screen)
         self.assertGreaterEqual(fasts_list_screen['count'], 1)
+
+        api_screen = next(
+            (screen for screen in top_screens if screen['data__screen'] == 'api_endpoint'),
+            None
+        )
+        self.assertIsNone(api_screen)
     
     def test_dashboard_platform_analytics(self):
         """Test platform analytics functionality in app dashboard."""
