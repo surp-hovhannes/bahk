@@ -21,7 +21,17 @@ class AnalyticsQueryOptimizer:
         """
         Get daily event counts with a single optimized query instead of N loops.
         Includes intelligent caching for improved performance.
-        
+
+        Args:
+            start_of_window: datetime start of analysis window
+            num_days: number of days to analyze
+            filters: optional dict with keys:
+                - include_categories: list of event categories to include
+                - exclude_categories: list of event categories to exclude
+                - exclude_staff: bool to exclude staff user events
+                - only_event_types: list of event type codes to include (exclusive)
+                - exclude_event_types: list of event type codes to exclude
+
         Returns:
             dict: {
                 'events_by_day': {'2025-01-15': 42, ...},
@@ -53,6 +63,7 @@ class AnalyticsQueryOptimizer:
             exclude_categories = filters.get('exclude_categories')
             exclude_staff = filters.get('exclude_staff')
             only_event_types = filters.get('only_event_types')
+            exclude_event_types = filters.get('exclude_event_types')
 
             if include_categories:
                 queryset = queryset.filter(event_type__category__in=include_categories)
@@ -62,6 +73,8 @@ class AnalyticsQueryOptimizer:
                 queryset = queryset.exclude(user__is_staff=True)
             if only_event_types:
                 queryset = queryset.filter(event_type__code__in=only_event_types)
+            if exclude_event_types:
+                queryset = queryset.exclude(event_type__code__in=exclude_event_types)
 
         daily_stats = queryset.annotate(
             date=TruncDate('timestamp')
@@ -124,13 +137,18 @@ class AnalyticsQueryOptimizer:
     def get_fast_specific_daily_data(fast_queryset, start_of_window, num_days, filters=None):
         """
         Get daily join/leave data for specific fasts with optimized queries.
-        
+
         Args:
             fast_queryset: QuerySet of Fast objects to analyze
             start_of_window: datetime start of analysis window
             num_days: number of days to analyze
-            filters: optional dict with keys include_categories, exclude_categories, exclude_staff
-            
+            filters: optional dict with keys:
+                - include_categories: list of event categories to include
+                - exclude_categories: list of event categories to exclude
+                - exclude_staff: bool to exclude staff user events
+                - only_event_types: list of event type codes to include (exclusive)
+                - exclude_event_types: list of event type codes to exclude
+
         Returns:
             dict: {fast_name: {'daily_joins': {...}, 'daily_leaves': {...}, ...}}
         """
@@ -158,6 +176,7 @@ class AnalyticsQueryOptimizer:
                 exclude_categories = filters.get('exclude_categories')
                 exclude_staff = filters.get('exclude_staff')
                 only_event_types = filters.get('only_event_types')
+                exclude_event_types = filters.get('exclude_event_types')
 
                 if include_categories:
                     base_qs = base_qs.filter(event_type__category__in=include_categories)
@@ -167,6 +186,8 @@ class AnalyticsQueryOptimizer:
                     base_qs = base_qs.exclude(user__is_staff=True)
                 if only_event_types:
                     base_qs = base_qs.filter(event_type__code__in=only_event_types)
+                if exclude_event_types:
+                    base_qs = base_qs.exclude(event_type__code__in=exclude_event_types)
 
             daily_stats = base_qs.annotate(
                 date=TruncDate('timestamp')

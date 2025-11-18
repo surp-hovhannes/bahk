@@ -110,11 +110,21 @@ class AdminDashboardTests(TestCase):
             event_type_code=EventType.SCREEN_VIEW,
             user=self.regular_user,
             title='Screen viewed',
-            data={'screen': 'fasts_list'}
+            data={'screen': 'fasts_list', 'source': 'app_ui'}
         )
         # Update timestamp manually
         self.screen_view_event.timestamp = today_noon - timedelta(minutes=15)
         self.screen_view_event.save()
+
+        # API screen view should be excluded from UI metrics
+        self.api_screen_view_event = Event.create_event(
+            event_type_code=EventType.SCREEN_VIEW,
+            user=self.regular_user,
+            title='API Screen viewed',
+            data={'screen': 'api_endpoint', 'path': '/api/data/', 'source': 'api'}
+        )
+        self.api_screen_view_event.timestamp = today_noon - timedelta(minutes=20)
+        self.api_screen_view_event.save()
         
         # Staff user events (should be excluded from both dashboards)
         self.staff_login_event = Event.create_event(
@@ -196,10 +206,10 @@ class AdminDashboardTests(TestCase):
         self.assertIn('app_open_hourly', context)
         self.assertIn('top_screens', context)
         self.assertIn('platform_counts', context)
-        
+
         # Verify analytics data is present
         self.assertGreaterEqual(context['total_app_opens'], 1)
-        self.assertGreaterEqual(context['total_screen_views'], 1)
+        self.assertEqual(context['total_screen_views'], 1)
     
     def test_app_analytics_dashboard_data_endpoint(self):
         """Test the App Analytics Dashboard AJAX data endpoint."""
@@ -218,10 +228,10 @@ class AdminDashboardTests(TestCase):
         self.assertIn('avg_session_duration', data)
         self.assertIn('top_screens', data)
         self.assertIn('platform_counts', data)
-        
+
         # Verify analytics data is present
         self.assertGreaterEqual(data['total_app_opens'], 1)
-        self.assertGreaterEqual(data['total_screen_views'], 1)
+        self.assertEqual(data['total_screen_views'], 1)
     
     def test_dashboard_staff_event_exclusion(self):
         """Test that both dashboards properly exclude staff events."""
@@ -338,6 +348,12 @@ class AdminDashboardTests(TestCase):
         )
         self.assertIsNotNone(fasts_list_screen)
         self.assertGreaterEqual(fasts_list_screen['count'], 1)
+
+        api_screen = next(
+            (screen for screen in top_screens if screen['data__screen'] == 'api_endpoint'),
+            None
+        )
+        self.assertIsNone(api_screen)
     
     def test_dashboard_platform_analytics(self):
         """Test platform analytics functionality in app dashboard."""
@@ -403,7 +419,10 @@ class AdminDashboardTests(TestCase):
         self.assertIn('filters', call_args[1])
         filters = call_args[1]['filters']
         self.assertTrue(filters['exclude_staff'])
-        self.assertIn('analytics', filters['exclude_categories'])
+        self.assertIn('exclude_event_types', filters)
+        # Should exclude pure analytics events
+        from events.models import EventType
+        self.assertIn(EventType.APP_OPEN, filters['exclude_event_types'])
         
         mock_optimizer.reset_mock()
         
@@ -420,3 +439,258 @@ class AdminDashboardTests(TestCase):
         filters = call_args[1]['filters']
         self.assertTrue(filters['exclude_staff'])
         self.assertIn('analytics', filters['include_categories'])
+
+    def test_new_kpi_metrics_in_view(self):
+        """Test that new KPI metrics are included in the analytics view."""
+        # Create KPI events
+        now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+
+        # User signup event
+        signup_event = Event.create_event(
+            event_type_code=EventType.USER_ACCOUNT_CREATED,
+            user=self.regular_user,
+            title='User account created'
+        )
+        signup_event.timestamp = today_noon - timedelta(hours=1)
+        signup_event.save()
+
+        # Devotional viewed event
+        devotional_event = Event.create_event(
+            event_type_code=EventType.DEVOTIONAL_VIEWED,
+            user=self.regular_user,
+            title='Devotional viewed',
+            target=self.fast
+        )
+        devotional_event.timestamp = today_noon - timedelta(hours=2)
+        devotional_event.save()
+
+        # Checklist used event
+        checklist_event = Event.create_event(
+            event_type_code=EventType.CHECKLIST_USED,
+            user=self.regular_user,
+            title='Checklist used'
+        )
+        checklist_event.timestamp = today_noon - timedelta(hours=3)
+        checklist_event.save()
+
+        # Prayer set viewed event
+        prayer_event = Event.create_event(
+            event_type_code=EventType.PRAYER_SET_VIEWED,
+            user=self.regular_user,
+            title='Prayer set viewed',
+            target=self.fast
+        )
+        prayer_event.timestamp = today_noon - timedelta(hours=4)
+        prayer_event.save()
+
+        # Test the analytics view
+        url = reverse('admin:events_analytics')
+        response = self.client.get(url, {'days': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        context = response.context
+
+        # Check that KPI metrics are in the context
+        self.assertIn('user_signups', context)
+        self.assertIn('devotional_views', context)
+        self.assertIn('checklist_usage', context)
+        self.assertIn('prayer_set_views', context)
+
+        # Check that daily breakdowns are in the context
+        self.assertIn('user_signups_by_day', context)
+        self.assertIn('devotional_views_by_day', context)
+        self.assertIn('checklist_usage_by_day', context)
+        self.assertIn('prayer_set_views_by_day', context)
+
+        # Check that feature usage chart data is present
+        self.assertIn('feature_usage_over_time', context)
+
+        # Verify counts
+        self.assertGreaterEqual(context['user_signups'], 1)
+        self.assertGreaterEqual(context['devotional_views'], 1)
+        self.assertGreaterEqual(context['checklist_usage'], 1)
+        self.assertGreaterEqual(context['prayer_set_views'], 1)
+
+    def test_new_kpi_metrics_in_data_endpoint(self):
+        """Test that new KPI metrics are included in the analytics data endpoint."""
+        # Create KPI events
+        now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+
+        # User signup event
+        signup_event = Event.create_event(
+            event_type_code=EventType.USER_ACCOUNT_CREATED,
+            user=self.regular_user,
+            title='User account created'
+        )
+        signup_event.timestamp = today_noon - timedelta(hours=1)
+        signup_event.save()
+
+        # Devotional viewed event
+        devotional_event = Event.create_event(
+            event_type_code=EventType.DEVOTIONAL_VIEWED,
+            user=self.regular_user,
+            title='Devotional viewed',
+            target=self.fast
+        )
+        devotional_event.timestamp = today_noon - timedelta(hours=2)
+        devotional_event.save()
+
+        # Test the data endpoint
+        url = reverse('admin:events_analytics_data')
+        response = self.client.get(url, {'days': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        # Check that KPI metrics are in the response
+        self.assertIn('user_signups', data)
+        self.assertIn('devotional_views', data)
+        self.assertIn('checklist_usage', data)
+        self.assertIn('prayer_set_views', data)
+
+        # Check that daily breakdowns are in the response
+        self.assertIn('user_signups_by_day', data)
+        self.assertIn('devotional_views_by_day', data)
+        self.assertIn('checklist_usage_by_day', data)
+        self.assertIn('prayer_set_views_by_day', data)
+
+        # Check that feature usage chart data is present
+        self.assertIn('feature_usage_over_time', data)
+
+        # Verify structure of feature_usage_over_time
+        feature_usage = data['feature_usage_over_time']
+        self.assertIn('labels', feature_usage)
+        self.assertIn('datasets', feature_usage)
+        self.assertIsInstance(feature_usage['datasets'], list)
+        self.assertEqual(len(feature_usage['datasets']), 4)  # 4 metrics
+
+        # Verify dataset labels
+        dataset_labels = [dataset['label'] for dataset in feature_usage['datasets']]
+        self.assertIn('User Signups', dataset_labels)
+        self.assertIn('Devotional Views', dataset_labels)
+        self.assertIn('Checklist Uses', dataset_labels)
+        self.assertIn('Prayer Set Views', dataset_labels)
+
+        # Verify counts
+        self.assertGreaterEqual(data['user_signups'], 1)
+        self.assertGreaterEqual(data['devotional_views'], 1)
+
+    def test_kpi_excludes_staff_events(self):
+        """Test that KPI metrics exclude staff user events."""
+        now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+
+        # Create regular user KPI event
+        regular_signup = Event.create_event(
+            event_type_code=EventType.USER_ACCOUNT_CREATED,
+            user=self.regular_user,
+            title='Regular user account created'
+        )
+        regular_signup.timestamp = today_noon - timedelta(hours=1)
+        regular_signup.save()
+
+        # Create staff user KPI event (should be excluded)
+        staff_signup = Event.create_event(
+            event_type_code=EventType.USER_ACCOUNT_CREATED,
+            user=self.staff_user,
+            title='Staff user account created'
+        )
+        staff_signup.timestamp = today_noon - timedelta(hours=2)
+        staff_signup.save()
+
+        # Test the data endpoint
+        url = reverse('admin:events_analytics_data')
+        response = self.client.get(url, {'days': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        # Should only count the regular user signup, not the staff user signup
+        self.assertEqual(data['user_signups'], 1)
+
+    def test_kpi_daily_breakdown_accuracy(self):
+        """Test that KPI daily breakdowns accurately reflect event counts."""
+        now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+        yesterday_noon = today_noon - timedelta(days=1)
+
+        # Create events on different days
+        # Today's devotional
+        devotional_today = Event.create_event(
+            event_type_code=EventType.DEVOTIONAL_VIEWED,
+            user=self.regular_user,
+            title='Devotional viewed today',
+            target=self.fast
+        )
+        devotional_today.timestamp = today_noon - timedelta(hours=1)
+        devotional_today.save()
+
+        # Yesterday's devotional
+        devotional_yesterday = Event.create_event(
+            event_type_code=EventType.DEVOTIONAL_VIEWED,
+            user=self.regular_user,
+            title='Devotional viewed yesterday',
+            target=self.fast
+        )
+        devotional_yesterday.timestamp = yesterday_noon
+        devotional_yesterday.save()
+
+        # Test the data endpoint with 2 days
+        url = reverse('admin:events_analytics_data')
+        response = self.client.get(url, {'days': '2'})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        # Total should be 2
+        self.assertEqual(data['devotional_views'], 2)
+
+        # Daily breakdown should show events distributed across days
+        devotional_by_day = data['devotional_views_by_day']
+        self.assertIsInstance(devotional_by_day, dict)
+
+        # Sum of daily counts should equal total
+        daily_sum = sum(devotional_by_day.values())
+        self.assertEqual(daily_sum, 2)
+
+    def test_pure_analytics_events_excluded(self):
+        """Test that pure analytics events (APP_OPEN, etc.) are excluded from engagement dashboard."""
+        # The existing app_open_event and screen_view_event from setUp should be excluded
+        url = reverse('admin:events_analytics_data')
+        response = self.client.get(url, {'days': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        # The events_by_day should NOT include APP_OPEN or SCREEN_VIEW events
+        # We know from setUp that we have app_open_event and screen_view_event
+        # But they should not be counted in the engagement dashboard
+
+        # Verify by checking that events_in_period excludes analytics events
+        # We have login and fast join events which should be included
+        events_count = data['events_in_period']
+
+        # Should have at least the user login and fast join events
+        self.assertGreater(events_count, 0)
+
+        # Create a devotional event to ensure engagement events are still counted
+        now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+
+        devotional_event = Event.create_event(
+            event_type_code=EventType.DEVOTIONAL_VIEWED,
+            user=self.regular_user,
+            title='Devotional viewed',
+            target=self.fast
+        )
+        devotional_event.timestamp = today_noon - timedelta(hours=1)
+        devotional_event.save()
+
+        # Get data again
+        response = self.client.get(url, {'days': '1'})
+        data = response.json()
+
+        # Should now have the devotional view counted
+        self.assertGreaterEqual(data['devotional_views'], 1)

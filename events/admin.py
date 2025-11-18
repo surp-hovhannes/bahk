@@ -6,7 +6,7 @@ Provides comprehensive views for events, event types, and analytics.
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Q, Avg, FloatField
-from django.db.models.functions import Cast
+from django.db.models.functions import Cast, TruncDate
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.urls import path, reverse
@@ -18,6 +18,31 @@ import json
 import csv
 
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
+
+
+def build_daily_counts_for_queryset(queryset, date_keys):
+    """
+    Build a date-keyed dict covering the window for the queryset.
+
+    Args:
+        queryset: Event queryset to aggregate
+        date_keys: Dict keys (dates as 'YYYY-MM-DD' strings) to initialize with zero
+
+    Returns:
+        Dict mapping date strings to event counts
+    """
+    counts = {date: 0 for date in date_keys}
+    daily_rows = queryset.annotate(
+        date=TruncDate('timestamp')
+    ).values('date').annotate(count=Count('id')).order_by('date')
+
+    for row in daily_rows:
+        date_value = row['date']
+        date_str = date_value.strftime('%Y-%m-%d') if hasattr(date_value, 'strftime') else str(date_value)
+        if date_str in counts:
+            counts[date_str] = row['count']
+
+    return counts
 
 
 @admin.register(EventType)
@@ -197,10 +222,16 @@ class EventAdmin(admin.ModelAdmin):
         start_date = start_of_window
         end_date = end_of_today
         
-        # Base queryset with engagement filters (exclude staff and analytics-category events)
+        # Base queryset with engagement filters (exclude staff and pure analytics events)
+        # Keep engagement analytics like DEVOTIONAL_VIEWED, CHECKLIST_USED, PRAYER_SET_VIEWED
         base_qs = Event.objects.select_related('event_type', 'user', 'content_type')\
             .exclude(user__is_staff=True)\
-            .exclude(event_type__category='analytics')
+            .exclude(event_type__code__in=[
+                EventType.APP_OPEN,
+                EventType.SESSION_START,
+                EventType.SESSION_END,
+                EventType.SCREEN_VIEW,
+            ])
 
         # Basic event statistics
         total_events = base_qs.count()
@@ -222,10 +253,16 @@ class EventAdmin(admin.ModelAdmin):
         num_days = days
         
         # Replace N+1 queries with single optimized aggregation
+        # Exclude pure analytics events but keep engagement analytics
         daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
             start_of_window, num_days, filters={
                 'exclude_staff': True,
-                'exclude_categories': ['analytics']
+                'exclude_event_types': [
+                    EventType.APP_OPEN,
+                    EventType.SESSION_START,
+                    EventType.SESSION_END,
+                    EventType.SCREEN_VIEW,
+                ]
             }
         )
         events_by_day = daily_aggregates['events_by_day']
@@ -244,7 +281,61 @@ class EventAdmin(admin.ModelAdmin):
         # Fast join/leave totals for the period (derived from per-day buckets to align with charts)
         fast_joins = sum(fast_joins_by_day.values())
         fast_leaves = sum(fast_leaves_by_day.values())
-        
+
+        # Optimize KPI totals with single aggregated query
+        kpi_totals = base_qs.filter(
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        ).aggregate(
+            user_signups=Count('id', filter=Q(event_type__code=EventType.USER_ACCOUNT_CREATED)),
+            devotional_views=Count('id', filter=Q(event_type__code=EventType.DEVOTIONAL_VIEWED)),
+            checklist_usage=Count('id', filter=Q(event_type__code=EventType.CHECKLIST_USED)),
+            prayer_set_views=Count('id', filter=Q(event_type__code=EventType.PRAYER_SET_VIEWED)),
+        )
+        user_signups_total = kpi_totals['user_signups']
+        devotional_views_total = kpi_totals['devotional_views']
+        checklist_usage_total = kpi_totals['checklist_usage']
+        prayer_set_views_total = kpi_totals['prayer_set_views']
+
+        # Get daily breakdowns for each KPI
+        signups_qs = base_qs.filter(
+            event_type__code=EventType.USER_ACCOUNT_CREATED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys())
+
+        devotional_qs = base_qs.filter(
+            event_type__code=EventType.DEVOTIONAL_VIEWED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys())
+
+        checklist_qs = base_qs.filter(
+            event_type__code=EventType.CHECKLIST_USED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys())
+
+        prayer_set_qs = base_qs.filter(
+            event_type__code=EventType.PRAYER_SET_VIEWED,
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys())
+
+        feature_usage_over_time = {
+            'labels': list(events_by_day.keys()),
+            'datasets': [
+                {'label': 'User Signups', 'data': list(user_signups_by_day.values())},
+                {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
+                {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
+                {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
+            ],
+        }
+
         # Recent milestones
         milestones = base_qs.filter(
             event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
@@ -270,10 +361,16 @@ class EventAdmin(admin.ModelAdmin):
         all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
         
         # Get fast-specific data with optimized queries
+        # Exclude pure analytics events but keep engagement analytics
         current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
             all_relevant_fasts, start_of_window, num_days, filters={
                 'exclude_staff': True,
-                'exclude_categories': ['analytics']
+                'exclude_event_types': [
+                    EventType.APP_OPEN,
+                    EventType.SESSION_START,
+                    EventType.SESSION_END,
+                    EventType.SCREEN_VIEW,
+                ]
             }
         )
         
@@ -319,6 +416,15 @@ class EventAdmin(admin.ModelAdmin):
             'start_date': start_date,
             'end_date': end_date,
             'days': days,
+            'user_signups': user_signups_total,
+            'devotional_views': devotional_views_total,
+            'checklist_usage': checklist_usage_total,
+            'prayer_set_views': prayer_set_views_total,
+            'user_signups_by_day': user_signups_by_day,
+            'devotional_views_by_day': devotional_views_by_day,
+            'checklist_usage_by_day': checklist_usage_by_day,
+            'prayer_set_views_by_day': prayer_set_views_by_day,
+            'feature_usage_over_time': feature_usage_over_time,
         }
         
         return render(request, 'admin/events/analytics.html', context)
@@ -340,9 +446,11 @@ class EventAdmin(admin.ModelAdmin):
                     'error': 'Invalid date range. Must be between 1 and 365 days.'
                 }, status=400)
             
-            # Use a rolling window of the last N days to avoid edge-of-midnight zeros
+            # Use calendar-day boundaries to match analytics_view behavior
             now = timezone.now()
-            start_of_window = now - timedelta(days=days)
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+            end_date = end_of_today
             
         except (ValueError, TypeError) as e:
             return JsonResponse({
@@ -356,16 +464,82 @@ class EventAdmin(admin.ModelAdmin):
         num_days = days
         
         # Replace N+1 queries with single optimized aggregation
+        # Exclude pure analytics events but keep engagement analytics
         daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
             start_of_window, num_days, filters={
                 'exclude_staff': True,
-                'exclude_categories': ['analytics']
+                'exclude_event_types': [
+                    EventType.APP_OPEN,
+                    EventType.SESSION_START,
+                    EventType.SESSION_END,
+                    EventType.SCREEN_VIEW,
+                ]
             }
         )
         events_by_day = daily_aggregates['events_by_day']
         fast_joins_by_day = daily_aggregates['fast_joins_by_day']
         fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
-        
+
+        # Keep engagement analytics like DEVOTIONAL_VIEWED, CHECKLIST_USED, PRAYER_SET_VIEWED
+        base_qs = Event.objects.select_related('event_type', 'user', 'content_type')\
+            .exclude(user__is_staff=True)\
+            .exclude(event_type__code__in=[
+                EventType.APP_OPEN,
+                EventType.SESSION_START,
+                EventType.SESSION_END,
+                EventType.SCREEN_VIEW,
+            ])
+
+        # Optimize KPI totals with single aggregated query
+        kpi_totals = base_qs.filter(
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
+        ).aggregate(
+            user_signups=Count('id', filter=Q(event_type__code=EventType.USER_ACCOUNT_CREATED)),
+            devotional_views=Count('id', filter=Q(event_type__code=EventType.DEVOTIONAL_VIEWED)),
+            checklist_usage=Count('id', filter=Q(event_type__code=EventType.CHECKLIST_USED)),
+            prayer_set_views=Count('id', filter=Q(event_type__code=EventType.PRAYER_SET_VIEWED)),
+        )
+
+        # Get daily breakdowns for each KPI
+        signups_qs = base_qs.filter(
+            event_type__code=EventType.USER_ACCOUNT_CREATED,
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
+        )
+        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys())
+
+        devotional_qs = base_qs.filter(
+            event_type__code=EventType.DEVOTIONAL_VIEWED,
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
+        )
+        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys())
+
+        checklist_qs = base_qs.filter(
+            event_type__code=EventType.CHECKLIST_USED,
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
+        )
+        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys())
+
+        prayer_set_qs = base_qs.filter(
+            event_type__code=EventType.PRAYER_SET_VIEWED,
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
+        )
+        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys())
+
+        feature_usage_over_time = {
+            'labels': list(events_by_day.keys()),
+            'datasets': [
+                {'label': 'User Signups', 'data': list(user_signups_by_day.values())},
+                {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
+                {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
+                {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
+            ],
+        }
+
         # Fast activity trends
         fast_trends_data = {
             'labels': list(events_by_day.keys()),
@@ -395,10 +569,16 @@ class EventAdmin(admin.ModelAdmin):
         all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
         
         # Get fast-specific data with optimized queries
+        # Exclude pure analytics events but keep engagement analytics
         current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
             all_relevant_fasts, start_of_window, num_days, filters={
                 'exclude_staff': True,
-                'exclude_categories': ['analytics']
+                'exclude_event_types': [
+                    EventType.APP_OPEN,
+                    EventType.SESSION_START,
+                    EventType.SESSION_END,
+                    EventType.SCREEN_VIEW,
+                ]
             }
         )
         
@@ -415,6 +595,15 @@ class EventAdmin(admin.ModelAdmin):
                 'net_joins': fast_joins - fast_leaves,
                 'events_in_period': sum(events_by_day.values()),
                 'current_upcoming_fast_data': current_upcoming_fast_data,
+                'user_signups_by_day': user_signups_by_day,
+                'devotional_views_by_day': devotional_views_by_day,
+                'checklist_usage_by_day': checklist_usage_by_day,
+                'prayer_set_views_by_day': prayer_set_views_by_day,
+                'feature_usage_over_time': feature_usage_over_time,
+                'user_signups': kpi_totals['user_signups'],
+                'devotional_views': kpi_totals['devotional_views'],
+                'checklist_usage': kpi_totals['checklist_usage'],
+                'prayer_set_views': kpi_totals['prayer_set_views'],
             })
             
         except Exception as e:
@@ -483,9 +672,14 @@ class EventAdmin(admin.ModelAdmin):
             event_type__category='analytics'
         ).exclude(user__is_staff=True)
 
+        screen_view_qs = base_qs.filter(
+            event_type__code=EventType.SCREEN_VIEW,
+            data__source='app_ui'
+        )
+
         # Totals
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
-        total_screen_views = base_qs.filter(event_type__code=EventType.SCREEN_VIEW).count()
+        total_screen_views = screen_view_qs.count()
         active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
 
         # Events over time (analytics)
@@ -508,7 +702,7 @@ class EventAdmin(admin.ModelAdmin):
 
         # Most viewed screens
         top_screens = list(
-            base_qs.filter(event_type__code=EventType.SCREEN_VIEW, data__has_key='screen')
+            screen_view_qs.filter(data__has_key='screen')
             .values('data__screen').annotate(count=Count('id')).order_by('-count')[:15]
         )
 
@@ -590,13 +784,18 @@ class EventAdmin(admin.ModelAdmin):
 
         # Other metrics
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
-        total_screen_views = base_qs.filter(event_type__code=EventType.SCREEN_VIEW).count()
+        screen_view_qs = base_qs.filter(
+            event_type__code=EventType.SCREEN_VIEW,
+            data__source='app_ui'
+        )
+
+        total_screen_views = screen_view_qs.count()
         active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
         avg_session_duration = base_qs.filter(event_type__code=EventType.SESSION_END, data__has_key='duration_seconds')\
             .aggregate(avg=Avg(Cast('data__duration_seconds', FloatField())))['avg'] or 0
 
         top_screens = list(
-            base_qs.filter(event_type__code=EventType.SCREEN_VIEW, data__has_key='screen')
+            screen_view_qs.filter(data__has_key='screen')
             .values('data__screen').annotate(count=Count('id')).order_by('-count')[:15]
         )
 
