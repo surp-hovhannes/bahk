@@ -417,9 +417,11 @@ class EventAdmin(admin.ModelAdmin):
                     'error': 'Invalid date range. Must be between 1 and 365 days.'
                 }, status=400)
             
-            # Use a rolling window of the last N days to avoid edge-of-midnight zeros
+            # Use calendar-day boundaries to match analytics_view behavior
             now = timezone.now()
-            start_of_window = now - timedelta(days=days)
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+            end_date = end_of_today
             
         except (ValueError, TypeError) as e:
             return JsonResponse({
@@ -464,30 +466,35 @@ class EventAdmin(admin.ModelAdmin):
         signups_qs = base_qs.filter(
             event_type__code=EventType.USER_ACCOUNT_CREATED,
             timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
         )
         user_signups_by_day = _build_daily_counts(signups_qs)
 
         devotional_qs = base_qs.filter(
             event_type__code=EventType.DEVOTIONAL_VIEWED,
             timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
         )
         devotional_views_by_day = _build_daily_counts(devotional_qs)
 
         checklist_qs = base_qs.filter(
             event_type__code=EventType.CHECKLIST_USED,
             timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
         )
         checklist_usage_by_day = _build_daily_counts(checklist_qs)
 
         prayer_set_qs = base_qs.filter(
             event_type__code=EventType.PRAYER_SET_VIEWED,
             timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
         )
         prayer_set_views_by_day = _build_daily_counts(prayer_set_qs)
 
         share_qs = base_qs.filter(
             event_type__code__icontains='share',
             timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
         )
         share_events_by_day = _build_daily_counts(share_qs)
 
