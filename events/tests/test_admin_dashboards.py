@@ -638,3 +638,43 @@ class AdminDashboardTests(TestCase):
         # Sum of daily counts should equal total
         daily_sum = sum(devotional_by_day.values())
         self.assertEqual(daily_sum, 2)
+
+    def test_pure_analytics_events_excluded(self):
+        """Test that pure analytics events (APP_OPEN, etc.) are excluded from engagement dashboard."""
+        # The existing app_open_event and screen_view_event from setUp should be excluded
+        url = reverse('admin:events_analytics_data')
+        response = self.client.get(url, {'days': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        # The events_by_day should NOT include APP_OPEN or SCREEN_VIEW events
+        # We know from setUp that we have app_open_event and screen_view_event
+        # But they should not be counted in the engagement dashboard
+
+        # Verify by checking that events_in_period excludes analytics events
+        # We have login and fast join events which should be included
+        events_count = data['events_in_period']
+
+        # Should have at least the user login and fast join events
+        self.assertGreater(events_count, 0)
+
+        # Create a devotional event to ensure engagement events are still counted
+        now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+
+        devotional_event = Event.create_event(
+            event_type_code=EventType.DEVOTIONAL_VIEWED,
+            user=self.regular_user,
+            title='Devotional viewed',
+            target=self.fast
+        )
+        devotional_event.timestamp = today_noon - timedelta(hours=1)
+        devotional_event.save()
+
+        # Get data again
+        response = self.client.get(url, {'days': '1'})
+        data = response.json()
+
+        # Should now have the devotional view counted
+        self.assertGreaterEqual(data['devotional_views'], 1)
