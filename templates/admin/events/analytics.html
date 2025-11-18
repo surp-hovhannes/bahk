@@ -281,12 +281,6 @@
             <p class="stat-value" id="stat-prayer-sets-value">{{ prayer_set_views }}</p>
             <p class="stat-change" id="stat-prayer-sets-change">Last {{ days }} days</p>
         </div>
-
-        <div class="stat-card" id="stat-shares">
-            <h3>Shares</h3>
-            <p class="stat-value" id="stat-shares-value">{{ share_events }}</p>
-            <p class="stat-change" id="stat-shares-change">Last {{ days }} days</p>
-        </div>
     </div>
     
     <!-- Events Over Time Chart -->
@@ -381,7 +375,6 @@
 {{ devotional_views_by_day|json_script:"devotional-views-by-day" }}
 {{ checklist_usage_by_day|json_script:"checklist-usage-by-day" }}
 {{ prayer_set_views_by_day|json_script:"prayer-set-views-by-day" }}
-{{ share_events_by_day|json_script:"share-events-by-day" }}
 
 
 <script>
@@ -792,7 +785,6 @@ function updateCharts() {
         document.getElementById('stat-devotionals-value').textContent = data.devotional_views;
         document.getElementById('stat-checklists-value').textContent = data.checklist_usage;
         document.getElementById('stat-prayer-sets-value').textContent = data.prayer_set_views;
-        document.getElementById('stat-shares-value').textContent = data.share_events;
 
         // Recreate charts with new data
         recreateCharts(data);
