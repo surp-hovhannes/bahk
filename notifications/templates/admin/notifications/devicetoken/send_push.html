@@ -624,6 +624,7 @@
     async function getNextMajorFast() {
         const fasts = await fetchFromAPI('/api/fasts/');
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
 
         // Filter out weekly fasts and find the next upcoming major fast
         const majorFasts = fasts.filter(fast => {
@@ -634,13 +635,35 @@
         });
 
         // Sort by start date (if available) or culmination_feast_date
-        // Find the first fast that hasn't ended yet
+        majorFasts.sort((a, b) => {
+            // Get comparison date for fast a (prefer start_date, fallback to culmination_feast_date)
+            const dateA = a.start_date ? new Date(a.start_date) : 
+                         (a.culmination_feast_date ? new Date(a.culmination_feast_date) : null);
+            
+            // Get comparison date for fast b
+            const dateB = b.start_date ? new Date(b.start_date) : 
+                         (b.culmination_feast_date ? new Date(b.culmination_feast_date) : null);
+            
+            // Handle null dates - put them at the end
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            
+            // Compare dates
+            return dateA - dateB;
+        });
+
+        // Find the first fast that hasn't ended yet (now in chronological order)
         const upcomingFast = majorFasts.find(fast => {
-            if (fast.culmination_feast_date) {
-                const feastDate = new Date(fast.culmination_feast_date);
-                return feastDate >= today;
+            // Use start_date if available, otherwise use culmination_feast_date
+            const comparisonDate = fast.start_date ? new Date(fast.start_date) : 
+                                  (fast.culmination_feast_date ? new Date(fast.culmination_feast_date) : null);
+            
+            if (comparisonDate) {
+                comparisonDate.setHours(0, 0, 0, 0);
+                return comparisonDate >= today;
             }
-            return true; // Include if no feast date
+            return true; // Include if no date available
         });
 
         return upcomingFast || majorFasts[0]; // Return first if none upcoming
