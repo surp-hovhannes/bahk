@@ -221,6 +221,7 @@ class PrayerSetDetailView(generics.RetrieveAPIView):
 from datetime import date
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
@@ -293,26 +294,17 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
 
         if instance.requester != self.request.user:
-            return Response(
-                {'detail': 'You can only edit your own prayer requests.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            raise PermissionDenied('You can only edit your own prayer requests.')
 
         if instance.status != 'pending_moderation':
-            return Response(
-                {'detail': 'Prayer requests can only be edited while pending moderation.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise ValidationError('Prayer requests can only be edited while pending moderation.')
 
         serializer.save()
 
     def perform_destroy(self, instance):
         """Soft delete: set status to deleted."""
         if instance.requester != self.request.user:
-            return Response(
-                {'detail': 'You can only delete your own prayer requests.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            raise PermissionDenied('You can only delete your own prayer requests.')
 
         instance.status = 'deleted'
         instance.save(update_fields=['status', 'updated_at'])
