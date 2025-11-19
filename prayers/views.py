@@ -515,14 +515,18 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         message = serializer.validated_data['message']
 
-        # Get all users who accepted this request
-        acceptances = prayer_request.acceptances.select_related('user')
+        # Get all users who accepted this request (excluding requester's auto-acceptance)
+        acceptances = prayer_request.acceptances.select_related('user').exclude(
+            user=prayer_request.requester
+        )
 
         if not acceptances.exists():
             return Response(
                 {'detail': 'No one accepted this prayer request.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        recipient_count = acceptances.count()
 
         # Create event
         Event.create_event(
@@ -533,11 +537,11 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             data={
                 'prayer_request_id': prayer_request.id,
                 'message': message,
-                'recipient_count': acceptances.count(),
+                'recipient_count': recipient_count,
             }
         )
 
-        # Create activity feed items for all who accepted
+        # Create activity feed items for all who accepted (excluding requester)
         for acceptance in acceptances:
             UserActivityFeed.objects.create(
                 user=acceptance.user,
@@ -552,6 +556,6 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             )
 
         return Response({
-            'detail': f'Thank you message sent to {acceptances.count()} people.',
-            'recipient_count': acceptances.count()
+            'detail': f'Thank you message sent to {recipient_count} people.',
+            'recipient_count': recipient_count
         }, status=status.HTTP_200_OK)

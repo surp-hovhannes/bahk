@@ -7,7 +7,7 @@ from better_profanity import profanity
 from celery import shared_task
 from django.conf import settings
 from django.core.mail import send_mail
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
@@ -134,6 +134,8 @@ Respond with a JSON object containing:
                     'llm_check': llm_result,
                     'reason': 'Approved by automated moderation'
                 }
+                # Save immediately so milestone check sees the updated status
+                prayer_request.save()
 
                 # Create event for approved prayer request
                 Event.create_event(
@@ -343,9 +345,16 @@ def send_daily_prayer_count_notifications_task():
         return {'success': True, 'notifications_sent': 0}
 
     # Fetch prayer requests with their requesters
+    # Include both approved requests and completed requests that expired today
+    # (to capture prayers logged on the final day before expiration)
     prayer_requests = PrayerRequest.objects.filter(
-        id__in=prayer_counts.keys(),
-        status='approved'
+        id__in=prayer_counts.keys()
+    ).filter(
+        Q(status='approved') |
+        Q(
+            status='completed',
+            expiration_date__date=today
+        )
     ).select_related('requester')
 
     notifications_sent = 0
