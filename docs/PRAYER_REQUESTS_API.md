@@ -35,12 +35,20 @@ Authorization: Bearer <jwt_token>
 
 ## 1. List Prayer Requests
 
-Get all approved, active prayer requests.
+Get prayer requests. By default, returns approved, active (non-expired) requests. Can be filtered by status.
 
 **Endpoint:** `GET /api/prayer-requests/`
 
 **Query Parameters:**
-- None
+- `status` (str, optional): Filter by status. Can be a single status or comma-separated multiple statuses. Valid values: `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`. When not provided, defaults to approved, active (non-expired) requests only.
+
+**Example Requests:**
+```
+GET /api/prayer-requests/
+GET /api/prayer-requests/?status=completed
+GET /api/prayer-requests/?status=pending_moderation
+GET /api/prayer-requests/?status=pending_moderation,completed
+```
 
 **Response:** `200 OK`
 
@@ -94,9 +102,11 @@ Get all approved, active prayer requests.
 ```
 
 **Notes:**
-- Only returns `approved` status requests that haven't expired
+- **Default behavior** (no `status` parameter): Only returns `approved` status requests that haven't expired
+- **With `status` parameter**: Returns requests matching the specified status(es), regardless of expiration
 - Anonymous requests hide `requester` field (shows `null`)
 - `has_accepted` and `has_prayed_today` are user-specific flags
+- Invalid status values result in an empty response
 
 ---
 
@@ -808,6 +818,22 @@ curl -X PATCH https://api.example.com/api/prayer-requests/12/ \
   -d '{
     "description": "Updated with more specific details about my situation."
   }'
+```
+
+### Example 4: Filter Prayer Requests by Status
+
+```bash
+# Get all completed prayer requests
+curl -X GET https://api.example.com/api/prayer-requests/?status=completed \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get pending moderation requests
+curl -X GET https://api.example.com/api/prayer-requests/?status=pending_moderation \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get both completed and pending moderation requests
+curl -X GET https://api.example.com/api/prayer-requests/?status=completed,pending_moderation \
+  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ---
