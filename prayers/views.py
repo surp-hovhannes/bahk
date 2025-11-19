@@ -253,6 +253,16 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
     accepted: Get all prayer requests the user has accepted
     mark_prayed: Mark that you prayed for a request today
     send_thanks: Send thanks message to all who accepted (requester only, if completed)
+
+    Query Parameters (for list action):
+        - status (str): Optional. Filter by status. Can be a single status or comma-separated
+                       multiple statuses. Valid values: pending_moderation, approved, rejected,
+                       completed, deleted. Default: approved (active, non-expired only).
+
+    Example Requests:
+        GET /api/prayer-requests/
+        GET /api/prayer-requests/?status=completed
+        GET /api/prayer-requests/?status=pending_moderation,completed
     """
 
     permission_classes = [IsAuthenticated]
@@ -260,8 +270,27 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Get prayer requests based on action."""
         if self.action == 'list':
-            # List only approved, non-expired requests
-            return PrayerRequest.objects.get_active_approved().select_related('requester')
+            queryset = PrayerRequest.objects.select_related('requester')
+            
+            # Filter by status if provided
+            status_param = self.request.query_params.get('status', None)
+            if status_param:
+                # Support comma-separated multiple statuses
+                status_list = [s.strip() for s in status_param.split(',')]
+                # Validate status values
+                valid_statuses = ['pending_moderation', 'approved', 'rejected', 'completed', 'deleted']
+                status_list = [s for s in status_list if s in valid_statuses]
+                
+                if status_list:
+                    queryset = queryset.filter(status__in=status_list)
+                else:
+                    # Invalid status values, return empty queryset
+                    return PrayerRequest.objects.none()
+            else:
+                # Default behavior: only approved, non-expired requests
+                queryset = PrayerRequest.objects.get_active_approved().select_related('requester')
+            
+            return queryset
         elif self.action == 'accepted':
             # Get user's accepted requests
             return PrayerRequest.objects.filter(
