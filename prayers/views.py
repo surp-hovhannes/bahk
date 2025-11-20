@@ -257,7 +257,8 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
     Query Parameters (for list action):
         - status (str): Optional. Filter by status. Can be a single status or comma-separated
                        multiple statuses. Valid values: pending_moderation, approved, rejected,
-                       completed, deleted. Default: approved (active, non-expired only).
+                       completed, deleted, active. Special value 'active' means approved and not expired.
+                       Default: approved (active, non-expired only).
         - mine (bool): Optional. Filter to show only the current user's own prayer requests.
                        Use ?mine=true or ?mine=1. When used, status filter still applies.
 
@@ -267,6 +268,7 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         GET /api/prayer-requests/?status=pending_moderation,completed
         GET /api/prayer-requests/?mine=true
         GET /api/prayer-requests/?mine=true&status=approved
+        GET /api/prayer-requests/?mine=true&status=active
     """
 
     permission_classes = [IsAuthenticated]
@@ -287,14 +289,25 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             if status_param:
                 # Support comma-separated multiple statuses
                 status_list = [s.strip() for s in status_param.split(',')]
-                # Validate status values
-                valid_statuses = ['pending_moderation', 'approved', 'rejected', 'completed', 'deleted']
-                status_list = [s for s in status_list if s in valid_statuses]
+                # Check for special 'active' status
+                if 'active' in status_list:
+                    # 'active' means approved and not expired
+                    queryset = queryset.filter(
+                        status='approved',
+                        expiration_date__gt=timezone.now()
+                    )
+                    # Remove 'active' from list and process other statuses
+                    status_list = [s for s in status_list if s != 'active']
+                else:
+                    # Validate status values
+                    valid_statuses = ['pending_moderation', 'approved', 'rejected', 'completed', 'deleted']
+                    status_list = [s for s in status_list if s in valid_statuses]
                 
+                # Apply additional status filters if any remain
                 if status_list:
                     queryset = queryset.filter(status__in=status_list)
-                else:
-                    # Invalid status values, return empty queryset
+                elif 'active' not in [s.strip() for s in status_param.split(',')]:
+                    # Invalid status values (and not 'active'), return empty queryset
                     return PrayerRequest.objects.none()
             elif not is_mine_filter:
                 # Default behavior: only approved, non-expired requests

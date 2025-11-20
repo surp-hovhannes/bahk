@@ -40,7 +40,7 @@ Get prayer requests. By default, returns approved, active (non-expired) requests
 **Endpoint:** `GET /api/prayer-requests/`
 
 **Query Parameters:**
-- `status` (str, optional): Filter by status. Can be a single status or comma-separated multiple statuses. Valid values: `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`. When not provided, defaults to approved, active (non-expired) requests only.
+- `status` (str, optional): Filter by status. Can be a single status or comma-separated multiple statuses. Valid values: `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`, `active`. Special value `active` means approved and not expired (equivalent to the default behavior). When not provided, defaults to approved, active (non-expired) requests only.
 - `mine` (bool, optional): Filter to show only the current user's own prayer requests. Use `?mine=true` or `?mine=1`. When used without `status`, returns all of the user's requests (all statuses). When combined with `status`, filters user's requests by the specified status(es).
 
 **Example Requests:**
@@ -51,6 +51,7 @@ GET /api/prayer-requests/?status=pending_moderation
 GET /api/prayer-requests/?status=pending_moderation,completed
 GET /api/prayer-requests/?mine=true
 GET /api/prayer-requests/?mine=true&status=approved
+GET /api/prayer-requests/?mine=true&status=active
 GET /api/prayer-requests/?mine=true&status=completed,deleted
 ```
 
@@ -623,7 +624,7 @@ Send a thank you message to all who accepted your completed prayer request.
 | `image` | file/url | Optional image |
 | `thumbnail_url` | url | Cached thumbnail URL |
 | `reviewed` | boolean | Whether moderation is complete |
-| `status` | string | `pending_moderation`, `approved`, `rejected`, `completed`, `deleted` |
+| `status` | string | `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`, `active` (special: approved and not expired) |
 | `requester` | object | User who submitted (null if anonymous) |
 | `created_at` | datetime | Creation timestamp |
 | `updated_at` | datetime | Last update timestamp |
@@ -860,6 +861,10 @@ curl -X GET https://api.example.com/api/prayer-requests/?mine=true \
 
 # Get only your approved prayer requests
 curl -X GET https://api.example.com/api/prayer-requests/?mine=true&status=approved \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get your active prayer requests (approved and not expired)
+curl -X GET https://api.example.com/api/prayer-requests/?mine=true&status=active \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Get your completed and deleted requests
