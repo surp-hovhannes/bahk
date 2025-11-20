@@ -1,6 +1,7 @@
 """Admin interface for prayers app."""
 from django.contrib import admin
 from django.utils.html import format_html
+from django.utils import timezone
 import json
 
 from prayers.models import (
@@ -13,6 +14,7 @@ from prayers.models import (
 )
 
 from adminsortable2.admin import SortableAdminBase, SortableInlineAdminMixin
+from events.models import Event, EventType, UserMilestone
 
 
 class PrayerSetMembershipInline(SortableInlineAdminMixin, admin.TabularInline):
@@ -110,9 +112,6 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
 
 # Prayer Request Admin
 
-from prayers.models import PrayerRequest, PrayerRequestAcceptance, PrayerRequestPrayerLog
-import json
-
 
 @admin.register(PrayerRequest)
 class PrayerRequestAdmin(admin.ModelAdmin):
@@ -192,21 +191,82 @@ class PrayerRequestAdmin(admin.ModelAdmin):
     prayer_log_count.short_description = 'Prayer Logs'
 
     def approve_requests(self, request, queryset):
-        """Bulk action to approve prayer requests."""
-        count = queryset.filter(status='pending_moderation').update(
-            status='approved',
-            reviewed=True
-        )
+        """Bulk action to approve prayer requests.
+        
+        This matches automated moderation behavior by:
+        - Setting moderated_at timestamp
+        - Creating PRAYER_REQUEST_CREATED events
+        - Checking for first_prayer_request_created milestones
+        - Auto-accepting requester's own prayer request
+        """
+        pending_requests = queryset.filter(status='pending_moderation')
+        count = 0
+        now = timezone.now()
+        
+        for prayer_request in pending_requests:
+            # Update all three fields to match automated moderation
+            prayer_request.status = 'approved'
+            prayer_request.reviewed = True
+            prayer_request.moderated_at = now
+            prayer_request.save()
+            
+            # Create event for approved prayer request
+            Event.create_event(
+                event_type_code=EventType.PRAYER_REQUEST_CREATED,
+                user=prayer_request.requester,
+                target=prayer_request,
+                title=f'Prayer request created: {prayer_request.title}',
+                data={
+                    'prayer_request_id': prayer_request.id,
+                    'is_anonymous': prayer_request.is_anonymous,
+                }
+            )
+            
+            # Check for first prayer request milestone
+            if prayer_request.requester.prayer_requests.filter(
+                status='approved'
+            ).count() == 1:
+                UserMilestone.create_milestone(
+                    user=prayer_request.requester,
+                    milestone_type='first_prayer_request_created',
+                    related_object=prayer_request,
+                    data={
+                        'prayer_request_id': prayer_request.id,
+                        'title': prayer_request.title,
+                    }
+                )
+            
+            # Automatically accept own prayer request
+            PrayerRequestAcceptance.objects.get_or_create(
+                prayer_request=prayer_request,
+                user=prayer_request.requester,
+                defaults={'counts_for_milestones': False}
+            )
+            
+            count += 1
+        
         self.message_user(request, f'{count} prayer request(s) approved.')
 
     approve_requests.short_description = 'Approve selected prayer requests'
 
     def reject_requests(self, request, queryset):
-        """Bulk action to reject prayer requests."""
-        count = queryset.filter(status='pending_moderation').update(
-            status='rejected',
-            reviewed=True
-        )
+        """Bulk action to reject prayer requests.
+        
+        This matches automated moderation behavior by:
+        - Setting moderated_at timestamp
+        """
+        pending_requests = queryset.filter(status='pending_moderation')
+        count = 0
+        now = timezone.now()
+        
+        for prayer_request in pending_requests:
+            # Update all three fields to match automated moderation
+            prayer_request.status = 'rejected'
+            prayer_request.reviewed = True
+            prayer_request.moderated_at = now
+            prayer_request.save()
+            count += 1
+        
         self.message_user(request, f'{count} prayer request(s) rejected.')
 
     reject_requests.short_description = 'Reject selected prayer requests'
