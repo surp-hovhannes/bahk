@@ -782,6 +782,7 @@ class LLMPrompt(models.Model):
     APPLIES_TO_CHOICES = [
         ("readings", "Readings"),
         ("feasts", "Feasts"),
+        ("prayer_requests", "Prayer Requests"),
     ]
 
     model = models.CharField(

@@ -117,6 +117,26 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'check-expired-prayer-requests-daily': {
+        'task': 'prayers.tasks.check_expired_prayer_requests_task',
+        'schedule': crontab(hour=23, minute=0),  # 11:00 PM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-expired-prayer-requests-check',
+            }
+        }
+    },
+    'send-daily-prayer-count-notifications': {
+        'task': 'prayers.tasks.send_daily_prayer_count_notifications_task',
+        'schedule': crontab(hour=23, minute=30),  # 11:30 PM daily
+        # Add Sentry Cron metadata
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-prayer-count-notifications',
+            }
+        }
+    },
 }
 
 # Initialize Sentry for Celery worker processes
