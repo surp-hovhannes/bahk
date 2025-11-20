@@ -181,8 +181,10 @@ class RequesterSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_full_name(self, obj):
-        """Get user's full name or email."""
-        return obj.get_full_name() or obj.email
+        """Get user's profile name or email."""
+        if hasattr(obj, 'profile') and obj.profile and obj.profile.name:
+            return obj.profile.name
+        return obj.email
 
 
 class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
@@ -195,6 +197,7 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     is_expired = serializers.SerializerMethodField()
     has_accepted = serializers.SerializerMethodField()
     has_prayed_today = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = PrayerRequest
@@ -202,7 +205,8 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             'id', 'title', 'description', 'is_anonymous', 'duration_days',
             'expiration_date', 'image', 'thumbnail_url', 'reviewed', 'status',
             'requester', 'created_at', 'updated_at', 'acceptance_count',
-            'prayer_log_count', 'is_expired', 'has_accepted', 'has_prayed_today'
+            'prayer_log_count', 'is_expired', 'has_accepted', 'has_prayed_today',
+            'is_owner'
         ]
         read_only_fields = [
             'expiration_date', 'reviewed', 'status', 'created_at', 'updated_at',
@@ -264,6 +268,13 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
                 user=request.user,
                 prayed_on_date=today
             ).exists()
+        return False
+
+    def get_is_owner(self, obj):
+        """Check if current user is the owner of this prayer request."""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return request.user == obj.requester
         return False
 
 

@@ -76,7 +76,8 @@ GET /api/prayer-requests/?status=pending_moderation,completed
     "prayer_log_count": 45,
     "is_expired": false,
     "has_accepted": false,
-    "has_prayed_today": false
+    "has_prayed_today": false,
+    "is_owner": false
   },
   {
     "id": 2,
@@ -96,7 +97,8 @@ GET /api/prayer-requests/?status=pending_moderation,completed
     "prayer_log_count": 20,
     "is_expired": false,
     "has_accepted": true,
-    "has_prayed_today": true
+    "has_prayed_today": true,
+    "is_owner": false
   }
 ]
 ```
@@ -105,7 +107,8 @@ GET /api/prayer-requests/?status=pending_moderation,completed
 - **Default behavior** (no `status` parameter): Only returns `approved` status requests that haven't expired
 - **With `status` parameter**: Returns requests matching the specified status(es), regardless of expiration
 - Anonymous requests hide `requester` field (shows `null`)
-- `has_accepted` and `has_prayed_today` are user-specific flags
+- `has_accepted`, `has_prayed_today`, and `is_owner` are user-specific flags
+- `is_owner` is `true` if the requesting user created the prayer request, `false` otherwise
 - Invalid status values result in an empty response
 
 ---
@@ -235,7 +238,8 @@ Retrieve a specific prayer request by ID.
   "prayer_log_count": 45,
   "is_expired": false,
   "has_accepted": false,
-  "has_prayed_today": false
+  "has_prayed_today": false,
+  "is_owner": false
 }
 ```
 
@@ -294,7 +298,8 @@ Update your own prayer request (only if still pending moderation).
   "prayer_log_count": 0,
   "is_expired": false,
   "has_accepted": false,
-  "has_prayed_today": false
+  "has_prayed_today": false,
+  "is_owner": true
 }
 ```
 
@@ -372,7 +377,8 @@ Commit to praying for a prayer request.
     "prayer_log_count": 45,
     "is_expired": false,
     "has_accepted": true,
-    "has_prayed_today": false
+    "has_prayed_today": false,
+    "is_owner": false
   },
   "user": 8,
   "user_email": "mike@example.com",
@@ -450,7 +456,8 @@ Retrieve all prayer requests the current user has accepted.
     "prayer_log_count": 45,
     "is_expired": false,
     "has_accepted": true,
-    "has_prayed_today": false
+    "has_prayed_today": false,
+    "is_owner": false
   }
 ]
 ```
@@ -497,7 +504,8 @@ Log that you prayed for a request today.
     "prayer_log_count": 46,
     "is_expired": false,
     "has_accepted": true,
-    "has_prayed_today": true
+    "has_prayed_today": true,
+    "is_owner": false
   },
   "user": 8,
   "user_email": "mike@example.com",
@@ -618,6 +626,7 @@ Send a thank you message to all who accepted your completed prayer request.
 | `is_expired` | boolean | Whether request has expired |
 | `has_accepted` | boolean | Current user has accepted |
 | `has_prayed_today` | boolean | Current user prayed today |
+| `is_owner` | boolean | Current user is the requester/owner |
 
 ### Status Flow
 
@@ -870,10 +879,12 @@ curl -X GET https://api.example.com/api/prayer-requests/?status=completed,pendin
    - Use Django REST Framework pagination
    - Don't load all requests at once
 
-8. **Handle user's own requests in UI**
-   - User's own requests automatically appear in `/accepted/` list
-   - Consider showing "Your Request" badge or special styling
+8. **Use `is_owner` to show owner-specific features**
+   - Check `is_owner` to determine if user created the request
+   - Show edit/delete buttons only when `is_owner: true`
+   - Display "Your Request" badge or special styling for owner
    - Allow marking own requests as prayed
+   - User's own requests automatically appear in `/accepted/` list
 
 ---
 
