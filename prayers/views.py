@@ -258,11 +258,15 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         - status (str): Optional. Filter by status. Can be a single status or comma-separated
                        multiple statuses. Valid values: pending_moderation, approved, rejected,
                        completed, deleted. Default: approved (active, non-expired only).
+        - mine (bool): Optional. Filter to show only the current user's own prayer requests.
+                       Use ?mine=true or ?mine=1. When used, status filter still applies.
 
     Example Requests:
         GET /api/prayer-requests/
         GET /api/prayer-requests/?status=completed
         GET /api/prayer-requests/?status=pending_moderation,completed
+        GET /api/prayer-requests/?mine=true
+        GET /api/prayer-requests/?mine=true&status=approved
     """
 
     permission_classes = [IsAuthenticated]
@@ -271,6 +275,12 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         """Get prayer requests based on action."""
         if self.action == 'list':
             queryset = PrayerRequest.objects.select_related('requester')
+            
+            # Filter by mine parameter (user's own requests)
+            mine_param = self.request.query_params.get('mine', None)
+            is_mine_filter = mine_param and mine_param.lower() in ('true', '1', 'yes')
+            if is_mine_filter:
+                queryset = queryset.filter(requester=self.request.user)
             
             # Filter by status if provided
             status_param = self.request.query_params.get('status', None)
@@ -286,8 +296,9 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
                 else:
                     # Invalid status values, return empty queryset
                     return PrayerRequest.objects.none()
-            else:
+            elif not is_mine_filter:
                 # Default behavior: only approved, non-expired requests
+                # (skip default when mine filter is active - show all user's requests)
                 queryset = PrayerRequest.objects.get_active_approved().select_related('requester')
             
             return queryset

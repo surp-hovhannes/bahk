@@ -35,12 +35,13 @@ Authorization: Bearer <jwt_token>
 
 ## 1. List Prayer Requests
 
-Get prayer requests. By default, returns approved, active (non-expired) requests. Can be filtered by status.
+Get prayer requests. By default, returns approved, active (non-expired) requests. Can be filtered by status or to show only your own requests.
 
 **Endpoint:** `GET /api/prayer-requests/`
 
 **Query Parameters:**
 - `status` (str, optional): Filter by status. Can be a single status or comma-separated multiple statuses. Valid values: `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`. When not provided, defaults to approved, active (non-expired) requests only.
+- `mine` (bool, optional): Filter to show only the current user's own prayer requests. Use `?mine=true` or `?mine=1`. When used without `status`, returns all of the user's requests (all statuses). When combined with `status`, filters user's requests by the specified status(es).
 
 **Example Requests:**
 ```
@@ -48,6 +49,9 @@ GET /api/prayer-requests/
 GET /api/prayer-requests/?status=completed
 GET /api/prayer-requests/?status=pending_moderation
 GET /api/prayer-requests/?status=pending_moderation,completed
+GET /api/prayer-requests/?mine=true
+GET /api/prayer-requests/?mine=true&status=approved
+GET /api/prayer-requests/?mine=true&status=completed,deleted
 ```
 
 **Response:** `200 OK`
@@ -104,8 +108,10 @@ GET /api/prayer-requests/?status=pending_moderation,completed
 ```
 
 **Notes:**
-- **Default behavior** (no `status` parameter): Only returns `approved` status requests that haven't expired
+- **Default behavior** (no `status` or `mine` parameters): Only returns `approved` status requests that haven't expired
 - **With `status` parameter**: Returns requests matching the specified status(es), regardless of expiration
+- **With `mine=true` parameter**: Returns all of the user's own prayer requests (all statuses, including deleted)
+- **With `mine=true` and `status` parameters**: Returns user's own requests filtered by the specified status(es)
 - Anonymous requests hide `requester` field (shows `null`)
 - `has_accepted`, `has_prayed_today`, and `is_owner` are user-specific flags
 - `is_owner` is `true` if the requesting user created the prayer request, `false` otherwise
@@ -842,6 +848,22 @@ curl -X GET https://api.example.com/api/prayer-requests/?status=pending_moderati
 
 # Get both completed and pending moderation requests
 curl -X GET https://api.example.com/api/prayer-requests/?status=completed,pending_moderation \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Example 5: Get Your Own Prayer Requests
+
+```bash
+# Get all your own prayer requests (all statuses)
+curl -X GET https://api.example.com/api/prayer-requests/?mine=true \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get only your approved prayer requests
+curl -X GET https://api.example.com/api/prayer-requests/?mine=true&status=approved \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get your completed and deleted requests
+curl -X GET https://api.example.com/api/prayer-requests/?mine=true&status=completed,deleted \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
