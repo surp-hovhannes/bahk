@@ -384,3 +384,299 @@ class PrayerRequestAPITests(BaseAPITestCase):
             user=requester
         )
         self.assertFalse(acceptance.counts_for_milestones)
+
+    @tag('integration', 'slow')
+    def test_moderation_task_handles_low_severity_approval(self):
+        """Low severity approved requests should be auto-approved."""
+        requester = self.create_user(email='lowsev@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Health prayer',
+            description='Please pray for my recovery.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Genuine prayer request for health",
+                "concerns": [],
+                "severity": "low",
+                "requires_human_review": false,
+                "suggested_action": "approve"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'approved')
+        self.assertEqual(prayer_request.status, 'approved')
+        self.assertEqual(prayer_request.moderation_severity, 'low')
+        self.assertFalse(prayer_request.requires_human_review)
+        self.assertTrue(prayer_request.reviewed)
+
+        # Should create event
+        self.assertTrue(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_CREATED,
+                object_id=prayer_request.id
+            ).exists()
+        )
+
+    @tag('integration', 'slow')
+    def test_moderation_task_handles_medium_severity_approval(self):
+        """Medium severity approved requests should be auto-approved with tracking."""
+        requester = self.create_user(email='medsev@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Emotional prayer',
+            description='Very distressing situation with family.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Appropriate but emotionally intense",
+                "concerns": ["emotional language"],
+                "severity": "medium",
+                "requires_human_review": false,
+                "suggested_action": "approve"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(prayer_request.status, 'approved')
+        self.assertEqual(prayer_request.moderation_severity, 'medium')
+        self.assertFalse(prayer_request.requires_human_review)
+
+    @tag('integration', 'slow')
+    def test_moderation_task_flags_high_severity_for_review(self):
+        """High severity requests should be flagged for human review."""
+        requester = self.create_user(email='highsev@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Unclear request',
+            description='Borderline content that needs review.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Borderline appropriate, needs human review",
+                "concerns": ["unclear intent", "sensitive topic"],
+                "severity": "high",
+                "requires_human_review": true,
+                "suggested_action": "flag_for_review"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        # Should stay pending for human review
+        self.assertEqual(prayer_request.status, 'pending_moderation')
+        self.assertEqual(prayer_request.moderation_severity, 'high')
+        self.assertTrue(prayer_request.requires_human_review)
+        self.assertTrue(prayer_request.reviewed)
+
+        # Should send email alert
+        mock_email.assert_called_once_with(prayer_request, 'requires_review')
+
+        # Should NOT create event (not approved yet)
+        self.assertFalse(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_CREATED,
+                object_id=prayer_request.id
+            ).exists()
+        )
+
+    @tag('integration', 'slow')
+    def test_moderation_task_escalates_critical_severity(self):
+        """Critical severity requests should be auto-rejected and escalated."""
+        requester = self.create_user(email='critical@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Dangerous content',
+            description='Content with safety concerns.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": false,
+                "reason": "Contains self-harm language requiring immediate attention",
+                "concerns": ["self-harm", "safety risk"],
+                "severity": "critical",
+                "requires_human_review": true,
+                "suggested_action": "escalate"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        # Should be rejected and flagged
+        self.assertEqual(prayer_request.status, 'rejected')
+        self.assertEqual(prayer_request.moderation_severity, 'critical')
+        self.assertTrue(prayer_request.requires_human_review)
+        self.assertTrue(prayer_request.reviewed)
+
+        # Should send critical alert
+        mock_email.assert_called_once_with(prayer_request, 'critical_safety_concern')
+
+        # Should NOT create event
+        self.assertFalse(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_CREATED,
+                object_id=prayer_request.id
+            ).exists()
+        )
+
+    @tag('integration', 'slow')
+    def test_moderation_task_rejects_spam_with_low_severity(self):
+        """Rejected spam should have low/medium severity."""
+        requester = self.create_user(email='spammer@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Buy my product',
+            description='Visit mysite.com for deals!',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": false,
+                "reason": "Promotional spam, not a prayer request",
+                "concerns": ["spam", "promotional content"],
+                "severity": "low",
+                "requires_human_review": false,
+                "suggested_action": "reject"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(prayer_request.status, 'rejected')
+        self.assertEqual(prayer_request.moderation_severity, 'low')
+        self.assertFalse(prayer_request.requires_human_review)
+
+        # Should send email for awareness
+        mock_email.assert_called_once_with(prayer_request, 'llm_rejected')
+
+    @tag('integration', 'slow')
+    def test_moderation_task_handles_requires_human_review_flag(self):
+        """LLM can set requires_human_review=true even for low severity."""
+        requester = self.create_user(email='needsreview@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Edge case',
+            description='Something that needs a second look.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Probably okay but would like human confirmation",
+                "concerns": ["edge case"],
+                "severity": "medium",
+                "requires_human_review": true,
+                "suggested_action": "flag_for_review"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        # Should stay pending because of requires_human_review flag
+        self.assertEqual(prayer_request.status, 'pending_moderation')
+        self.assertTrue(prayer_request.requires_human_review)
+        mock_email.assert_called_once()
+
+    @tag('integration')
+    def test_api_exposes_moderation_severity(self):
+        """API should expose moderation_severity field."""
+        requester = self.create_user(email='apitest@example.com')
+        self.authenticate(requester)
+
+        prayer_request = self.create_prayer_request(
+            requester,
+            title='API test',
+            status='approved',
+            moderation_severity='low'
+        )
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['moderation_severity'], 'low')
+
+    @tag('integration')
+    def test_api_does_not_expose_requires_human_review(self):
+        """API should NOT expose requires_human_review to regular users."""
+        requester = self.create_user(email='apitest2@example.com')
+        self.authenticate(requester)
+
+        prayer_request = self.create_prayer_request(
+            requester,
+            title='API test 2',
+            status='pending_moderation'
+        )
+        prayer_request.requires_human_review = True
+        prayer_request.save()
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # requires_human_review should not be in response
+        self.assertNotIn('requires_human_review', response.data)
