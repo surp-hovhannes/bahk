@@ -70,6 +70,7 @@ GET /api/prayer-requests/?mine=true&status=completed,deleted
     "thumbnail_url": "https://s3.amazonaws.com/bucket/cache/thumbnails/1_thumb.jpg",
     "reviewed": true,
     "status": "approved",
+    "moderation_severity": "low",
     "requester": {
       "id": 5,
       "email": "john@example.com",
@@ -373,6 +374,7 @@ Commit to praying for a prayer request.
     "thumbnail_url": "https://s3.amazonaws.com/bucket/cache/thumbnails/1_thumb.jpg",
     "reviewed": true,
     "status": "approved",
+    "moderation_severity": "low",
     "requester": {
       "id": 5,
       "email": "john@example.com",
@@ -452,6 +454,7 @@ Retrieve all prayer requests the current user has accepted.
     "thumbnail_url": "https://s3.amazonaws.com/bucket/cache/thumbnails/1_thumb.jpg",
     "reviewed": true,
     "status": "approved",
+    "moderation_severity": "low",
     "requester": {
       "id": 5,
       "email": "john@example.com",
@@ -500,6 +503,7 @@ Log that you prayed for a request today.
     "thumbnail_url": "https://s3.amazonaws.com/bucket/cache/thumbnails/1_thumb.jpg",
     "reviewed": true,
     "status": "approved",
+    "moderation_severity": "low",
     "requester": {
       "id": 5,
       "email": "john@example.com",
@@ -625,6 +629,7 @@ Send a thank you message to all who accepted your completed prayer request.
 | `thumbnail_url` | url | Cached thumbnail URL |
 | `reviewed` | boolean | Whether moderation is complete |
 | `status` | string | `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`, `active` (special: approved and not expired) |
+| `moderation_severity` | string | Severity level from AI moderation: `low`, `medium`, `high`, `critical` (null if not yet moderated) |
 | `requester` | object | User who submitted (null if anonymous) |
 | `created_at` | datetime | Creation timestamp |
 | `updated_at` | datetime | Last update timestamp |
@@ -693,23 +698,73 @@ All prayer requests undergo two-tier moderation:
 - Email sent to admin with details
 
 ### 2. AI Moderation (Claude Sonnet 4.5)
-- Evaluates for:
-  - Genuine prayer need
-  - Appropriate content for Christian community
-  - Not spam or promotional
-  - Coherent and clear
-  - Safe and non-harmful
-- Returns JSON with approval decision and reasons
-- Email sent to admin if rejected or error occurs
 
-### Moderation Email
+**Enhanced Moderation with Severity Levels**
+
+The AI moderation system evaluates each request and assigns a severity level:
+
+**Evaluation Criteria:**
+- **Genuine Prayer Need**: Health, relationships, spiritual growth, grief, anxiety, financial hardship, guidance, protection
+- **Appropriate Content**: Respectful and suitable for Christian community (rejects explicit content, violence, hate speech, harassment)
+- **Not Spam/Promotional**: Real prayer needs (rejects advertising, fundraising, political campaigns)
+- **Coherence**: Understandable and written in good faith (rejects gibberish, test submissions, jokes)
+- **Safety**: No dangerous content (self-harm, threats, harmful activities, private information sharing)
+
+**Severity Levels:**
+
+| Severity | Description | Action |
+|----------|-------------|--------|
+| **Low** | Clear, appropriate prayer request with no concerns | Auto-approve |
+| **Medium** | Minor concerns but acceptable (e.g., emotional language, slightly vague) | Auto-approve with tracking |
+| **High** | Significant concerns requiring human review (borderline content, unclear intent) | Flag for manual review, stays pending |
+| **Critical** | Immediate safety concerns (self-harm, threats, severe harassment) | Auto-reject + urgent escalation |
+
+**Tiered Moderation Workflow:**
+
+1. **Critical Severity**: Automatically rejected, flagged for review, urgent email sent to admin
+2. **High Severity**: Kept in `pending_moderation` status, flagged for review, email sent to admin
+3. **Medium/Low + Approved**: Auto-approved with severity tracking
+4. **Rejected (any severity)**: Status set to `rejected`, admin notified
+
+**Moderation Response Format:**
+```json
+{
+  "approved": true/false,
+  "reason": "Brief explanation (1-2 sentences)",
+  "concerns": ["list", "of", "issues"],
+  "severity": "low|medium|high|critical",
+  "requires_human_review": false,
+  "suggested_action": "approve|reject|flag_for_review|escalate"
+}
+```
+
+### Moderation Emails
+
 **Recipient:** fastandprayhelp@gmail.com
-**Subject:** Prayer Request Rejected/Error - Manual Review Needed
-**Contents:**
+
+**Email Types:**
+
+| Alert Type | Subject | When Sent |
+|------------|---------|-----------|
+| Critical Safety Concern | 🚨 CRITICAL: Prayer Request Safety Concern | Severity = critical |
+| Requires Review | ⚠️ HIGH PRIORITY: Prayer Request Flagged for Human Review | Severity = high or requires_human_review = true |
+| LLM Rejected | Prayer Request Rejected - Manual Review Needed | Approved = false (not critical) |
+| Profanity Detected | Prayer Request Rejected - Profanity Detected | Profanity filter triggered |
+| LLM Error | Prayer Request Moderation Error - Manual Review Required | Moderation system failure |
+
+**Email Contents:**
 - Prayer request ID and details
 - Requester information
-- Moderation results
+- **SEVERITY** (prominently displayed)
+- **Requires Human Review** flag
+- Status
+- Moderation results (full JSON)
 - Link to admin panel
+
+**Admin Panel Features:**
+- Filter by `moderation_severity` and `requires_human_review`
+- Bulk action: "Mark as manually reviewed" (clears review flag)
+- Display severity in list and detail views
 
 ---
 
@@ -731,23 +786,26 @@ Prayer requests create the following activity feed items:
 Access at `/admin/prayers/prayerrequest/`
 
 ### Features
-- List display with status, reviewed flag, anonymous indicator
-- Filters: status, reviewed, is_anonymous, duration, created_at
+- List display with status, moderation severity, requires human review flag, reviewed flag, anonymous indicator
+- Filters: status, moderation_severity, requires_human_review, reviewed, is_anonymous, duration, created_at
 - Search by title, description, requester email/name
 - Formatted JSON display for moderation results
 - Image preview for requests with images
 - Statistics: acceptance count, prayer log count
 
 ### Bulk Actions
-- **Approve selected prayer requests**: Set status to `approved`, mark as reviewed
+- **Approve selected prayer requests**: Set status to `approved`, mark as reviewed, create events and milestones
 - **Reject selected prayer requests**: Set status to `rejected`, mark as reviewed
+- **Mark as manually reviewed**: Clear `requires_human_review` flag and mark as reviewed (for requests flagged for human review)
 
 ### Moderation Result Display
 Shows formatted JSON with:
 - Profanity check results
-- LLM moderation decision
+- LLM moderation decision with severity level
 - Concerns identified
 - Rejection reason
+- Suggested action
+- Requires human review flag
 
 ---
 
@@ -926,6 +984,24 @@ For issues or questions:
 ---
 
 ## Changelog
+
+### v1.1.0 (2025-11-26)
+- **Enhanced Moderation System**
+  - Added severity levels: low, medium, high, critical
+  - Implemented tiered moderation workflow
+  - Added `moderation_severity` field to API responses
+  - Added `requires_human_review` flag for admin workflow
+  - Enhanced AI prompt with detailed evaluation criteria
+  - Severity-based email alerts with visual indicators (🚨 for critical, ⚠️ for high)
+  - Auto-escalation for critical safety concerns
+  - Human review workflow for borderline content
+- **Admin Interface Updates**
+  - Filter by moderation severity and review status
+  - Bulk action: "Mark as manually reviewed"
+  - Enhanced moderation result display with severity
+- **Test Coverage**
+  - Added 8 comprehensive integration tests for moderation
+  - 100% coverage of severity levels and workflows
 
 ### v1.0.0 (2025-11-18)
 - Initial release
