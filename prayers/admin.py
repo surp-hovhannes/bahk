@@ -195,6 +195,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         
         This matches automated moderation behavior by:
         - Setting moderated_at timestamp
+        - Clearing requires_human_review flag
         - Creating PRAYER_REQUEST_CREATED events
         - Checking for first_prayer_request_created milestones
         - Auto-accepting requester's own prayer request
@@ -204,10 +205,11 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         now = timezone.now()
         
         for prayer_request in pending_requests:
-            # Update all three fields to match automated moderation
+            # Update fields to match automated moderation behavior
             prayer_request.status = 'approved'
             prayer_request.reviewed = True
             prayer_request.moderated_at = now
+            prayer_request.requires_human_review = False
             prayer_request.save()
             
             # Create event for approved prayer request
@@ -254,16 +256,18 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         
         This matches automated moderation behavior by:
         - Setting moderated_at timestamp
+        - Clearing requires_human_review flag
         """
         pending_requests = queryset.filter(status='pending_moderation')
         count = 0
         now = timezone.now()
         
         for prayer_request in pending_requests:
-            # Update all three fields to match automated moderation
+            # Update fields to match automated moderation behavior
             prayer_request.status = 'rejected'
             prayer_request.reviewed = True
             prayer_request.moderated_at = now
+            prayer_request.requires_human_review = False
             prayer_request.save()
             count += 1
         
