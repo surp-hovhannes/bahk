@@ -176,6 +176,9 @@ dump.rdb
 # cursor rules
 .cursorrules
 
+# claude rules
+.claude/
+
 # push notifications
 certificate.pem
 certificates/
