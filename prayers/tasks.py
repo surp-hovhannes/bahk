@@ -23,18 +23,19 @@ profanity.load_censor_words()
 
 def _get_moderation_prompt_and_service(prayer_request):
     """
-    Get the moderation prompt and LLM service for prayer request moderation.
+    Get the moderation prompt and model info for prayer request moderation.
 
     First tries to fetch from LLMPrompt model (applies_to='prayer_requests', active=True).
     Falls back to hard-coded prompt if no active prompt exists in database.
 
     Returns:
-        tuple: (llm_service, prompt_text)
+        tuple: (model_name, prompt_text)
+            model_name: str - The model identifier to use for the API call
+            prompt_text: str - The formatted prompt with prayer request details
     """
     try:
         # Try to get active prompt from database
         llm_prompt = LLMPrompt.objects.get(applies_to='prayer_requests', active=True)
-        llm_service = llm_prompt.get_llm_service()
 
         # Format the prompt with prayer request data
         # The database prompt should use {title} and {description} placeholders
@@ -44,12 +45,12 @@ def _get_moderation_prompt_and_service(prayer_request):
         )
 
         logger.info(f"Using LLMPrompt (id={llm_prompt.id}, model={llm_prompt.model}) for prayer request moderation")
-        return llm_service, prompt_text
+        return llm_prompt.model, prompt_text
 
     except LLMPrompt.DoesNotExist:
         # Fallback to hard-coded prompt
         logger.warning("No active LLMPrompt found for prayer_requests, using hard-coded fallback")
-        llm_service = get_llm_service('claude-sonnet-4-5-20250929')
+        model_name = 'claude-sonnet-4-5-20250929'
 
         # Hard-coded fallback prompt (same as our enhanced prompt)
         prompt_text = f"""You are evaluating a prayer request submitted to a Christian community app. Assess the request for appropriateness and genuine prayer needs.
@@ -83,14 +84,14 @@ def _get_moderation_prompt_and_service(prayer_request):
 - **critical**: Immediate safety concerns (e.g., self-harm, threats, severe harassment)
 
 **Response Format (JSON only):**
-{{{{
+{{
   "approved": true/false,
   "reason": "Brief explanation of decision (1-2 sentences)",
   "concerns": ["list", "specific", "issues"],
   "severity": "low|medium|high|critical",
   "requires_human_review": false,
   "suggested_action": "approve|reject|flag_for_review|escalate"
-}}}}
+}}
 
 Note: The concerns array should be empty if fully approved with no issues.
 
@@ -126,7 +127,7 @@ Note: The concerns array should be empty if fully approved with no issues.
 - Political campaign messages (promotional)
 """
 
-        return llm_service, prompt_text
+        return model_name, prompt_text
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -183,15 +184,15 @@ def moderate_prayer_request_task(self, prayer_request_id):
 
         # Step 2: LLM moderation check
         try:
-            # Get prompt and service (from database or fallback to hard-coded)
-            llm_service, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
+            # Get prompt and model (from database or fallback to hard-coded)
+            model_name, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
 
             # Call LLM with low temperature for consistent moderation
             from anthropic import Anthropic
 
             client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
             response = client.messages.create(
-                model='claude-sonnet-4-5-20250929',
+                model=model_name,
                 max_tokens=500,
                 temperature=0.1,
                 messages=[{
