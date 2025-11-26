@@ -12,12 +12,121 @@ from django.utils import timezone
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.services.llm_service import get_llm_service
+from hub.models import LLMPrompt
 from prayers.models import PrayerRequest, PrayerRequestPrayerLog
 
 logger = logging.getLogger(__name__)
 
 # Initialize profanity filter
 profanity.load_censor_words()
+
+
+def _get_moderation_prompt_and_service(prayer_request):
+    """
+    Get the moderation prompt and LLM service for prayer request moderation.
+
+    First tries to fetch from LLMPrompt model (applies_to='prayer_requests', active=True).
+    Falls back to hard-coded prompt if no active prompt exists in database.
+
+    Returns:
+        tuple: (llm_service, prompt_text)
+    """
+    try:
+        # Try to get active prompt from database
+        llm_prompt = LLMPrompt.objects.get(applies_to='prayer_requests', active=True)
+        llm_service = llm_prompt.get_llm_service()
+
+        # Format the prompt with prayer request data
+        # The database prompt should use {title} and {description} placeholders
+        prompt_text = llm_prompt.prompt.format(
+            title=prayer_request.title,
+            description=prayer_request.description
+        )
+
+        logger.info(f"Using LLMPrompt (id={llm_prompt.id}, model={llm_prompt.model}) for prayer request moderation")
+        return llm_service, prompt_text
+
+    except LLMPrompt.DoesNotExist:
+        # Fallback to hard-coded prompt
+        logger.warning("No active LLMPrompt found for prayer_requests, using hard-coded fallback")
+        llm_service = get_llm_service('claude-sonnet-4-5-20250929')
+
+        # Hard-coded fallback prompt (same as our enhanced prompt)
+        prompt_text = f"""You are evaluating a prayer request submitted to a Christian community app. Assess the request for appropriateness and genuine prayer needs.
+
+**Request Details:**
+- Title: {prayer_request.title}
+- Description: {prayer_request.description}
+
+**Evaluation Criteria:**
+
+1. **Genuine Prayer Need**: Does this represent a sincere request for prayer support? Acceptable topics include health concerns, relationship struggles, spiritual growth, grief, anxiety, financial hardship, guidance, protection, and similar life challenges.
+
+2. **Appropriate Content**: Is the content respectful and suitable for a Christian community? Reject requests containing: explicit sexual content, graphic violence, hate speech, harassment of individuals, or content that mocks faith.
+
+3. **Not Spam/Promotional**: Is this a real prayer need rather than advertising, fundraising solicitation, political campaigning, or repetitive spam?
+
+4. **Coherence**: Is the request understandable and written in good faith? Reject incoherent gibberish, test submissions, or obvious jokes.
+
+5. **Safety**: Does this request avoid dangerous content such as self-harm intentions, threats to others, requests for harmful activities, or sharing of private information about others?
+
+**Special Considerations:**
+- Anonymous requests should be evaluated with the same standards
+- Requests may include personal struggles or vulnerable situations - be compassionate while maintaining community safety
+- Prayer requests often include emotional language - distinguish between authentic expression and inappropriate content
+- Requests may be brief (title only) or detailed - both can be valid if they meet the criteria
+
+**Severity Levels:**
+- **low**: Clear, appropriate prayer request with no concerns
+- **medium**: Minor concerns but acceptable (e.g., slightly vague, emotional language that might be misinterpreted)
+- **high**: Significant concerns requiring human review (e.g., borderline inappropriate, unclear intent, potential safety issues)
+- **critical**: Immediate safety concerns (e.g., self-harm, threats, severe harassment)
+
+**Response Format (JSON only):**
+{{{{
+  "approved": true/false,
+  "reason": "Brief explanation of decision (1-2 sentences)",
+  "concerns": ["list", "specific", "issues"],
+  "severity": "low|medium|high|critical",
+  "requires_human_review": false,
+  "suggested_action": "approve|reject|flag_for_review|escalate"
+}}}}
+
+Note: The concerns array should be empty if fully approved with no issues.
+
+**Examples of APPROVED requests (low severity):**
+- Health issues, medical procedures, recovery
+- Relationship challenges, family conflicts
+- Anxiety, depression, mental health struggles
+- Job loss, financial difficulties
+- Spiritual growth, breaking bad habits
+- Grief, loss of loved ones
+- Guidance for major life decisions
+- Protection during travel or difficult situations
+
+**Examples of MEDIUM severity (may approve with flag):**
+- Very emotional or distressing content that is still appropriate
+- Vague requests that might need clarification
+- Requests with minor grammatical issues but clear intent
+
+**Examples of HIGH severity (flag for review):**
+- Borderline inappropriate language
+- Unclear whether request is genuine
+- Mentions sensitive topics that need careful review
+
+**Examples of CRITICAL severity (escalate immediately):**
+- Expressions of intent to self-harm
+- Threats to harm others
+- Severe harassment or hate speech
+
+**Examples of REJECTED requests:**
+- "Buy my product! Visit mysite.com" (spam)
+- "asdfasdf test test 123" (incoherent)
+- Explicit sexual content or graphic descriptions (inappropriate)
+- Political campaign messages (promotional)
+"""
+
+        return llm_service, prompt_text
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -74,82 +183,8 @@ def moderate_prayer_request_task(self, prayer_request_id):
 
         # Step 2: LLM moderation check
         try:
-            llm_service = get_llm_service('claude-sonnet-4-5-20250929')
-
-            # Construct moderation prompt
-            moderation_prompt = f"""You are evaluating a prayer request submitted to a Christian community app. Assess the request for appropriateness and genuine prayer needs.
-
-**Request Details:**
-- Title: {prayer_request.title}
-- Description: {prayer_request.description}
-
-**Evaluation Criteria:**
-
-1. **Genuine Prayer Need**: Does this represent a sincere request for prayer support? Acceptable topics include health concerns, relationship struggles, spiritual growth, grief, anxiety, financial hardship, guidance, protection, and similar life challenges.
-
-2. **Appropriate Content**: Is the content respectful and suitable for a Christian community? Reject requests containing: explicit sexual content, graphic violence, hate speech, harassment of individuals, or content that mocks faith.
-
-3. **Not Spam/Promotional**: Is this a real prayer need rather than advertising, fundraising solicitation, political campaigning, or repetitive spam?
-
-4. **Coherence**: Is the request understandable and written in good faith? Reject incoherent gibberish, test submissions, or obvious jokes.
-
-5. **Safety**: Does this request avoid dangerous content such as self-harm intentions, threats to others, requests for harmful activities, or sharing of private information about others?
-
-**Special Considerations:**
-- Anonymous requests should be evaluated with the same standards
-- Requests may include personal struggles or vulnerable situations - be compassionate while maintaining community safety
-- Prayer requests often include emotional language - distinguish between authentic expression and inappropriate content
-- Requests may be brief (title only) or detailed - both can be valid if they meet the criteria
-
-**Severity Levels:**
-- **low**: Clear, appropriate prayer request with no concerns
-- **medium**: Minor concerns but acceptable (e.g., slightly vague, emotional language that might be misinterpreted)
-- **high**: Significant concerns requiring human review (e.g., borderline inappropriate, unclear intent, potential safety issues)
-- **critical**: Immediate safety concerns (e.g., self-harm, threats, severe harassment)
-
-**Response Format (JSON only):**
-{{
-  "approved": true/false,
-  "reason": "Brief explanation of decision (1-2 sentences)",
-  "concerns": ["list", "specific", "issues"],
-  "severity": "low|medium|high|critical",
-  "requires_human_review": false,
-  "suggested_action": "approve|reject|flag_for_review|escalate"
-}}
-
-Note: The concerns array should be empty if fully approved with no issues.
-
-**Examples of APPROVED requests (low severity):**
-- Health issues, medical procedures, recovery
-- Relationship challenges, family conflicts
-- Anxiety, depression, mental health struggles
-- Job loss, financial difficulties
-- Spiritual growth, breaking bad habits
-- Grief, loss of loved ones
-- Guidance for major life decisions
-- Protection during travel or difficult situations
-
-**Examples of MEDIUM severity (may approve with flag):**
-- Very emotional or distressing content that is still appropriate
-- Vague requests that might need clarification
-- Requests with minor grammatical issues but clear intent
-
-**Examples of HIGH severity (flag for review):**
-- Borderline inappropriate language
-- Unclear whether request is genuine
-- Mentions sensitive topics that need careful review
-
-**Examples of CRITICAL severity (escalate immediately):**
-- Expressions of intent to self-harm
-- Threats to harm others
-- Severe harassment or hate speech
-
-**Examples of REJECTED requests:**
-- "Buy my product! Visit mysite.com" (spam)
-- "asdfasdf test test 123" (incoherent)
-- Explicit sexual content or graphic descriptions (inappropriate)
-- Political campaign messages (promotional)
-"""
+            # Get prompt and service (from database or fallback to hard-coded)
+            llm_service, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
 
             # Call LLM with low temperature for consistent moderation
             from anthropic import Anthropic
