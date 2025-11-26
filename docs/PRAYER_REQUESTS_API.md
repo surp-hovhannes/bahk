@@ -74,7 +74,9 @@ GET /api/prayer-requests/?mine=true&status=completed,deleted
     "requester": {
       "id": 5,
       "email": "john@example.com",
-      "full_name": "John Doe"
+      "full_name": "John Doe",
+      "profile_image_url": "https://s3.amazonaws.com/bucket/profile_images/5/profile.jpg",
+      "profile_image_thumbnail_url": "https://s3.amazonaws.com/bucket/cache/profile_thumbnails/5_thumb.jpg"
     },
     "created_at": "2025-11-18T15:30:00Z",
     "updated_at": "2025-11-18T15:32:00Z",
@@ -378,7 +380,9 @@ Commit to praying for a prayer request.
     "requester": {
       "id": 5,
       "email": "john@example.com",
-      "full_name": "John Doe"
+      "full_name": "John Doe",
+      "profile_image_url": "https://s3.amazonaws.com/bucket/profile_images/5/profile.jpg",
+      "profile_image_thumbnail_url": "https://s3.amazonaws.com/bucket/cache/profile_thumbnails/5_thumb.jpg"
     },
     "created_at": "2025-11-18T15:30:00Z",
     "updated_at": "2025-11-18T15:32:00Z",
@@ -458,7 +462,9 @@ Retrieve all prayer requests the current user has accepted.
     "requester": {
       "id": 5,
       "email": "john@example.com",
-      "full_name": "John Doe"
+      "full_name": "John Doe",
+      "profile_image_url": "https://s3.amazonaws.com/bucket/profile_images/5/profile.jpg",
+      "profile_image_thumbnail_url": "https://s3.amazonaws.com/bucket/cache/profile_thumbnails/5_thumb.jpg"
     },
     "created_at": "2025-11-18T15:30:00Z",
     "updated_at": "2025-11-18T15:32:00Z",
@@ -507,7 +513,9 @@ Log that you prayed for a request today.
     "requester": {
       "id": 5,
       "email": "john@example.com",
-      "full_name": "John Doe"
+      "full_name": "John Doe",
+      "profile_image_url": "https://s3.amazonaws.com/bucket/profile_images/5/profile.jpg",
+      "profile_image_thumbnail_url": "https://s3.amazonaws.com/bucket/cache/profile_thumbnails/5_thumb.jpg"
     },
     "created_at": "2025-11-18T15:30:00Z",
     "updated_at": "2025-11-18T15:32:00Z",
@@ -630,7 +638,7 @@ Send a thank you message to all who accepted your completed prayer request.
 | `reviewed` | boolean | Whether moderation is complete |
 | `status` | string | `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`, `active` (special: approved and not expired) |
 | `moderation_severity` | string | Severity level from AI moderation: `low`, `medium`, `high`, `critical` (null if not yet moderated) |
-| `requester` | object | User who submitted (null if anonymous) |
+| `requester` | object | User who submitted (null if anonymous). Includes: `id`, `email`, `full_name`, `profile_image_url`, `profile_image_thumbnail_url` |
 | `created_at` | datetime | Creation timestamp |
 | `updated_at` | datetime | Last update timestamp |
 | `acceptance_count` | integer | Number of users who accepted |
@@ -971,6 +979,12 @@ curl -X GET https://api.example.com/api/prayer-requests/?mine=true&status=comple
    - Allow marking own requests as prayed
    - User's own requests automatically appear in `/accepted/` list
 
+9. **Display profile images for requester avatars**
+   - Use `requester.profile_image_thumbnail_url` for avatar display (100x100 optimized)
+   - Fallback to `requester.profile_image_url` for full-size image if needed
+   - Both fields will be `null` if user has no profile image
+   - Profile images respect anonymous setting - entire `requester` object is `null` for anonymous requests
+
 ---
 
 ## Support
@@ -984,6 +998,17 @@ For issues or questions:
 ---
 
 ## Changelog
+
+### v1.2.0 (2025-11-25)
+- **Profile Image Support**
+  - Added `profile_image_url` and `profile_image_thumbnail_url` to requester data
+  - Thumbnail URL (100x100) optimized for avatar display
+  - Full image URL available for larger displays
+  - Both fields return `null` if user has no profile image
+  - Respects anonymous request setting
+- **Test Coverage**
+  - Added 3 integration tests for profile image serialization
+  - Tests cover: image URLs present, null when no image, hidden for anonymous requests
 
 ### v1.1.0 (2025-11-26)
 - **Enhanced Moderation System**

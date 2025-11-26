@@ -174,10 +174,12 @@ class RequesterSerializer(serializers.ModelSerializer):
     """Minimal serializer for prayer request requester."""
 
     full_name = serializers.SerializerMethodField()
+    profile_image_url = serializers.SerializerMethodField()
+    profile_image_thumbnail_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'full_name']
+        fields = ['id', 'email', 'full_name', 'profile_image_url', 'profile_image_thumbnail_url']
         read_only_fields = fields
 
     def get_full_name(self, obj):
@@ -185,6 +187,29 @@ class RequesterSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'profile') and obj.profile and obj.profile.name:
             return obj.profile.name
         return obj.email
+
+    def get_profile_image_url(self, obj):
+        """Get the original profile image URL."""
+        if hasattr(obj, 'profile') and obj.profile and obj.profile.profile_image:
+            try:
+                return obj.profile.profile_image.url
+            except (AttributeError, ValueError, OSError):
+                return None
+        return None
+
+    def get_profile_image_thumbnail_url(self, obj):
+        """Get the cached or generated thumbnail URL for profile image."""
+        if hasattr(obj, 'profile') and obj.profile and obj.profile.profile_image:
+            # Try to use cached URL if available and recent
+            if obj.profile.cached_thumbnail_url:
+                return obj.profile.cached_thumbnail_url
+
+            # Fall back to generating thumbnail URL
+            try:
+                return obj.profile.profile_image_thumbnail.url
+            except (AttributeError, ValueError, OSError):
+                return None
+        return None
 
 
 class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
