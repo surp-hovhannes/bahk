@@ -118,17 +118,17 @@ class PrayerRequestAdmin(admin.ModelAdmin):
     """Admin interface for PrayerRequest model."""
 
     list_display = (
-        'title', 'requester', 'status', 'reviewed', 'is_anonymous',
-        'duration_days', 'expiration_date', 'acceptance_count', 'created_at'
+        'title', 'requester', 'status', 'moderation_severity', 'requires_human_review',
+        'reviewed', 'is_anonymous', 'duration_days', 'expiration_date', 'acceptance_count', 'created_at'
     )
-    list_filter = ('status', 'reviewed', 'is_anonymous', 'duration_days', 'created_at')
+    list_filter = ('status', 'moderation_severity', 'requires_human_review', 'reviewed', 'is_anonymous', 'duration_days', 'created_at')
     search_fields = ('title', 'description', 'requester__email', 'requester__first_name', 'requester__last_name')
     raw_id_fields = ('requester',)
     readonly_fields = (
-        'expiration_date', 'reviewed', 'moderated_at', 'moderation_result_display',
+        'expiration_date', 'reviewed', 'moderated_at', 'moderation_severity', 'moderation_result_display',
         'image_preview', 'acceptance_count', 'prayer_log_count', 'created_at', 'updated_at'
     )
-    actions = ['approve_requests', 'reject_requests']
+    actions = ['approve_requests', 'reject_requests', 'mark_manually_reviewed']
 
     fieldsets = (
         (None, {
@@ -141,7 +141,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
             'fields': ('image', 'image_preview')
         }),
         ('Moderation', {
-            'fields': ('status', 'reviewed', 'moderated_at', 'moderation_result_display')
+            'fields': ('status', 'moderation_severity', 'requires_human_review', 'reviewed', 'moderated_at', 'moderation_result_display')
         }),
         ('Statistics', {
             'fields': ('acceptance_count', 'prayer_log_count'),
@@ -195,6 +195,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         
         This matches automated moderation behavior by:
         - Setting moderated_at timestamp
+        - Clearing requires_human_review flag
         - Creating PRAYER_REQUEST_CREATED events
         - Checking for first_prayer_request_created milestones
         - Auto-accepting requester's own prayer request
@@ -204,10 +205,11 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         now = timezone.now()
         
         for prayer_request in pending_requests:
-            # Update all three fields to match automated moderation
+            # Update fields to match automated moderation behavior
             prayer_request.status = 'approved'
             prayer_request.reviewed = True
             prayer_request.moderated_at = now
+            prayer_request.requires_human_review = False
             prayer_request.save()
             
             # Create event for approved prayer request
@@ -254,22 +256,38 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         
         This matches automated moderation behavior by:
         - Setting moderated_at timestamp
+        - Clearing requires_human_review flag
         """
         pending_requests = queryset.filter(status='pending_moderation')
         count = 0
         now = timezone.now()
         
         for prayer_request in pending_requests:
-            # Update all three fields to match automated moderation
+            # Update fields to match automated moderation behavior
             prayer_request.status = 'rejected'
             prayer_request.reviewed = True
             prayer_request.moderated_at = now
+            prayer_request.requires_human_review = False
             prayer_request.save()
             count += 1
         
         self.message_user(request, f'{count} prayer request(s) rejected.')
 
     reject_requests.short_description = 'Reject selected prayer requests'
+
+    def mark_manually_reviewed(self, request, queryset):
+        """Bulk action to mark prayer requests as manually reviewed.
+
+        This clears the requires_human_review flag and marks as reviewed.
+        """
+        count = queryset.update(
+            requires_human_review=False,
+            reviewed=True
+        )
+
+        self.message_user(request, f'{count} prayer request(s) marked as manually reviewed.')
+
+    mark_manually_reviewed.short_description = 'Mark as manually reviewed'
 
 
 @admin.register(PrayerRequestAcceptance)

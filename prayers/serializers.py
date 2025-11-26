@@ -204,13 +204,14 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         fields = [
             'id', 'title', 'description', 'is_anonymous', 'duration_days',
             'expiration_date', 'image', 'thumbnail_url', 'reviewed', 'status',
-            'requester', 'created_at', 'updated_at', 'acceptance_count',
-            'prayer_log_count', 'is_expired', 'has_accepted', 'has_prayed_today',
-            'is_owner'
+            'moderation_severity', 'requester', 'created_at', 'updated_at',
+            'acceptance_count', 'prayer_log_count', 'is_expired', 'has_accepted',
+            'has_prayed_today', 'is_owner'
         ]
         read_only_fields = [
-            'expiration_date', 'reviewed', 'status', 'created_at', 'updated_at',
-            'acceptance_count', 'prayer_log_count', 'is_expired'
+            'expiration_date', 'reviewed', 'status', 'moderation_severity',
+            'created_at', 'updated_at', 'acceptance_count', 'prayer_log_count',
+            'is_expired'
         ]
 
     def get_requester(self, obj):

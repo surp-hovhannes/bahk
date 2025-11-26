@@ -327,6 +327,24 @@ class PrayerRequest(models.Model):
         blank=True,
         help_text='Results from LLM moderation process'
     )
+    moderation_severity = models.CharField(
+        max_length=20,
+        choices=[
+            ('low', 'Low'),
+            ('medium', 'Medium'),
+            ('high', 'High'),
+            ('critical', 'Critical'),
+        ],
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Severity level from moderation'
+    )
+    requires_human_review = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Flagged for human review'
+    )
     moderated_at = models.DateTimeField(
         null=True,
         blank=True,
