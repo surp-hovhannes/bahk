@@ -46,7 +46,13 @@ class EventType(models.Model):
     ARTICLE_PUBLISHED = 'article_published'
     RECIPE_PUBLISHED = 'recipe_published'
     VIDEO_PUBLISHED = 'video_published'
-    
+
+    # Prayer request events
+    PRAYER_REQUEST_CREATED = 'prayer_request_created'
+    PRAYER_REQUEST_ACCEPTED = 'prayer_request_accepted'
+    PRAYER_REQUEST_COMPLETED = 'prayer_request_completed'
+    PRAYER_REQUEST_THANKS_SENT = 'prayer_request_thanks_sent'
+
     CORE_EVENT_TYPES = [
         (USER_JOINED_FAST, 'User Joined Fast'),
         (USER_LEFT_FAST, 'User Left Fast'),
@@ -63,6 +69,11 @@ class EventType(models.Model):
         (ARTICLE_PUBLISHED, 'Article Published'),
         (RECIPE_PUBLISHED, 'Recipe Published'),
         (VIDEO_PUBLISHED, 'Video Published'),
+        # Prayer requests
+        (PRAYER_REQUEST_CREATED, 'Prayer Request Created'),
+        (PRAYER_REQUEST_ACCEPTED, 'Prayer Request Accepted'),
+        (PRAYER_REQUEST_COMPLETED, 'Prayer Request Completed'),
+        (PRAYER_REQUEST_THANKS_SENT, 'Prayer Request Thanks Sent'),
         # Analytics and engagement
         (APP_OPEN, 'App Open'),
         (SESSION_START, 'Session Start'),
@@ -148,13 +159,13 @@ class EventType(models.Model):
     @classmethod
     def _get_category_for_code(cls, code):
         """Get appropriate category for event type code."""
-        if code in [cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.USER_LOGGED_IN, cls.USER_LOGGED_OUT]:
+        if code in [cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.USER_LOGGED_IN, cls.USER_LOGGED_OUT, cls.PRAYER_REQUEST_CREATED, cls.PRAYER_REQUEST_ACCEPTED]:
             return 'user_action'
-        elif code in [cls.FAST_BEGINNING, cls.FAST_ENDING, cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED]:
+        elif code in [cls.FAST_BEGINNING, cls.FAST_ENDING, cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED, cls.PRAYER_REQUEST_COMPLETED]:
             return 'system_event'
         elif code in [cls.FAST_PARTICIPANT_MILESTONE, cls.USER_MILESTONE_REACHED]:
             return 'milestone'
-        elif code in [cls.DEVOTIONAL_AVAILABLE]:
+        elif code in [cls.DEVOTIONAL_AVAILABLE, cls.PRAYER_REQUEST_THANKS_SENT]:
             return 'notification'
         elif code in [cls.APP_OPEN, cls.SESSION_START, cls.SESSION_END, cls.SCREEN_VIEW, cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED, cls.PRAYER_SET_VIEWED]:
             return 'analytics'
@@ -164,10 +175,13 @@ class EventType(models.Model):
     def _requires_target_for_code(cls, code):
         """Check if event type requires a target object."""
         return code in [
-            cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.FAST_BEGINNING, 
+            cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.FAST_BEGINNING,
             cls.FAST_ENDING, cls.DEVOTIONAL_AVAILABLE, cls.FAST_PARTICIPANT_MILESTONE,
-            cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED, 
+            cls.FAST_CREATED, cls.FAST_UPDATED, cls.ARTICLE_PUBLISHED,
             cls.RECIPE_PUBLISHED, cls.VIDEO_PUBLISHED,
+            # Prayer request targets
+            cls.PRAYER_REQUEST_CREATED, cls.PRAYER_REQUEST_ACCEPTED,
+            cls.PRAYER_REQUEST_COMPLETED, cls.PRAYER_REQUEST_THANKS_SENT,
             # Engagement targets
             cls.DEVOTIONAL_VIEWED,
             cls.PRAYER_SET_VIEWED,
@@ -865,6 +879,12 @@ class UserMilestone(models.Model):
     MILESTONE_TYPES = [
         ('first_fast_join', 'First Fast Joined'),
         ('first_nonweekly_fast_complete', 'First Non-Weekly Fast Completed'),
+        # Prayer request milestones
+        ('first_prayer_request_created', 'First Prayer Request Created'),
+        ('first_prayer_request_accepted', 'First Prayer Request Accepted'),
+        ('prayer_warrior_10', 'Prayer Warrior - 10 Requests Accepted'),
+        ('prayer_warrior_50', 'Prayer Warrior - 50 Requests Accepted'),
+        ('faithful_intercessor', 'Faithful Intercessor - 7 Consecutive Days'),
         # Future milestone types can be added here
         # ('fasts_completed_5', 'Five Fasts Completed'),
         # ('consecutive_fasts_3', 'Three Consecutive Fasts'),
@@ -947,8 +967,28 @@ class UserMilestone(models.Model):
                 'description': "Congratulations on joining your first fast! May God bless your spiritual journey."
             },
             'first_nonweekly_fast_complete': {
-                'title': "Completed your first fast", 
+                'title': "Completed your first fast",
                 'description': "Congratulations on completing your first non-weekly fast! Your participation inspired us to continue our spiritual journey together."
+            },
+            'first_prayer_request_created': {
+                'title': "Shared your first prayer request",
+                'description': "Thank you for sharing your prayer needs with the community. We're here to pray with you."
+            },
+            'first_prayer_request_accepted': {
+                'title': "Accepted your first prayer request",
+                'description': "Thank you for committing to pray for someone in our community. Your intercession makes a difference."
+            },
+            'prayer_warrior_10': {
+                'title': "Prayer Warrior",
+                'description': "You've accepted 10 prayer requests! Your faithful intercession is a blessing to our community."
+            },
+            'prayer_warrior_50': {
+                'title': "Prayer Warrior Champion",
+                'description': "Amazing! You've accepted 50 prayer requests! Your dedication to prayer is an inspiration to us all."
+            },
+            'faithful_intercessor': {
+                'title': "Faithful Intercessor",
+                'description': "You've prayed for 7 consecutive days! Your consistent prayer life is a powerful witness."
             },
             # Add more milestone types here
             # 'fasts_completed_5': {
