@@ -326,7 +326,7 @@ def _send_moderation_alert_email(prayer_request, alert_type):
         'llm_rejected': 'Prayer Request Rejected - Manual Review Needed',
         'llm_error': 'Prayer Request Moderation Error - Manual Review Required',
         'requires_review': 'Prayer Request Flagged for Human Review',
-        'critical_safety_concern': '🚨 CRITICAL: Prayer Request Safety Concern',
+        'critical_safety_concern': 'Prayer Request Safety Concern',
     }
 
     subject = subject_map.get(alert_type, 'Prayer Request Needs Review')
