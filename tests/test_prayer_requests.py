@@ -680,3 +680,112 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # requires_human_review should not be in response
         self.assertNotIn('requires_human_review', response.data)
+
+    @tag('integration')
+    def test_requester_includes_profile_image_urls(self):
+        """Requester data should include profile image and thumbnail URLs."""
+        from hub.models import Profile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        requester = self.create_user(email='withimage@example.com')
+        viewer = self.create_user(email='viewer@example.com')
+        self.authenticate(viewer)
+
+        # Create a simple test image
+        image_content = (
+            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04'
+            b'\x01\x0a\x00\x01\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02'
+            b'\x02\x4c\x01\x00\x3b'
+        )
+        test_image = SimpleUploadedFile(
+            name='test_image.gif',
+            content=image_content,
+            content_type='image/gif'
+        )
+
+        # Create or get profile with image
+        profile, _ = Profile.objects.get_or_create(user=requester)
+        profile.profile_image = test_image
+        profile.save()
+
+        # Create a non-anonymous prayer request
+        prayer_request = self.create_prayer_request(
+            requester,
+            title='Has profile image',
+            is_anonymous=False
+        )
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        requester_data = response.data.get('requester')
+        self.assertIsNotNone(requester_data)
+        self.assertIn('profile_image_url', requester_data)
+        self.assertIn('profile_image_thumbnail_url', requester_data)
+
+        # Both should be present for a user with a profile image
+        self.assertIsNotNone(requester_data['profile_image_url'])
+        self.assertIsNotNone(requester_data['profile_image_thumbnail_url'])
+
+    @tag('integration')
+    def test_requester_profile_image_null_when_no_image(self):
+        """Requester data should return null image URLs when user has no profile image."""
+        requester = self.create_user(email='noimage@example.com')
+        viewer = self.create_user(email='viewer2@example.com')
+        self.authenticate(viewer)
+
+        prayer_request = self.create_prayer_request(
+            requester,
+            title='No profile image',
+            is_anonymous=False
+        )
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        requester_data = response.data.get('requester')
+        self.assertIsNotNone(requester_data)
+        self.assertIn('profile_image_url', requester_data)
+        self.assertIn('profile_image_thumbnail_url', requester_data)
+
+        # Both should be None when no profile image exists
+        self.assertIsNone(requester_data['profile_image_url'])
+        self.assertIsNone(requester_data['profile_image_thumbnail_url'])
+
+    @tag('integration')
+    def test_anonymous_request_hides_requester_including_profile_image(self):
+        """Anonymous requests should hide requester data including profile images."""
+        from hub.models import Profile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        requester = self.create_user(email='anon@example.com')
+        viewer = self.create_user(email='viewer3@example.com')
+        self.authenticate(viewer)
+
+        # Create or get profile with image
+        image_content = (
+            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04'
+            b'\x01\x0a\x00\x01\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02'
+            b'\x02\x4c\x01\x00\x3b'
+        )
+        test_image = SimpleUploadedFile(
+            name='test_anon.gif',
+            content=image_content,
+            content_type='image/gif'
+        )
+        profile, _ = Profile.objects.get_or_create(user=requester)
+        profile.profile_image = test_image
+        profile.save()
+
+        # Create an anonymous prayer request
+        prayer_request = self.create_prayer_request(
+            requester,
+            title='Anonymous request',
+            is_anonymous=True
+        )
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Requester should be None for anonymous requests (unless owner/staff)
+        self.assertIsNone(response.data.get('requester'))
