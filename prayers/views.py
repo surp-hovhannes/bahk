@@ -289,24 +289,33 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             if status_param:
                 # Support comma-separated multiple statuses
                 status_list = [s.strip() for s in status_param.split(',')]
-                # Check for special 'active' status
-                if 'active' in status_list:
+                # Build Q objects for OR logic when combining multiple statuses
+                q_objects = []
+                has_active = 'active' in status_list
+                
+                if has_active:
                     # 'active' means approved and not expired
-                    queryset = queryset.filter(
-                        status='approved',
-                        expiration_date__gt=timezone.now()
+                    q_objects.append(
+                        Q(status='approved', expiration_date__gt=timezone.now())
                     )
                     # Remove 'active' from list and process other statuses
                     status_list = [s for s in status_list if s != 'active']
-                else:
-                    # Validate status values
-                    valid_statuses = ['pending_moderation', 'approved', 'rejected', 'completed', 'deleted']
-                    status_list = [s for s in status_list if s in valid_statuses]
                 
-                # Apply additional status filters if any remain
-                if status_list:
-                    queryset = queryset.filter(status__in=status_list)
-                elif 'active' not in [s.strip() for s in status_param.split(',')]:
+                # Validate and add other status values
+                valid_statuses = ['pending_moderation', 'approved', 'rejected', 'completed', 'deleted']
+                valid_status_list = [s for s in status_list if s in valid_statuses]
+                
+                if valid_status_list:
+                    q_objects.append(Q(status__in=valid_status_list))
+                
+                # Apply filters with OR logic if we have any Q objects
+                if q_objects:
+                    # Combine all Q objects with OR logic
+                    combined_q = q_objects[0]
+                    for q_obj in q_objects[1:]:
+                        combined_q |= q_obj
+                    queryset = queryset.filter(combined_q)
+                elif not has_active:
                     # Invalid status values (and not 'active'), return empty queryset
                     return PrayerRequest.objects.none()
             elif not is_mine_filter:
