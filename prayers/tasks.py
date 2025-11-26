@@ -77,24 +77,78 @@ def moderate_prayer_request_task(self, prayer_request_id):
             llm_service = get_llm_service('claude-sonnet-4-5-20250929')
 
             # Construct moderation prompt
-            moderation_prompt = f"""You are a content moderator for a Christian prayer request community.
-Evaluate the following prayer request for appropriateness.
+            moderation_prompt = f"""You are evaluating a prayer request submitted to a Christian community app. Assess the request for appropriateness and genuine prayer needs.
 
-Check for:
-1. Spam or promotional content
-2. Inappropriate or offensive content
-3. Requests that are not genuine prayer needs
-4. Coherence and clarity
+**Request Details:**
+- Title: {prayer_request.title}
+- Description: {prayer_request.description}
 
-Title: {prayer_request.title}
-Description: {prayer_request.description}
+**Evaluation Criteria:**
 
-Respond with a JSON object containing:
+1. **Genuine Prayer Need**: Does this represent a sincere request for prayer support? Acceptable topics include health concerns, relationship struggles, spiritual growth, grief, anxiety, financial hardship, guidance, protection, and similar life challenges.
+
+2. **Appropriate Content**: Is the content respectful and suitable for a Christian community? Reject requests containing: explicit sexual content, graphic violence, hate speech, harassment of individuals, or content that mocks faith.
+
+3. **Not Spam/Promotional**: Is this a real prayer need rather than advertising, fundraising solicitation, political campaigning, or repetitive spam?
+
+4. **Coherence**: Is the request understandable and written in good faith? Reject incoherent gibberish, test submissions, or obvious jokes.
+
+5. **Safety**: Does this request avoid dangerous content such as self-harm intentions, threats to others, requests for harmful activities, or sharing of private information about others?
+
+**Special Considerations:**
+- Anonymous requests should be evaluated with the same standards
+- Requests may include personal struggles or vulnerable situations - be compassionate while maintaining community safety
+- Prayer requests often include emotional language - distinguish between authentic expression and inappropriate content
+- Requests may be brief (title only) or detailed - both can be valid if they meet the criteria
+
+**Severity Levels:**
+- **low**: Clear, appropriate prayer request with no concerns
+- **medium**: Minor concerns but acceptable (e.g., slightly vague, emotional language that might be misinterpreted)
+- **high**: Significant concerns requiring human review (e.g., borderline inappropriate, unclear intent, potential safety issues)
+- **critical**: Immediate safety concerns (e.g., self-harm, threats, severe harassment)
+
+**Response Format (JSON only):**
 {{
-    "approved": true/false,
-    "reason": "Brief explanation of your decision",
-    "concerns": ["List any specific concerns, if any"]
+  "approved": true/false,
+  "reason": "Brief explanation of decision (1-2 sentences)",
+  "concerns": ["list", "specific", "issues"],
+  "severity": "low|medium|high|critical",
+  "requires_human_review": false,
+  "suggested_action": "approve|reject|flag_for_review|escalate"
 }}
+
+Note: The concerns array should be empty if fully approved with no issues.
+
+**Examples of APPROVED requests (low severity):**
+- Health issues, medical procedures, recovery
+- Relationship challenges, family conflicts
+- Anxiety, depression, mental health struggles
+- Job loss, financial difficulties
+- Spiritual growth, breaking bad habits
+- Grief, loss of loved ones
+- Guidance for major life decisions
+- Protection during travel or difficult situations
+
+**Examples of MEDIUM severity (may approve with flag):**
+- Very emotional or distressing content that is still appropriate
+- Vague requests that might need clarification
+- Requests with minor grammatical issues but clear intent
+
+**Examples of HIGH severity (flag for review):**
+- Borderline inappropriate language
+- Unclear whether request is genuine
+- Mentions sensitive topics that need careful review
+
+**Examples of CRITICAL severity (escalate immediately):**
+- Expressions of intent to self-harm
+- Threats to harm others
+- Severe harassment or hate speech
+
+**Examples of REJECTED requests:**
+- "Buy my product! Visit mysite.com" (spam)
+- "asdfasdf test test 123" (incoherent)
+- Explicit sexual content or graphic descriptions (inappropriate)
+- Political campaign messages (promotional)
 """
 
             # Call LLM with low temperature for consistent moderation
@@ -127,13 +181,52 @@ Respond with a JSON object containing:
             prayer_request.reviewed = True
             prayer_request.moderated_at = timezone.now()
 
-            if llm_result.get('approved', False):
+            # Extract severity and review flags
+            severity = llm_result.get('severity', 'low')
+            requires_review = llm_result.get('requires_human_review', False)
+            suggested_action = llm_result.get('suggested_action', 'approve' if llm_result.get('approved') else 'reject')
+
+            # Store moderation metadata
+            prayer_request.moderation_severity = severity
+            prayer_request.moderation_result = {
+                'profanity_check': {'passed': True},
+                'llm_check': llm_result,
+                'reason': llm_result.get('reason', 'Processed by automated moderation')
+            }
+
+            # Handle critical severity - always escalate
+            if severity == 'critical':
+                prayer_request.status = 'rejected'
+                prayer_request.requires_human_review = True
+                prayer_request.save()
+
+                # Send urgent email to admin
+                _send_moderation_alert_email(prayer_request, 'critical_safety_concern')
+
+                logger.warning(
+                    f"CRITICAL: Prayer request {prayer_request_id} flagged for safety concerns: "
+                    f"{llm_result.get('reason')}"
+                )
+
+            # Handle high severity - flag for review regardless of approval
+            elif severity == 'high' or requires_review:
+                prayer_request.status = 'pending_moderation'
+                prayer_request.requires_human_review = True
+                prayer_request.save()
+
+                # Send email to admin for manual review
+                _send_moderation_alert_email(prayer_request, 'requires_review')
+
+                logger.info(
+                    f"Prayer request {prayer_request_id} flagged for human review (severity: {severity}): "
+                    f"{llm_result.get('reason')}"
+                )
+
+            # Handle approved requests
+            elif llm_result.get('approved', False):
                 prayer_request.status = 'approved'
-                prayer_request.moderation_result = {
-                    'profanity_check': {'passed': True},
-                    'llm_check': llm_result,
-                    'reason': 'Approved by automated moderation'
-                }
+                prayer_request.requires_human_review = False
+
                 # Save immediately so milestone check sees the updated status
                 prayer_request.save()
 
@@ -171,20 +264,21 @@ Respond with a JSON object containing:
                     defaults={'counts_for_milestones': False}
                 )
 
-                logger.info(f"Prayer request {prayer_request_id} approved by LLM")
+                logger.info(
+                    f"Prayer request {prayer_request_id} approved by LLM (severity: {severity})"
+                )
+
+            # Handle rejected requests
             else:
                 prayer_request.status = 'rejected'
-                prayer_request.moderation_result = {
-                    'profanity_check': {'passed': True},
-                    'llm_check': llm_result,
-                    'reason': llm_result.get('reason', 'Content did not pass moderation')
-                }
+                prayer_request.requires_human_review = False
+                prayer_request.save()
 
-                # Send email to admin for manual review
+                # Send email to admin for awareness
                 _send_moderation_alert_email(prayer_request, 'llm_rejected')
 
                 logger.info(
-                    f"Prayer request {prayer_request_id} rejected by LLM: "
+                    f"Prayer request {prayer_request_id} rejected by LLM (severity: {severity}): "
                     f"{llm_result.get('reason')}"
                 )
 
@@ -231,9 +325,18 @@ def _send_moderation_alert_email(prayer_request, alert_type):
         'profanity_detected': 'Prayer Request Rejected - Profanity Detected',
         'llm_rejected': 'Prayer Request Rejected - Manual Review Needed',
         'llm_error': 'Prayer Request Moderation Error - Manual Review Required',
+        'requires_review': 'Prayer Request Flagged for Human Review',
+        'critical_safety_concern': '🚨 CRITICAL: Prayer Request Safety Concern',
     }
 
     subject = subject_map.get(alert_type, 'Prayer Request Needs Review')
+
+    # Add severity indicator to subject for critical/high severity
+    severity = prayer_request.moderation_severity
+    if severity == 'critical':
+        subject = f"🚨 CRITICAL: {subject}"
+    elif severity == 'high':
+        subject = f"⚠️  HIGH PRIORITY: {subject}"
 
     message = f"""
 A prayer request has been flagged during moderation and requires your attention.
@@ -245,10 +348,12 @@ Requester: {prayer_request.requester.email}
 Anonymous: {'Yes' if prayer_request.is_anonymous else 'No'}
 Created: {prayer_request.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}
 
+SEVERITY: {severity.upper() if severity else 'Unknown'}
+Requires Human Review: {'Yes' if prayer_request.requires_human_review else 'No'}
+Status: {prayer_request.status}
+
 Moderation Result:
 {prayer_request.moderation_result}
-
-Status: {prayer_request.status}
 
 Please review this prayer request in the Django admin panel.
 Admin URL: {settings.SITE_URL}/admin/prayers/prayerrequest/{prayer_request.id}/change/
