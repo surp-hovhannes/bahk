@@ -311,6 +311,21 @@ class FastAdmin(admin.ModelAdmin):
                 duplicate_fast.image = old_fast.image
                 duplicate_fast.image_thumbnail = old_fast.image_thumbnail
 
+                # Copy translated fields (django-modeltrans stores in _en, _hy suffixes)
+                # This ensures all language versions are preserved
+                duplicate_fast.name_en = old_fast.name_en
+                duplicate_fast.name_hy = old_fast.name_hy
+                duplicate_fast.description_en = old_fast.description_en
+                duplicate_fast.description_hy = old_fast.description_hy
+                duplicate_fast.culmination_feast_en = old_fast.culmination_feast_en
+                duplicate_fast.culmination_feast_hy = old_fast.culmination_feast_hy
+                duplicate_fast.culmination_feast_salutation_en = old_fast.culmination_feast_salutation_en
+                duplicate_fast.culmination_feast_salutation_hy = old_fast.culmination_feast_salutation_hy
+                duplicate_fast.culmination_feast_message_en = old_fast.culmination_feast_message_en
+                duplicate_fast.culmination_feast_message_hy = old_fast.culmination_feast_message_hy
+                duplicate_fast.culmination_feast_message_attribution_en = old_fast.culmination_feast_message_attribution_en
+                duplicate_fast.culmination_feast_message_attribution_hy = old_fast.culmination_feast_message_attribution_hy
+
                 # days
                 dates = [
                     data["first_day"] + datetime.timedelta(days=num_days)
@@ -332,6 +347,9 @@ class FastAdmin(admin.ModelAdmin):
                     "name": old_fast.name,
                     "church": old_fast.church,
                     "culmination_feast": old_fast.culmination_feast,
+                    "culmination_feast_salutation": old_fast.culmination_feast_salutation,
+                    "culmination_feast_message": old_fast.culmination_feast_message,
+                    "culmination_feast_message_attribution": old_fast.culmination_feast_message_attribution,
                     "description": old_fast.description,
                     "url": old_fast.url,
                 }
