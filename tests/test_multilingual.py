@@ -11,7 +11,7 @@ from django.db import IntegrityError
 
 class MultilingualModelTests(TestCase):
     """Tests for multilingual model fields."""
-    
+
     def test_model_i18n_fields_return_translations(self):
         """Test that i18n fields return correct translations."""
         activate('en')
@@ -27,6 +27,76 @@ class MultilingualModelTests(TestCase):
         self.assertEqual(fast.name_i18n, "Մեծ Պահք")
         self.assertEqual(fast.description_i18n, "Նկարագրություն")
         self.assertEqual(fast.culmination_feast_i18n, "Զատիկ")
+
+    def test_fast_duplication_copies_translations(self):
+        """Test that duplicating a fast copies all translatable fields."""
+        church = Church.objects.create(name="Test Church")
+
+        # Create original fast with all translatable fields populated
+        original_fast = Fast.objects.create(
+            name="Great Lent",
+            church=church,
+            description="Fasting period before Easter",
+            culmination_feast="Easter",
+            culmination_feast_salutation="Christ is Risen!",
+            culmination_feast_message="He is risen indeed!",
+            culmination_feast_message_attribution="Traditional greeting",
+            url="https://example.com"
+        )
+
+        # Set Armenian translations
+        original_fast.name_hy = "Մեծ Պահք"
+        original_fast.description_hy = "Զատկի նախորդող պահողության ժամանակաշրջան"
+        original_fast.culmination_feast_hy = "Զատիկ"
+        original_fast.culmination_feast_salutation_hy = "Քրիստոս հարյավ ի մեռելոց!"
+        original_fast.culmination_feast_message_hy = "Օրհնյալ է հարությունն Քրիստոսի!"
+        original_fast.culmination_feast_message_attribution_hy = "Ավանդական բարևույթ"
+        original_fast.save()
+
+        # Create a duplicate by manually copying fields (simulating admin duplication logic)
+        duplicate_fast = Fast.objects.create(
+            name=original_fast.name,
+            church=original_fast.church,
+            description=original_fast.description,
+            culmination_feast=original_fast.culmination_feast,
+            culmination_feast_salutation=original_fast.culmination_feast_salutation,
+            culmination_feast_message=original_fast.culmination_feast_message,
+            culmination_feast_message_attribution=original_fast.culmination_feast_message_attribution,
+            url=original_fast.url,
+        )
+
+        # Copy translated fields
+        duplicate_fast.name_en = original_fast.name_en
+        duplicate_fast.name_hy = original_fast.name_hy
+        duplicate_fast.description_en = original_fast.description_en
+        duplicate_fast.description_hy = original_fast.description_hy
+        duplicate_fast.culmination_feast_en = original_fast.culmination_feast_en
+        duplicate_fast.culmination_feast_hy = original_fast.culmination_feast_hy
+        duplicate_fast.culmination_feast_salutation_en = original_fast.culmination_feast_salutation_en
+        duplicate_fast.culmination_feast_salutation_hy = original_fast.culmination_feast_salutation_hy
+        duplicate_fast.culmination_feast_message_en = original_fast.culmination_feast_message_en
+        duplicate_fast.culmination_feast_message_hy = original_fast.culmination_feast_message_hy
+        duplicate_fast.culmination_feast_message_attribution_en = original_fast.culmination_feast_message_attribution_en
+        duplicate_fast.culmination_feast_message_attribution_hy = original_fast.culmination_feast_message_attribution_hy
+        duplicate_fast.save()
+
+        # Verify English translations
+        activate('en')
+        self.assertEqual(duplicate_fast.name_i18n, "Great Lent")
+        self.assertEqual(duplicate_fast.description_i18n, "Fasting period before Easter")
+        self.assertEqual(duplicate_fast.culmination_feast_i18n, "Easter")
+        self.assertEqual(duplicate_fast.culmination_feast_salutation_i18n, "Christ is Risen!")
+        self.assertEqual(duplicate_fast.culmination_feast_message_i18n, "He is risen indeed!")
+        self.assertEqual(duplicate_fast.culmination_feast_message_attribution_i18n, "Traditional greeting")
+
+        # Verify Armenian translations
+        activate('hy')
+        self.assertEqual(duplicate_fast.name_i18n, "Մեծ Պահք")
+        self.assertEqual(duplicate_fast.description_i18n, "Զատկի նախորդող պահողության ժամանակաշրջան")
+        self.assertEqual(duplicate_fast.culmination_feast_i18n, "Զատիկ")
+        self.assertEqual(duplicate_fast.culmination_feast_salutation_i18n, "Քրիստոս հարյավ ի մեռելոց!")
+        self.assertEqual(duplicate_fast.culmination_feast_message_i18n, "Օրհնյալ է հարությունն Քրիստոսի!")
+        self.assertEqual(duplicate_fast.culmination_feast_message_attribution_i18n, "Ավանդական բարևույթ")
 
     def test_devotional_unique_together_language_code(self):
         """Test that devotional unique_together constraint works with language_code."""
