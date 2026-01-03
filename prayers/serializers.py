@@ -29,7 +29,7 @@ class PrayerSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerial
     class Meta:
         model = Prayer
         fields = [
-            'id', 'title', 'text', 'category', 'church', 'church_name',
+            'id', 'title', 'text', 'category', 'video', 'church', 'church_name',
             'fast', 'fast_name', 'tags', 'created_at', 'updated_at', 'is_bookmarked'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
