@@ -30,15 +30,15 @@ class PrayerSetMembershipInline(SortableInlineAdminMixin, admin.TabularInline):
 class PrayerAdmin(admin.ModelAdmin):
     """Admin interface for Prayer model."""
     
-    list_display = ('title', 'category', 'church', 'fast', 'tag_list', 'created_at')
+    list_display = ('title', 'category', 'church', 'fast', 'video', 'tag_list', 'created_at')
     list_filter = ('church', 'category', 'fast', 'created_at', 'tags')
     search_fields = ('title', 'text')
-    raw_id_fields = ('church', 'fast')
+    raw_id_fields = ('church', 'fast', 'video')
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         (None, {
-            'fields': ('title', 'title_hy', 'text', 'text_hy', 'category')
+            'fields': ('title', 'title_hy', 'text', 'text_hy', 'category', 'video')
         }),
         ('Organization', {
             'fields': ('church', 'fast', 'tags')
