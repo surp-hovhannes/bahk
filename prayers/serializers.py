@@ -13,6 +13,7 @@ from prayers.models import (
     PrayerRequest,
     PrayerRequestAcceptance,
     PrayerRequestPrayerLog,
+    FeastPrayer,
 )
 
 User = get_user_model()
@@ -394,3 +395,52 @@ class PrayerRequestThanksSerializer(serializers.Serializer):
         if not value.strip():
             raise serializers.ValidationError('Message cannot be empty.')
         return value.strip()
+
+
+class FeastPrayerSerializer(serializers.ModelSerializer):
+    """Serializer for FeastPrayer with translation and rendering support."""
+
+    title_template = serializers.CharField(source='title', read_only=True)
+    text_template = serializers.CharField(source='text', read_only=True)
+    title_rendered = serializers.SerializerMethodField()
+    text_rendered = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeastPrayer
+        fields = [
+            'id', 'designation', 'title_template', 'text_template',
+            'title_rendered', 'text_rendered', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_title_rendered(self, obj):
+        """Return empty string - populated in to_representation."""
+        return ""
+
+    def get_text_rendered(self, obj):
+        """Return empty string - populated in to_representation."""
+        return ""
+
+    def to_representation(self, instance):
+        """Add translation support and template rendering."""
+        # Get language from request
+        lang = self.context.get('lang') or (
+            self.context.get('request').query_params.get('lang')
+            if self.context.get('request') else None
+        ) or 'en'
+        activate(lang)
+
+        data = super().to_representation(instance)
+
+        # Get translated template fields
+        data['title_template'] = getattr(instance, 'title_i18n', instance.title)
+        data['text_template'] = getattr(instance, 'text_i18n', instance.text)
+
+        # Render with feast if provided in context
+        feast = self.context.get('feast')
+        if feast:
+            rendered = instance.render_for_feast(feast, lang)
+            data['title_rendered'] = rendered['title']
+            data['text_rendered'] = rendered['text']
+
+        return data
