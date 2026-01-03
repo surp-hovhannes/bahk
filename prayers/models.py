@@ -559,3 +559,78 @@ class PrayerRequestPrayerLog(models.Model):
 
     def __str__(self):
         return f'{self.user.email} prayed for "{self.prayer_request.title}" on {self.prayed_on_date}'
+
+
+class FeastPrayer(models.Model):
+    """Prayer templates associated with feast designations.
+
+    Stores prayer templates with {feast_name} placeholder that gets
+    substituted at runtime with the actual feast name.
+    """
+
+    designation = models.CharField(
+        max_length=256,
+        choices=[
+            ('Sundays, Dominical Feast Days', 'Sundays, Dominical Feast Days'),
+            ('St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets',
+             'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets'),
+            ('Patriarchs, Vartapets', 'Patriarchs, Vartapets'),
+            ('Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord',
+             'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord'),
+            ('Martyrs', 'Martyrs'),
+        ],
+        unique=True,
+        db_index=True,
+        help_text='Feast designation this prayer is for'
+    )
+    title = models.CharField(
+        max_length=200,
+        help_text='Prayer title template (can include {feast_name} placeholder)'
+    )
+    text = models.TextField(
+        help_text='Prayer text template with {feast_name} placeholder'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Translations for bilingual support
+    i18n = TranslationField(fields=('title', 'text'))
+
+    class Meta:
+        ordering = ['designation']
+        verbose_name = 'Feast Prayer'
+        verbose_name_plural = 'Feast Prayers'
+
+    def __str__(self):
+        return f"Prayer for {self.designation}"
+
+    def render_for_feast(self, feast, lang='en'):
+        """Render the prayer with feast name substituted.
+
+        Args:
+            feast: Feast instance
+            lang: Language code ('en' or 'hy')
+
+        Returns:
+            dict with 'title' and 'text' keys containing rendered prayer
+        """
+        from django.utils.translation import activate
+
+        # Activate the requested language
+        activate(lang)
+
+        # Get translated feast name
+        feast_name = getattr(feast, 'name_i18n', feast.name)
+
+        # Get translated prayer fields
+        title_template = getattr(self, 'title_i18n', self.title)
+        text_template = getattr(self, 'text_i18n', self.text)
+
+        # Substitute {feast_name} placeholder
+        rendered_title = title_template.replace('{feast_name}', feast_name) if title_template else ''
+        rendered_text = text_template.replace('{feast_name}', feast_name) if text_template else ''
+
+        return {
+            'title': rendered_title,
+            'text': rendered_text
+        }

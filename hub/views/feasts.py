@@ -173,6 +173,24 @@ class GetFeastForDate(generics.GenericAPIView):
             **context_dict,
         }
 
+        # Check if feast has a prayer for its designation
+        feast_prayer_data = None
+        if feast.designation:
+            try:
+                from prayers.models import FeastPrayer
+                from prayers.serializers import FeastPrayerSerializer
+
+                feast_prayer = FeastPrayer.objects.get(designation=feast.designation)
+                serializer = FeastPrayerSerializer(
+                    feast_prayer,
+                    context={'request': request, 'lang': lang, 'feast': feast}
+                )
+                feast_prayer_data = serializer.data
+            except FeastPrayer.DoesNotExist:
+                pass
+
+        feast_data['prayer'] = feast_prayer_data
+
         response_data = {
             "date": date_str,
             "feast": feast_data,
@@ -253,4 +271,3 @@ class FeastContextFeedbackView(APIView):
                 {"status": "error", "message": "Invalid feedback type"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-

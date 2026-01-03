@@ -11,6 +11,7 @@ from prayers.models import (
     PrayerRequest,
     PrayerRequestAcceptance,
     PrayerRequestPrayerLog,
+    FeastPrayer,
 )
 
 from adminsortable2.admin import SortableAdminBase, SortableInlineAdminMixin
@@ -329,3 +330,48 @@ class PrayerRequestPrayerLogAdmin(admin.ModelAdmin):
             'fields': ('prayer_request', 'user', 'prayed_on_date', 'created_at')
         }),
     )
+
+
+@admin.register(FeastPrayer)
+class FeastPrayerAdmin(admin.ModelAdmin):
+    """Admin interface for FeastPrayer model."""
+
+    list_display = ('designation_short', 'title_preview', 'created_at')
+    search_fields = ('designation', 'title', 'text')
+    readonly_fields = ('created_at', 'updated_at')
+
+    fieldsets = (
+        (None, {
+            'fields': ('designation',)
+        }),
+        ('English Prayer Template', {
+            'fields': ('title', 'text'),
+            'description': 'Use {feast_name} placeholder for feast name.'
+        }),
+        ('Armenian Translation', {
+            'fields': ('title_hy', 'text_hy'),
+            'classes': ('collapse',),
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def designation_short(self, obj):
+        """Display shortened designation."""
+        return obj.designation[:50] + '...' if len(obj.designation) > 50 else obj.designation
+
+    designation_short.short_description = 'Designation'
+
+    def title_preview(self, obj):
+        """Display prayer title with placeholder hint."""
+        title = obj.title or ''
+        if '{feast_name}' in title:
+            return format_html(
+                '{} <span style="color: #999;">(has placeholder)</span>',
+                title[:50]
+            )
+        return title[:50]
+
+    title_preview.short_description = 'Title'
