@@ -10,6 +10,8 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import Truncator
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.http import Http404
 from markdownx.admin import MarkdownxModelAdmin
 import logging
 
@@ -28,7 +30,11 @@ from hub.models import (
     Reading,
     ReadingContext,
 )
-from hub.tasks import generate_reading_context_task, generate_feast_context_task
+from hub.tasks import (
+    generate_reading_context_task,
+    generate_feast_context_task,
+    match_icon_to_feast_task,
+)
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
 
@@ -717,9 +723,14 @@ class FeastAdmin(admin.ModelAdmin):
     )
     search_fields = ("name", "name_en", "name_hy")
     ordering = ("day",)
-    raw_id_fields = ("day",)
-    actions = ["force_regenerate_context"]
+    raw_id_fields = ("day", "icon")
+    actions = [
+        "force_rematch_icon",
+        "match_icon_if_missing",
+        "force_regenerate_context",
+    ]
     exclude = ("name",)  # Avoid duplicate with translation fields
+    readonly_fields = ("icon_rematch_links",)
 
     fieldsets = (
         (None, {
@@ -728,9 +739,139 @@ class FeastAdmin(admin.ModelAdmin):
         ('Classification', {
             'fields': ('designation',)
         }),
+        ('Icon', {
+            'fields': ('icon', 'icon_rematch_links')
+        }),
         ('Translations', {
             'fields': ('name_en', 'name_hy')
         }),
+    )
+
+    def get_urls(self):
+        """Add per-feast endpoints to trigger icon matching."""
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "<int:pk>/rematch_icon_force/",
+                self.admin_site.admin_view(self.rematch_icon_force_view),
+                name="hub_feast_rematch_icon_force",
+            ),
+            path(
+                "<int:pk>/rematch_icon_if_missing/",
+                self.admin_site.admin_view(self.rematch_icon_if_missing_view),
+                name="hub_feast_rematch_icon_if_missing",
+            ),
+        ]
+        return custom_urls + urls
+
+    def icon_rematch_links(self, feast):
+        """Render links to trigger icon matching for this feast in admin."""
+        if not feast or not feast.pk:
+            return "-"
+
+        url_force = reverse("admin:hub_feast_rematch_icon_force", args=[feast.pk])
+        url_if_missing = reverse(
+            "admin:hub_feast_rematch_icon_if_missing", args=[feast.pk]
+        )
+        return format_html(
+            '<a class="button" href="{}">Force re-match icon</a>&nbsp;'
+            '<a class="button" href="{}">Match icon only if missing</a>',
+            url_force,
+            url_if_missing,
+        )
+
+    icon_rematch_links.short_description = "Icon matching"
+
+    def _enqueue_icon_match_for_feast(self, request, feast, *, force: bool) -> bool:
+        """
+        Enqueue icon matching for a feast.
+
+        Returns True if a Celery task was enqueued, False otherwise.
+        """
+        if force:
+            if feast.icon_id is not None:
+                feast.icon = None
+                feast.save(update_fields=["icon"])
+            match_icon_to_feast_task.delay(feast.id)
+            return True
+
+        # Only if missing
+        if feast.icon_id is None:
+            match_icon_to_feast_task.delay(feast.id)
+            return True
+
+        return False
+
+    def rematch_icon_force_view(self, request, pk: int):
+        try:
+            feast = Feast.objects.select_related("day", "day__church").get(pk=pk)
+        except Feast.DoesNotExist as exc:
+            raise Http404 from exc
+        if not self.has_change_permission(request, obj=feast):
+            raise PermissionDenied
+
+        self._enqueue_icon_match_for_feast(request, feast, force=True)
+        self.message_user(
+            request,
+            f"Enqueued icon re-match for feast {feast.id}.",
+            level=messages.SUCCESS,
+        )
+        return redirect(reverse("admin:hub_feast_change", args=[feast.pk]))
+
+    def rematch_icon_if_missing_view(self, request, pk: int):
+        try:
+            feast = Feast.objects.select_related("day", "day__church").get(pk=pk)
+        except Feast.DoesNotExist as exc:
+            raise Http404 from exc
+        if not self.has_change_permission(request, obj=feast):
+            raise PermissionDenied
+
+        enqueued = self._enqueue_icon_match_for_feast(request, feast, force=False)
+        if enqueued:
+            self.message_user(
+                request,
+                f"Enqueued icon match for feast {feast.id}.",
+                level=messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                f"Feast {feast.id} already has an icon; nothing to do.",
+                level=messages.WARNING,
+            )
+        return redirect(reverse("admin:hub_feast_change", args=[feast.pk]))
+
+    def force_rematch_icon(self, request, queryset):
+        """Clear current icon and enqueue icon matching for selected feasts."""
+        enqueued = 0
+        for feast in queryset:
+            if self._enqueue_icon_match_for_feast(request, feast, force=True):
+                enqueued += 1
+        self.message_user(
+            request,
+            f"Enqueued forced icon re-match for {enqueued} feasts.",
+            level=messages.SUCCESS,
+        )
+
+    force_rematch_icon.short_description = "Force re-match icon for selected feasts"
+
+    def match_icon_if_missing(self, request, queryset):
+        """Enqueue icon matching only for selected feasts missing an icon."""
+        enqueued = 0
+        skipped = 0
+        for feast in queryset:
+            if self._enqueue_icon_match_for_feast(request, feast, force=False):
+                enqueued += 1
+            else:
+                skipped += 1
+        self.message_user(
+            request,
+            f"Enqueued icon matching for {enqueued} feasts; skipped {skipped} (already had icon).",
+            level=messages.SUCCESS,
+        )
+
+    match_icon_if_missing.short_description = (
+        "Match icon only if missing for selected feasts"
     )
 
     def force_regenerate_context(self, request, queryset):
