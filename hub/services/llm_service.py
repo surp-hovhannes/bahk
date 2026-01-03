@@ -185,6 +185,90 @@ def _parse_feast_context_json(response_text: str) -> Optional[dict]:
     """
     import re
     import json
+
+    def _extract_json_object(text_value: str) -> Optional[str]:
+        """Extract the first JSON object from a larger string.
+
+        LLMs sometimes wrap JSON in markdown fences or add stray commentary.
+        We conservatively take the substring from the first '{' to the last '}'.
+        """
+        if not isinstance(text_value, str):
+            return None
+        start = text_value.find("{")
+        end = text_value.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        return text_value[start : end + 1]
+
+    def _escape_control_chars_in_json_strings(json_text: str) -> str:
+        """Escape invalid control characters that appear *inside* JSON strings.
+
+        A common LLM failure mode is to emit literal newlines inside quoted values
+        (e.g. multi-paragraph `"text": "...\n..."`), which is invalid JSON and raises:
+        `Invalid control character at ...`.
+
+        This keeps content intact by converting these characters to JSON escapes.
+        """
+        if not isinstance(json_text, str):
+            return json_text
+
+        out: list[str] = []
+        in_string = False
+        escaped = False
+
+        for ch in json_text:
+            if in_string:
+                if escaped:
+                    out.append(ch)
+                    escaped = False
+                    continue
+
+                if ch == "\\":
+                    out.append(ch)
+                    escaped = True
+                    continue
+
+                if ch == '"':
+                    out.append(ch)
+                    in_string = False
+                    continue
+
+                code = ord(ch)
+                if code < 0x20:
+                    if ch == "\n":
+                        out.append("\\n")
+                    elif ch == "\r":
+                        out.append("\\r")
+                    elif ch == "\t":
+                        out.append("\\t")
+                    else:
+                        out.append(f"\\u{code:04x}")
+                    continue
+
+                out.append(ch)
+            else:
+                if ch == '"':
+                    out.append(ch)
+                    in_string = True
+                    continue
+                out.append(ch)
+
+        return "".join(out)
+
+    def _safe_json_loads(text_value: str):
+        """Parse JSON more defensively for LLM outputs."""
+        # Strip outer code fences if present (best-effort).
+        text_value = re.sub(r"^\s*```(?:json)?\s*\n", "", text_value)
+        text_value = re.sub(r"\n```\s*$", "", text_value)
+        text_value = text_value.strip()
+
+        # If the model added chatter, extract the object portion.
+        extracted = _extract_json_object(text_value)
+        if extracted:
+            text_value = extracted
+
+        text_value = _escape_control_chars_in_json_strings(text_value)
+        return json.loads(text_value)
     
     def clean_and_extract_text(text_value: str) -> str:
         """Recursively clean and extract plain text from potentially nested JSON/markdown."""
@@ -192,13 +276,13 @@ def _parse_feast_context_json(response_text: str) -> Optional[dict]:
             return text_value
         
         # Remove markdown code blocks
-        text_value = re.sub(r'^```(?:json)?\s*\n', '', text_value)
+        text_value = re.sub(r'^\s*```(?:json)?\s*\n', '', text_value)
         text_value = re.sub(r'\n```\s*$', '', text_value)
         text_value = text_value.strip()
         
         # Check if the value itself is JSON that needs parsing
         try:
-            parsed = json.loads(text_value)
+            parsed = _safe_json_loads(text_value)
             if isinstance(parsed, dict):
                 # If it has 'text' or 'short_text', extract the appropriate one
                 if 'text' in parsed:
@@ -211,14 +295,9 @@ def _parse_feast_context_json(response_text: str) -> Optional[dict]:
         
         return text_value
     
-    # Remove markdown code blocks from outer response if present
-    text = re.sub(r'^```(?:json)?\s*\n', '', response_text)
-    text = re.sub(r'\n```\s*$', '', text)
-    text = text.strip()
-    
     # Try to parse as JSON
     try:
-        parsed = json.loads(text)
+        parsed = _safe_json_loads(response_text)
         if isinstance(parsed, dict):
             # Check if we have both required fields
             if 'text' in parsed and 'short_text' in parsed:
@@ -234,8 +313,8 @@ def _parse_feast_context_json(response_text: str) -> Optional[dict]:
                 )
                 return None
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"Failed to parse feast context JSON: {e}")
-        logger.error(f"Response text was: {response_text[:200]}")
+        logger.error("Failed to parse feast context JSON: %s", e)
+        logger.error("Response text was: %s", response_text[:500])
         return None
     
     return None
@@ -354,7 +433,8 @@ class AnthropicService(LLMService):
             "Return your response as JSON with two fields:\n"
             '- "short_text": A 2-sentence summary\n'
             '- "text": A detailed explanation (multiple paragraphs)\n\n'
-            "Return ONLY the JSON object, no markdown code blocks."
+            "Return ONLY the JSON object, no markdown code blocks.\n"
+            r"IMPORTANT: If you need paragraph breaks, encode them as \n in the JSON string values (do not include literal newlines inside quoted strings)."
         )
 
         # Search for matching feast in reference data
@@ -546,7 +626,8 @@ class OpenAIService(LLMService):
             "Return your response as JSON with two fields:\n"
             '- "short_text": A 2-sentence summary\n'
             '- "text": A detailed explanation (multiple paragraphs)\n\n'
-            "Return ONLY the JSON object, no markdown code blocks."
+            "Return ONLY the JSON object, no markdown code blocks.\n"
+            r"IMPORTANT: If you need paragraph breaks, encode them as \n in the JSON string values (do not include literal newlines inside quoted strings)."
         )
 
         # Search for matching feast in reference data
