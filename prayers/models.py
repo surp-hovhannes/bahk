@@ -15,6 +15,7 @@ from taggit.managers import TaggableManager
 
 from hub.constants import DAYS_TO_CACHE_THUMBNAIL
 from hub.models import Church, Fast
+from learning_resources.models import Video
 from prayers.utils import prayer_set_image_upload_path, prayer_request_image_upload_path
 
 User = get_user_model()
@@ -24,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 class Prayer(models.Model):
     """Model for a prayer."""
-    
+
     CATEGORY_CHOICES = [
         ('morning', 'Morning Prayer'),
         ('evening', 'Evening Prayer'),
         ('general', 'General Prayer')
     ]
-    
+
     title = models.CharField(max_length=200)
     text = models.TextField(help_text='Main prayer content')
     category = models.CharField(
@@ -54,18 +55,26 @@ class Prayer(models.Model):
         related_name='prayers',
         help_text='Optional fast association'
     )
+    video = models.ForeignKey(
+        Video,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='prayers',
+        help_text='Video containing audio recording of the prayer being read aloud and visuals integrated with the prayer'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     # Tags using django-taggit
     tags = TaggableManager(blank=True, help_text='Tags for categorizing prayers')
-    
+
     # Translations for user-facing fields
     i18n = TranslationField(fields=(
         'title',
         'text',
     ))
-    
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Prayer'
@@ -74,20 +83,20 @@ class Prayer(models.Model):
             models.Index(fields=['church', 'category']),
             models.Index(fields=['church', 'fast']),
         ]
-    
+
     def __str__(self):
         return self.title
 
 
 class PrayerSet(models.Model):
     """Model for an ordered collection of prayers."""
-    
+
     CATEGORY_CHOICES = [
         ('morning', 'Morning Prayer'),
         ('evening', 'Evening Prayer'),
         ('general', 'General Prayer')
     ]
-    
+
     title = models.CharField(max_length=128)
     description = models.TextField(
         null=True,
@@ -122,26 +131,26 @@ class PrayerSet(models.Model):
     # Cache the thumbnail URL to avoid S3 calls
     cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
     cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
-    
+
     prayers = models.ManyToManyField(
         'Prayer',
         through='PrayerSetMembership',
         related_name='prayer_sets',
         help_text='Prayers in this set'
     )
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     # Translations for user-facing fields
     i18n = TranslationField(fields=(
         'title',
         'description',
     ))
-    
+
     # Track changes to fields requiring custom save behavior
     tracker = FieldTracker(fields=['image'])
-    
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Prayer Set'
@@ -150,10 +159,10 @@ class PrayerSet(models.Model):
             models.Index(fields=['church', 'created_at']),
             models.Index(fields=['church', 'category']),
         ]
-    
+
     def __str__(self):
         return self.title
-    
+
     def save(self, **kwargs):
         """Save method with thumbnail caching logic."""
         # First check if this is a new instance or if the image field has changed
@@ -162,9 +171,9 @@ class PrayerSet(models.Model):
             or 'image' in kwargs.get('update_fields', [])
             or (not self._state.adding and self.tracker.has_changed('image'))
         )
-        
+
         super().save(**kwargs)
-        
+
         # Handle thumbnail URL caching after the instance and image are fully saved to S3
         if self.image:
             # Update cache if:
@@ -180,16 +189,16 @@ class PrayerSet(models.Model):
                     >= DAYS_TO_CACHE_THUMBNAIL
                 )
             )
-            
+
             if should_update_cache:
                 try:
                     # Force generation of the thumbnail and wait for S3 upload
                     thumbnail = self.thumbnail.generate()
-                    
+
                     # Get the S3 URL after the file has been uploaded
                     self.cached_thumbnail_url = self.thumbnail.url
                     self.cached_thumbnail_updated = timezone.now()
-                    
+
                     # Save again to update the cache fields only
                     super().save(
                         update_fields=[

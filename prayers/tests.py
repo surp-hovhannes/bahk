@@ -9,6 +9,7 @@ from rest_framework import status
 from hub.models import Church, Fast
 from learning_resources.models import Bookmark
 from prayers.models import Prayer, PrayerSet, PrayerSetMembership
+from tests.fixtures.test_data import TestDataFactory
 
 
 class PrayerModelTests(TestCase):
@@ -34,6 +35,7 @@ class PrayerModelTests(TestCase):
         self.assertEqual(prayer.category, 'morning')
         self.assertEqual(prayer.church, self.church)
         self.assertIsNone(prayer.fast)
+        self.assertIsNone(prayer.video)
     
     def test_create_prayer_with_fast(self):
         """Test creating a prayer associated with a fast."""
@@ -45,6 +47,20 @@ class PrayerModelTests(TestCase):
             fast=self.fast
         )
         self.assertEqual(prayer.fast, self.fast)
+    
+    def test_create_prayer_with_video(self):
+        """Test creating a prayer associated with a video."""
+        video = TestDataFactory.create_video(title='Prayer Video')
+        prayer = Prayer.objects.create(
+            title='Prayer with Video',
+            text='This prayer has an associated video.',
+            category='morning',
+            church=self.church,
+            video=video
+        )
+        self.assertEqual(prayer.video, video)
+        # Verify reverse relationship works
+        self.assertIn(prayer, video.prayers.all())
     
     def test_prayer_tags(self):
         """Test adding tags to prayers."""
