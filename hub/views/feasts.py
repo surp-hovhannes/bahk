@@ -271,4 +271,3 @@ class FeastContextFeedbackView(APIView):
                 {"status": "error", "message": "Invalid feedback type"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
