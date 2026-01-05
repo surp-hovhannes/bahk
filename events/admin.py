@@ -1198,6 +1198,7 @@ class UserActivityFeedAdmin(admin.ModelAdmin):
     """
     Admin interface for UserActivityFeed model with monitoring capabilities.
     """
+    autocomplete_fields = ('user', 'event')
     list_display = [
         'user', 'activity_type', 'title', 'is_read', 'created_at', 'age_display'
     ]
