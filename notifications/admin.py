@@ -5,7 +5,7 @@ from django.urls import path
 from django.shortcuts import redirect
 from .models import DeviceToken, PromoEmail, PromoEmailImage
 from .utils import send_push_notification
-from .tasks import send_promo_email_task
+from .tasks import send_promo_email_task, send_admin_push_batch_task
 from django.contrib.admin import SimpleListFilter
 from hub.models import Fast, Profile, Church
 from django.utils import timezone
@@ -27,6 +27,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def queue_admin_push_notification(message, data, token_ids):
+    """
+    Enqueue push notifications to be processed asynchronously.
+    Separated for easier testing/mocking.
+    """
+    return send_admin_push_batch_task.apply_async(
+        kwargs={
+            'message': message,
+            'data': data,
+            'token_ids': token_ids,
+        }
+    )
 
 
 class UserWithNoFastsFilter(SimpleListFilter):
@@ -161,29 +175,18 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                         context
                     )
 
-                users = list(tokens.values_list('user', flat=True).distinct())
-                
-                result = send_push_notification(
+                token_ids = list(tokens.values_list('id', flat=True))
+
+                queue_admin_push_notification(
                     message=message,
                     data=data,
-                    users=users
+                    token_ids=token_ids,
                 )
 
-                if result['success']:
-                    messages.success(
-                        request,
-                        f"Successfully sent notifications to {result['sent']} devices. Failed: {result['failed']}"
-                    )
-                    if result['invalid_tokens']:
-                        messages.warning(
-                            request,
-                            f'{len(result["invalid_tokens"])} devices were deactivated due to invalid tokens'
-                        )
-                else:
-                    error_msg = 'Failed to send push notification'
-                    if result['errors']:
-                        error_msg += f': {", ".join(result["errors"])}'
-                    messages.error(request, error_msg)
+                messages.success(
+                    request,
+                    f"Push notification queued for {len(token_ids)} devices. Processing will continue in the background."
+                )
 
                 # Clear session
                 if 'selected_tokens' in request.session:

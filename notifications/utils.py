@@ -22,7 +22,14 @@ def is_weekly_fast(fast):
     return bool(re.match("wednesday|friday", fast.name, re.I))
 
 
-def send_push_notification(message, data=None, users=None, notification_type=None):
+def send_push_notification(
+    message,
+    data=None,
+    users=None,
+    notification_type=None,
+    tokens=None,
+    token_ids=None,
+):
     """
     Send push notifications to specified tokens or all registered devices.
     
@@ -32,6 +39,8 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         users (list, optional): List of specific users to send to. If None, sends to all registered users.
         notification_type (str, optional): Type of notification. If not specified, will send to all users regardless of
             preferences. Defaults to None. Other options: ('upcoming_fast', 'ongoing_fast', 'daily_fast', 'weekly_fast')
+        tokens (list, optional): Explicit list of Expo push tokens to target. When provided, users/notification_type are ignored.
+        token_ids (list, optional): List of DeviceToken IDs to target. Useful for admin-selected batches.
     
     Returns:
         dict: Contains success status and details about sent/failed notifications
@@ -45,21 +54,34 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
     }
 
     try:
-        logger.info(f"Starting push notification with users: {users or 'all'}")
-        
-        # Get all active tokens for the specified users
+        logger.info(
+            "Starting push notification with users=%s token_ids=%s tokens_provided=%s",
+            users or 'all',
+            token_ids if token_ids is not None else 'none',
+            bool(tokens),
+        )
+
+        # Get tokens to send to, preferring explicit tokens/token_ids when provided
         tokens_queryset = DeviceToken.objects.filter(is_active=True)
-        
-        if users:
-            tokens_queryset = tokens_queryset.filter(user__in=users)
 
-        if notification_type in NOTIFICATION_TYPE_FILTERS:
-            filter_field = NOTIFICATION_TYPE_FILTERS[notification_type]
-            tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
+        if tokens is None:
+            if token_ids:
+                tokens_queryset = tokens_queryset.filter(id__in=token_ids)
 
-        tokens = list(tokens_queryset.values_list('token', flat=True))
+            if users:
+                tokens_queryset = tokens_queryset.filter(user__in=users)
 
-        if not tokens:
+            if notification_type in NOTIFICATION_TYPE_FILTERS:
+                filter_field = NOTIFICATION_TYPE_FILTERS[notification_type]
+                tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
+
+            tokens_to_send = list(tokens_queryset.values_list('token', flat=True))
+        else:
+            # Ensure provided tokens are unique and non-empty
+            tokens_to_send = [t for t in tokens if t]
+            tokens_to_send = list(dict.fromkeys(tokens_to_send))  # preserve order while de-duping
+
+        if not tokens_to_send:
             logger.warning("No device tokens available for push notification")
             result['errors'].append("No device tokens available")
             return result
@@ -76,7 +98,7 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
                 data = {}
 
         # Send notifications
-        for token in tokens:
+        for token in tokens_to_send:
             try:
                 client.publish(
                     PushMessage(

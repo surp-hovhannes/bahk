@@ -30,7 +30,84 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_push_notification_task(message, data=None, tokens=None, notification_type=None):
-    send_push_notification(message, data, tokens, notification_type)
+    send_push_notification(
+        message=message,
+        data=data,
+        tokens=tokens,
+        notification_type=notification_type,
+    )
+
+
+@shared_task(bind=True)
+def send_admin_push_batch_task(
+    self,
+    message,
+    data=None,
+    token_ids=None,
+    notification_type=None,
+    chunk_size=None,
+):
+    """
+    Send admin-initiated push notifications in chunks to avoid request timeouts.
+    Args:
+        message (str): Notification body
+        data (dict|str|None): Additional payload
+        token_ids (list[int]): DeviceToken ids selected in admin
+        chunk_size (int|None): Optional chunk size override; defaults to setting or 500
+    """
+    if not token_ids:
+        logger.warning("send_admin_push_batch_task called with no token_ids")
+        return {
+            'success': False,
+            'sent': 0,
+            'failed': 0,
+            'invalid_tokens': [],
+            'errors': ['No token ids provided'],
+        }
+
+    batch_size = max(1, int(chunk_size or getattr(settings, 'PUSH_ADMIN_BATCH_SIZE', 500)))
+    aggregated = {
+        'success': True,
+        'sent': 0,
+        'failed': 0,
+        'invalid_tokens': [],
+        'errors': [],
+    }
+
+    logger.info(
+        "send_admin_push_batch_task started tokens=%s batch_size=%s",
+        len(token_ids),
+        batch_size,
+    )
+
+    for start in range(0, len(token_ids), batch_size):
+        batch_ids = token_ids[start:start + batch_size]
+
+        result = send_push_notification(
+            message=message,
+            data=data,
+            token_ids=batch_ids,
+            notification_type=notification_type,
+        )
+
+        aggregated['sent'] += result.get('sent', 0)
+        aggregated['failed'] += result.get('failed', 0)
+        aggregated['invalid_tokens'].extend(result.get('invalid_tokens', []))
+        aggregated['errors'].extend(result.get('errors', []))
+
+        if not result.get('success', False):
+            aggregated['success'] = False
+
+    if aggregated['errors']:
+        aggregated['success'] = False
+
+    logger.info(
+        "send_admin_push_batch_task completed sent=%s failed=%s errors=%s",
+        aggregated['sent'],
+        aggregated['failed'],
+        len(aggregated['errors']),
+    )
+    return aggregated
 
 def get_email_count():
     """Get the number of emails sent in the current rate limit window."""
