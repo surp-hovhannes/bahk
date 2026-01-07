@@ -414,7 +414,7 @@ def check_expired_prayer_requests_task():
     Check for expired prayer requests and mark them as completed.
     Creates completion activity feed items for requesters.
 
-    This task should run daily at 11:00 PM.
+    Runs frequently via Celery beat to minimize delay between expiration and completion.
     """
     now = timezone.now()
 
@@ -426,36 +426,9 @@ def check_expired_prayer_requests_task():
 
     count = 0
     for prayer_request in expired_requests:
-        # Mark as completed
-        prayer_request.mark_completed()
-
-        # Create completion event
-        Event.create_event(
-            event_type_code=EventType.PRAYER_REQUEST_COMPLETED,
-            user=prayer_request.requester,
-            target=prayer_request,
-            title=f'Prayer request completed: {prayer_request.title}',
-            data={
-                'prayer_request_id': prayer_request.id,
-                'acceptance_count': prayer_request.get_acceptance_count(),
-                'prayer_log_count': prayer_request.get_prayer_log_count(),
-            }
-        )
-
-        # Create activity feed item
-        UserActivityFeed.objects.create(
-            user=prayer_request.requester,
-            activity_type='prayer_request_completed',
-            title='Your prayer request has completed',
-            description=f'Your prayer request "{prayer_request.title}" has reached its duration. You can now send a thank you message to those who prayed.',
-            target=prayer_request,
-            data={
-                'prayer_request_id': prayer_request.id,
-                'acceptance_count': prayer_request.get_acceptance_count(),
-            }
-        )
-
-        count += 1
+        _, completed = prayer_request.complete_if_expired_with_side_effects()
+        if completed:
+            count += 1
 
     logger.info(f"Marked {count} prayer requests as completed")
     return {'success': True, 'completed_count': count}
