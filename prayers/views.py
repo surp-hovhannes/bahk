@@ -228,6 +228,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
+from hub.utils import get_user_profile_safe
 from prayers.models import PrayerRequest, PrayerRequestAcceptance, PrayerRequestPrayerLog
 from prayers.serializers import (
     PrayerRequestSerializer,
@@ -465,10 +466,19 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
 
         # Create activity feed item for requester
         if not prayer_request.is_anonymous:
+            # Get display name from profile, fallback to "User {first_letter}" for privacy
+            profile = get_user_profile_safe(request.user)
+            if profile and profile.name:
+                acceptor_name = profile.name
+            else:
+                # Privacy-safe fallback: "User D" instead of showing email
+                first_letter = request.user.email[0].upper() if request.user.email else 'U'
+                acceptor_name = f'User {first_letter}'
+            
             UserActivityFeed.objects.create(
                 user=prayer_request.requester,
                 activity_type='prayer_request_accepted',
-                title=f'{request.user.get_full_name() or request.user.email} accepted your prayer request',
+                title=f'{acceptor_name} accepted your prayer request',
                 description=f'Someone is now praying for your request "{prayer_request.title}".',
                 target=prayer_request,
                 data={
@@ -604,11 +614,20 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         )
 
         # Create activity feed items for all who accepted (excluding requester)
+        # Get display name from profile, fallback to "User {first_letter}" for privacy
+        profile = get_user_profile_safe(request.user)
+        if profile and profile.name:
+            sender_name = profile.name
+        else:
+            # Privacy-safe fallback: "User D" instead of showing email
+            first_letter = request.user.email[0].upper() if request.user.email else 'U'
+            sender_name = f'User {first_letter}'
+        
         for acceptance in acceptances:
             UserActivityFeed.objects.create(
                 user=acceptance.user,
                 activity_type='prayer_request_thanks',
-                title=f'Thank you from {request.user.get_full_name() or request.user.email}',
+                title=f'Thank you from {sender_name}',
                 description=message,
                 target=prayer_request,
                 data={
