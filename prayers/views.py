@@ -1,5 +1,4 @@
 """Views for prayers app."""
-from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics
@@ -355,52 +354,7 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         When a request is expired but still approved, mark it completed
         and create completion side-effects if they don't already exist.
         """
-        if prayer_request.status != 'approved' or not prayer_request.is_expired():
-            return prayer_request
-
-        content_type = ContentType.objects.get_for_model(prayer_request)
-
-        completion_event_exists = Event.objects.filter(
-            event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
-            content_type=content_type,
-            object_id=prayer_request.id,
-        ).exists()
-
-        activity_exists = UserActivityFeed.objects.filter(
-            user=prayer_request.requester,
-            activity_type='prayer_request_completed',
-            content_type=content_type,
-            object_id=prayer_request.id,
-        ).exists()
-
-        prayer_request.mark_completed()
-
-        if not completion_event_exists:
-            Event.create_event(
-                event_type_code=EventType.PRAYER_REQUEST_COMPLETED,
-                user=prayer_request.requester,
-                target=prayer_request,
-                title=f'Prayer request completed: {prayer_request.title}',
-                data={
-                    'prayer_request_id': prayer_request.id,
-                    'acceptance_count': prayer_request.get_acceptance_count(),
-                    'prayer_log_count': prayer_request.get_prayer_log_count(),
-                }
-            )
-
-        if not activity_exists:
-            UserActivityFeed.objects.create(
-                user=prayer_request.requester,
-                activity_type='prayer_request_completed',
-                title='Your prayer request has completed',
-                description=f'Your prayer request "{prayer_request.title}" has reached its duration. You can now send a thank you message to those who prayed.',
-                target=prayer_request,
-                data={
-                    'prayer_request_id': prayer_request.id,
-                    'acceptance_count': prayer_request.get_acceptance_count(),
-                }
-            )
-
+        prayer_request, _ = prayer_request.complete_if_expired_with_side_effects()
         return prayer_request
 
     def perform_create(self, serializer):

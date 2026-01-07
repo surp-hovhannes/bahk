@@ -409,6 +409,39 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
         self.assertEqual(feed_items.count(), 1)
 
+    @tag('integration')
+    def test_expired_completion_idempotent_across_task_and_view(self):
+        """Task and view paths should not create duplicate completion artifacts."""
+        requester = self.create_user(email='expired-idempotent@example.com')
+        prayer_request = self.create_prayer_request(requester, title='Idempotent completion')
+        prayer_request.expiration_date = timezone.now() - timedelta(minutes=5)
+        prayer_request.save(update_fields=['expiration_date'])
+
+        first_result = check_expired_prayer_requests_task()
+        self.assertEqual(first_result['completed_count'], 1)
+
+        # Trigger both retrieval and a second task run to exercise both paths.
+        self.authenticate(requester)
+        self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        second_result = check_expired_prayer_requests_task()
+
+        self.assertEqual(second_result['completed_count'], 0)
+        self.assertEqual(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
+                object_id=prayer_request.id
+            ).count(),
+            1
+        )
+        self.assertEqual(
+            UserActivityFeed.objects.filter(
+                user=requester,
+                activity_type='prayer_request_completed',
+                object_id=prayer_request.id
+            ).count(),
+            1
+        )
+
     @tag('integration', 'slow')
     def test_send_daily_prayer_count_notifications_task_creates_activity(self):
         """Daily notification task should create activity feed entries."""
