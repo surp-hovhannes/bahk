@@ -30,12 +30,9 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_push_notification_task(message, data=None, tokens=None, notification_type=None):
-    send_push_notification(
-        message=message,
-        data=data,
-        tokens=tokens,
-        notification_type=notification_type,
-    )
+    # Keep positional arguments to preserve legacy behavior where the third argument
+    # represents users (not explicit push tokens).
+    send_push_notification(message, data, tokens, notification_type)
 
 
 @shared_task(bind=True)

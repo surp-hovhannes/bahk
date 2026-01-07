@@ -69,8 +69,8 @@ class AdminActionEnqueueTests(TestCase):
             device_type='ios',
         )
 
-    @patch('notifications.tasks.send_push_notification')
-    def test_admin_action_queues_task(self, mock_send):
+    @patch('notifications.admin.queue_admin_push_notification')
+    def test_admin_action_queues_task(self, mock_queue):
         session = self.client.session
         session['selected_tokens'] = [self.token.id]
         session.save()
@@ -84,5 +84,9 @@ class AdminActionEnqueueTests(TestCase):
         self.assertTrue(
             response.url.endswith(reverse('admin:notifications_devicetoken_changelist'))
         )
-        mock_send.assert_called_once()
+        mock_queue.assert_called_once_with(
+            message='hello',
+            data={},
+            token_ids=[self.token.id],
+        )
 
