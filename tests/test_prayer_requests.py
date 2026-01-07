@@ -472,6 +472,44 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertEqual(prayer_request.status, 'approved')
 
     @tag('integration', 'slow')
+    def test_moderation_task_null_severity_defaults_to_low(self):
+        """
+        If the LLM returns `severity: null`, we must not store an invalid choice
+        value like "none". Default to "low".
+        """
+        requester = self.create_user(email='nullseverity@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Prayer request with null severity',
+            description='Please pray for wisdom and peace.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Appropriate prayer request",
+                "concerns": [],
+                "severity": null,
+                "requires_human_review": false,
+                "suggested_action": "approve"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), patch('anthropic.Anthropic') as mock_anthropic:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'approved')
+        self.assertEqual(prayer_request.status, 'approved')
+        self.assertEqual(prayer_request.moderation_severity, 'low')
+
+    @tag('integration', 'slow')
     def test_moderation_task_flag_for_review_stays_pending(self):
         """If the LLM suggests flagging for review, the request must remain pending."""
         requester = self.create_user(email='flagforreview@example.com')

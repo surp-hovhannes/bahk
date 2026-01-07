@@ -219,14 +219,25 @@ def moderate_prayer_request_task(self, prayer_request_id):
             prayer_request.moderated_at = timezone.now()
 
             # Extract severity and review flags
-            severity = str(llm_result.get('severity', 'low')).lower()
-            requires_review = llm_result.get('requires_human_review', False)
-            suggested_action = str(
-                llm_result.get(
-                    'suggested_action',
-                    'approve' if llm_result.get('approved') else 'reject',
-                )
-            ).lower()
+            valid_severities = {"low", "medium", "high", "critical"}
+            severity_raw = llm_result.get("severity")
+            severity = (
+                str(severity_raw).strip().lower()
+                if severity_raw
+                else "low"
+            )
+            if severity not in valid_severities:
+                severity = "low"
+
+            requires_review = bool(llm_result.get("requires_human_review", False))
+
+            default_action = "approve" if llm_result.get("approved") else "reject"
+            suggested_action_raw = llm_result.get("suggested_action")
+            suggested_action = (
+                str(suggested_action_raw).strip().lower()
+                if suggested_action_raw
+                else default_action
+            )
 
             # Store moderation metadata
             prayer_request.moderation_severity = severity
