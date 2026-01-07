@@ -221,7 +221,12 @@ def moderate_prayer_request_task(self, prayer_request_id):
             # Extract severity and review flags
             severity = llm_result.get('severity', 'low')
             requires_review = llm_result.get('requires_human_review', False)
-            suggested_action = llm_result.get('suggested_action', 'approve' if llm_result.get('approved') else 'reject')
+            suggested_action = str(
+                llm_result.get(
+                    'suggested_action',
+                    'approve' if llm_result.get('approved') else 'reject',
+                )
+            ).lower()
 
             # Store moderation metadata
             prayer_request.moderation_severity = severity
@@ -246,7 +251,7 @@ def moderate_prayer_request_task(self, prayer_request_id):
                 )
 
             # Handle high severity - flag for review regardless of approval
-            elif severity == 'high' or requires_review:
+            elif severity == 'high' or requires_review or suggested_action == 'flag_for_review':
                 prayer_request.status = 'pending_moderation'
                 prayer_request.requires_human_review = True
                 prayer_request.save()
