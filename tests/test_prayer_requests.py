@@ -332,6 +332,83 @@ class PrayerRequestAPITests(BaseAPITestCase):
             ).exists()
         )
 
+    @tag('integration')
+    def test_retrieve_auto_completes_expired_request(self):
+        """Detail fetch should auto-complete expired approved requests."""
+        requester = self.create_user(email='expired-owner@example.com')
+        self.authenticate(requester)
+
+        prayer_request = self.create_prayer_request(requester, title='Expired detail')
+        prayer_request.expiration_date = timezone.now() - timedelta(minutes=5)
+        prayer_request.save(update_fields=['expiration_date'])
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        prayer_request.refresh_from_db()
+        self.assertEqual(prayer_request.status, 'completed')
+
+        self.assertTrue(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
+                object_id=prayer_request.id
+            ).exists()
+        )
+        self.assertTrue(
+            UserActivityFeed.objects.filter(
+                user=requester,
+                activity_type='prayer_request_completed',
+                object_id=prayer_request.id
+            ).exists()
+        )
+
+    @tag('integration')
+    def test_send_thanks_after_auto_completion(self):
+        """Expired requests should allow thanks without waiting for scheduler."""
+        requester = self.create_user(email='expired-thanks@example.com')
+        intercessor = self.create_user(email='helper-thanks@example.com')
+        prayer_request = self.create_prayer_request(requester, title='Expired thanks')
+        prayer_request.expiration_date = timezone.now() - timedelta(minutes=5)
+        prayer_request.save(update_fields=['expiration_date'])
+
+        PrayerRequestAcceptance.objects.create(
+            prayer_request=prayer_request,
+            user=intercessor,
+            counts_for_milestones=True,
+        )
+
+        self.authenticate(requester)
+        response = self.client.post(
+            f'/api/prayer-requests/{prayer_request.id}/send-thanks/',
+            {'message': 'Appreciate your prayers!'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['recipient_count'], 1)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(prayer_request.status, 'completed')
+
+        self.assertTrue(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
+                object_id=prayer_request.id
+            ).exists()
+        )
+        self.assertTrue(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_THANKS_SENT,
+                object_id=prayer_request.id
+            ).exists()
+        )
+        feed_items = UserActivityFeed.objects.filter(
+            user=intercessor,
+            activity_type='prayer_request_thanks',
+            object_id=prayer_request.id
+        )
+        self.assertEqual(feed_items.count(), 1)
+
     @tag('integration', 'slow')
     def test_send_daily_prayer_count_notifications_task_creates_activity(self):
         """Daily notification task should create activity feed entries."""
