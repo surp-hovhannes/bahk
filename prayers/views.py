@@ -345,6 +345,19 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             return PrayerRequestThanksSerializer
         return PrayerRequestSerializer
 
+    def get_object(self):
+        """Retrieve object and ensure expired approved requests are completed."""
+        prayer_request = super().get_object()
+        return self._ensure_completed_if_expired(prayer_request)
+
+    def _ensure_completed_if_expired(self, prayer_request):
+        """
+        When a request is expired but still approved, mark it completed
+        and create completion side-effects if they don't already exist.
+        """
+        prayer_request, _ = prayer_request.complete_if_expired_with_side_effects()
+        return prayer_request
+
     def perform_create(self, serializer):
         """Create prayer request and trigger moderation."""
         prayer_request = serializer.save()

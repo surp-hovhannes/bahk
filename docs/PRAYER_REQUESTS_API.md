@@ -677,7 +677,7 @@ The following milestones are automatically awarded:
 ## Scheduled Tasks
 
 ### Check Expired Prayer Requests
-**Schedule:** Daily at 11:00 PM
+**Schedule:** Every 15 minutes
 **Task:** `prayers.tasks.check_expired_prayer_requests_task`
 
 - Finds approved requests where `expiration_date <= now()`
