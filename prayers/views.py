@@ -465,10 +465,18 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
 
         # Create activity feed item for requester
         if not prayer_request.is_anonymous:
+            # Get display name from profile, fallback to "User {first_letter}" for privacy
+            if hasattr(request.user, 'profile') and request.user.profile and request.user.profile.name:
+                acceptor_name = request.user.profile.name
+            else:
+                # Privacy-safe fallback: "User D" instead of showing email
+                first_letter = request.user.email[0].upper() if request.user.email else 'U'
+                acceptor_name = f'User {first_letter}'
+            
             UserActivityFeed.objects.create(
                 user=prayer_request.requester,
                 activity_type='prayer_request_accepted',
-                title=f'{request.user.get_full_name() or request.user.email} accepted your prayer request',
+                title=f'{acceptor_name} accepted your prayer request',
                 description=f'Someone is now praying for your request "{prayer_request.title}".',
                 target=prayer_request,
                 data={
@@ -604,11 +612,19 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         )
 
         # Create activity feed items for all who accepted (excluding requester)
+        # Get display name from profile, fallback to "User {first_letter}" for privacy
+        if hasattr(request.user, 'profile') and request.user.profile and request.user.profile.name:
+            sender_name = request.user.profile.name
+        else:
+            # Privacy-safe fallback: "User D" instead of showing email
+            first_letter = request.user.email[0].upper() if request.user.email else 'U'
+            sender_name = f'User {first_letter}'
+        
         for acceptance in acceptances:
             UserActivityFeed.objects.create(
                 user=acceptance.user,
                 activity_type='prayer_request_thanks',
-                title=f'Thank you from {request.user.get_full_name() or request.user.email}',
+                title=f'Thank you from {sender_name}',
                 description=message,
                 target=prayer_request,
                 data={
