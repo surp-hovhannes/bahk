@@ -124,7 +124,7 @@ app.conf.beat_schedule = {
         # Add Sentry Cron metadata
         'options': {
             'sentry': {
-                'monitor_slug': 'daily-expired-prayer-requests-check',
+                'monitor_slug': 'frequent-expired-prayer-requests-check',
             }
         }
     },
