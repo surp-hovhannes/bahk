@@ -3,11 +3,13 @@ from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.utils import tag
 from django.utils import timezone
 from rest_framework import status
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
+from icons.models import Icon
 from prayers.models import (
     PrayerRequest,
     PrayerRequestAcceptance,
@@ -276,6 +278,174 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertEqual(results[0]['id'], tracked_request.id)
 
     @tag('integration')
+    def test_create_rejects_icon_from_other_church_when_profile_church_set(self):
+        """Create should validate icon_id belongs to requester's Profile.church (when set)."""
+        church_a = self.create_church(name='Church A')
+        church_b = self.create_church(name='Church B')
+        user = self.create_user(email='creator_icon@example.com')
+        self.create_profile(user=user, church=church_a)
+        self.authenticate(user)
+
+        test_image = SimpleUploadedFile(
+            name='test_icon.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+        other_church_icon = Icon.objects.create(
+            title='Other Church Icon',
+            church=church_b,
+            image=test_image,
+        )
+
+        with patch('prayers.views.moderate_prayer_request_task.delay') as mock_delay:
+            response = self.client.post(self.list_url, {
+                'title': 'Need prayer',
+                'description': 'Please pray for my family.',
+                'duration_days': 3,
+                'is_anonymous': False,
+                'icon_id': other_church_icon.id,
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Icon must belong to your church', response.data['icon_id'][0])
+        mock_delay.assert_not_called()
+
+    @tag('integration')
+    def test_create_accepts_icon_from_same_church_and_thumbnail_falls_back_to_icon(self):
+        """When no image is uploaded, thumbnail_url should fall back to icon thumbnail."""
+        church = self.create_church(name='Church A')
+        user = self.create_user(email='creator_icon_ok@example.com')
+        self.create_profile(user=user, church=church)
+        self.authenticate(user)
+
+        test_image = SimpleUploadedFile(
+            name='test_icon.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+        icon = Icon.objects.create(
+            title='Church Icon',
+            church=church,
+            image=test_image,
+        )
+        # Avoid ImageSpec generation in tests: set cached thumbnail explicitly.
+        icon.cached_thumbnail_url = 'https://example.com/icon-thumb.jpg'
+        icon.cached_thumbnail_updated = timezone.now()
+        icon.save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+
+        with patch('prayers.views.moderate_prayer_request_task.delay') as mock_delay:
+            response = self.client.post(self.list_url, {
+                'title': 'Need prayer',
+                'description': 'Please pray for my job search.',
+                'duration_days': 3,
+                'is_anonymous': False,
+                'icon_id': icon.id,
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_delay.assert_called_once()
+        # Regression: icon_id must be present in create response (not write_only).
+        self.assertEqual(response.data.get('icon_id'), icon.id)
+
+        created_request = PrayerRequest.objects.filter(requester=user).latest('id')
+        created_request.status = 'approved'
+        created_request.reviewed = True
+        created_request.save(update_fields=['status', 'reviewed'])
+
+        list_response = self.client.get(self.list_url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        results = self._get_results(list_response)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], created_request.id)
+        self.assertEqual(results[0]['icon_id'], icon.id)
+        self.assertEqual(results[0]['thumbnail_url'], icon.cached_thumbnail_url)
+
+    @tag('integration')
+    def test_create_allows_icon_when_user_has_no_profile(self):
+        """
+        Users without a Profile should not error when validating icon_id.
+
+        Church-based validation should only apply when Profile.church is set.
+        """
+        church = self.create_church(name='Church A')
+        user = self.create_user(email='creator_no_profile@example.com')
+        # Intentionally do NOT create a profile
+        self.authenticate(user)
+
+        test_image = SimpleUploadedFile(
+            name='test_icon.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+        icon = Icon.objects.create(title='Church Icon', church=church, image=test_image)
+        # Avoid ImageSpec generation in tests: set cached thumbnail explicitly.
+        icon.cached_thumbnail_url = 'https://example.com/icon-thumb-no-profile.jpg'
+        icon.cached_thumbnail_updated = timezone.now()
+        icon.save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+
+        with patch('prayers.views.moderate_prayer_request_task.delay') as mock_delay:
+            response = self.client.post(self.list_url, {
+                'title': 'Need prayer',
+                'description': 'Please pray for my health.',
+                'duration_days': 3,
+                'is_anonymous': False,
+                'icon_id': icon.id,
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_delay.assert_called_once()
+
+    @tag('integration')
+    def test_update_allows_setting_icon_id_and_validates_church(self):
+        """Update should accept icon_id (same church) and reject other-church icon_id."""
+        church_a = self.create_church(name='Church A')
+        church_b = self.create_church(name='Church B')
+        owner = self.create_user(email='owner_icon@example.com')
+        self.create_profile(user=owner, church=church_a)
+        self.authenticate(owner)
+
+        prayer_request = self.create_prayer_request(
+            owner,
+            status='pending_moderation',
+            reviewed=False,
+        )
+
+        test_image_a = SimpleUploadedFile(
+            name='test_icon_a.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+        icon_a = Icon.objects.create(title='Icon A', church=church_a, image=test_image_a)
+
+        test_image_b = SimpleUploadedFile(
+            name='test_icon_b.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+        icon_b = Icon.objects.create(title='Icon B', church=church_b, image=test_image_b)
+
+        # Reject other church
+        response = self.client.patch(
+            f'/api/prayer-requests/{prayer_request.id}/',
+            {'icon_id': icon_b.id},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Icon must belong to your church', response.data['icon_id'][0])
+
+        # Accept same church
+        response = self.client.patch(
+            f'/api/prayer-requests/{prayer_request.id}/',
+            {'icon_id': icon_a.id},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Regression: icon_id must be present in update response (not write_only).
+        self.assertEqual(response.data.get('icon_id'), icon_a.id)
+        prayer_request.refresh_from_db()
+        self.assertEqual(prayer_request.icon_id, icon_a.id)
+
+    @tag('integration')
     def test_send_thanks_requires_completed_status_and_notifies_acceptors(self):
         """Requester can only send thanks once completed, and recipients receive feed items."""
         requester = self.create_user(email='thankful@example.com')
@@ -330,6 +500,116 @@ class PrayerRequestAPITests(BaseAPITestCase):
                 event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
                 object_id=prayer_request.id
             ).exists()
+        )
+
+    @tag('integration')
+    def test_retrieve_auto_completes_expired_request(self):
+        """Detail fetch should auto-complete expired approved requests."""
+        requester = self.create_user(email='expired-owner@example.com')
+        self.authenticate(requester)
+
+        prayer_request = self.create_prayer_request(requester, title='Expired detail')
+        prayer_request.expiration_date = timezone.now() - timedelta(minutes=5)
+        prayer_request.save(update_fields=['expiration_date'])
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        prayer_request.refresh_from_db()
+        self.assertEqual(prayer_request.status, 'completed')
+
+        self.assertTrue(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
+                object_id=prayer_request.id
+            ).exists()
+        )
+        self.assertTrue(
+            UserActivityFeed.objects.filter(
+                user=requester,
+                activity_type='prayer_request_completed',
+                object_id=prayer_request.id
+            ).exists()
+        )
+
+    @tag('integration')
+    def test_send_thanks_after_auto_completion(self):
+        """Expired requests should allow thanks without waiting for scheduler."""
+        requester = self.create_user(email='expired-thanks@example.com')
+        intercessor = self.create_user(email='helper-thanks@example.com')
+        prayer_request = self.create_prayer_request(requester, title='Expired thanks')
+        prayer_request.expiration_date = timezone.now() - timedelta(minutes=5)
+        prayer_request.save(update_fields=['expiration_date'])
+
+        PrayerRequestAcceptance.objects.create(
+            prayer_request=prayer_request,
+            user=intercessor,
+            counts_for_milestones=True,
+        )
+
+        self.authenticate(requester)
+        response = self.client.post(
+            f'/api/prayer-requests/{prayer_request.id}/send-thanks/',
+            {'message': 'Appreciate your prayers!'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['recipient_count'], 1)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(prayer_request.status, 'completed')
+
+        self.assertTrue(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
+                object_id=prayer_request.id
+            ).exists()
+        )
+        self.assertTrue(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_THANKS_SENT,
+                object_id=prayer_request.id
+            ).exists()
+        )
+        feed_items = UserActivityFeed.objects.filter(
+            user=intercessor,
+            activity_type='prayer_request_thanks',
+            object_id=prayer_request.id
+        )
+        self.assertEqual(feed_items.count(), 1)
+
+    @tag('integration')
+    def test_expired_completion_idempotent_across_task_and_view(self):
+        """Task and view paths should not create duplicate completion artifacts."""
+        requester = self.create_user(email='expired-idempotent@example.com')
+        prayer_request = self.create_prayer_request(requester, title='Idempotent completion')
+        prayer_request.expiration_date = timezone.now() - timedelta(minutes=5)
+        prayer_request.save(update_fields=['expiration_date'])
+
+        first_result = check_expired_prayer_requests_task()
+        self.assertEqual(first_result['completed_count'], 1)
+
+        # Trigger both retrieval and a second task run to exercise both paths.
+        self.authenticate(requester)
+        self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        second_result = check_expired_prayer_requests_task()
+
+        self.assertEqual(second_result['completed_count'], 0)
+        self.assertEqual(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
+                object_id=prayer_request.id
+            ).count(),
+            1
+        )
+        self.assertEqual(
+            UserActivityFeed.objects.filter(
+                user=requester,
+                activity_type='prayer_request_completed',
+                object_id=prayer_request.id
+            ).count(),
+            1
         )
 
     @tag('integration', 'slow')

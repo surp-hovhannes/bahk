@@ -4,8 +4,9 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
@@ -13,6 +14,7 @@ from model_utils.tracker import FieldTracker
 from modeltrans.fields import TranslationField
 from taggit.managers import TaggableManager
 
+from events.models import Event, EventType, UserActivityFeed
 from hub.constants import DAYS_TO_CACHE_THUMBNAIL
 from hub.models import Church, Fast
 from learning_resources.models import Video
@@ -310,6 +312,14 @@ class PrayerRequest(models.Model):
         blank=True,
         help_text='Optional image for the prayer request. Recommended size: 1600x1200 pixels (4:3)'
     )
+    icon = models.ForeignKey(
+        'icons.Icon',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='prayer_requests',
+        help_text='Optional fallback icon for this prayer request (used when no custom image is uploaded)'
+    )
     thumbnail = ImageSpecField(
         source='image',
         processors=[ResizeToFill(400, 300)],  # 4:3 aspect ratio
@@ -475,6 +485,71 @@ class PrayerRequest(models.Model):
         if self.status != 'completed':
             self.status = 'completed'
             self.save(update_fields=['status', 'updated_at'])
+
+    def complete_if_expired_with_side_effects(self):
+        """
+        Idempotently complete expired approved requests and ensure side-effects exist.
+
+        Returns:
+            tuple: (PrayerRequest, bool) where bool indicates if completion occurred now.
+        """
+        with transaction.atomic():
+            locked = (
+                PrayerRequest.objects.select_for_update()
+                .select_related('requester')
+                .get(pk=self.pk)
+            )
+
+            if locked.status != 'approved' or not locked.is_expired():
+                return locked, False
+
+            content_type = ContentType.objects.get_for_model(locked)
+
+            completion_event_exists = Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_COMPLETED,
+                content_type=content_type,
+                object_id=locked.id,
+            ).exists()
+
+            activity_exists = UserActivityFeed.objects.filter(
+                user=locked.requester,
+                activity_type='prayer_request_completed',
+                content_type=content_type,
+                object_id=locked.id,
+            ).exists()
+
+            locked.mark_completed()
+
+            if not completion_event_exists:
+                Event.create_event(
+                    event_type_code=EventType.PRAYER_REQUEST_COMPLETED,
+                    user=locked.requester,
+                    target=locked,
+                    title=f'Prayer request completed: {locked.title}',
+                    data={
+                        'prayer_request_id': locked.id,
+                        'acceptance_count': locked.get_acceptance_count(),
+                        'prayer_log_count': locked.get_prayer_log_count(),
+                    }
+                )
+
+            if not activity_exists:
+                UserActivityFeed.objects.create(
+                    user=locked.requester,
+                    activity_type='prayer_request_completed',
+                    title='Your prayer request has completed',
+                    description=(
+                        f'Your prayer request "{locked.title}" has reached its duration. '
+                        'You can now send a thank you message to those who prayed.'
+                    ),
+                    target=locked,
+                    data={
+                        'prayer_request_id': locked.id,
+                        'acceptance_count': locked.get_acceptance_count(),
+                    }
+                )
+
+            return locked, True
 
     def get_acceptance_count(self):
         """Get the number of users who accepted this prayer request."""

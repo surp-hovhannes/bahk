@@ -124,7 +124,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
     )
     list_filter = ('status', 'moderation_severity', 'requires_human_review', 'reviewed', 'is_anonymous', 'duration_days', 'created_at')
     search_fields = ('title', 'description', 'requester__email', 'requester__first_name', 'requester__last_name')
-    raw_id_fields = ('requester',)
+    raw_id_fields = ('requester', 'icon')
     readonly_fields = (
         'expiration_date', 'reviewed', 'moderated_at', 'moderation_severity', 'moderation_result_display',
         'image_preview', 'acceptance_count', 'prayer_log_count', 'created_at', 'updated_at'
@@ -139,7 +139,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
             'fields': ('duration_days', 'expiration_date')
         }),
         ('Media', {
-            'fields': ('image', 'image_preview')
+            'fields': ('image', 'icon', 'image_preview')
         }),
         ('Moderation', {
             'fields': ('status', 'moderation_severity', 'requires_human_review', 'reviewed', 'moderated_at', 'moderation_result_display')
@@ -166,6 +166,26 @@ class PrayerRequestAdmin(admin.ModelAdmin):
                 '<img src="{}" style="max-height: 100px; max-width: 200px;" />',
                 obj.image.url
             )
+        elif obj.icon:
+            # Fallback to icon thumbnail when no uploaded image is present
+            if getattr(obj.icon, 'cached_thumbnail_url', None):
+                return format_html(
+                    '<img src="{}" style="max-height: 100px; max-width: 200px;" />',
+                    obj.icon.cached_thumbnail_url
+                )
+            try:
+                return format_html(
+                    '<img src="{}" style="max-height: 100px; max-width: 200px;" />',
+                    obj.icon.thumbnail.url
+                )
+            except (AttributeError, ValueError, OSError):
+                try:
+                    return format_html(
+                        '<img src="{}" style="max-height: 100px; max-width: 200px;" />',
+                        obj.icon.image.url
+                    )
+                except (AttributeError, ValueError, OSError):
+                    return 'No image'
         return 'No image'
 
     image_preview.short_description = 'Image Preview'

@@ -117,13 +117,14 @@ app.conf.beat_schedule = {
             }
         }
     },
-    'check-expired-prayer-requests-daily': {
+    'check-expired-prayer-requests-frequent': {
         'task': 'prayers.tasks.check_expired_prayer_requests_task',
-        'schedule': crontab(hour=23, minute=0),  # 11:00 PM daily
+        # Run frequently to minimize delay between expiration and completion
+        'schedule': crontab(minute='*/15'),
         # Add Sentry Cron metadata
         'options': {
             'sentry': {
-                'monitor_slug': 'daily-expired-prayer-requests-check',
+                'monitor_slug': 'frequent-expired-prayer-requests-check',
             }
         }
     },

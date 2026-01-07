@@ -277,7 +277,7 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Get prayer requests based on action."""
         if self.action == 'list':
-            queryset = PrayerRequest.objects.select_related('requester')
+            queryset = PrayerRequest.objects.select_related('requester', 'icon')
             
             # Filter by mine parameter (user's own requests)
             mine_param = self.request.query_params.get('mine', None)
@@ -322,18 +322,18 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             elif not is_mine_filter:
                 # Default behavior: only approved, non-expired requests
                 # (skip default when mine filter is active - show all user's requests)
-                queryset = PrayerRequest.objects.get_active_approved().select_related('requester')
+                queryset = PrayerRequest.objects.get_active_approved().select_related('requester', 'icon')
             
             return queryset
         elif self.action == 'accepted':
             # Get user's accepted requests
             return PrayerRequest.objects.filter(
                 acceptances__user=self.request.user
-            ).select_related('requester').distinct()
+            ).select_related('requester', 'icon').distinct()
         else:
             # For retrieve/update/destroy, include all statuses
             # Permissions will be checked separately
-            return PrayerRequest.objects.select_related('requester')
+            return PrayerRequest.objects.select_related('requester', 'icon')
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -344,6 +344,19 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         elif self.action == 'send_thanks':
             return PrayerRequestThanksSerializer
         return PrayerRequestSerializer
+
+    def get_object(self):
+        """Retrieve object and ensure expired approved requests are completed."""
+        prayer_request = super().get_object()
+        return self._ensure_completed_if_expired(prayer_request)
+
+    def _ensure_completed_if_expired(self, prayer_request):
+        """
+        When a request is expired but still approved, mark it completed
+        and create completion side-effects if they don't already exist.
+        """
+        prayer_request, _ = prayer_request.complete_if_expired_with_side_effects()
+        return prayer_request
 
     def perform_create(self, serializer):
         """Create prayer request and trigger moderation."""
