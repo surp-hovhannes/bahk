@@ -73,16 +73,24 @@ class EventTypeAdmin(admin.ModelAdmin):
     
     def event_count(self, obj):
         """Show the number of events for this event type."""
-        count = obj.events.count()
+        count = getattr(obj, "events_total", None)
+        if count is None:
+            count = obj.events.count()
         if count > 0:
             url = reverse('admin:events_event_changelist') + f'?event_type__id__exact={obj.id}'
             return format_html('<a href="{}">{} events</a>', url, count)
         return "0 events"
     event_count.short_description = "Events"
+    event_count.admin_order_field = "events_total"
     
     def get_queryset(self, request):
-        """Optimize queryset with prefetch."""
-        return super().get_queryset(request).prefetch_related('events')
+        """
+        Optimize queryset for changelist rendering.
+
+        Avoid prefetching related `Event` rows (can be huge). Use an annotated
+        count instead so the changelist can render quickly.
+        """
+        return super().get_queryset(request).annotate(events_total=Count("events"))
 
 
 @admin.register(Event)
