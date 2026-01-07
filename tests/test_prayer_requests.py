@@ -512,6 +512,47 @@ class PrayerRequestAPITests(BaseAPITestCase):
         mock_email.assert_called_once_with(prayer_request, 'requires_review')
 
     @tag('integration', 'slow')
+    def test_moderation_task_escalate_triggers_critical_alert_even_if_severity_not_critical(self):
+        """
+        If the LLM suggests `escalate`, we must treat it as a safety escalation
+        regardless of the provided severity string.
+        """
+        requester = self.create_user(email='escalate@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Concerning request',
+            description='This contains safety-critical content and must be escalated.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": false,
+                "reason": "Potential self-harm ideation; requires immediate admin attention",
+                "concerns": ["self-harm"],
+                "severity": "medium",
+                "requires_human_review": false,
+                "suggested_action": "escalate"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'rejected')
+        self.assertEqual(prayer_request.status, 'rejected')
+        self.assertTrue(prayer_request.requires_human_review)
+        mock_email.assert_called_once_with(prayer_request, 'critical_safety_concern')
+
+    @tag('integration', 'slow')
     def test_moderation_task_handles_medium_severity_approval(self):
         """Medium severity approved requests should be auto-approved with tracking."""
         requester = self.create_user(email='medsev@example.com')
