@@ -67,6 +67,7 @@ GET /api/prayer-requests/?mine=true&status=completed,deleted
     "duration_days": 3,
     "expiration_date": "2025-11-21T15:30:00Z",
     "image": "https://s3.amazonaws.com/bucket/prayer_requests/1/image.jpg",
+    "icon_id": null,
     "thumbnail_url": "https://s3.amazonaws.com/bucket/cache/thumbnails/1_thumb.jpg",
     "reviewed": true,
     "status": "approved",
@@ -95,7 +96,8 @@ GET /api/prayer-requests/?mine=true&status=completed,deleted
     "duration_days": 7,
     "expiration_date": "2025-11-25T10:00:00Z",
     "image": null,
-    "thumbnail_url": null,
+    "icon_id": 12,
+    "thumbnail_url": "https://s3.amazonaws.com/bucket/cache/icon_thumbnails/12_thumb.jpg",
     "reviewed": true,
     "status": "approved",
     "requester": null,
@@ -117,6 +119,7 @@ GET /api/prayer-requests/?mine=true&status=completed,deleted
 - **With `mine=true` parameter**: Returns all of the user's own prayer requests (all statuses, including deleted)
 - **With `mine=true` and `status` parameters**: Returns user's own requests filtered by the specified status(es)
 - Anonymous requests hide `requester` field (shows `null`)
+- `thumbnail_url` is **image-first**: it returns the uploaded image thumbnail when `image` is present; otherwise, if `icon_id` is set, it returns the icon thumbnail URL.
 - `has_accepted`, `has_prayed_today`, and `is_owner` are user-specific flags
 - `is_owner` is `true` if the requesting user created the prayer request, `false` otherwise
 - Invalid status values result in an empty response
@@ -142,7 +145,8 @@ Content-Type: application/json
   "description": "Please pray for my mother who is recovering from surgery. We trust in God's healing power.",
   "is_anonymous": false,
   "duration_days": 5,
-  "image": null
+  "image": null,
+  "icon_id": 12
 }
 ```
 
@@ -163,6 +167,7 @@ image=<file>
 - `is_anonymous`: Optional, default `false`
 - `duration_days`: Required, must be between 1-7
 - `image`: Optional, image file (JPG, PNG)
+- `icon_id`: Optional, integer ID of an `Icon` to use as fallback when no image is uploaded. If your profile has a church set, the icon must belong to that church.
 
 **Response:** `201 Created`
 
@@ -175,7 +180,8 @@ image=<file>
   "duration_days": 5,
   "expiration_date": "2025-11-23T16:00:00Z",
   "image": null,
-  "thumbnail_url": null,
+  "icon_id": 12,
+  "thumbnail_url": "https://s3.amazonaws.com/bucket/cache/icon_thumbnails/12_thumb.jpg",
   "reviewed": false,
   "status": "pending_moderation",
   "requester": {
@@ -634,6 +640,7 @@ Send a thank you message to all who accepted your completed prayer request.
 | `duration_days` | integer | Duration in days (1-7) |
 | `expiration_date` | datetime | Auto-calculated expiration timestamp |
 | `image` | file/url | Optional image |
+| `icon_id` | integer | Optional icon to use as a fallback when no image is uploaded |
 | `thumbnail_url` | url | Cached thumbnail URL |
 | `reviewed` | boolean | Whether moderation is complete |
 | `status` | string | `pending_moderation`, `approved`, `rejected`, `completed`, `deleted`, `active` (special: approved and not expired) |

@@ -277,7 +277,7 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Get prayer requests based on action."""
         if self.action == 'list':
-            queryset = PrayerRequest.objects.select_related('requester')
+            queryset = PrayerRequest.objects.select_related('requester', 'icon')
             
             # Filter by mine parameter (user's own requests)
             mine_param = self.request.query_params.get('mine', None)
@@ -322,18 +322,18 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             elif not is_mine_filter:
                 # Default behavior: only approved, non-expired requests
                 # (skip default when mine filter is active - show all user's requests)
-                queryset = PrayerRequest.objects.get_active_approved().select_related('requester')
+                queryset = PrayerRequest.objects.get_active_approved().select_related('requester', 'icon')
             
             return queryset
         elif self.action == 'accepted':
             # Get user's accepted requests
             return PrayerRequest.objects.filter(
                 acceptances__user=self.request.user
-            ).select_related('requester').distinct()
+            ).select_related('requester', 'icon').distinct()
         else:
             # For retrieve/update/destroy, include all statuses
             # Permissions will be checked separately
-            return PrayerRequest.objects.select_related('requester')
+            return PrayerRequest.objects.select_related('requester', 'icon')
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
