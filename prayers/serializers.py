@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.translation import activate
 
+from icons.models import Icon
 from hub.mixins import ThumbnailCacheMixin
 from learning_resources.serializers import BookmarkOptimizedSerializerMixin
 from prayers.models import (
@@ -229,7 +230,7 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         model = PrayerRequest
         fields = [
             'id', 'title', 'description', 'is_anonymous', 'duration_days',
-            'expiration_date', 'image', 'thumbnail_url', 'reviewed', 'status',
+            'expiration_date', 'image', 'icon_id', 'thumbnail_url', 'reviewed', 'status',
             'moderation_severity', 'requester', 'created_at', 'updated_at',
             'acceptance_count', 'prayer_log_count', 'is_expired', 'has_accepted',
             'has_prayed_today', 'is_owner'
@@ -255,7 +256,7 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return RequesterSerializer(obj.requester).data
 
     def get_thumbnail_url(self, obj):
-        """Get cached or generated thumbnail URL."""
+        """Get cached or generated thumbnail URL (uploaded image, or fallback icon)."""
         if obj.image:
             cached_url = self.update_thumbnail_cache(obj, 'image', 'thumbnail')
             if cached_url:
@@ -265,6 +266,18 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
                 return obj.thumbnail.url
             except (AttributeError, ValueError, OSError):
                 return None
+        if obj.icon:
+            cached_url = self.update_thumbnail_cache(obj.icon, 'image', 'thumbnail')
+            if cached_url:
+                return cached_url
+            try:
+                return obj.icon.thumbnail.url
+            except (AttributeError, ValueError, OSError):
+                # As a last resort, try full image URL
+                try:
+                    return obj.icon.image.url
+                except (AttributeError, ValueError, OSError):
+                    return None
         return None
 
     def get_acceptance_count(self, obj):
@@ -308,11 +321,33 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
 class PrayerRequestCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating prayer requests."""
 
+    icon_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = PrayerRequest
         fields = [
-            'title', 'description', 'is_anonymous', 'duration_days', 'image'
+            'title', 'description', 'is_anonymous', 'duration_days', 'image', 'icon_id'
         ]
+
+    def validate_icon_id(self, value):
+        """Validate icon selection against requester's Profile.church (when set)."""
+        if value is None:
+            return value
+
+        try:
+            icon = Icon.objects.select_related('church').get(id=value)
+        except Icon.DoesNotExist:
+            raise serializers.ValidationError('Invalid icon_id.')
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        profile = getattr(user, 'profile', None) if user else None
+        profile_church = getattr(profile, 'church', None) if profile else None
+
+        if profile_church and icon.church_id != profile_church.id:
+            raise serializers.ValidationError('Icon must belong to your church.')
+
+        return value
 
     def validate(self, data):
         """Validate that user doesn't exceed max active requests."""
@@ -336,16 +371,41 @@ class PrayerRequestCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Create prayer request with requester from request."""
         request = self.context.get('request')
+        icon_id = validated_data.pop('icon_id', None)
         validated_data['requester'] = request.user
+        if icon_id is not None:
+            validated_data['icon_id'] = icon_id
         return super().create(validated_data)
 
 
 class PrayerRequestUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating prayer requests (only when pending moderation)."""
 
+    icon_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = PrayerRequest
-        fields = ['title', 'description', 'image']
+        fields = ['title', 'description', 'image', 'icon_id']
+
+    def validate_icon_id(self, value):
+        """Validate icon selection against requester's Profile.church (when set)."""
+        if value is None:
+            return value
+
+        try:
+            icon = Icon.objects.select_related('church').get(id=value)
+        except Icon.DoesNotExist:
+            raise serializers.ValidationError('Invalid icon_id.')
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        profile = getattr(user, 'profile', None) if user else None
+        profile_church = getattr(profile, 'church', None) if profile else None
+
+        if profile_church and icon.church_id != profile_church.id:
+            raise serializers.ValidationError('Icon must belong to your church.')
+
+        return value
 
     def validate(self, data):
         """Only allow updates if status is pending_moderation."""
@@ -355,6 +415,13 @@ class PrayerRequestUpdateSerializer(serializers.ModelSerializer):
                 'Prayer requests can only be edited while pending moderation.'
             )
         return data
+
+    def update(self, instance, validated_data):
+        """Support updating icon by icon_id."""
+        icon_id = validated_data.pop('icon_id', serializers.empty)
+        if icon_id is not serializers.empty:
+            instance.icon_id = icon_id
+        return super().update(instance, validated_data)
 
 
 class PrayerRequestAcceptanceSerializer(serializers.ModelSerializer):

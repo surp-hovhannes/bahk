@@ -310,6 +310,14 @@ class PrayerRequest(models.Model):
         blank=True,
         help_text='Optional image for the prayer request. Recommended size: 1600x1200 pixels (4:3)'
     )
+    icon = models.ForeignKey(
+        'icons.Icon',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='prayer_requests',
+        help_text='Optional fallback icon for this prayer request (used when no custom image is uploaded)'
+    )
     thumbnail = ImageSpecField(
         source='image',
         processors=[ResizeToFill(400, 300)],  # 4:3 aspect ratio
