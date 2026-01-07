@@ -10,5 +10,9 @@ class HubConfig(AppConfig):
         Register signals when the app is ready.
         This ensures our signal handlers are connected.
         """
+        # Configure global profanity filter overrides (used across multiple apps).
+        from hub.profanity import configure_profanity_filter
+        configure_profanity_filter()
+
         # Import signals to register them
         import hub.signals

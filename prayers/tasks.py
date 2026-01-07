@@ -13,12 +13,13 @@ from django.utils import timezone
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.services.llm_service import get_llm_service
 from hub.models import LLMPrompt
+from hub.profanity import configure_profanity_filter
 from prayers.models import PrayerRequest, PrayerRequestPrayerLog
 
 logger = logging.getLogger(__name__)
 
-# Initialize profanity filter
-profanity.load_censor_words()
+# Initialize profanity filter (with app-specific allowlist overrides)
+configure_profanity_filter()
 
 
 def _get_moderation_prompt_and_service(prayer_request):

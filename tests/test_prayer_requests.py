@@ -432,6 +432,46 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
     @tag('integration', 'slow')
+    def test_moderation_task_does_not_treat_god_as_profanity(self):
+        """
+        `better_profanity`'s default word list includes "god", which would cause
+        false-positive rejections in a Christian prayer app.
+        """
+        requester = self.create_user(email='godword@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='For Those Beginning Their Walk with Christ',
+            description=(
+                'Please pray that God would grant wise teachers and welcoming '
+                'communities, so new believers may grow in faith.'
+            ),
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Appropriate prayer request",
+                "concerns": [],
+                "severity": "low",
+                "requires_human_review": false,
+                "suggested_action": "approve"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), patch('anthropic.Anthropic') as mock_anthropic:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'approved')
+        self.assertEqual(prayer_request.status, 'approved')
+
+    @tag('integration', 'slow')
     def test_moderation_task_handles_medium_severity_approval(self):
         """Medium severity approved requests should be auto-approved with tracking."""
         requester = self.create_user(email='medsev@example.com')
