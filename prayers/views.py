@@ -228,6 +228,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
+from hub.utils import get_user_profile_safe
 from prayers.models import PrayerRequest, PrayerRequestAcceptance, PrayerRequestPrayerLog
 from prayers.serializers import (
     PrayerRequestSerializer,
@@ -466,8 +467,9 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         # Create activity feed item for requester
         if not prayer_request.is_anonymous:
             # Get display name from profile, fallback to "User {first_letter}" for privacy
-            if hasattr(request.user, 'profile') and request.user.profile and request.user.profile.name:
-                acceptor_name = request.user.profile.name
+            profile = get_user_profile_safe(request.user)
+            if profile and profile.name:
+                acceptor_name = profile.name
             else:
                 # Privacy-safe fallback: "User D" instead of showing email
                 first_letter = request.user.email[0].upper() if request.user.email else 'U'
@@ -613,8 +615,9 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
 
         # Create activity feed items for all who accepted (excluding requester)
         # Get display name from profile, fallback to "User {first_letter}" for privacy
-        if hasattr(request.user, 'profile') and request.user.profile and request.user.profile.name:
-            sender_name = request.user.profile.name
+        profile = get_user_profile_safe(request.user)
+        if profile and profile.name:
+            sender_name = profile.name
         else:
             # Privacy-safe fallback: "User D" instead of showing email
             first_letter = request.user.email[0].upper() if request.user.email else 'U'
