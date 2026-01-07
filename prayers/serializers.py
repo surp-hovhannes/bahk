@@ -322,7 +322,8 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
 class PrayerRequestCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating prayer requests."""
 
-    icon_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
+    # Not write_only: clients expect icon_id echoed back in create responses (docs contract).
+    icon_id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = PrayerRequest
@@ -382,7 +383,8 @@ class PrayerRequestCreateSerializer(serializers.ModelSerializer):
 class PrayerRequestUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating prayer requests (only when pending moderation)."""
 
-    icon_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
+    # Not write_only: clients expect icon_id echoed back in update responses (docs contract).
+    icon_id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = PrayerRequest

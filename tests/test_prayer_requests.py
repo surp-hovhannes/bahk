@@ -344,6 +344,8 @@ class PrayerRequestAPITests(BaseAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         mock_delay.assert_called_once()
+        # Regression: icon_id must be present in create response (not write_only).
+        self.assertEqual(response.data.get('icon_id'), icon.id)
 
         created_request = PrayerRequest.objects.filter(requester=user).latest('id')
         created_request.status = 'approved'
@@ -438,6 +440,8 @@ class PrayerRequestAPITests(BaseAPITestCase):
             format='json'
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Regression: icon_id must be present in update response (not write_only).
+        self.assertEqual(response.data.get('icon_id'), icon_a.id)
         prayer_request.refresh_from_db()
         self.assertEqual(prayer_request.icon_id, icon_a.id)
 
