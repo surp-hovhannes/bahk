@@ -359,6 +359,41 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertEqual(results[0]['thumbnail_url'], icon.cached_thumbnail_url)
 
     @tag('integration')
+    def test_create_allows_icon_when_user_has_no_profile(self):
+        """
+        Users without a Profile should not error when validating icon_id.
+
+        Church-based validation should only apply when Profile.church is set.
+        """
+        church = self.create_church(name='Church A')
+        user = self.create_user(email='creator_no_profile@example.com')
+        # Intentionally do NOT create a profile
+        self.authenticate(user)
+
+        test_image = SimpleUploadedFile(
+            name='test_icon.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+        icon = Icon.objects.create(title='Church Icon', church=church, image=test_image)
+        # Avoid ImageSpec generation in tests: set cached thumbnail explicitly.
+        icon.cached_thumbnail_url = 'https://example.com/icon-thumb-no-profile.jpg'
+        icon.cached_thumbnail_updated = timezone.now()
+        icon.save(update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated'])
+
+        with patch('prayers.views.moderate_prayer_request_task.delay') as mock_delay:
+            response = self.client.post(self.list_url, {
+                'title': 'Need prayer',
+                'description': 'Please pray for my health.',
+                'duration_days': 3,
+                'is_anonymous': False,
+                'icon_id': icon.id,
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_delay.assert_called_once()
+
+    @tag('integration')
     def test_update_allows_setting_icon_id_and_validates_church(self):
         """Update should accept icon_id (same church) and reject other-church icon_id."""
         church_a = self.create_church(name='Church A')

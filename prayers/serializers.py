@@ -6,6 +6,7 @@ from django.utils.translation import activate
 
 from icons.models import Icon
 from hub.mixins import ThumbnailCacheMixin
+from hub.utils import get_user_profile_safe
 from learning_resources.serializers import BookmarkOptimizedSerializerMixin
 from prayers.models import (
     Prayer,
@@ -341,7 +342,7 @@ class PrayerRequestCreateSerializer(serializers.ModelSerializer):
 
         request = self.context.get('request')
         user = getattr(request, 'user', None)
-        profile = getattr(user, 'profile', None) if user else None
+        profile = get_user_profile_safe(user) if user else None
         profile_church = getattr(profile, 'church', None) if profile else None
 
         if profile_church and icon.church_id != profile_church.id:
@@ -399,7 +400,7 @@ class PrayerRequestUpdateSerializer(serializers.ModelSerializer):
 
         request = self.context.get('request')
         user = getattr(request, 'user', None)
-        profile = getattr(user, 'profile', None) if user else None
+        profile = get_user_profile_safe(user) if user else None
         profile_church = getattr(profile, 'church', None) if profile else None
 
         if profile_church and icon.church_id != profile_church.id:
