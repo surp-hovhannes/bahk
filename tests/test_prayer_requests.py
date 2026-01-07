@@ -712,6 +712,165 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
     @tag('integration', 'slow')
+    def test_moderation_task_does_not_treat_god_as_profanity(self):
+        """
+        `better_profanity`'s default word list includes "god", which would cause
+        false-positive rejections in a Christian prayer app.
+        """
+        requester = self.create_user(email='godword@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='For Those Beginning Their Walk with Christ',
+            description=(
+                'Please pray that God would grant wise teachers and welcoming '
+                'communities, so new believers may grow in faith.'
+            ),
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Appropriate prayer request",
+                "concerns": [],
+                "severity": "low",
+                "requires_human_review": false,
+                "suggested_action": "approve"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), patch('anthropic.Anthropic') as mock_anthropic:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'approved')
+        self.assertEqual(prayer_request.status, 'approved')
+
+    @tag('integration', 'slow')
+    def test_moderation_task_null_severity_defaults_to_low(self):
+        """
+        If the LLM returns `severity: null`, we must not store an invalid choice
+        value like "none". Default to "low".
+        """
+        requester = self.create_user(email='nullseverity@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Prayer request with null severity',
+            description='Please pray for wisdom and peace.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": true,
+                "reason": "Appropriate prayer request",
+                "concerns": [],
+                "severity": null,
+                "requires_human_review": false,
+                "suggested_action": "approve"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), patch('anthropic.Anthropic') as mock_anthropic:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'approved')
+        self.assertEqual(prayer_request.status, 'approved')
+        self.assertEqual(prayer_request.moderation_severity, 'low')
+
+    @tag('integration', 'slow')
+    def test_moderation_task_flag_for_review_stays_pending(self):
+        """If the LLM suggests flagging for review, the request must remain pending."""
+        requester = self.create_user(email='flagforreview@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Needs clarification',
+            description='This is unclear and should be reviewed by a human.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        # Simulate an LLM response that explicitly requests human review via suggested_action,
+        # even if it doesn't set requires_human_review.
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": false,
+                "reason": "Unclear intent; needs manual review",
+                "concerns": ["unclear intent"],
+                "severity": "medium",
+                "requires_human_review": false,
+                "suggested_action": "flag_for_review"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'pending_moderation')
+        self.assertEqual(prayer_request.status, 'pending_moderation')
+        self.assertTrue(prayer_request.requires_human_review)
+        mock_email.assert_called_once_with(prayer_request, 'requires_review')
+
+    @tag('integration', 'slow')
+    def test_moderation_task_escalate_triggers_critical_alert_even_if_severity_not_critical(self):
+        """
+        If the LLM suggests `escalate`, we must treat it as a safety escalation
+        regardless of the provided severity string.
+        """
+        requester = self.create_user(email='escalate@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Concerning request',
+            description='This contains safety-critical content and must be escalated.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        mock_response = SimpleNamespace(
+            content=[SimpleNamespace(text='''{
+                "approved": false,
+                "reason": "Potential self-harm ideation; requires immediate admin attention",
+                "concerns": ["self-harm"],
+                "severity": "medium",
+                "requires_human_review": false,
+                "suggested_action": "escalate"
+            }''')]
+        )
+
+        with patch('prayers.tasks.get_llm_service'), \
+             patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.return_value = mock_response
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertEqual(result['status'], 'rejected')
+        self.assertEqual(prayer_request.status, 'rejected')
+        self.assertTrue(prayer_request.requires_human_review)
+        mock_email.assert_called_once_with(prayer_request, 'critical_safety_concern')
+
+    @tag('integration', 'slow')
     def test_moderation_task_handles_medium_severity_approval(self):
         """Medium severity approved requests should be auto-approved with tracking."""
         requester = self.create_user(email='medsev@example.com')

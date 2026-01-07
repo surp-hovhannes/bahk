@@ -13,12 +13,13 @@ from django.utils import timezone
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.services.llm_service import get_llm_service
 from hub.models import LLMPrompt
+from hub.profanity import configure_profanity_filter
 from prayers.models import PrayerRequest, PrayerRequestPrayerLog
 
 logger = logging.getLogger(__name__)
 
-# Initialize profanity filter
-profanity.load_censor_words()
+# Initialize profanity filter (with app-specific allowlist overrides)
+configure_profanity_filter()
 
 
 def _get_moderation_prompt_and_service(prayer_request):
@@ -218,9 +219,25 @@ def moderate_prayer_request_task(self, prayer_request_id):
             prayer_request.moderated_at = timezone.now()
 
             # Extract severity and review flags
-            severity = llm_result.get('severity', 'low')
-            requires_review = llm_result.get('requires_human_review', False)
-            suggested_action = llm_result.get('suggested_action', 'approve' if llm_result.get('approved') else 'reject')
+            valid_severities = {"low", "medium", "high", "critical"}
+            severity_raw = llm_result.get("severity")
+            severity = (
+                str(severity_raw).strip().lower()
+                if severity_raw
+                else "low"
+            )
+            if severity not in valid_severities:
+                severity = "low"
+
+            requires_review = bool(llm_result.get("requires_human_review", False))
+
+            default_action = "approve" if llm_result.get("approved") else "reject"
+            suggested_action_raw = llm_result.get("suggested_action")
+            suggested_action = (
+                str(suggested_action_raw).strip().lower()
+                if suggested_action_raw
+                else default_action
+            )
 
             # Store moderation metadata
             prayer_request.moderation_severity = severity
@@ -231,7 +248,7 @@ def moderate_prayer_request_task(self, prayer_request_id):
             }
 
             # Handle critical severity - always escalate
-            if severity == 'critical':
+            if severity == 'critical' or suggested_action == 'escalate':
                 prayer_request.status = 'rejected'
                 prayer_request.requires_human_review = True
                 prayer_request.save()
@@ -240,12 +257,12 @@ def moderate_prayer_request_task(self, prayer_request_id):
                 _send_moderation_alert_email(prayer_request, 'critical_safety_concern')
 
                 logger.warning(
-                    f"CRITICAL: Prayer request {prayer_request_id} flagged for safety concerns: "
-                    f"{llm_result.get('reason')}"
+                    f"CRITICAL: Prayer request {prayer_request_id} flagged for safety concerns "
+                    f"(severity={severity}, suggested_action={suggested_action}): {llm_result.get('reason')}"
                 )
 
             # Handle high severity - flag for review regardless of approval
-            elif severity == 'high' or requires_review:
+            elif severity == 'high' or requires_review or suggested_action == 'flag_for_review':
                 prayer_request.status = 'pending_moderation'
                 prayer_request.requires_human_review = True
                 prayer_request.save()
@@ -367,9 +384,13 @@ def _send_moderation_alert_email(prayer_request, alert_type):
 
     subject = subject_map.get(alert_type, 'Prayer Request Needs Review')
 
-    # Add severity indicator to subject for critical/high severity
     severity = prayer_request.moderation_severity
-    if severity == 'critical':
+
+    # Always treat safety concerns as critical in subject line, regardless of the LLM's severity string.
+    if alert_type == 'critical_safety_concern':
+        subject = f"🚨 CRITICAL: {subject}"
+    # Add severity indicator to subject for critical/high severity
+    elif severity == 'critical':
         subject = f"🚨 CRITICAL: {subject}"
     elif severity == 'high':
         subject = f"⚠️  HIGH PRIORITY: {subject}"
