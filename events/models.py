@@ -29,6 +29,8 @@ class EventType(models.Model):
     DEVOTIONAL_VIEWED = 'devotional_viewed'
     CHECKLIST_USED = 'checklist_used'
     PRAYER_SET_VIEWED = 'prayer_set_viewed'
+    PRAYER_VIEWED = 'prayer_viewed'
+    PRAYER_REQUEST_VIEWED = 'prayer_request_viewed'
     
     # Event type constants
     USER_JOINED_FAST = 'user_joined_fast'
@@ -82,6 +84,8 @@ class EventType(models.Model):
         (DEVOTIONAL_VIEWED, 'Devotional Viewed'),
         (CHECKLIST_USED, 'Checklist Used'),
         (PRAYER_SET_VIEWED, 'Prayer Set Viewed'),
+        (PRAYER_VIEWED, 'Prayer Viewed'),
+        (PRAYER_REQUEST_VIEWED, 'Prayer Request Viewed'),
     ]
     
     # Core fields
@@ -167,7 +171,17 @@ class EventType(models.Model):
             return 'milestone'
         elif code in [cls.DEVOTIONAL_AVAILABLE, cls.PRAYER_REQUEST_THANKS_SENT]:
             return 'notification'
-        elif code in [cls.APP_OPEN, cls.SESSION_START, cls.SESSION_END, cls.SCREEN_VIEW, cls.DEVOTIONAL_VIEWED, cls.CHECKLIST_USED, cls.PRAYER_SET_VIEWED]:
+        elif code in [
+            cls.APP_OPEN,
+            cls.SESSION_START,
+            cls.SESSION_END,
+            cls.SCREEN_VIEW,
+            cls.DEVOTIONAL_VIEWED,
+            cls.CHECKLIST_USED,
+            cls.PRAYER_SET_VIEWED,
+            cls.PRAYER_VIEWED,
+            cls.PRAYER_REQUEST_VIEWED,
+        ]:
             return 'analytics'
         return 'user_action'
     
@@ -185,6 +199,8 @@ class EventType(models.Model):
             # Engagement targets
             cls.DEVOTIONAL_VIEWED,
             cls.PRAYER_SET_VIEWED,
+            cls.PRAYER_VIEWED,
+            cls.PRAYER_REQUEST_VIEWED,
             # Note: CHECKLIST_USED removed - can be used without a specific fast
         ]
 

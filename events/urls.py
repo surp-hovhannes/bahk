@@ -33,6 +33,8 @@ urlpatterns = [
     path('track/devotional-viewed/', views.TrackDevotionalViewedView.as_view(), name='track-devotional-viewed'),
     path('track/prayer-set-viewed/', views.TrackPrayerSetViewedView.as_view(), name='track-prayer-set-viewed'),
     path('track/checklist-used/', views.TrackChecklistUsedView.as_view(), name='track-checklist-used'),
+    path('track/prayer-viewed/', views.TrackPrayerViewedView.as_view(), name='track-prayer-viewed'),
+    path('track/prayer-request-viewed/', views.TrackPrayerRequestViewedView.as_view(), name='track-prayer-request-viewed'),
     
     # Admin utilities
     path('admin/trigger-milestone/<int:fast_id>/', views.trigger_milestone_check, name='trigger-milestone'),
