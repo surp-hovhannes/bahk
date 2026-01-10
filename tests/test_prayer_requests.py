@@ -233,6 +233,31 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
     @tag('integration')
+    def test_retrieve_creates_prayer_request_viewed_event(self):
+        """Retrieving a prayer request should create a PRAYER_REQUEST_VIEWED event."""
+        user = self.create_user(email='viewer@example.com')
+        self.authenticate(user)
+
+        prayer_request = self.create_prayer_request(user, title='Track view event')
+        initial_count = Event.objects.filter(
+            event_type__code=EventType.PRAYER_REQUEST_VIEWED,
+            user=user,
+            object_id=prayer_request.id,
+        ).count()
+
+        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(
+            Event.objects.filter(
+                event_type__code=EventType.PRAYER_REQUEST_VIEWED,
+                user=user,
+                object_id=prayer_request.id,
+            ).count(),
+            initial_count + 1,
+        )
+
+    @tag('integration')
     def test_delete_marks_status_deleted_and_is_owner_only(self):
         """Destroy endpoint soft-deletes and rejects non-owners."""
         owner = self.create_user(email='owner2@example.com')

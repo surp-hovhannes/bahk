@@ -39,15 +39,22 @@ class EventTypeModelTest(TestCase):
     
     def test_get_or_create_default_types(self):
         """Test creating default event types."""
-        # Should start with 0 event types
-        self.assertEqual(EventType.objects.count(), 0)
+        # Migrations may pre-create a subset of default event types
+        initial_count = EventType.objects.count()
+        self.assertLessEqual(initial_count, len(EventType.CORE_EVENT_TYPES))
         
         # Create default types
         created_types = EventType.get_or_create_default_types()
         
-        # Should have created all default types
-        self.assertEqual(len(created_types), len(EventType.CORE_EVENT_TYPES))
-        self.assertEqual(EventType.objects.count(), len(EventType.CORE_EVENT_TYPES))
+        # Should have created any missing default types
+        self.assertEqual(
+            len(created_types),
+            len(EventType.CORE_EVENT_TYPES) - initial_count,
+        )
+        self.assertEqual(
+            EventType.objects.count(),
+            len(EventType.CORE_EVENT_TYPES),
+        )
         
         # Verify specific event types exist
         self.assertTrue(EventType.objects.filter(code=EventType.USER_JOINED_FAST).exists())

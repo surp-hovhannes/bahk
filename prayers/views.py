@@ -117,6 +117,39 @@ class PrayerDetailView(generics.RetrieveAPIView):
     permission_classes = [AllowAny]
     queryset = Prayer.objects.select_related('church', 'fast').prefetch_related('tags')
 
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Return prayer details. If the requester is authenticated, also track a best-effort
+        analytics event (never fails the API response).
+        """
+        instance = self.get_object()
+
+        if request.user and request.user.is_authenticated:
+            try:
+                from events.models import Event, EventType
+
+                Event.create_event(
+                    event_type_code=EventType.PRAYER_VIEWED,
+                    user=request.user,
+                    target=instance,
+                    title="Prayer viewed",
+                    data={
+                        "prayer_id": instance.id,
+                        "church_id": instance.church_id,
+                        "fast_id": instance.fast_id,
+                        "category": instance.category,
+                        "title": instance.title,
+                    },
+                    request=request,
+                )
+            except Exception:
+                pass
+
+        serializer = self.get_serializer(instance)
+        from rest_framework.response import Response
+
+        return Response(serializer.data)
+
 
 class PrayerSetListView(generics.ListAPIView):
     """
@@ -349,6 +382,32 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         """Retrieve object and ensure expired approved requests are completed."""
         prayer_request = super().get_object()
         return self._ensure_completed_if_expired(prayer_request)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Return prayer request details and track a best-effort analytics event.
+        """
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+
+        if request.user and request.user.is_authenticated:
+            try:
+                Event.create_event(
+                    event_type_code=EventType.PRAYER_REQUEST_VIEWED,
+                    user=request.user,
+                    target=instance,
+                    title=f'Prayer request viewed: {instance.title}',
+                    data={
+                        "prayer_request_id": instance.id,
+                        "status": instance.status,
+                        "title": instance.title,
+                    },
+                    request=request,
+                )
+            except Exception:
+                pass
+
+        return Response(serializer.data)
 
     def _ensure_completed_if_expired(self, prayer_request):
         """
