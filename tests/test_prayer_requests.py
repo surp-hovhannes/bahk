@@ -234,7 +234,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
 
     @tag('integration')
     def test_retrieve_creates_prayer_request_viewed_event(self):
-        """Retrieving a prayer request should create a PRAYER_REQUEST_VIEWED event."""
+        """Tracking prayer request viewed should create a PRAYER_REQUEST_VIEWED event."""
         user = self.create_user(email='viewer@example.com')
         self.authenticate(user)
 
@@ -245,8 +245,13 @@ class PrayerRequestAPITests(BaseAPITestCase):
             object_id=prayer_request.id,
         ).count()
 
-        response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+        response = self.client.post(
+            '/api/events/track/prayer-request-viewed/',
+            {'prayer_request_id': prayer_request.id},
+            format='json',
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get('status'), 'ok')
 
         self.assertEqual(
             Event.objects.filter(

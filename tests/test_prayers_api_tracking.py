@@ -27,7 +27,11 @@ class PrayerViewTrackingTests(BaseAPITestCase):
             object_id=prayer.id,
         ).count()
 
-        response = self.client.get(f"/api/prayers/{prayer.id}/")
+        response = self.client.post(
+            "/api/events/track/prayer-viewed/",
+            {"prayer_id": prayer.id},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.assertEqual(
@@ -50,8 +54,12 @@ class PrayerViewTrackingTests(BaseAPITestCase):
             fast=None,
         )
 
-        response = self.client.get(f"/api/prayers/{prayer.id}/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.client.post(
+            "/api/events/track/prayer-viewed/",
+            {"prayer_id": prayer.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
         self.assertFalse(
             Event.objects.filter(
