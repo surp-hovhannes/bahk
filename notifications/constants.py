@@ -11,4 +11,7 @@ DAILY_FAST_MESSAGE = "Today is a fast day! Let's fast and pray together!"
 UPCOMING_FAST_MESSAGE = "The {fast_name} is starting soon!"
 ONGOING_FAST_MESSAGE = "Fast together today for the {fast_name}"
 ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE = "{devotional_title}. Tap to listen."
-WEEKLY_PRAYER_REQUEST_MESSAGE = "There are {count} prayer requests you can participate in this week. Join in or share one of your own"
+WEEKLY_PRAYER_REQUEST_MESSAGE = (
+    "There {verb} {count} prayer request{plural_suffix} you can participate in this week. "
+    "Join in or share one of your own"
+)

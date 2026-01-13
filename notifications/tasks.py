@@ -572,7 +572,13 @@ def send_weekly_prayer_request_push_notification_task():
 
     # Send notifications grouped by personalized count
     for unaccepted_count, users_to_notify in users_by_unaccepted_count.items():
-        message = WEEKLY_PRAYER_REQUEST_MESSAGE.format(count=unaccepted_count)
+        plural_suffix = "" if unaccepted_count == 1 else "s"
+        verb = "is" if unaccepted_count == 1 else "are"
+        message = WEEKLY_PRAYER_REQUEST_MESSAGE.format(
+            count=unaccepted_count,
+            verb=verb,
+            plural_suffix=plural_suffix,
+        )
 
         send_push_notification_task(
             message,
