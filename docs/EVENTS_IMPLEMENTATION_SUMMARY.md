@@ -24,6 +24,9 @@ I've successfully implemented a comprehensive user events tracking system for yo
     - `session_start` / `session_end` - Session lifecycle tracking
     - `screen_view` - Screen/page view tracking
     - `devotional_viewed` / `checklist_used` - User engagement tracking
+    - `prayer_set_viewed` - Viewing a prayer set
+    - `prayer_viewed` - Viewing an individual prayer
+    - `prayer_request_viewed` - Viewing an individual prayer request
 
 **Event Model:**
 - Flexible event tracking with Generic Foreign Keys for target objects
@@ -102,13 +105,19 @@ I've successfully implemented a comprehensive user events tracking system for yo
 - **Event Viewing**: Read-only event browser with advanced filtering
 - **UserActivityFeed Management**: Feed item management with retention policy controls
 - **UserMilestone Management**: View user achievements (read-only to prevent manual creation)
-- **Analytics Dashboard**: Custom analytics view with:
+- **User Engagement Dashboard**: Custom analytics view with:
   - Event statistics (total, last 24h/7d/30d)
   - Top event types
   - Events by day visualization
   - Fast join/leave trends
   - Recent milestones
   - Activity feed statistics
+- Feature usage KPI cards (including Prayer Requests)
+- Modal drilldowns for user signups (includes profile location), devotional views (includes devotional title + fast name), checklist usage, and prayer set views
+- **App Analytics Dashboard**: Analytics view focused on analytics-category events with:
+  - App opens, screen views, active users, average session duration
+  - Top screens and platform distribution
+  - Screen views include both `data.source = "app_ui"` and `data.source = "api"` (some clients record screen views via API routes)
 - **CSV Export**: Export events and activity feeds for external analysis
 - **User-friendly displays**: Links to related objects, formatted data, age displays
 
@@ -128,6 +137,11 @@ I've successfully implemented a comprehensive user events tracking system for yo
 **Engagement Tracking Endpoints (NEW):**
 - `POST /api/events/track/devotional-viewed/` - Track devotional views
 - `POST /api/events/track/checklist-used/` - Track checklist interactions
+- `POST /api/events/track/prayer-set-viewed/` - Track prayer set views
+
+**Prayer View Tracking Endpoints (NEW):**
+- `POST /api/events/track/prayer-viewed/` - Track individual prayer views (`prayer_viewed`)
+- `POST /api/events/track/prayer-request-viewed/` - Track individual prayer request views (`prayer_request_viewed`)
 
 **Activity Feed API Endpoints:**
 - `GET /api/events/activity-feed/` - User's activity feed
@@ -512,6 +526,7 @@ The enhanced events system now provides comprehensive analytics tracking that en
 - **Retention Metrics**: D1/D7/D28 retention rates
 - **User Journey Tracking**: Screen views and navigation patterns
 - **Engagement Analytics**: Devotional views and checklist usage
+- **Prayer Engagement Analytics**: Prayer set views, prayer views, prayer request views
 - **Attribution Analysis**: UTM campaign effectiveness and user acquisition sources
 
 ### 🎯 **Automatic Data Collection:**
@@ -635,6 +650,8 @@ X-Platform: {platform}               // Platform: ios/android/web
 - `profile_edit` - Editing user profile
 - `settings` - App settings screen
 - `checklist` - Daily checklist screen
+- `prayer_detail` - Viewing an individual prayer
+- `prayer_request_detail` - Viewing an individual prayer request
 
 **Alternative: Query Parameters**
 ```

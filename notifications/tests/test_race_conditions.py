@@ -132,20 +132,34 @@ class RaceConditionTests(TransactionTestCase):
         results = []
         
         def update_status():
-            try:
-                # Simulate the database update logic from the task
-                from django.db import transaction
-                with transaction.atomic():
-                    promo = PromoEmail.objects.select_for_update().get(id=self.promo.id)
-                    if promo.status == PromoEmail.DRAFT:
-                        promo.status = PromoEmail.SENDING
-                        promo.save()
-                        results.append("updated")
-                    else:
-                        results.append("skipped")
-            except (OperationalError, Exception) as e:
-                # SQLite may raise OperationalError for database lock issues
-                results.append(f"error: {e}")
+            # Ensure thread-local DB connection (SQLite locking is especially sensitive here).
+            from django.db import connections, transaction
+
+            connections.close_all()
+
+            # SQLite can throw transient "database table is locked" errors under contention.
+            # Retry briefly so the test is stable across parallel activity in the suite.
+            for attempt in range(5):
+                try:
+                    with transaction.atomic():
+                        promo = PromoEmail.objects.select_for_update().get(id=self.promo.id)
+                        if promo.status == PromoEmail.DRAFT:
+                            promo.status = PromoEmail.SENDING
+                            promo.save()
+                            results.append("updated")
+                        else:
+                            results.append("skipped")
+                    return
+                except OperationalError as e:
+                    msg = str(e).lower()
+                    if "locked" in msg and attempt < 4:
+                        time.sleep(0.05 * (attempt + 1))
+                        continue
+                    results.append(f"error: {e}")
+                    return
+                except Exception as e:
+                    results.append(f"error: {e}")
+                    return
         
         # Run multiple status updates concurrently
         threads = []

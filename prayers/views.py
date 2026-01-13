@@ -117,6 +117,9 @@ class PrayerDetailView(generics.RetrieveAPIView):
     permission_classes = [AllowAny]
     queryset = Prayer.objects.select_related('church', 'fast').prefetch_related('tags')
 
+    # Note: analytics tracking for prayer views is handled via explicit
+    # POST endpoints in the events app (see /api/events/track/*).
+
 
 class PrayerSetListView(generics.ListAPIView):
     """
@@ -349,6 +352,9 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
         """Retrieve object and ensure expired approved requests are completed."""
         prayer_request = super().get_object()
         return self._ensure_completed_if_expired(prayer_request)
+
+    # Note: analytics tracking for prayer request views is handled via explicit
+    # POST endpoints in the events app (see /api/events/track/*).
 
     def _ensure_completed_if_expired(self, prayer_request):
         """

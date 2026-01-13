@@ -505,6 +505,80 @@ class TrackChecklistUsedView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class TrackPrayerViewedView(APIView):
+    """
+    Track when a user views/opens an individual prayer.
+    POST body: { "prayer_id": number }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        prayer_id = request.data.get('prayer_id')
+        if not prayer_id:
+            return Response({"error": "prayer_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from prayers.models import Prayer
+            prayer = Prayer.objects.select_related('church', 'fast').get(id=int(prayer_id))
+        except (ValueError, Prayer.DoesNotExist):
+            return Response({"error": "Invalid prayer_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            Event.create_event(
+                event_type_code=EventType.PRAYER_VIEWED,
+                user=request.user,
+                target=prayer,
+                title="Prayer viewed",
+                data={
+                    "prayer_id": prayer.id,
+                    "church_id": prayer.church_id,
+                    "fast_id": prayer.fast_id,
+                    "category": prayer.category,
+                    "title": prayer.title,
+                },
+                request=request,
+            )
+            return Response({"status": "ok"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TrackPrayerRequestViewedView(APIView):
+    """
+    Track when a user views/opens an individual prayer request.
+    POST body: { "prayer_request_id": number }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        prayer_request_id = request.data.get('prayer_request_id')
+        if not prayer_request_id:
+            return Response({"error": "prayer_request_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from prayers.models import PrayerRequest
+            prayer_request = PrayerRequest.objects.get(id=int(prayer_request_id))
+        except (ValueError, PrayerRequest.DoesNotExist):
+            return Response({"error": "Invalid prayer_request_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            Event.create_event(
+                event_type_code=EventType.PRAYER_REQUEST_VIEWED,
+                user=request.user,
+                target=prayer_request,
+                title=f'Prayer request viewed: {prayer_request.title}',
+                data={
+                    "prayer_request_id": prayer_request.id,
+                    "status": prayer_request.status,
+                    "title": prayer_request.title,
+                },
+                request=request,
+            )
+            return Response({"status": "ok"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAdminUser])
 def trigger_milestone_check(request, fast_id):
