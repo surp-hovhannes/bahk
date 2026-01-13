@@ -138,6 +138,15 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'send-weekly-prayer-request-notifications': {
+        'task': 'notifications.tasks.send_weekly_prayer_request_push_notification_task',
+        'schedule': crontab(day_of_week=0, hour=18, minute=0),  # Sunday 6:00 PM
+        'options': {
+            'sentry': {
+                'monitor_slug': 'weekly-prayer-request-notifications',
+            }
+        }
+    },
 }
 
 # Initialize Sentry for Celery worker processes
