@@ -232,6 +232,42 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         self.assertEqual(unaccepted, 2)
 
     @patch('notifications.tasks.send_push_notification_task')
+    def test_message_count_is_personalized_to_unaccepted_requests(self, mock_send):
+        """Test that the message count reflects the per-user unaccepted requests, not global total."""
+        # Create 3 active requests; user1 accepts 2, user2 accepts 0
+        req1 = self.create_prayer_request(self.requester, title='Request 1')
+        req2 = self.create_prayer_request(self.requester, title='Request 2')
+        req3 = self.create_prayer_request(self.requester, title='Request 3')
+
+        PrayerRequestAcceptance.objects.create(prayer_request=req1, user=self.user1)
+        PrayerRequestAcceptance.objects.create(prayer_request=req2, user=self.user1)
+
+        send_weekly_prayer_request_push_notification_task()
+
+        # We expect two sends: one for user1 (1 unaccepted) and one for user2 (3 unaccepted)
+        self.assertEqual(mock_send.call_count, 2)
+
+        # Extract (message, data, users, notification_type) for each call
+        calls = [call_args[0] for call_args in mock_send.call_args_list]
+
+        # Find the call containing user1
+        user1_calls = [args for args in calls if self.user1 in args[2]]
+        self.assertEqual(len(user1_calls), 1)
+        user1_message, user1_data, user1_users, user1_type = user1_calls[0]
+        self.assertIn('1', user1_message)
+        self.assertNotIn('3', user1_message)
+        self.assertEqual(user1_data, {"screen": "prayer-requests"})
+        self.assertEqual(user1_type, 'weekly_prayer_requests')
+
+        # Find the call containing user2
+        user2_calls = [args for args in calls if self.user2 in args[2]]
+        self.assertEqual(len(user2_calls), 1)
+        user2_message, user2_data, user2_users, user2_type = user2_calls[0]
+        self.assertIn('3', user2_message)
+        self.assertEqual(user2_data, {"screen": "prayer-requests"})
+        self.assertEqual(user2_type, 'weekly_prayer_requests')
+
+    @patch('notifications.tasks.send_push_notification_task')
     def test_handles_expiration_timezone_correctly(self, mock_send):
         """Test that expiration checks respect timezones."""
         # Create request expiring soon
