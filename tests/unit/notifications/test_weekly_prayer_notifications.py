@@ -58,7 +58,8 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         args, kwargs = mock_send.call_args
         message, data, users, notification_type = args
 
-        self.assertIn('prayer requests', message.lower())
+        # Message may be singular or plural depending on personalized count.
+        self.assertIn('prayer request', message.lower())
         self.assertEqual(data['screen'], 'prayer-requests')
         self.assertEqual(notification_type, 'weekly_prayer_requests')
         self.assertGreater(len(users), 0)
@@ -298,17 +299,23 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         from notifications.constants import WEEKLY_PRAYER_REQUEST_MESSAGE
 
         # Test with 1 request
-        message_1 = WEEKLY_PRAYER_REQUEST_MESSAGE.format(count=1)
+        message_1 = WEEKLY_PRAYER_REQUEST_MESSAGE.format(count=1, verb="is", plural_suffix="")
         self.assertIn('1', message_1)
-        self.assertIn('prayer requests', message_1.lower())
+        self.assertIn('there is', message_1.lower())
+        self.assertIn('prayer request', message_1.lower())
+        self.assertNotIn('prayer requests', message_1.lower())
 
         # Test with 10 requests
-        message_10 = WEEKLY_PRAYER_REQUEST_MESSAGE.format(count=10)
+        message_10 = WEEKLY_PRAYER_REQUEST_MESSAGE.format(count=10, verb="are", plural_suffix="s")
         self.assertIn('10', message_10)
+        self.assertIn('there are', message_10.lower())
+        self.assertIn('prayer requests', message_10.lower())
 
         # Test with 100 requests
-        message_100 = WEEKLY_PRAYER_REQUEST_MESSAGE.format(count=100)
+        message_100 = WEEKLY_PRAYER_REQUEST_MESSAGE.format(count=100, verb="are", plural_suffix="s")
         self.assertIn('100', message_100)
+        self.assertIn('there are', message_100.lower())
+        self.assertIn('prayer requests', message_100.lower())
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_excludes_rejected_requests(self, mock_send):
