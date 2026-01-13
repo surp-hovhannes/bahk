@@ -45,6 +45,7 @@ Key scheduled tasks being monitored:
 
 - `daily-fast-notifications`: Daily task that sends reminders about fasts
 - `hourly-fast-map-updates`: Hourly task that updates participant maps
+- `weekly-prayer-request-notifications`: Weekly task that sends prayer request engagement push notifications
 
 Crons are configured in two places:
 - `bahk/celery.py`: Sets up the Sentry monitoring for Celery beat tasks

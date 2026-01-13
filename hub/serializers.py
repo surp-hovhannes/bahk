@@ -48,6 +48,7 @@ class ProfileSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
                  'receive_upcoming_fast_push_notifications', 
                  'receive_ongoing_fast_push_notifications',
                  'receive_daily_fast_push_notifications',
+                 'receive_weekly_prayer_request_push_notifications',
                  'include_weekly_fasts_in_notifications']
 
 

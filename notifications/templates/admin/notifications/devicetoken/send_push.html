@@ -291,6 +291,8 @@
                             <option value="fast">Fast</option>
                             <option value="devotional">Devotional</option>
                             <option value="prayer">Prayer</option>
+                            <option value="prayer_request">Prayer Request (detail)</option>
+                            <option value="prayer_requests">Prayer Requests (list)</option>
                             <option value="video">Video (learn/video)</option>
                             <option value="article">Article (learn/article)</option>
                             <option value="recipe">Recipe (learn/recipe)</option>
@@ -423,6 +425,8 @@
         'fast': 'fast',
         'devotional': 'devotional',
         'prayer': 'prayer',
+        'prayer_request': 'prayer-request',
+        'prayer_requests': 'prayer-requests',
         'video': 'learn/video',
         'article': 'learn/article',
         'recipe': 'learn/recipe',
@@ -529,7 +533,10 @@
             } else {
                 const route = routeMap[type];
                 const id = contentId.value.trim();
-                const screenPath = id ? `${route}/${id}` : route;
+                // Some routes are list/detail screens and should never include an ID.
+                // Example: prayer-requests list.
+                const useId = type !== 'prayer_requests';
+                const screenPath = (useId && id) ? `${route}/${id}` : route;
                 payload = { screen: screenPath };
                 if (Object.keys(params).length) {
                     payload.params = params;
@@ -757,8 +764,13 @@
     // Event Listeners
     payloadType.addEventListener('change', () => {
         const isActivity = payloadType.value === 'activity';
+        const isNoIdRoute = payloadType.value === 'prayer_requests';
         activityFields.style.display = isActivity ? 'flex' : 'none';
-        document.getElementById('contentIdBox').style.display = isActivity ? 'none' : 'block';
+        document.getElementById('contentIdBox').style.display = (isActivity || isNoIdRoute) ? 'none' : 'block';
+        if (isNoIdRoute) {
+            // Prevent accidental /<id> being appended if a stale ID is present.
+            contentId.value = '';
+        }
         buildPayload();
     });
 
