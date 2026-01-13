@@ -252,11 +252,46 @@ class EventAdmin(admin.ModelAdmin):
         ).count()
         
         # Events by type
-        events_by_type = base_qs.values(
+        events_by_type_qs = base_qs.values(
             'event_type__name', 'event_type__code'
         ).annotate(
             count=Count('id')
-        ).order_by('-count')[:10]
+        ).order_by('-count')
+
+        # Take top-N, but ensure prayer-related event types are always included in the distribution.
+        events_by_type = list(events_by_type_qs[:10])
+        required_event_type_codes = [
+            EventType.PRAYER_REQUEST_CREATED,
+            EventType.PRAYER_REQUEST_ACCEPTED,
+            EventType.PRAYER_REQUEST_COMPLETED,
+            EventType.PRAYER_REQUEST_THANKS_SENT,
+            EventType.PRAYER_SET_VIEWED,
+            # Newer types (may not exist in older DBs)
+            'prayer_viewed',
+            'prayer_request_viewed',
+        ]
+        existing_codes = {row['event_type__code'] for row in events_by_type}
+        missing_codes = [c for c in required_event_type_codes if c not in existing_codes]
+
+        if missing_codes:
+            extra_rows = list(
+                events_by_type_qs.filter(event_type__code__in=missing_codes)
+            )
+            by_code = {row['event_type__code']: row for row in (events_by_type + extra_rows)}
+
+            # Add explicit zero-count rows for codes with no events (so they still show in the chart).
+            type_name_by_code = dict(
+                EventType.objects.filter(code__in=missing_codes).values_list('code', 'name')
+            )
+            for code in missing_codes:
+                if code not in by_code:
+                    by_code[code] = {
+                        'event_type__code': code,
+                        'event_type__name': type_name_by_code.get(code, code),
+                        'count': 0,
+                    }
+
+            events_by_type = sorted(by_code.values(), key=lambda r: r['count'], reverse=True)
         
         # Events by day (histogram data) - Optimized single query approach
         from .analytics_optimizer import AnalyticsQueryOptimizer
@@ -303,11 +338,23 @@ class EventAdmin(admin.ModelAdmin):
             devotional_views=Count('id', filter=Q(event_type__code=EventType.DEVOTIONAL_VIEWED)),
             checklist_usage=Count('id', filter=Q(event_type__code=EventType.CHECKLIST_USED)),
             prayer_set_views=Count('id', filter=Q(event_type__code=EventType.PRAYER_SET_VIEWED)),
+            prayer_request_activity=Count(
+                'id',
+                filter=Q(
+                    event_type__code__in=[
+                        EventType.PRAYER_REQUEST_CREATED,
+                        EventType.PRAYER_REQUEST_ACCEPTED,
+                        EventType.PRAYER_REQUEST_COMPLETED,
+                        EventType.PRAYER_REQUEST_THANKS_SENT,
+                    ]
+                ),
+            ),
         )
         user_signups_total = kpi_totals['user_signups']
         devotional_views_total = kpi_totals['devotional_views']
         checklist_usage_total = kpi_totals['checklist_usage']
         prayer_set_views_total = kpi_totals['prayer_set_views']
+        prayer_request_activity_total = kpi_totals['prayer_request_activity']
 
         # Get daily breakdowns for each KPI
         signups_qs = base_qs.filter(
@@ -338,6 +385,18 @@ class EventAdmin(admin.ModelAdmin):
         )
         prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys())
 
+        prayer_requests_qs = base_qs.filter(
+            event_type__code__in=[
+                EventType.PRAYER_REQUEST_CREATED,
+                EventType.PRAYER_REQUEST_ACCEPTED,
+                EventType.PRAYER_REQUEST_COMPLETED,
+                EventType.PRAYER_REQUEST_THANKS_SENT,
+            ],
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+        )
+        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys())
+
         feature_usage_over_time = {
             'labels': list(events_by_day.keys()),
             'datasets': [
@@ -345,6 +404,7 @@ class EventAdmin(admin.ModelAdmin):
                 {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
                 {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
                 {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
+                {'label': 'Prayer Requests', 'data': list(prayer_request_activity_by_day.values())},
             ],
         }
 
@@ -432,6 +492,7 @@ class EventAdmin(admin.ModelAdmin):
             'devotional_views': devotional_views_total,
             'checklist_usage': checklist_usage_total,
             'prayer_set_views': prayer_set_views_total,
+            'prayer_request_activity': prayer_request_activity_total,
             'user_signups_by_day': user_signups_by_day,
             'devotional_views_by_day': devotional_views_by_day,
             'checklist_usage_by_day': checklist_usage_by_day,
@@ -511,6 +572,17 @@ class EventAdmin(admin.ModelAdmin):
             devotional_views=Count('id', filter=Q(event_type__code=EventType.DEVOTIONAL_VIEWED)),
             checklist_usage=Count('id', filter=Q(event_type__code=EventType.CHECKLIST_USED)),
             prayer_set_views=Count('id', filter=Q(event_type__code=EventType.PRAYER_SET_VIEWED)),
+            prayer_request_activity=Count(
+                'id',
+                filter=Q(
+                    event_type__code__in=[
+                        EventType.PRAYER_REQUEST_CREATED,
+                        EventType.PRAYER_REQUEST_ACCEPTED,
+                        EventType.PRAYER_REQUEST_COMPLETED,
+                        EventType.PRAYER_REQUEST_THANKS_SENT,
+                    ]
+                ),
+            ),
         )
 
         # Get daily breakdowns for each KPI
@@ -542,6 +614,18 @@ class EventAdmin(admin.ModelAdmin):
         )
         prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys())
 
+        prayer_requests_qs = base_qs.filter(
+            event_type__code__in=[
+                EventType.PRAYER_REQUEST_CREATED,
+                EventType.PRAYER_REQUEST_ACCEPTED,
+                EventType.PRAYER_REQUEST_COMPLETED,
+                EventType.PRAYER_REQUEST_THANKS_SENT,
+            ],
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
+        )
+        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys())
+
         feature_usage_over_time = {
             'labels': list(events_by_day.keys()),
             'datasets': [
@@ -549,6 +633,7 @@ class EventAdmin(admin.ModelAdmin):
                 {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
                 {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
                 {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
+                {'label': 'Prayer Requests', 'data': list(prayer_request_activity_by_day.values())},
             ],
         }
 
@@ -616,6 +701,7 @@ class EventAdmin(admin.ModelAdmin):
                 'devotional_views': kpi_totals['devotional_views'],
                 'checklist_usage': kpi_totals['checklist_usage'],
                 'prayer_set_views': kpi_totals['prayer_set_views'],
+                'prayer_request_activity': kpi_totals['prayer_request_activity'],
             })
             
         except Exception as e:
@@ -678,12 +764,14 @@ class EventAdmin(admin.ModelAdmin):
             # Serialize data
             items = []
             for user in users:
+                profile = getattr(user, 'profile', None)
                 items.append({
                     'id': user.id,
                     'username': user.username,
                     'email': user.email,
-                    'name': user.profile.name if hasattr(user, 'profile') and user.profile.name else '',
-                    'church_name': user.profile.church.name if hasattr(user, 'profile') and user.profile.church else 'No Church',
+                    'name': profile.name if profile and profile.name else '',
+                    'location': profile.location if profile and profile.location else '',
+                    'church_name': profile.church.name if profile and profile.church else 'No Church',
                     'date_joined': user.date_joined.isoformat(),
                     'date_joined_display': user.date_joined.strftime('%b %d, %Y %I:%M %p'),
                 })
@@ -742,29 +830,47 @@ class EventAdmin(admin.ModelAdmin):
             # Group by devotional and aggregate data
             # devotional_id is stored in event.data
             from collections import defaultdict
-            devotional_stats = defaultdict(lambda: {'views': 0, 'unique_users': set(), 'title': '', 'fast_name': '', 'last_viewed': None})
+            devotional_stats = defaultdict(lambda: {'views': 0, 'unique_users': set(), 'last_viewed': None})
 
+            devotional_ids = set()
             for event in devotional_events:
                 if event.data and 'devotional_id' in event.data:
                     dev_id = event.data.get('devotional_id')
+                    devotional_ids.add(dev_id)
                     devotional_stats[dev_id]['views'] += 1
                     if event.user:
                         devotional_stats[dev_id]['unique_users'].add(event.user.id)
-                    if not devotional_stats[dev_id]['title'] and 'title' in event.data:
-                        devotional_stats[dev_id]['title'] = event.data.get('title', f'Devotional #{dev_id}')
-                    if not devotional_stats[dev_id]['fast_name'] and 'fast_name' in event.data:
-                        devotional_stats[dev_id]['fast_name'] = event.data.get('fast_name', 'Unknown Fast')
                     # Track last viewed time
                     if not devotional_stats[dev_id]['last_viewed'] or event.timestamp > devotional_stats[dev_id]['last_viewed']:
                         devotional_stats[dev_id]['last_viewed'] = event.timestamp
 
+            # Enrich with Devotional + Fast + Video title (don't rely on event.data payload)
+            devotional_by_id = {}
+            if devotional_ids:
+                from hub.models import Devotional
+                devotional_by_id = {
+                    d.id: d
+                    for d in Devotional.objects.filter(id__in=devotional_ids).select_related('day__fast', 'video')
+                }
+
             # Convert to list for sorting/pagination
             items_list = []
             for dev_id, stats in devotional_stats.items():
+                devotional = devotional_by_id.get(dev_id)
+                fast_name = (
+                    devotional.day.fast.name
+                    if devotional and devotional.day and devotional.day.fast
+                    else 'Unknown Fast'
+                )
+                title = (
+                    getattr(devotional.video, 'title', None)
+                    if devotional and devotional.video
+                    else None
+                ) or f'Devotional #{dev_id}'
                 items_list.append({
                     'devotional_id': dev_id,
-                    'title': stats['title'] or f'Devotional #{dev_id}',
-                    'fast_name': stats['fast_name'] or 'Unknown Fast',
+                    'title': title,
+                    'fast_name': fast_name,
                     'views': stats['views'],
                     'unique_users': len(stats['unique_users']),
                     'last_viewed': stats['last_viewed'].isoformat() if stats['last_viewed'] else None,
@@ -1049,10 +1155,9 @@ class EventAdmin(admin.ModelAdmin):
             event_type__category='analytics'
         ).exclude(user__is_staff=True)
 
-        screen_view_qs = base_qs.filter(
-            event_type__code=EventType.SCREEN_VIEW,
-            data__source='app_ui'
-        )
+        # Count screen views regardless of source (app_ui vs api). Mobile clients often hit /api/*,
+        # which the middleware marks as source="api".
+        screen_view_qs = base_qs.filter(event_type__code=EventType.SCREEN_VIEW)
 
         # Totals
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
@@ -1161,10 +1266,9 @@ class EventAdmin(admin.ModelAdmin):
 
         # Other metrics
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
-        screen_view_qs = base_qs.filter(
-            event_type__code=EventType.SCREEN_VIEW,
-            data__source='app_ui'
-        )
+        # Count screen views regardless of source (app_ui vs api). Mobile clients often hit /api/*,
+        # which the middleware marks as source="api".
+        screen_view_qs = base_qs.filter(event_type__code=EventType.SCREEN_VIEW)
 
         total_screen_views = screen_view_qs.count()
         active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()

@@ -513,6 +513,12 @@
             <p class="stat-value" id="stat-prayer-sets-value">{{ prayer_set_views }}</p>
             <p class="stat-change" id="stat-prayer-sets-change">Last {{ days }} days • Click for details</p>
         </div>
+
+        <div class="stat-card" id="stat-prayer-requests">
+            <h3>Prayer Requests</h3>
+            <p class="stat-value" id="stat-prayer-requests-value">{{ prayer_request_activity }}</p>
+            <p class="stat-change" id="stat-prayer-requests-change">Last {{ days }} days</p>
+        </div>
     </div>
     
     <!-- Events Over Time Chart -->
@@ -1045,6 +1051,7 @@ function updateCharts() {
         document.getElementById('stat-devotionals-value').textContent = data.devotional_views;
         document.getElementById('stat-checklists-value').textContent = data.checklist_usage;
         document.getElementById('stat-prayer-sets-value').textContent = data.prayer_set_views;
+        document.getElementById('stat-prayer-requests-value').textContent = data.prayer_request_activity;
 
         // Recreate charts with new data
         recreateCharts(data);
@@ -1506,6 +1513,7 @@ function renderNewUsersTable(items, append) {
                 <td>${user.name || user.username}</td>
                 <td>${user.email}</td>
                 <td>${user.username}</td>
+                <td>${user.location || ''}</td>
                 <td>${user.church_name}</td>
                 <td>${user.date_joined_display}</td>
             </tr>
@@ -1519,6 +1527,7 @@ function renderNewUsersTable(items, append) {
                     <th>Name</th>
                     <th>Email</th>
                     <th>Username</th>
+                    <th>Location</th>
                     <th>Church</th>
                     <th>Joined</th>
                 </tr>
@@ -1529,6 +1538,7 @@ function renderNewUsersTable(items, append) {
                         <td>${user.name || user.username}</td>
                         <td>${user.email}</td>
                         <td>${user.username}</td>
+                        <td>${user.location || ''}</td>
                         <td>${user.church_name}</td>
                         <td>${user.date_joined_display}</td>
                     </tr>

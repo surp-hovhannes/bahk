@@ -15,7 +15,8 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from events.models import Event, EventType
-from hub.models import Profile, Church, Fast
+from hub.models import Profile, Church, Fast, Day, Devotional
+from tests.fixtures.test_data import TestDataFactory
 
 User = get_user_model()
 
@@ -116,7 +117,7 @@ class AdminDashboardTests(TestCase):
         self.screen_view_event.timestamp = today_noon - timedelta(minutes=15)
         self.screen_view_event.save()
 
-        # API screen view should be excluded from UI metrics
+        # API screen view should be included in app analytics metrics
         self.api_screen_view_event = Event.create_event(
             event_type_code=EventType.SCREEN_VIEW,
             user=self.regular_user,
@@ -209,7 +210,7 @@ class AdminDashboardTests(TestCase):
 
         # Verify analytics data is present
         self.assertGreaterEqual(context['total_app_opens'], 1)
-        self.assertEqual(context['total_screen_views'], 1)
+        self.assertEqual(context['total_screen_views'], 2)
     
     def test_app_analytics_dashboard_data_endpoint(self):
         """Test the App Analytics Dashboard AJAX data endpoint."""
@@ -231,7 +232,7 @@ class AdminDashboardTests(TestCase):
 
         # Verify analytics data is present
         self.assertGreaterEqual(data['total_app_opens'], 1)
-        self.assertEqual(data['total_screen_views'], 1)
+        self.assertEqual(data['total_screen_views'], 2)
     
     def test_dashboard_staff_event_exclusion(self):
         """Test that both dashboards properly exclude staff events."""
@@ -353,7 +354,8 @@ class AdminDashboardTests(TestCase):
             (screen for screen in top_screens if screen['data__screen'] == 'api_endpoint'),
             None
         )
-        self.assertIsNone(api_screen)
+        self.assertIsNotNone(api_screen)
+        self.assertGreaterEqual(api_screen['count'], 1)
     
     def test_dashboard_platform_analytics(self):
         """Test platform analytics functionality in app dashboard."""
@@ -377,6 +379,69 @@ class AdminDashboardTests(TestCase):
         )
         self.assertIsNotNone(ios_platform)
         self.assertGreaterEqual(ios_platform['count'], 1)
+
+    def test_new_users_modal_includes_location(self):
+        """User signups modal should include profile location."""
+        self.regular_profile.location = 'New York, NY'
+        self.regular_profile.save(update_fields=['location'])
+
+        url = reverse('admin:events_new_users_data')
+        response = self.client.get(url, {'days': '30', 'sort': 'recent_first', 'offset': '0', 'limit': '50'})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('items', data)
+
+        # Find the regular user row
+        row = next((u for u in data['items'] if u['id'] == self.regular_user.id), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(row.get('location'), 'New York, NY')
+
+    def test_devotional_views_modal_enriches_fast_and_title(self):
+        """Devotional views modal should show fast name and devotional title."""
+        video = TestDataFactory.create_video(title='Test Devotional Video', category='devotional')
+        day = Day.objects.create(date=timezone.now().date(), fast=self.fast, church=self.church)
+        devotional = Devotional.objects.create(day=day, video=video, order=1, language_code='en')
+
+        now = timezone.now()
+        today_noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+        devotional_event = Event.create_event(
+            event_type_code=EventType.DEVOTIONAL_VIEWED,
+            user=self.regular_user,
+            title='Devotional viewed',
+            target=devotional,
+            data={'devotional_id': devotional.id},
+        )
+        devotional_event.timestamp = today_noon - timedelta(hours=1)
+        devotional_event.save()
+
+        url = reverse('admin:events_devotional_views_data')
+        response = self.client.get(url, {'days': '30', 'sort': 'most_viewed', 'offset': '0', 'limit': '20'})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('items', data)
+        self.assertGreaterEqual(len(data['items']), 1)
+
+        row = next((i for i in data['items'] if i['devotional_id'] == devotional.id), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(row['fast_name'], self.fast.name)
+        self.assertEqual(row['title'], video.title)
+
+    def test_event_type_distribution_includes_prayer_types(self):
+        """Event distribution should always include prayer-related event types."""
+        url = reverse('admin:events_analytics')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        events_by_type = response.context.get('events_by_type', [])
+        codes = {row['event_type__code'] for row in events_by_type}
+
+        self.assertIn(EventType.PRAYER_REQUEST_CREATED, codes)
+        self.assertIn(EventType.PRAYER_REQUEST_ACCEPTED, codes)
+        self.assertIn(EventType.PRAYER_REQUEST_COMPLETED, codes)
+        self.assertIn(EventType.PRAYER_REQUEST_THANKS_SENT, codes)
+        self.assertIn(EventType.PRAYER_SET_VIEWED, codes)
     
     def test_dashboard_permissions(self):
         """Test that only staff users can access dashboards."""
@@ -496,6 +561,7 @@ class AdminDashboardTests(TestCase):
         self.assertIn('devotional_views', context)
         self.assertIn('checklist_usage', context)
         self.assertIn('prayer_set_views', context)
+        self.assertIn('prayer_request_activity', context)
 
         # Check that daily breakdowns are in the context
         self.assertIn('user_signups_by_day', context)
@@ -549,6 +615,7 @@ class AdminDashboardTests(TestCase):
         self.assertIn('devotional_views', data)
         self.assertIn('checklist_usage', data)
         self.assertIn('prayer_set_views', data)
+        self.assertIn('prayer_request_activity', data)
 
         # Check that daily breakdowns are in the response
         self.assertIn('user_signups_by_day', data)
@@ -564,7 +631,7 @@ class AdminDashboardTests(TestCase):
         self.assertIn('labels', feature_usage)
         self.assertIn('datasets', feature_usage)
         self.assertIsInstance(feature_usage['datasets'], list)
-        self.assertEqual(len(feature_usage['datasets']), 4)  # 4 metrics
+        self.assertEqual(len(feature_usage['datasets']), 5)  # 5 metrics
 
         # Verify dataset labels
         dataset_labels = [dataset['label'] for dataset in feature_usage['datasets']]
@@ -572,6 +639,7 @@ class AdminDashboardTests(TestCase):
         self.assertIn('Devotional Views', dataset_labels)
         self.assertIn('Checklist Uses', dataset_labels)
         self.assertIn('Prayer Set Views', dataset_labels)
+        self.assertIn('Prayer Requests', dataset_labels)
 
         # Verify counts
         self.assertGreaterEqual(data['user_signups'], 1)
