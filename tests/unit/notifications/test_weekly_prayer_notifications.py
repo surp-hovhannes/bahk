@@ -19,11 +19,17 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         self.user2 = self.create_user(email='user2@example.com')
         self.requester = self.create_user(email='requester@example.com')
 
-        # Create profiles with preference enabled
-        self.user1.profile.receive_weekly_prayer_request_push_notifications = True
-        self.user1.profile.save()
-        self.user2.profile.receive_weekly_prayer_request_push_notifications = True
-        self.user2.profile.save()
+        # Users created by TestDataFactory.create_user() do not automatically
+        # get a Profile, so create them explicitly for tests that touch profile
+        # notification preferences.
+        self.profile1 = self.create_profile(user=self.user1)
+        self.profile2 = self.create_profile(user=self.user2)
+
+        # Enable weekly prayer request notifications
+        self.profile1.receive_weekly_prayer_request_push_notifications = True
+        self.profile1.save(update_fields=['receive_weekly_prayer_request_push_notifications'])
+        self.profile2.receive_weekly_prayer_request_push_notifications = True
+        self.profile2.save(update_fields=['receive_weekly_prayer_request_push_notifications'])
 
     def create_prayer_request(self, requester, **overrides):
         """Helper to create an approved prayer request."""
