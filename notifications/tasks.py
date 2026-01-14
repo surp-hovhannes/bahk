@@ -495,3 +495,99 @@ def send_culmination_feast_push_notification_task():
             f'Push Notification: Culmination feast notification sent to {len(users_to_notify)} users '
             f'for {fast.name} ({fast.culmination_feast or "unnamed feast"})'
         )
+
+
+@shared_task
+def send_weekly_prayer_request_push_notification_task():
+    """
+    Send weekly push notifications about available prayer requests.
+
+    This task sends a notification to users about how many prayer requests
+    they can participate in this week (i.e., *active approved* requests they
+    have not accepted yet).
+
+    Users are only notified if they have at least one unaccepted request.
+
+    This task should run weekly on Sunday at 6:00 PM.
+    """
+    from prayers.models import PrayerRequest
+    from prayers.models import PrayerRequestAcceptance
+    from notifications.constants import WEEKLY_PRAYER_REQUEST_MESSAGE
+    from django.db.models import Count
+
+    # Get all active approved prayer requests
+    active_requests = PrayerRequest.objects.get_active_approved()
+
+    if not active_requests.exists():
+        logger.info("Push Notification: No active prayer requests found for weekly notification")
+        return
+
+    total_active_requests = active_requests.count()
+
+    # Get users with active profiles and preference enabled
+    users_with_preferences = User.objects.filter(
+        is_active=True,
+        profile__isnull=False,
+        profile__receive_weekly_prayer_request_push_notifications=True,
+    ).select_related('profile')
+
+    if not users_with_preferences.exists():
+        logger.info("Push Notification: No users with weekly prayer request notifications enabled")
+        return
+
+    # Compute accepted active requests per user in a single query
+    accepted_counts_by_user_id = {
+        row["user_id"]: row["accepted_count"]
+        for row in PrayerRequestAcceptance.objects.filter(
+            prayer_request__in=active_requests,
+            user__in=users_with_preferences,
+        )
+        .values("user_id")
+        .annotate(accepted_count=Count("prayer_request_id", distinct=True))
+    }
+
+    # Group recipients by their personalized unaccepted count so we can send
+    # one notification per distinct count value (avoids per-user sends).
+    users_by_unaccepted_count = {}
+    total_users_to_notify = 0
+
+    for user in users_with_preferences:
+        accepted_count = accepted_counts_by_user_id.get(user.id, 0)
+        unaccepted_count = max(total_active_requests - accepted_count, 0)
+
+        if unaccepted_count <= 0:
+            continue
+
+        users_by_unaccepted_count.setdefault(unaccepted_count, []).append(user)
+        total_users_to_notify += 1
+
+    if total_users_to_notify == 0:
+        logger.info("Push Notification: No users with unaccepted prayer requests")
+        return
+
+    # Deep link payload to prayer requests screen
+    data = {
+        "screen": "prayer-requests"
+    }
+
+    # Send notifications grouped by personalized count
+    for unaccepted_count, users_to_notify in users_by_unaccepted_count.items():
+        plural_suffix = "" if unaccepted_count == 1 else "s"
+        verb = "is" if unaccepted_count == 1 else "are"
+        message = WEEKLY_PRAYER_REQUEST_MESSAGE.format(
+            count=unaccepted_count,
+            verb=verb,
+            plural_suffix=plural_suffix,
+        )
+
+        send_push_notification_task(
+            message,
+            data,
+            users_to_notify,
+            'weekly_prayer_requests'
+        )
+
+    logger.info(
+        f'Push Notification: Weekly prayer request notification sent to '
+        f'{total_users_to_notify} users ({total_active_requests} total active requests)'
+    )

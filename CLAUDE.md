@@ -336,6 +336,12 @@ Push notifications use JSON payloads to navigate users to specific screens in th
 // Prayer
 { "screen": "prayer/77" }
 
+// Prayer request detail
+{ "screen": "prayer-request/123" }
+
+// Prayer requests list
+{ "screen": "prayer-requests" }
+
 // Video (learning resources have learn/ prefix)
 { "screen": "learn/video/902" }
 

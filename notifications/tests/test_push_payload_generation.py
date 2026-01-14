@@ -34,6 +34,16 @@ class PushNotificationPayloadTests(TestCase):
         expected = {"screen": "prayer/77"}
         self.assertEqual(expected, {"screen": "prayer/77"})
 
+    def test_prayer_request_detail_payload(self):
+        """Test prayer request detail screen payload."""
+        expected = {"screen": "prayer-request/123"}
+        self.assertEqual(expected, {"screen": "prayer-request/123"})
+
+    def test_prayer_requests_list_payload(self):
+        """Test prayer requests list screen payload (no ID)."""
+        expected = {"screen": "prayer-requests"}
+        self.assertEqual(expected, {"screen": "prayer-requests"})
+
     def test_video_payload_with_learn_prefix(self):
         """Test video screen payload includes learn/ prefix."""
         expected = {"screen": "learn/video/902"}
@@ -105,6 +115,8 @@ class PushNotificationPayloadTests(TestCase):
             {"screen": "fast/48"},
             {"screen": "learn/video/902"},
             {"screen": "prayer-set/44"},
+            {"screen": "prayer-request/123"},
+            {"screen": "prayer-requests"},
             {"screen": "activity", "params": {"activity_type": "announcement"}},
             {"url": "https://example.com"},
         ]
@@ -128,11 +140,21 @@ class RouteMapValidationTests(TestCase):
             'fast': 'fast',
             'devotional': 'devotional',
             'prayer': 'prayer',
+            'prayer_request': 'prayer-request',
+            'prayer_requests': 'prayer-requests',
             'video': 'learn/video',
             'article': 'learn/article',
             'recipe': 'learn/recipe',
             'prayer_set': 'prayer-set',
         }
+
+    def test_prayer_request_route(self):
+        """Verify prayer_request maps to prayer-request detail route."""
+        self.assertEqual(self.route_map['prayer_request'], 'prayer-request')
+
+    def test_prayer_requests_route(self):
+        """Verify prayer_requests maps to prayer-requests list route."""
+        self.assertEqual(self.route_map['prayer_requests'], 'prayer-requests')
 
     def test_learning_resources_have_prefix(self):
         """Verify learning resources have learn/ prefix."""

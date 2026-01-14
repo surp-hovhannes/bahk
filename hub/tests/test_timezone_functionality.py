@@ -50,6 +50,15 @@ class ProfileSerializerTest(TestCase):
         serializer = ProfileSerializer(self.profile)
         self.assertIn('timezone', serializer.data)
         self.assertEqual(serializer.data['timezone'], 'UTC')
+
+    def test_profile_serializer_includes_weekly_prayer_request_push_preference(self):
+        """Test that ProfileSerializer includes weekly prayer request push notification preference."""
+        serializer = ProfileSerializer(self.profile)
+        self.assertIn('receive_weekly_prayer_request_push_notifications', serializer.data)
+        self.assertEqual(
+            serializer.data['receive_weekly_prayer_request_push_notifications'],
+            self.profile.receive_weekly_prayer_request_push_notifications,
+        )
     
     def test_profile_serializer_can_update_timezone(self):
         """Test that ProfileSerializer can update timezone field."""

@@ -250,6 +250,7 @@ class Profile(models.Model):
     receive_upcoming_fast_push_notifications = models.BooleanField(default=True)
     receive_ongoing_fast_push_notifications = models.BooleanField(default=True)
     receive_daily_fast_push_notifications = models.BooleanField(default=False)
+    receive_weekly_prayer_request_push_notifications = models.BooleanField(default=True)
     include_weekly_fasts_in_notifications = models.BooleanField(default=False)
     # Email preferences
     receive_promotional_emails = models.BooleanField(

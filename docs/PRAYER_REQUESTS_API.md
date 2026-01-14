@@ -700,6 +700,15 @@ The following milestones are automatically awarded:
 - Creates activity feed item: "X users prayed for your request today"
 - Only sent if count > 0
 
+### Send Weekly Prayer Request Push Notifications
+**Schedule:** Sundays at 6:00 PM
+**Task:** `notifications.tasks.send_weekly_prayer_request_push_notification_task`
+
+- Sends a push notification to users who have **at least 1** active, approved prayer request they have **not** accepted yet
+- The `{count}` in the message is **personalized per user** (their unaccepted count), not the global total
+- Respects the user preference flag: `Profile.receive_weekly_prayer_request_push_notifications`
+- Deep links to the prayer requests screen with payload: `{"screen": "prayer-requests"}`
+
 ---
 
 ## Content Moderation
