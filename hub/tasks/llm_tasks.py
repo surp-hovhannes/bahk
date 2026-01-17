@@ -213,7 +213,7 @@ def _create_feast_context_with_translations(
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def generate_feast_context_task(
-    self, feast_id: int, force_regeneration: bool = False, language_code: str = None
+    self, feast_id: int, force_regeneration: bool = False, language_code: str = None, improvement_instructions: str = None
 ):
     """Generate and save AI context for a Feast instance in all available languages.
 
@@ -221,6 +221,7 @@ def generate_feast_context_task(
         feast_id: ID of the Feast to generate context for
         force_regeneration: If True, regenerate even if context exists
         language_code: DEPRECATED - Ignored. All languages are always generated.
+        improvement_instructions: Optional instructions to improve the generated content
     """
     if language_code is not None:
         logger.warning(
@@ -254,7 +255,7 @@ def generate_feast_context_task(
         generated_contexts = {}
         for lang in AVAILABLE_LANGUAGES:
             # Generate both text and short_text in a single call
-            context_dict = service.generate_feast_context(feast, llm_prompt, lang)
+            context_dict = service.generate_feast_context(feast, llm_prompt, lang, improvement_instructions)
             
             if context_dict and 'text' in context_dict and 'short_text' in context_dict:
                 generated_contexts[lang] = context_dict

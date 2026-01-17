@@ -1,0 +1,76 @@
+{% extends "admin/base_site.html" %}
+
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; {% translate "Regenerate Context with Instructions" %}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{% translate "Regenerate Feast Context with Improvement Instructions" %}</h1>
+
+<p>You are about to regenerate AI context for the following {{ feasts|length }} feast(s):</p>
+
+<ul class="object-tools" style="list-style-type: disc; margin-left: 20px; margin-bottom: 20px;">
+{% for feast in feasts %}
+    <li style="margin: 5px 0;">
+        <strong>{{ feast.name }}</strong>
+        {% if feast.day %}
+            ({{ feast.day.date }})
+        {% endif %}
+    </li>
+{% endfor %}
+</ul>
+
+<form action="" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="ids" value="{{ ids }}">
+
+    <fieldset class="module aligned">
+        <h2>{% translate "Improvement Instructions" %}</h2>
+        <div class="form-row">
+            <div>
+                <label for="improvement_instructions">
+                    {% translate "Instructions for improving the generated content:" %}
+                </label>
+                <p class="help">
+                    {% translate "These instructions will be appended to the LLM prompt to guide content generation." %}
+                </p>
+                <textarea
+                    id="improvement_instructions"
+                    name="improvement_instructions"
+                    rows="6"
+                    cols="80"
+                    style="width: 100%; max-width: 800px;"
+                    placeholder="Enter your improvement instructions here..."></textarea>
+            </div>
+        </div>
+
+        <div class="form-row" style="margin-top: 15px;">
+            <div>
+                <strong>{% translate "Example instructions:" %}</strong>
+                <ul style="list-style-type: disc; margin-left: 20px; margin-top: 10px; color: #666;">
+                    <li>Make it more concise and focused</li>
+                    <li>Focus on the historical significance and origins</li>
+                    <li>Emphasize the spiritual meaning for modern Christians</li>
+                    <li>Include more details about Armenian traditions</li>
+                    <li>Make the short_text more engaging and inviting</li>
+                    <li>Use simpler language suitable for new believers</li>
+                </ul>
+            </div>
+        </div>
+    </fieldset>
+
+    <div class="submit-row" style="margin-top: 20px;">
+        <input type="submit" value="{% translate 'Regenerate Context' %}" class="default">
+        <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link" style="margin-left: 10px;">
+            {% translate "Cancel" %}
+        </a>
+    </div>
+</form>
+{% endblock %}
