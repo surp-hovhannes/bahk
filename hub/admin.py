@@ -728,6 +728,7 @@ class FeastAdmin(admin.ModelAdmin):
         "force_rematch_icon",
         "match_icon_if_missing",
         "force_regenerate_context",
+        "regenerate_context_with_instructions",
     ]
     exclude = ("name",)  # Avoid duplicate with translation fields
     readonly_fields = ("icon_rematch_links",)
@@ -760,6 +761,11 @@ class FeastAdmin(admin.ModelAdmin):
                 "<int:pk>/rematch_icon_if_missing/",
                 self.admin_site.admin_view(self.rematch_icon_if_missing_view),
                 name="hub_feast_rematch_icon_if_missing",
+            ),
+            path(
+                "regenerate_context_instructions/",
+                self.admin_site.admin_view(self.regenerate_context_with_instructions_view),
+                name="hub_feast_regenerate_context_instructions",
             ),
         ]
         return custom_urls + urls
@@ -886,6 +892,79 @@ class FeastAdmin(admin.ModelAdmin):
     force_regenerate_context.short_description = (
         "Force regenerate AI context for selected feasts"
     )
+
+    def regenerate_context_with_instructions(self, request, queryset):
+        """Redirect to intermediate page for providing improvement instructions."""
+        selected = queryset.values_list('pk', flat=True)
+        return redirect(
+            f"{reverse('admin:hub_feast_regenerate_context_instructions')}?ids={','.join(str(pk) for pk in selected)}"
+        )
+
+    regenerate_context_with_instructions.short_description = (
+        "Regenerate context with improvement instructions"
+    )
+
+    def regenerate_context_with_instructions_view(self, request):
+        """View to handle regeneration with improvement instructions."""
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+
+        ids_param = request.GET.get('ids', '') or request.POST.get('ids', '')
+        if not ids_param:
+            self.message_user(
+                request,
+                "No feasts selected.",
+                level=messages.ERROR
+            )
+            return redirect(reverse('admin:hub_feast_changelist'))
+
+        feast_ids = [int(pk) for pk in ids_param.split(',') if pk.strip()]
+        feasts = Feast.objects.filter(pk__in=feast_ids).select_related('day')
+
+        if not feasts.exists():
+            self.message_user(
+                request,
+                "No valid feasts found.",
+                level=messages.ERROR
+            )
+            return redirect(reverse('admin:hub_feast_changelist'))
+
+        if request.method == 'POST':
+            improvement_instructions = request.POST.get('improvement_instructions', '').strip()
+            if not improvement_instructions:
+                self.message_user(
+                    request,
+                    "Please provide improvement instructions.",
+                    level=messages.ERROR
+                )
+            else:
+                count = feasts.count()
+                for feast in feasts:
+                    generate_feast_context_task.delay(
+                        feast.id,
+                        force_regeneration=True,
+                        improvement_instructions=improvement_instructions
+                    )
+                self.message_user(
+                    request,
+                    f"Initiated context regeneration with instructions for {count} feasts.",
+                    level=messages.SUCCESS
+                )
+                return redirect(reverse('admin:hub_feast_changelist'))
+
+        context = dict(
+            self.admin_site.each_context(request),
+            opts=Feast._meta,
+            title="Regenerate Feast Context with Instructions",
+            feasts=feasts,
+            ids=ids_param,
+        )
+
+        return TemplateResponse(
+            request,
+            "admin/hub/feast/regenerate_context_instructions.html",
+            context
+        )
 
     def church_link(self, feast):
         if not feast.day or not feast.day.church:

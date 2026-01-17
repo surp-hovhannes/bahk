@@ -342,16 +342,17 @@ class LLMService(ABC):
         pass
 
     @abstractmethod
-    def generate_feast_context(self, feast: Feast, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[dict]:
+    def generate_feast_context(self, feast: Feast, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en', improvement_instructions: str = None) -> Optional[dict]:
         """Generate context for a feast in the specified language.
-        
+
         Returns JSON with both 'text' (detailed) and 'short_text' (2-sentence summary).
-        
+
         Args:
             feast: The Feast instance to generate context for
             llm_prompt: Optional LLMPrompt to use (defaults to active prompt for feasts)
             language_code: Language code for the context ('en', 'hy', or other ISO codes)
-            
+            improvement_instructions: Optional instructions to improve the generated content
+
         Returns:
             Dict with 'text' and 'short_text' keys, or None if generation fails
         """
@@ -411,7 +412,7 @@ class AnthropicService(LLMService):
             logger.error(f"Error generating context with Claude: {e}")
             return None
 
-    def generate_feast_context(self, feast: Feast, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[dict]:
+    def generate_feast_context(self, feast: Feast, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en', improvement_instructions: str = None) -> Optional[dict]:
         """Generate feast context using Claude, returning both text and short_text."""
         if not settings.ANTHROPIC_API_KEY:
             logger.error("ANTHROPIC_API_KEY is not configured.")
@@ -454,6 +455,12 @@ class AnthropicService(LLMService):
                 base_message += reference_context
         except Exception as e:
             logger.error(f"Error during feast reference lookup: {e}", exc_info=True)
+
+        # Add improvement instructions if provided
+        if improvement_instructions:
+            base_message += (
+                f"\n\nIMPROVEMENT INSTRUCTIONS:\n{improvement_instructions}"
+            )
 
         system_prompt, user_message = _build_language_prompts(
             base_message, llm_prompt.prompt, language_code
@@ -604,7 +611,7 @@ class OpenAIService(LLMService):
             logger.exception("OpenAI API call failed: %s", exc)
         return None
 
-    def generate_feast_context(self, feast: Feast, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en') -> Optional[dict]:
+    def generate_feast_context(self, feast: Feast, llm_prompt: Optional[LLMPrompt] = None, language_code: str = 'en', improvement_instructions: str = None) -> Optional[dict]:
         """Generate feast context using OpenAI, returning both text and short_text."""
         if not settings.OPENAI_API_KEY:
             logger.error("OPENAI_API_KEY is not configured.")
@@ -620,7 +627,7 @@ class OpenAIService(LLMService):
         feast_info = f"Feast: {feast.name}"
         if feast.name_hy:
             feast_info += f"\nArmenian name: {feast.name_hy}"
-        
+
         base_prompt = (
             f"Provide context for the following feast:\n{feast_info}\n\n"
             "Return your response as JSON with two fields:\n"
@@ -647,7 +654,13 @@ class OpenAIService(LLMService):
                 base_prompt += reference_context
         except Exception as e:
             logger.error(f"Error during feast reference lookup: {e}", exc_info=True)
-        
+
+        # Add improvement instructions if provided
+        if improvement_instructions:
+            base_prompt += (
+                f"\n\nIMPROVEMENT INSTRUCTIONS:\n{improvement_instructions}"
+            )
+
         llm_prompt_text = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
         system_prompt, user_message = _build_language_prompts(
             base_prompt, llm_prompt_text, language_code
