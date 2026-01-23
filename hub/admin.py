@@ -555,6 +555,15 @@ class LLMPromptAdmin(admin.ModelAdmin):
         }),
         ('Important Notes', {
             'description': (
+                '<strong>For Prayer Requests:</strong> The prompt must include <code>{title}</code> and '
+                '<code>{description}</code> placeholders where the prayer request content will be inserted. '
+                'The prompt should instruct the LLM to return a JSON response with these fields: '
+                '<code>"approved"</code>, <code>"reason"</code>, <code>"concerns"</code>, <code>"severity"</code>, '
+                '<code>"requires_human_review"</code>, and <code>"suggested_action"</code>.<br><br>'
+                '<strong style="color: #c00;">Important:</strong> If your prompt includes a JSON example, '
+                'you must escape the curly braces by doubling them: use <code>{{</code> and <code>}}</code> '
+                'instead of <code>{</code> and <code>}</code>. Otherwise, Python\'s string formatting will '
+                'interpret them as placeholders and cause errors.<br><br>'
                 '<strong>For Feasts:</strong> The prompt must instruct the LLM to return a JSON response '
                 'with two fields: <code>"text"</code> (detailed explanation) and <code>"short_text"</code> '
                 '(2-sentence summary). Example instruction: "Return your response as JSON with two fields: '

@@ -30,8 +30,9 @@ def _get_moderation_prompt_and_service(prayer_request):
     Falls back to hard-coded prompt if no active prompt exists in database.
 
     Returns:
-        tuple: (model_name, prompt_text)
+        tuple: (model_name, system_role, prompt_text)
             model_name: str - The model identifier to use for the API call
+            system_role: str or None - The system/role message for the API call
             prompt_text: str - The formatted prompt with prayer request details
     """
     try:
@@ -45,8 +46,11 @@ def _get_moderation_prompt_and_service(prayer_request):
             description=prayer_request.description
         )
 
+        # Get the role/system message (may be empty)
+        system_role = llm_prompt.role if llm_prompt.role else None
+
         logger.info(f"Using LLMPrompt (id={llm_prompt.id}, model={llm_prompt.model}) for prayer request moderation")
-        return llm_prompt.model, prompt_text
+        return llm_prompt.model, system_role, prompt_text
 
     except LLMPrompt.DoesNotExist:
         # Fallback to hard-coded prompt
@@ -128,7 +132,8 @@ Note: The concerns array should be empty if fully approved with no issues.
 - Political campaign messages (promotional)
 """
 
-        return model_name, prompt_text
+        # No system role for fallback - the prompt is self-contained
+        return model_name, None, prompt_text
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -186,21 +191,29 @@ def moderate_prayer_request_task(self, prayer_request_id):
         # Step 2: LLM moderation check
         try:
             # Get prompt and model (from database or fallback to hard-coded)
-            model_name, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
+            model_name, system_role, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
 
             # Call LLM with low temperature for consistent moderation
             from anthropic import Anthropic
 
             client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-            response = client.messages.create(
-                model=model_name,
-                max_tokens=500,
-                temperature=0.1,
-                messages=[{
+
+            # Build API call arguments
+            api_kwargs = {
+                'model': model_name,
+                'max_tokens': 500,
+                'temperature': 0.1,
+                'messages': [{
                     'role': 'user',
                     'content': moderation_prompt
                 }]
-            )
+            }
+
+            # Add system message if role is provided
+            if system_role:
+                api_kwargs['system'] = system_role
+
+            response = client.messages.create(**api_kwargs)
 
             # Parse response
             import json
@@ -213,6 +226,20 @@ def moderate_prayer_request_task(self, prayer_request_id):
                 response_text = response_text.split('```')[1].split('```')[0].strip()
 
             llm_result = json.loads(response_text)
+
+            # Validate that the LLM returned a dict with required structure
+            if not isinstance(llm_result, dict):
+                raise ValueError(
+                    f"LLM returned {type(llm_result).__name__} instead of dict. "
+                    f"Response was: {response_text[:200]}"
+                )
+
+            # Check for required key 'approved' at minimum
+            if 'approved' not in llm_result:
+                raise ValueError(
+                    f"LLM response missing required 'approved' key. "
+                    f"Got keys: {list(llm_result.keys())}"
+                )
 
             # Update prayer request based on LLM result
             prayer_request.reviewed = True
