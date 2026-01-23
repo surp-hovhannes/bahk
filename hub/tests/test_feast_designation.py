@@ -500,7 +500,7 @@ class FeastContextAnthropicServiceTests(TestCase):
             active=True,
         )
 
-    @patch('hub.services.llm_service._find_feast_in_reference_data')
+    @patch('hub.services.llm_service._find_all_matching_feasts')
     @patch('hub.services.llm_service.settings')
     @patch('hub.services.llm_service.anthropic.Anthropic')
     def test_generate_feast_context_includes_reference_data(self, mock_anthropic_class, mock_settings, mock_find_feast):
@@ -508,12 +508,12 @@ class FeastContextAnthropicServiceTests(TestCase):
         mock_settings.ANTHROPIC_API_KEY = "test-key"
         mock_settings.BASE_DIR = "/fake/path"
 
-        # Mock the feast reference data
-        mock_find_feast.return_value = {
+        # Mock the feast reference data (returns list for multi-commemoration support)
+        mock_find_feast.return_value = [{
             "name": "Feast of the Holy Nativity and Theophany of Our Lord Jesus Christ",
             "description": "Each year, on January 6, the Armenian Apostolic Church celebrates...",
             "source_url": "https://armenianchurch.ge/en/kalendar-prazdnikov/description-2/january"
-        }
+        }]
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -544,7 +544,7 @@ class FeastContextAnthropicServiceTests(TestCase):
         # Verify no extra headers are sent
         self.assertNotIn('extra_headers', kwargs)
 
-    @patch('hub.services.llm_service._find_feast_in_reference_data')
+    @patch('hub.services.llm_service._find_all_matching_feasts')
     @patch('hub.services.llm_service.settings')
     @patch('hub.services.llm_service.anthropic.Anthropic')
     def test_generate_feast_context_without_reference_data(self, mock_anthropic_class, mock_settings, mock_find_feast):
@@ -552,8 +552,8 @@ class FeastContextAnthropicServiceTests(TestCase):
         mock_settings.ANTHROPIC_API_KEY = "test-key"
         mock_settings.BASE_DIR = "/fake/path"
 
-        # Mock no feast found in reference data
-        mock_find_feast.return_value = None
+        # Mock no feast found in reference data (returns empty list)
+        mock_find_feast.return_value = []
 
         mock_client = MagicMock()
         mock_response = MagicMock()

@@ -7,6 +7,7 @@ from difflib import SequenceMatcher
 import anthropic
 from openai import OpenAI
 from django.conf import settings
+from django.core.mail import mail_admins
 
 from hub.models import LLMPrompt, Reading, Feast
 
@@ -19,6 +20,11 @@ _USER_LANGUAGE_PREFIX = "CRITICAL INSTRUCTION: Respond ONLY in"
 # Constants for feast reference data matching
 MIN_FEAST_NAME_SIMILARITY_THRESHOLD = 0.5  # Minimum similarity score to consider a feast match
 DATE_MATCH_CONFIDENCE_BOOST = 0.15  # Boost score by this amount if dates match
+
+# Multi-commemoration matching (two-stage: string similarity → LLM filtering)
+MIN_MULTI_FEAST_SIMILARITY = 0.33  # Initial threshold for candidate selection (LLM will filter false positives)
+MAX_LLM_FILTER_CANDIDATES = 15  # Limit candidates sent to LLM for filtering
+MAX_COMMEMORATIONS_IN_CONTEXT = 5  # Prevent token overflow in final context
 
 
 def _calculate_similarity(a: str, b: str) -> float:
@@ -34,18 +40,131 @@ def _calculate_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
-def _find_feast_in_reference_data(feast) -> Optional[dict]:
+def _llm_filter_feast_matches(feast, candidates: list[dict]) -> list[dict]:
     """
-    Search the feasts.json file for a matching feast entry.
-    
-    Primary matching is based on name similarity, with date matching 
-    used as a confidence boost (not a requirement).
+    Use an LLM to intelligently filter candidate feast matches.
+
+    This handles:
+    - Combined feast names with multiple saints
+    - Transliteration differences (Cyricus/Kirakos, Julitta/Judithah)
+    - Semantic understanding of which commemorations actually correspond to the feast
+
+    Args:
+        feast: A Feast model instance
+        candidates: List of candidate feast entries from feasts.json
+
+    Returns:
+        Filtered list of feast dictionaries that actually correspond to the feast
+    """
+    if not candidates:
+        return []
+
+    # Build JSON data for LLM (names and dates only - descriptions not needed for matching)
+    candidates_json = json.dumps([{
+        "name": c.get("name"),
+        "month": c.get("month"),
+        "day": c.get("day")
+    } for c in candidates], indent=2)
+
+    # Build prompt for LLM
+    feast_info = f"Feast Name: {feast.name}"
+    if hasattr(feast, 'name_hy') and feast.name_hy:
+        feast_info += f"\nArmenian Name: {feast.name_hy}"
+
+    prompt = f"""You are analyzing a feast day to determine which reference commemorations correspond to it.
+
+{feast_info}
+
+Here are {len(candidates)} candidate commemorations from the reference data:
+
+{candidates_json}
+
+TASK: Return ONLY the JSON array indices (0-based) of commemorations that likely correspond to this feast.
+
+GUIDELINES:
+- If the feast name mentions specific saints, include their commemorations
+- Handle transliteration differences (e.g., "Cyricus" = "Kirakos", "Julitta" = "Judithah")
+- For combined feast names listing multiple saints, include each saint's individual commemoration
+- Do NOT include commemorations for completely unrelated saints
+- Dates may differ slightly between the feast and reference data (ignore date mismatches)
+
+Return ONLY a JSON array of indices, e.g.: [0, 2, 5]
+If none match, return: []
+"""
+
+    try:
+        # Use Anthropic API directly (fast model for quick filtering)
+        if not settings.ANTHROPIC_API_KEY:
+            logger.warning("ANTHROPIC_API_KEY not configured, skipping LLM filtering")
+            return candidates
+
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",  # Fast, cheap model for filtering
+            max_tokens=200,
+            temperature=0.0,  # Deterministic
+            system="You are a precise feast matching assistant. Return only JSON arrays of indices.",
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+
+        if response and response.content:
+            raw_response = response.content[0].text
+            logger.debug(f"LLM filter raw response: '{raw_response}'")
+            response_text = raw_response.strip()
+            logger.debug(f"LLM filter cleaned response: '{response_text}'")
+
+            # Remove markdown code fences if present
+            response_text = response_text.replace("```json", "").replace("```", "").strip()
+
+            if not response_text:
+                logger.warning("LLM filter returned empty response, using all candidates")
+                return candidates
+
+            # Parse the JSON array of indices
+            indices = json.loads(response_text)
+
+            if not isinstance(indices, list):
+                logger.warning(f"LLM filter returned non-list: {response_text}")
+                return candidates  # Fallback to all candidates
+
+            # Filter candidates by indices
+            filtered = [candidates[i] for i in indices if 0 <= i < len(candidates)]
+
+            logger.info(
+                f"LLM filter: {len(candidates)} candidates → {len(filtered)} matches "
+                f"for feast: {feast.name}"
+            )
+
+            return filtered
+        else:
+            logger.warning("No response from LLM filter, using all candidates")
+            return candidates
+
+    except Exception as e:
+        logger.error(f"Error in LLM feast filtering: {e}", exc_info=True)
+        # Fallback to returning all candidates if LLM filtering fails
+        return candidates
+
+
+def _find_all_matching_feasts(feast) -> list[dict]:
+    """
+    Search feasts.json for ALL matching feast entries.
+
+    Uses name similarity as primary criterion with optional date boost.
+    This handles both:
+    - Fixed dates with multiple commemorations
+    - Moveable feasts that shift year-to-year
 
     Args:
         feast: A Feast model instance
 
     Returns:
-        Dictionary with feast data if found, None otherwise
+        List of matching feast dictionaries, sorted by score (descending).
+        Returns empty list if no matches found.
     """
     # Get the base directory (project root)
     base_dir = settings.BASE_DIR
@@ -53,45 +172,43 @@ def _find_feast_in_reference_data(feast) -> Optional[dict]:
 
     if not os.path.exists(feasts_file_path):
         logger.warning(f"Feasts reference file not found at {feasts_file_path}")
-        return None
+        return []
 
     try:
         with open(feasts_file_path, 'r', encoding='utf-8') as f:
             feasts_data = json.load(f)
     except (json.JSONDecodeError, IOError) as e:
         logger.error(f"Error reading feasts reference file: {e}")
-        return None
+        return []
 
     # Extract feast date components if available (for confidence boost)
     feast_month = None
     feast_day = None
     has_date = False
-    
+
     if hasattr(feast, 'day') and feast.day and hasattr(feast.day, 'date') and feast.day.date:
         try:
             feast_date = feast.day.date
             feast_month = feast_date.strftime("%B")  # Full month name (e.g., "January")
             feast_day = feast_date.strftime("%d")    # Day with leading zero (e.g., "06")
             has_date = True
-            logger.debug(f"Searching for feast reference: {feast.name} on {feast_month} {feast_day}")
+            logger.debug(f"Searching for feast references: {feast.name} on {feast_month} {feast_day}")
         except (AttributeError, ValueError) as e:
             logger.debug(f"Could not extract date from feast {feast.id}: {e}")
     else:
-        logger.debug(f"Searching for feast reference: {feast.name} (no date available)")
+        logger.debug(f"Searching for feast references: {feast.name} (no date available)")
 
     # Cache lowercased feast names to avoid repeated .lower() calls
     feast_name_lower = feast.name.lower()
     feast_name_hy_lower = feast.name_hy.lower() if hasattr(feast, 'name_hy') and feast.name_hy else None
 
-    # Search all entries, using name similarity as primary criterion
-    best_match = None
-    best_score = 0.0
-    best_date_match = None
+    # Collect all matches above threshold
+    matches = []
 
     for entry in feasts_data:
         entry_name = entry.get('name', '')
         entry_name_lower = entry_name.lower()
-        
+
         # Calculate name similarity
         name_score = _calculate_similarity(feast_name_lower, entry_name_lower)
 
@@ -102,36 +219,72 @@ def _find_feast_in_reference_data(feast) -> Optional[dict]:
 
         # Apply date boost if available and dates match
         final_score = name_score
-        date_match = False
-        
+
         if has_date and feast_month and feast_day:
             entry_month = entry.get('month')
             entry_day = entry.get('day')
             if entry_month == feast_month and entry_day == feast_day:
                 final_score = min(name_score + DATE_MATCH_CONFIDENCE_BOOST, 1.0)  # Cap at 1.0
-                date_match = True
 
-        # Keep track of best match
-        if final_score > best_score:
-            best_score = final_score
-            best_match = entry
-            best_date_match = date_match if has_date else None
+        # Keep all entries above threshold
+        if final_score >= MIN_MULTI_FEAST_SIMILARITY:
+            matches.append({
+                'entry': entry,
+                'score': final_score
+            })
 
-    # Return the best match if similarity is above threshold
-    if best_match and best_score >= MIN_FEAST_NAME_SIMILARITY_THRESHOLD:
-        if has_date:
-            date_info = f" (date match: {best_date_match})"
-        else:
-            date_info = " (no date check)"
+    # Sort by score (descending) and limit to top candidates for LLM filtering
+    matches.sort(key=lambda x: x['score'], reverse=True)
+    top_candidates = [m['entry'] for m in matches[:MAX_LLM_FILTER_CANDIDATES]]
+
+    if not top_candidates:
+        logger.warning(f"No feast references found for: {feast.name}")
+
+        # Notify admins about missing feast reference
+        try:
+            feast_date = (
+                feast.day.date.strftime("%B %d, %Y")
+                if hasattr(feast, 'day')
+                and feast.day
+                and hasattr(feast.day, 'date')
+                and feast.day.date
+                else "Unknown date"
+            )
+            mail_admins(
+                subject=f"Missing Feast Reference: {feast.name}",
+                message=f"""A feast is lacking a matching reference in feasts.json:
+
+Feast ID: {feast.id}
+Feast Name: {feast.name}
+Armenian Name: {feast.name_hy if hasattr(feast, 'name_hy') else 'N/A'}
+Date: {feast_date}
+
+Please review and consider adding this feast to the reference data file.
+""",
+                fail_silently=True
+            )
+            logger.info(f"Sent admin notification for missing feast reference: {feast.name}")
+        except Exception as e:
+            logger.error(f"Failed to send admin notification for missing feast: {e}", exc_info=True)
+
+        return []
+
+    # Use LLM to intelligently filter the candidates
+    # This handles combined feast names, transliterations, and semantic understanding
+    filtered_results = _llm_filter_feast_matches(feast, top_candidates)
+
+    # Limit to max commemorations after filtering
+    result = filtered_results[:MAX_COMMEMORATIONS_IN_CONTEXT]
+
+    # Log the results
+    if result:
         logger.info(
-            f"Found feast reference: {best_match.get('name', 'N/A')} "
-            f"(score: {best_score:.2%}{date_info})"
+            f"Found {len(result)} reference(s) for {feast.name}: "
+            f"{', '.join(m.get('name', 'N/A')[:40] + ('...' if len(m.get('name', '')) > 40 else '') for m in result[:3])}"
+            + (" (and more)" if len(result) > 3 else "")
         )
-        return best_match
 
-    # No good match found
-    logger.info(f"No feast reference found for: {feast.name} (best score: {best_score:.2%})")
-    return None
+    return result
 
 
 def _build_language_prompts(
@@ -440,17 +593,37 @@ class AnthropicService(LLMService):
 
         # Search for matching feast in reference data
         try:
-            feast_reference = _find_feast_in_reference_data(feast)
-            if feast_reference:
-                logger.debug(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
-                reference_context = (
-                    f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
-                    f"Feast Name: {feast_reference.get('name', 'N/A')}\n"
-                    f"Description: {feast_reference.get('description', 'N/A')}"
-                )
-                # Add source URL if available
-                if feast_reference.get('source_url'):
-                    reference_context += f"\nSource: {feast_reference['source_url']}"
+            feast_references = _find_all_matching_feasts(feast)
+            if feast_references:
+                if len(feast_references) == 1:
+                    # Single match - keep existing format for backward compatibility
+                    ref = feast_references[0]
+                    logger.debug(f"Found reference data for feast: {ref.get('name', 'N/A')}")
+                    reference_context = (
+                        f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
+                        f"Feast Name: {ref.get('name', 'N/A')}\n"
+                        f"Description: {ref.get('description', 'N/A')}"
+                    )
+                else:
+                    # Multiple matches - synthesize all
+                    logger.debug(f"Found {len(feast_references)} reference commemorations for feast")
+                    reference_context = (
+                        f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
+                        f"This feast may include {len(feast_references)} related commemorations. "
+                        f"Synthesize the most relevant information:\n\n"
+                    )
+                    for i, ref in enumerate(feast_references, 1):
+                        reference_context += (
+                            f"=== COMMEMORATION {i}: {ref.get('name', 'N/A')} ===\n"
+                            f"{ref.get('description', 'N/A')}\n\n"
+                        )
+
+                    # Add synthesis instruction
+                    reference_context += (
+                        "INSTRUCTION: Analyze all commemorations above. If the feast name clearly "
+                        "corresponds to one commemoration, prioritize it. Otherwise, synthesize "
+                        "information from all that are liturgically connected to this date."
+                    )
 
                 base_message += reference_context
         except Exception as e:
@@ -639,17 +812,37 @@ class OpenAIService(LLMService):
 
         # Search for matching feast in reference data
         try:
-            feast_reference = _find_feast_in_reference_data(feast)
-            if feast_reference:
-                logger.debug(f"Found reference data for feast: {feast_reference.get('name', 'N/A')}")
-                reference_context = (
-                    f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
-                    f"Feast Name: {feast_reference.get('name', 'N/A')}\n"
-                    f"Description: {feast_reference.get('description', 'N/A')}"
-                )
-                # Add source URL if available
-                if feast_reference.get('source_url'):
-                    reference_context += f"\nSource: {feast_reference['source_url']}"
+            feast_references = _find_all_matching_feasts(feast)
+            if feast_references:
+                if len(feast_references) == 1:
+                    # Single match - keep existing format for backward compatibility
+                    ref = feast_references[0]
+                    logger.debug(f"Found reference data for feast: {ref.get('name', 'N/A')}")
+                    reference_context = (
+                        f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
+                        f"Feast Name: {ref.get('name', 'N/A')}\n"
+                        f"Description: {ref.get('description', 'N/A')}"
+                    )
+                else:
+                    # Multiple matches - synthesize all
+                    logger.debug(f"Found {len(feast_references)} reference commemorations for feast")
+                    reference_context = (
+                        f"\n\nREFERENCE INFORMATION (use as canonical source):\n"
+                        f"This feast may include {len(feast_references)} related commemorations. "
+                        f"Synthesize the most relevant information:\n\n"
+                    )
+                    for i, ref in enumerate(feast_references, 1):
+                        reference_context += (
+                            f"=== COMMEMORATION {i}: {ref.get('name', 'N/A')} ===\n"
+                            f"{ref.get('description', 'N/A')}\n\n"
+                        )
+
+                    # Add synthesis instruction
+                    reference_context += (
+                        "INSTRUCTION: Analyze all commemorations above. If the feast name clearly "
+                        "corresponds to one commemoration, prioritize it. Otherwise, synthesize "
+                        "information from all that are liturgically connected to this date."
+                    )
 
                 base_prompt += reference_context
         except Exception as e:
