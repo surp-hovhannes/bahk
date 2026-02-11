@@ -201,6 +201,7 @@ CATENA_ABBREV_FOR_BOOK = {
     "St. Paul's Epistle to the Galatians": "gal",
     "Ephesians": "eph",
     "St. Paul's Epistle to the Ephesians": "eph",
+    "Philippians": "phil",
     "St. Paul's Epistle to the Philippians": "phil",
     "Colossians": "col",
     "St. Paul's Epistle to the Colossians": "col",
