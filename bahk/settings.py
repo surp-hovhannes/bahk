@@ -436,6 +436,9 @@ BIBLE_API_KEY = config('BIBLE_API_KEY', default='')
 # Set to 30 - (refresh interval in days) to ensure content never exceeds the 30-day
 # freshness requirement. Default: 23 (= 30 - 7, for a weekly refresh).
 READING_TEXT_REFRESH_DAYS = config('READING_TEXT_REFRESH_DAYS', default=23, cast=int)
+# Maximum number of readings to keep in the database.  Oldest readings are
+# pruned during the weekly refresh to stay within the API calls/month budget.
+MAX_READINGS = config('MAX_READINGS', default=2000, cast=int)
 
 # Test settings
 if 'test' in sys.argv:

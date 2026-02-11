@@ -22,9 +22,6 @@ from hub.services.bible_api_service import BibleAPIService
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of readings to keep in the database.
-MAX_READINGS = 2000
-
 
 def _fetch_and_update_passage(
     service: BibleAPIService,
@@ -161,9 +158,10 @@ def refresh_all_reading_texts_task(self):
         5. Log a structured error summary.
     """
     # --- Step 1: Cleanup old readings ---
+    max_readings = getattr(settings, "MAX_READINGS", 2000)
     total_readings = Reading.objects.count()
-    if total_readings > MAX_READINGS:
-        excess = total_readings - MAX_READINGS
+    if total_readings > max_readings:
+        excess = total_readings - max_readings
         oldest_ids = list(
             Reading.objects.order_by("day__date", "pk")
             .values_list("pk", flat=True)[:excess]
