@@ -451,26 +451,42 @@ def generate_participant_map(self, fast_id, delay=0):
 
 
 @shared_task(name='hub.tasks.update_current_fast_maps')
-@sentry_sdk.monitor(monitor_slug='hourly-fast-map-updates')
+@sentry_sdk.monitor(monitor_slug='daily-fast-map-updates')
 def update_current_fast_maps():
     """
     Update maps for current and upcoming fasts only.
-    This ensures we don't waste resources on past fasts.
+
+    Only generates maps for fasts that are:
+    1. Currently active (haven't ended yet, started in the past or today)
+    2. Starting soon (start within the next 60 days)
+
+    This ensures we don't waste resources on past fasts or fasts too far in the future.
     """
     try:
+        from datetime import timedelta
+        from django.db.models import Min, Max, Q
+
         today = timezone.now().date()
-        
+        sixty_days_from_now = today + timedelta(days=60)
+
         # Add context for Sentry
         sentry_sdk.set_context("map_update", {
             "date": str(today),
-            "type": "scheduled_hourly"
+            "date_range_end": str(sixty_days_from_now),
+            "type": "scheduled_daily"
         })
-        
-        # Find current and upcoming fasts by checking if they have any days today or in the future
-        current_fasts = Fast.objects.filter(
-            days__date__gte=today
+
+        # Find current and upcoming fasts:
+        # - Fasts that haven't ended yet (end_date >= today)
+        # - AND that start within the next 60 days (start_date <= 60 days from now)
+        current_fasts = Fast.objects.annotate(
+            start_date=Min('days__date'),
+            end_date=Max('days__date')
+        ).filter(
+            Q(end_date__gte=today) &  # Haven't ended yet
+            Q(start_date__lte=sixty_days_from_now)  # Start within 60 days
         ).distinct()
-        
+
         count = 0
         for fast in current_fasts:
             # Add breadcrumb for each fast being processed
@@ -479,16 +495,16 @@ def update_current_fast_maps():
                 message=f"Scheduling map generation for fast {fast.id}: {fast.name}",
                 level="info"
             )
-            
+
             # Generate map for each current/upcoming fast
             generate_participant_map.delay(fast.id)
             count += 1
-            
+
         logging.info(f"Scheduled map generation for {count} current/upcoming fasts")
-        
+
         # Set metrics for Sentry
         sentry_sdk.set_measurement("fasts_processed", count)
-        
+
         return count
     except Exception as e:
         # Capture the exception with additional context
