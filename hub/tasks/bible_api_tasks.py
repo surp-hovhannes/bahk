@@ -72,7 +72,7 @@ def _fetch_and_update_passage(
     return updated
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, name='hub.tasks.fetch_reading_text_task')
 def fetch_reading_text_task(self, reading_id: int):
     """Fetch Bible text for a single Reading and all duplicates of the same passage.
 
@@ -146,7 +146,7 @@ def fetch_reading_text_task(self, reading_id: int):
         raise self.retry(exc=e)
 
 
-@shared_task(bind=True, max_retries=1, default_retry_delay=300)
+@shared_task(bind=True, max_retries=1, default_retry_delay=300, name='hub.tasks.refresh_all_reading_texts_task')
 def refresh_all_reading_texts_task(self):
     """Refresh Bible text for all stale readings, with deduplication.
 
