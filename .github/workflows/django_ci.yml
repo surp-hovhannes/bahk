@@ -107,6 +107,7 @@ jobs:
         AWS_LOCATION_PLACE_INDEX: ${{ secrets.AWS_LOCATION_PLACE_INDEX }}
         AWS_LOCATION_SERVICES_KEY: ${{ secrets.AWS_LOCATION_SERVICES_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        BIBLE_API_KEY: ${{ secrets.BIBLE_API_KEY }}
         # Provide any other environment variables your settings.py or tests expect
 
       run: |
