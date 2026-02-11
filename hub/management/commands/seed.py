@@ -426,26 +426,189 @@ class Command(BaseCommand):
         return devotional_sets
 
     def _create_readings(self, days):
-        """Create Bible readings for days."""
+        """Create Bible readings for days with sample text pre-populated.
+
+        Text is provided inline so that the seed database is immediately usable
+        without requiring a BIBLE_API_KEY or a running Celery worker.
+        """
         readings = []
-        bible_books = ["Genesis", "Exodus", "Matthew", "Mark", "Luke", "John", "Romans", "Psalms"]
-        
+        sample_readings = [
+            {
+                "book": "Genesis",
+                "chapter": 1, "start_verse": 1, "end_verse": 5,
+                "text": (
+                    "[1] In the beginning God created the heavens and the earth. "
+                    "[2] The earth was without form, and void; and darkness was on the face of the deep. "
+                    "And the Spirit of God was hovering over the face of the waters. "
+                    "[3] Then God said, \"Let there be light\"; and there was light. "
+                    "[4] And God saw the light, that it was good; and God divided the light from the darkness. "
+                    "[5] God called the light Day, and the darkness He called Night. "
+                    "So the evening and the morning were the first day."
+                ),
+            },
+            {
+                "book": "Exodus",
+                "chapter": 3, "start_verse": 1, "end_verse": 6,
+                "text": (
+                    "[1] Now Moses was tending the flock of Jethro his father-in-law, the priest of Midian. "
+                    "And he led the flock to the back of the desert, and came to Horeb, the mountain of God. "
+                    "[2] And the Angel of the LORD appeared to him in a flame of fire from the midst of a bush. "
+                    "So he looked, and behold, the bush was burning with fire, but the bush was not consumed. "
+                    "[3] Then Moses said, \"I will now turn aside and see this great sight, why the bush does not burn.\" "
+                    "[4] So when the LORD saw that he turned aside to look, God called to him from the midst of the bush "
+                    "and said, \"Moses, Moses!\" And he said, \"Here I am.\" "
+                    "[5] Then He said, \"Do not draw near this place. Take your sandals off your feet, "
+                    "for the place where you stand is holy ground.\" "
+                    "[6] Moreover He said, \"I am the God of your father—the God of Abraham, the God of Isaac, "
+                    "and the God of Jacob.\" And Moses hid his face, for he was afraid to look upon God."
+                ),
+            },
+            {
+                "book": "Matthew",
+                "chapter": 5, "start_verse": 1, "end_verse": 12,
+                "text": (
+                    "[1] And seeing the multitudes, He went up on a mountain, and when He was seated "
+                    "His disciples came to Him. [2] Then He opened His mouth and taught them, saying: "
+                    "[3] \"Blessed are the poor in spirit, for theirs is the kingdom of heaven. "
+                    "[4] Blessed are those who mourn, for they shall be comforted. "
+                    "[5] Blessed are the meek, for they shall inherit the earth. "
+                    "[6] Blessed are those who hunger and thirst for righteousness, for they shall be filled. "
+                    "[7] Blessed are the merciful, for they shall obtain mercy. "
+                    "[8] Blessed are the pure in heart, for they shall see God. "
+                    "[9] Blessed are the peacemakers, for they shall be called sons of God. "
+                    "[10] Blessed are those who are persecuted for righteousness' sake, "
+                    "for theirs is the kingdom of heaven. "
+                    "[11] Blessed are you when they revile and persecute you, and say all kinds of evil "
+                    "against you falsely for My sake. "
+                    "[12] Rejoice and be exceedingly glad, for great is your reward in heaven, "
+                    "for so they persecuted the prophets who were before you.\""
+                ),
+            },
+            {
+                "book": "Mark",
+                "chapter": 1, "start_verse": 1, "end_verse": 8,
+                "text": (
+                    "[1] The beginning of the gospel of Jesus Christ, the Son of God. "
+                    "[2] As it is written in the Prophets: \"Behold, I send My messenger before Your face, "
+                    "Who will prepare Your way before You.\" "
+                    "[3] \"The voice of one crying in the wilderness: 'Prepare the way of the LORD; "
+                    "Make His paths straight.'\" "
+                    "[4] John came baptizing in the wilderness and preaching a baptism of repentance "
+                    "for the remission of sins. "
+                    "[5] Then all the land of Judea, and those from Jerusalem, went out to him and were all "
+                    "baptized by him in the Jordan River, confessing their sins. "
+                    "[6] Now John was clothed with camel's hair and with a leather belt around his waist, "
+                    "and he ate locusts and wild honey. "
+                    "[7] And he preached, saying, \"There comes One after me who is mightier than I, "
+                    "whose sandal strap I am not worthy to stoop down and loose. "
+                    "[8] I indeed baptized you with water, but He will baptize you with the Holy Spirit.\""
+                ),
+            },
+            {
+                "book": "Luke",
+                "chapter": 2, "start_verse": 1, "end_verse": 7,
+                "text": (
+                    "[1] And it came to pass in those days that a decree went out from Caesar Augustus "
+                    "that all the world should be registered. "
+                    "[2] This census first took place while Quirinius was governing Syria. "
+                    "[3] So all went to be registered, everyone to his own city. "
+                    "[4] Joseph also went up from Galilee, out of the city of Nazareth, into Judea, "
+                    "to the city of David, which is called Bethlehem, because he was of the house and "
+                    "lineage of David, [5] to be registered with Mary, his betrothed wife, who was with child. "
+                    "[6] So it was, that while they were there, the days were completed for her to be delivered. "
+                    "[7] And she brought forth her firstborn Son, and wrapped Him in swaddling cloths, "
+                    "and laid Him in a manger, because there was no room for them in the inn."
+                ),
+            },
+            {
+                "book": "John",
+                "chapter": 1, "start_verse": 1, "end_verse": 5,
+                "text": (
+                    "[1] In the beginning was the Word, and the Word was with God, and the Word was God. "
+                    "[2] He was in the beginning with God. "
+                    "[3] All things were made through Him, and without Him nothing was made that was made. "
+                    "[4] In Him was life, and the life was the light of men. "
+                    "[5] And the light shines in the darkness, and the darkness did not comprehend it."
+                ),
+            },
+            {
+                "book": "Romans",
+                "chapter": 8, "start_verse": 28, "end_verse": 32,
+                "text": (
+                    "[28] And we know that all things work together for good to those who love God, "
+                    "to those who are the called according to His purpose. "
+                    "[29] For whom He foreknew, He also predestined to be conformed to the image of His Son, "
+                    "that He might be the firstborn among many brethren. "
+                    "[30] Moreover whom He predestined, these He also called; whom He called, "
+                    "these He also justified; and whom He justified, these He also glorified. "
+                    "[31] What then shall we say to these things? If God is for us, who can be against us? "
+                    "[32] He who did not spare His own Son, but delivered Him up for us all, "
+                    "how shall He not with Him also freely give us all things?"
+                ),
+            },
+            {
+                "book": "Psalms",
+                "chapter": 23, "start_verse": 1, "end_verse": 6,
+                "text": (
+                    "[1] The LORD is my shepherd; I shall not want. "
+                    "[2] He makes me to lie down in green pastures; He leads me beside the still waters. "
+                    "[3] He restores my soul; He leads me in the paths of righteousness for His name's sake. "
+                    "[4] Yea, though I walk through the valley of the shadow of death, I will fear no evil; "
+                    "for You are with me; Your rod and Your staff, they comfort me. "
+                    "[5] You prepare a table before me in the presence of my enemies; "
+                    "You anoint my head with oil; my cup runs over. "
+                    "[6] Surely goodness and mercy shall follow me all the days of my life; "
+                    "and I will dwell in the house of the LORD forever."
+                ),
+            },
+            {
+                "book": "Genesis",
+                "chapter": 12, "start_verse": 1, "end_verse": 4,
+                "text": (
+                    "[1] Now the LORD had said to Abram: \"Get out of your country, from your family "
+                    "and from your father's house, to a land that I will show you. "
+                    "[2] I will make you a great nation; I will bless you and make your name great; "
+                    "and you shall be a blessing. "
+                    "[3] I will bless those who bless you, and I will curse him who curses you; "
+                    "and in you all the families of the earth shall be blessed.\" "
+                    "[4] So Abram departed as the LORD had spoken to him, and Lot went with him. "
+                    "And Abram was seventy-five years old when he departed from Haran."
+                ),
+            },
+            {
+                "book": "Exodus",
+                "chapter": 14, "start_verse": 13, "end_verse": 16,
+                "text": (
+                    "[13] And Moses said to the people, \"Do not be afraid. Stand still, "
+                    "and see the salvation of the LORD, which He will accomplish for you today. "
+                    "For the Egyptians whom you see today, you shall see again no more forever. "
+                    "[14] The LORD will fight for you, and you shall hold your peace.\" "
+                    "[15] And the LORD said to Moses, \"Why do you cry to Me? "
+                    "Tell the children of Israel to go forward. "
+                    "[16] But lift up your rod, and stretch out your hand over the sea and divide it. "
+                    "And the children of Israel shall go on dry ground through the midst of the sea.\""
+                ),
+            },
+        ]
+
+        sample_copyright = "Scripture taken from the New King James Version®. Copyright © 1982 by Thomas Nelson. Used by permission. All rights reserved."
+
         for i, day in enumerate(days[:10]):  # Create readings for first 10 days
-            book = bible_books[i % len(bible_books)]
-            chapter = (i % 5) + 1
-            start_verse = (i % 10) + 1
-            end_verse = start_verse + (i % 5) + 1
-            
+            data = sample_readings[i % len(sample_readings)]
             reading = models.Reading.objects.create(
                 day=day,
-                book=book,
-                start_chapter=chapter,
-                start_verse=start_verse,
-                end_chapter=chapter,
-                end_verse=end_verse,
+                book=data["book"],
+                start_chapter=data["chapter"],
+                start_verse=data["start_verse"],
+                end_chapter=data["chapter"],
+                end_verse=data["end_verse"],
+                text=data["text"],
+                text_copyright=sample_copyright,
+                text_version="NKJV",
+                text_fetched_at=timezone.now(),
             )
             readings.append(reading)
-        
+
         return readings
 
     def _create_reading_contexts(self, readings, llm_prompts):
