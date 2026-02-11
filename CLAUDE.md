@@ -46,6 +46,8 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
 
 5. **Push Notifications**: Expo push notifications for mobile app integration
 
+6. **Bible Text (API.Bible)**: Fetches Scripture via the [API.Bible](https://scripture.api.bible/) REST API (NKJV; KJVAIC for Apocrypha). Service in `hub/services/bible_api_service.py`, tasks in `hub/tasks/bible_api_tasks.py`. A weekly Celery Beat task refreshes stale texts (>23 days) to meet the 30-day freshness requirement. Copyright is stored unmodified alongside text. FUMS tracking is pending before frontend exposure. Env var: `BIBLE_API_KEY`.
+
 ## Development Environment
 
 This project runs in a **Docker development container**. All Python/Django commands must be executed inside the container using `docker exec`.
@@ -233,6 +235,7 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`
 - `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (for AI-generated content)
+- `BIBLE_API_KEY` (API.Bible text retrieval)
 - `SENTRY_DSN` (error monitoring)
 
 ### Celery Scheduled Tasks
@@ -243,6 +246,7 @@ Defined in `bahk/celery.py`. Daily tasks include:
 - Map updates (1 AM)
 - Activity feed cleanup (2 AM)
 - Milestone checks (various times)
+- Reading text refresh (Monday 4 AM)
 
 ### Database
 
