@@ -78,16 +78,16 @@ if not (config('CI', default=False, cast=bool) or 'test' in sys.argv):
 if os.environ.get("DYNO"):
     # Tag with full dyno name (e.g., web.1, worker.2)
     sentry_sdk.set_tag("dyno", os.environ.get("DYNO"))
-    
+
     # Extract and tag with dyno type (e.g., web, worker)
     dyno_parts = os.environ.get("DYNO", "").split(".")
     if len(dyno_parts) > 0:
         sentry_sdk.set_tag("dyno_type", dyno_parts[0])
-    
+
     # Add Heroku release information if available
     if os.environ.get("HEROKU_RELEASE_VERSION"):
         sentry_sdk.set_tag("heroku_release", os.environ.get("HEROKU_RELEASE_VERSION"))
-    
+
     # Add Heroku app name
     if os.environ.get("HEROKU_APP_NAME"):
         sentry_sdk.set_tag("heroku_app", os.environ.get("HEROKU_APP_NAME"))
@@ -320,19 +320,19 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB - Django default
 
 # AWS S3 settings
 if IS_PRODUCTION:
-    # Configure AWS S3 
+    # Configure AWS S3
     AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
     AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
     AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', 'us-west-2')
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     AWS_S3_ENDPOINT_URL = f'https://s3.{AWS_S3_REGION_NAME}.amazonaws.com'
-    
+
     # Storage configuration
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-    
+
     # S3 configuration
     AWS_DEFAULT_ACL = None  # Don't set ACL
     AWS_S3_SIGNATURE_VERSION = 's3v4'
@@ -340,7 +340,7 @@ if IS_PRODUCTION:
     AWS_S3_OBJECT_PARAMETERS = {
         'CacheControl': 'max-age=2592000',  # 30 days
     }
-    
+
     # S3FileField Configuration
     S3FF_UPLOAD_PREFIX = 'uploads'
 
@@ -418,9 +418,9 @@ EMAIL_API_DELAY_SECONDS = config('EMAIL_API_DELAY_SECONDS', default=1.0, cast=fl
 
 ANYMAIL = {
     "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
-    "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')  
+    "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')
 }
-EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend" 
+EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fastandprayhelp@gmail.com')
 
 # OPEN AI SETTINGS
@@ -430,16 +430,23 @@ READING_CONTEXT_REGENERATION_THRESHOLD = config('READING_CONTEXT_REGENERATION_TH
 # ANTHROPIC SETTINGS
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY')
 
+# API.BIBLE SETTINGS
+BIBLE_API_KEY = config('BIBLE_API_KEY', default='')
+# Number of days after which a reading's text is considered stale and needs refresh.
+# Set to 30 - (refresh interval in days) to ensure content never exceeds the 30-day
+# freshness requirement. Default: 23 (= 30 - 7, for a weekly refresh).
+READING_TEXT_REFRESH_DAYS = config('READING_TEXT_REFRESH_DAYS', default=23, cast=int)
+
 # Test settings
 if 'test' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
-    
+
     # Celery settings for testing
     CELERY_TASK_ALWAYS_EAGER = True  # Run tasks synchronously in tests
     CELERY_TASK_EAGER_PROPAGATES = True  # Raise task errors directly in tests
-    
+
     # Use the same database for tests with a test_ prefix
     if config('DATABASE_URL', default=None):
         db_config = dj_database_url.config(default=config('DATABASE_URL'))
@@ -480,13 +487,13 @@ default_cors_headers = [
     'x-requested-with',
     # Analytics tracking headers
     'x-app-version',
-    'x-platform', 
+    'x-platform',
     'x-screen',
     'x-join-source',
 ]
 
 CORS_ALLOW_HEADERS = config(
-    'CORS_ALLOW_HEADERS', 
+    'CORS_ALLOW_HEADERS',
     default=','.join(default_cors_headers),
     cast=Csv()
 )
@@ -522,11 +529,11 @@ def download_certificate(filename):
                 aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                 region_name=AWS_S3_REGION_NAME
             )
-            
+
             # Create certificates directory if it doesn't exist
             cert_dir = os.path.join(BASE_DIR, 'certificates')
             os.makedirs(cert_dir, exist_ok=True)
-            
+
             # Download the file
             cert_path = os.path.join(cert_dir, filename)
             try:
@@ -539,16 +546,16 @@ def download_certificate(filename):
                 return cert_path
             except Exception as e:
                 print(f"Failed to download from S3: {str(e)}")
-                
+
         # Try local file as fallback
         local_path = os.path.join(BASE_DIR, 'certificates', filename)
         if os.path.exists(local_path):
             print(f"Using local certificate: {filename}")
             return local_path
-        
+
         print(f"Certificate not found: {filename}")
         return None
-                
+
     except Exception as e:
         print(f"Error handling certificate {filename}: {str(e)}")
         if not DEBUG:

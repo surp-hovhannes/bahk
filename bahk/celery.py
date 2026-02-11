@@ -147,6 +147,15 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'refresh-reading-texts-weekly': {
+        'task': 'hub.tasks.refresh_all_reading_texts_task',
+        'schedule': crontab(day_of_week='monday', hour=4, minute=0),  # Monday 4:00 AM
+        'options': {
+            'sentry': {
+                'monitor_slug': 'weekly-reading-text-refresh',
+            }
+        }
+    },
 }
 
 # Initialize Sentry for Celery worker processes

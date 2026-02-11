@@ -4,6 +4,135 @@ NUMBER_PARTICIPANTS_TO_SHOW_WEB = 6  # number of participant thumbnails to show 
 DATE_FORMAT_STRING = "%m/%d/%Y"  # format string for dates (month, day, year)
 ICON_MATCH_CONFIDENCE_THRESHOLD = 'high'  # Minimum confidence level required for icon matching to feasts
 
+# --- API.Bible USFM mappings ---
+# Maps book names (as stored in Reading.book, matching CATENA_ABBREV_FOR_BOOK keys)
+# to 3-letter USFM codes used by the API.Bible API.
+BOOK_NAME_TO_USFM = {
+    # Old Testament
+    "Genesis": "GEN",
+    "Exodus": "EXO",
+    "Leviticus": "LEV",
+    "Numbers": "NUM",
+    "Deuteronomy": "DEU",
+    "Joshua": "JOS",
+    "Judges": "JDG",
+    "Ruth": "RUT",
+    "1 Samuel": "1SA",
+    "2 Samuel": "2SA",
+    "1 Kings": "1KI",
+    "2 Kings": "2KI",
+    "1 Chronicles": "1CH",
+    "2 Chronicles": "2CH",
+    "Ezra": "EZR",
+    "Nehemiah": "NEH",
+    "Esther": "EST",
+    "Job": "JOB",
+    "Psalms": "PSA",
+    "Proverbs": "PRO",
+    "Ecclesiastes": "ECC",
+    "Song of Solomon": "SNG",
+    "Isaiah": "ISA",
+    "Jeremiah": "JER",
+    "Lamentations": "LAM",
+    "Ezekiel": "EZK",
+    "Daniel": "DAN",
+    "Hosea": "HOS",
+    "Joel": "JOL",
+    "Amos": "AMO",
+    "Obadiah": "OBA",
+    "Jonah": "JON",
+    "Micah": "MIC",
+    "Nahum": "NAM",
+    "Habakkuk": "HAB",
+    "Zephaniah": "ZEP",
+    "Haggai": "HAG",
+    "Zechariah": "ZEC",
+    "Malachi": "MAL",
+    # Apocrypha / Deuterocanonical
+    "Tobit": "TOB",
+    "Judith": "JDT",
+    "1 Maccabees": "1MA",
+    "2 Maccabees": "2MA",
+    "Wisdom of Solomon": "WIS",
+    "Wisdom": "WIS",
+    "Sirach": "SIR",
+    "Epistle of Jeremiah": "LJE",
+    "Baruch": "BAR",
+    # New Testament
+    "Matthew": "MAT",
+    "Mark": "MRK",
+    "Luke": "LUK",
+    "John": "JHN",
+    "Acts": "ACT",
+    "Acts of the Apostles": "ACT",
+    "Romans": "ROM",
+    "St. Paul's Epistle to the Romans": "ROM",
+    "1 Corinthians": "1CO",
+    "St. Paul's First Epistle to the Corinthians": "1CO",
+    "2 Corinthians": "2CO",
+    "St. Paul's Second Epistle to the Corinthians": "2CO",
+    "Galatians": "GAL",
+    "St. Paul's Epistle to the Galatians": "GAL",
+    "Ephesians": "EPH",
+    "St. Paul's Epistle to the Ephesians": "EPH",
+    "St. Paul's Epistle to the Philippians": "PHP",
+    "Colossians": "COL",
+    "St. Paul's Epistle to the Colossians": "COL",
+    "1 Thessalonians": "1TH",
+    "St. Paul's First Epistle to the Thessalonians": "1TH",
+    "2 Thessalonians": "2TH",
+    "St. Paul's Second Epistle to the Thessalonians": "2TH",
+    "1 Timothy": "1TI",
+    "St. Paul's First Epistle to Timothy": "1TI",
+    "2 Timothy": "2TI",
+    "St. Paul's Second Epistle to Timothy": "2TI",
+    "Titus": "TIT",
+    "St. Paul's Epistle to Titus": "TIT",
+    "Philemon": "PHM",
+    "St. Paul's Epistle to Philemon": "PHM",
+    "Hebrews": "HEB",
+    "St. Paul's Epistle to the Hebrews": "HEB",
+    "James": "JAS",
+    "St. James' Epistle General": "JAS",
+    "St. James General Epistle": "JAS",
+    "1 Peter": "1PE",
+    "St. Peter's First Epistle General": "1PE",
+    "2 Peter": "2PE",
+    "St. Peter's Second Epistle General": "2PE",
+    "1 John": "1JN",
+    "St. John's First Epistle General": "1JN",
+    "2 John": "2JN",
+    "St. John's Second Epistle General": "2JN",
+    "3 John": "3JN",
+    "St. John's Third Epistle General": "3JN",
+    "St. John's Third Epistle": "3JN",
+    "Jude": "JUD",
+    "St. Jude's General Epistle": "JUD",
+    "Revelation": "REV",
+}
+
+# Deuterocanonical / Apocrypha USFM book IDs (not in NKJV, served from KJVAIC)
+APOCRYPHA_USFM_IDS = {
+    "TOB",  # Tobit
+    "JDT",  # Judith
+    "ESG",  # Esther (Greek)
+    "WIS",  # Wisdom of Solomon
+    "SIR",  # Sirach / Ecclesiasticus
+    "BAR",  # Baruch
+    "LJE",  # Letter of Jeremiah
+    "S3Y",  # Song of Three Young Men
+    "SUS",  # Susanna
+    "BEL",  # Bel and the Dragon
+    "1MA",  # 1 Maccabees
+    "2MA",  # 2 Maccabees
+    "1ES",  # 1 Esdras
+    "2ES",  # 2 Esdras
+    "MAN",  # Prayer of Manasseh
+    "PS2",  # Psalm 151
+    "3MA",  # 3 Maccabees
+    "4MA",  # 4 Maccabees
+}
+
 CATENA_HOME_PAGE_URL = "https://catenabible.com/"
 CATENA_ABBREV_FOR_BOOK = {
     # Old Testament
