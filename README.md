@@ -116,6 +116,17 @@ Database Notes
 
 - Production is expected to use PostgreSQL (preferred for JSONB). Tests may use SQLite and will still function using Django's built-in `JSONField`.
 
+## Bible Text (API.Bible)
+
+Bahk retrieves Scripture text from the [API.Bible](https://scripture.api.bible/) REST API using NKJV for canonical books and KJVAIC for Apocrypha/Deuterocanonical books. See the [API.Bible Terms of Use](https://docs.api.bible/docs/terms-of-use).
+
+Key compliance measures:
+
+- **Content freshness**: A weekly Celery Beat task refreshes all reading texts so none exceed 30 days old.
+- **Content integrity**: Text is stored exactly as returned by the API with no modifications.
+- **Copyright citation**: The copyright string from the API response is stored and displayed alongside the text.
+- **FUMS**: Fair Use Management System tracking will be implemented before exposing Bible text to the frontend client.
+
 ## Contact Us!
 
 Bahk is maintained by Dn. Andrew Ylitalo and Fr. Mesrop Ash of [St. John Armenian Church](https://stjohnarmenianchurch.com/)
