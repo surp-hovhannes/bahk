@@ -171,7 +171,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                         lang_text = active_context.text
                     else:
                         lang_text = getattr(active_context, f'text_{available_lang}', None)
-                    
+
                     if not lang_text or not lang_text.strip():
                         all_languages_present = False
                         break
@@ -190,6 +190,9 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "context_thumbs_down": active_context.thumbs_down,
                 }
 
+            # Get translated text (falls back to English)
+            text_translated = getattr(reading, 'text_i18n', reading.text)
+
             formatted_readings.append(
                 {
                     "id": reading.id,
@@ -199,6 +202,9 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
+                    "text": text_translated or "",
+                    "textCopyright": reading.text_copyright or "",
+                    "textVersion": reading.text_version or "",
                     **context_dict,
                 }
             )
@@ -250,7 +256,7 @@ class ReadingContextFeedbackView(APIView):
     def post(self, request, pk):
         reading = get_object_or_404(Reading, pk=pk)
         active_context = reading.active_context
-        
+
         # Check if active context exists
         if active_context is None:
             # Trigger context generation if not already in progress
@@ -262,7 +268,7 @@ class ReadingContextFeedbackView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
+
         feedback_type = request.data.get("feedback_type")
         if feedback_type == "up":
             active_context.thumbs_up += 1

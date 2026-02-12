@@ -13,7 +13,7 @@ from learning_resources.models import Video, Article, Recipe, Bookmark
 from events.models import EventType
 
 # Default prompt template for LLM context generation (Readings)
-READING_PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings. 
+READING_PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings.
 
 When provided with a biblical passage reference, provide concise but meaningful context by:
 1. Summarizing the key themes and events leading up to the passage
@@ -66,20 +66,20 @@ class Command(BaseCommand):
     def clear_data(self):
         """Clear all existing data and reset sequences."""
         from django.db import connection
-        
+
         def table_exists(table_name):
             """Check if a table exists in the database."""
             # Use Django's introspection API for database-agnostic table checking
             table_names = connection.introspection.table_names()
             return table_name in table_names
-        
+
         def safe_delete(model_class, model_name, table_name):
             """Safely delete all objects from a model, checking if table exists first."""
             if table_exists(table_name):
                 model_class.objects.all().delete()
             else:
                 self.stdout.write(self.style.WARNING(f"Table {table_name} doesn't exist yet, skipping..."))
-        
+
         # Clear in reverse dependency order
         safe_delete(models.FeastContext, "FeastContext", "hub_feastcontext")
         safe_delete(models.Feast, "Feast", "hub_feast")
@@ -95,7 +95,7 @@ class Command(BaseCommand):
         safe_delete(models.Church, "Church", "hub_church")
         safe_delete(models.LLMPrompt, "LLMPrompt", "hub_llmprompt")
         safe_delete(models.GeocodingCache, "GeocodingCache", "hub_geocodingcache")
-        
+
         # Clear other apps
         safe_delete(DeviceToken, "DeviceToken", "notifications_devicetoken")
         safe_delete(PromoEmail, "PromoEmail", "notifications_promoemail")
@@ -161,14 +161,14 @@ class Command(BaseCommand):
                 url="https://stjohnarmenianchurch.com/lent"
             ),
             models.Fast.objects.create(
-                name="Fast of the Catechumens", 
+                name="Fast of the Catechumens",
                 church=churches[0],
                 description="Preparation for the Nativity of Christ",
                 culmination_feast="Christmas Day",
                 culmination_feast_date=date.today() + timedelta(days=28)
             ),
             models.Fast.objects.create(
-                name="Assumption Fast", 
+                name="Assumption Fast",
                 church=churches[0],
                 description="Fast leading to the Assumption of the Virgin Mary",
                 culmination_feast="Feast of the Assumption",
@@ -179,20 +179,20 @@ class Command(BaseCommand):
         # Create Days for each Fast with non-overlapping dates
         all_days = []
         day_offset = 0  # Track the starting day offset for each fast
-        
+
         for n, fast in enumerate(fasts):
             fast_days = []
             num_days = (n + 1) * 7  # Different durations for each fast (7, 14, 21)
-            
+
             for i in range(num_days):
                 day = models.Day.objects.create(
-                    date=date.today() + timedelta(days=day_offset + i), 
-                    fast=fast, 
+                    date=date.today() + timedelta(days=day_offset + i),
+                    fast=fast,
                     church=fast.church
                 )
                 fast_days.append(day)
                 all_days.append(day)
-            
+
             day_offset += num_days  # Move offset forward for next fast
             fast.save(update_fields=["year"])  # saving fast with day(s) updates the year field
 
@@ -240,14 +240,14 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("All models populated with seed data."))
 
-    @transaction.atomic        
+    @transaction.atomic
     def _create_users(self, emails, names, church, fasts=None):
         users_and_profiles = []
         for email, name in zip(emails, names):
             user = models.User.objects.create_user(username=email, email=email, password=PASSWORD)
             profile = models.Profile.objects.create(
-                user=user, 
-                name=name, 
+                user=user,
+                name=name,
                 church=church,
                 location=f"City in {church.name} region",
                 latitude=40.7128 + len(users_and_profiles) * 0.1,  # Vary coordinates
@@ -261,7 +261,7 @@ class Command(BaseCommand):
             for user, profile in users_and_profiles:
                 profile.fasts.set(fasts)
                 profile.save()
-        
+
         return users_and_profiles
 
     def _create_videos(self):
@@ -415,7 +415,7 @@ class Command(BaseCommand):
         # Create devotionals for some days
         for i, day in enumerate(days[:6]):  # Create devotionals for first 6 days
             video = videos[i % len(videos)]
-            
+
             models.Devotional.objects.create(
                 day=day,
                 description=f"Daily reflection for {day.date.strftime('%B %d')}",
@@ -426,33 +426,196 @@ class Command(BaseCommand):
         return devotional_sets
 
     def _create_readings(self, days):
-        """Create Bible readings for days."""
+        """Create Bible readings for days with sample text pre-populated.
+
+        Text is provided inline so that the seed database is immediately usable
+        without requiring a BIBLE_API_KEY or a running Celery worker.
+        """
         readings = []
-        bible_books = ["Genesis", "Exodus", "Matthew", "Mark", "Luke", "John", "Romans", "Psalms"]
-        
+        sample_readings = [
+            {
+                "book": "Genesis",
+                "chapter": 1, "start_verse": 1, "end_verse": 5,
+                "text": (
+                    "[1] In the beginning God created the heavens and the earth. "
+                    "[2] The earth was without form, and void; and darkness was on the face of the deep. "
+                    "And the Spirit of God was hovering over the face of the waters. "
+                    "[3] Then God said, \"Let there be light\"; and there was light. "
+                    "[4] And God saw the light, that it was good; and God divided the light from the darkness. "
+                    "[5] God called the light Day, and the darkness He called Night. "
+                    "So the evening and the morning were the first day."
+                ),
+            },
+            {
+                "book": "Exodus",
+                "chapter": 3, "start_verse": 1, "end_verse": 6,
+                "text": (
+                    "[1] Now Moses was tending the flock of Jethro his father-in-law, the priest of Midian. "
+                    "And he led the flock to the back of the desert, and came to Horeb, the mountain of God. "
+                    "[2] And the Angel of the LORD appeared to him in a flame of fire from the midst of a bush. "
+                    "So he looked, and behold, the bush was burning with fire, but the bush was not consumed. "
+                    "[3] Then Moses said, \"I will now turn aside and see this great sight, why the bush does not burn.\" "
+                    "[4] So when the LORD saw that he turned aside to look, God called to him from the midst of the bush "
+                    "and said, \"Moses, Moses!\" And he said, \"Here I am.\" "
+                    "[5] Then He said, \"Do not draw near this place. Take your sandals off your feet, "
+                    "for the place where you stand is holy ground.\" "
+                    "[6] Moreover He said, \"I am the God of your father—the God of Abraham, the God of Isaac, "
+                    "and the God of Jacob.\" And Moses hid his face, for he was afraid to look upon God."
+                ),
+            },
+            {
+                "book": "Matthew",
+                "chapter": 5, "start_verse": 1, "end_verse": 12,
+                "text": (
+                    "[1] And seeing the multitudes, He went up on a mountain, and when He was seated "
+                    "His disciples came to Him. [2] Then He opened His mouth and taught them, saying: "
+                    "[3] \"Blessed are the poor in spirit, for theirs is the kingdom of heaven. "
+                    "[4] Blessed are those who mourn, for they shall be comforted. "
+                    "[5] Blessed are the meek, for they shall inherit the earth. "
+                    "[6] Blessed are those who hunger and thirst for righteousness, for they shall be filled. "
+                    "[7] Blessed are the merciful, for they shall obtain mercy. "
+                    "[8] Blessed are the pure in heart, for they shall see God. "
+                    "[9] Blessed are the peacemakers, for they shall be called sons of God. "
+                    "[10] Blessed are those who are persecuted for righteousness' sake, "
+                    "for theirs is the kingdom of heaven. "
+                    "[11] Blessed are you when they revile and persecute you, and say all kinds of evil "
+                    "against you falsely for My sake. "
+                    "[12] Rejoice and be exceedingly glad, for great is your reward in heaven, "
+                    "for so they persecuted the prophets who were before you.\""
+                ),
+            },
+            {
+                "book": "Mark",
+                "chapter": 1, "start_verse": 1, "end_verse": 8,
+                "text": (
+                    "[1] The beginning of the gospel of Jesus Christ, the Son of God. "
+                    "[2] As it is written in the Prophets: \"Behold, I send My messenger before Your face, "
+                    "Who will prepare Your way before You.\" "
+                    "[3] \"The voice of one crying in the wilderness: 'Prepare the way of the LORD; "
+                    "Make His paths straight.'\" "
+                    "[4] John came baptizing in the wilderness and preaching a baptism of repentance "
+                    "for the remission of sins. "
+                    "[5] Then all the land of Judea, and those from Jerusalem, went out to him and were all "
+                    "baptized by him in the Jordan River, confessing their sins. "
+                    "[6] Now John was clothed with camel's hair and with a leather belt around his waist, "
+                    "and he ate locusts and wild honey. "
+                    "[7] And he preached, saying, \"There comes One after me who is mightier than I, "
+                    "whose sandal strap I am not worthy to stoop down and loose. "
+                    "[8] I indeed baptized you with water, but He will baptize you with the Holy Spirit.\""
+                ),
+            },
+            {
+                "book": "Luke",
+                "chapter": 2, "start_verse": 1, "end_verse": 7,
+                "text": (
+                    "[1] And it came to pass in those days that a decree went out from Caesar Augustus "
+                    "that all the world should be registered. "
+                    "[2] This census first took place while Quirinius was governing Syria. "
+                    "[3] So all went to be registered, everyone to his own city. "
+                    "[4] Joseph also went up from Galilee, out of the city of Nazareth, into Judea, "
+                    "to the city of David, which is called Bethlehem, because he was of the house and "
+                    "lineage of David, [5] to be registered with Mary, his betrothed wife, who was with child. "
+                    "[6] So it was, that while they were there, the days were completed for her to be delivered. "
+                    "[7] And she brought forth her firstborn Son, and wrapped Him in swaddling cloths, "
+                    "and laid Him in a manger, because there was no room for them in the inn."
+                ),
+            },
+            {
+                "book": "John",
+                "chapter": 1, "start_verse": 1, "end_verse": 5,
+                "text": (
+                    "[1] In the beginning was the Word, and the Word was with God, and the Word was God. "
+                    "[2] He was in the beginning with God. "
+                    "[3] All things were made through Him, and without Him nothing was made that was made. "
+                    "[4] In Him was life, and the life was the light of men. "
+                    "[5] And the light shines in the darkness, and the darkness did not comprehend it."
+                ),
+            },
+            {
+                "book": "Romans",
+                "chapter": 8, "start_verse": 28, "end_verse": 32,
+                "text": (
+                    "[28] And we know that all things work together for good to those who love God, "
+                    "to those who are the called according to His purpose. "
+                    "[29] For whom He foreknew, He also predestined to be conformed to the image of His Son, "
+                    "that He might be the firstborn among many brethren. "
+                    "[30] Moreover whom He predestined, these He also called; whom He called, "
+                    "these He also justified; and whom He justified, these He also glorified. "
+                    "[31] What then shall we say to these things? If God is for us, who can be against us? "
+                    "[32] He who did not spare His own Son, but delivered Him up for us all, "
+                    "how shall He not with Him also freely give us all things?"
+                ),
+            },
+            {
+                "book": "Psalms",
+                "chapter": 23, "start_verse": 1, "end_verse": 6,
+                "text": (
+                    "[1] The LORD is my shepherd; I shall not want. "
+                    "[2] He makes me to lie down in green pastures; He leads me beside the still waters. "
+                    "[3] He restores my soul; He leads me in the paths of righteousness for His name's sake. "
+                    "[4] Yea, though I walk through the valley of the shadow of death, I will fear no evil; "
+                    "for You are with me; Your rod and Your staff, they comfort me. "
+                    "[5] You prepare a table before me in the presence of my enemies; "
+                    "You anoint my head with oil; my cup runs over. "
+                    "[6] Surely goodness and mercy shall follow me all the days of my life; "
+                    "and I will dwell in the house of the LORD forever."
+                ),
+            },
+            {
+                "book": "Genesis",
+                "chapter": 12, "start_verse": 1, "end_verse": 4,
+                "text": (
+                    "[1] Now the LORD had said to Abram: \"Get out of your country, from your family "
+                    "and from your father's house, to a land that I will show you. "
+                    "[2] I will make you a great nation; I will bless you and make your name great; "
+                    "and you shall be a blessing. "
+                    "[3] I will bless those who bless you, and I will curse him who curses you; "
+                    "and in you all the families of the earth shall be blessed.\" "
+                    "[4] So Abram departed as the LORD had spoken to him, and Lot went with him. "
+                    "And Abram was seventy-five years old when he departed from Haran."
+                ),
+            },
+            {
+                "book": "Exodus",
+                "chapter": 14, "start_verse": 13, "end_verse": 16,
+                "text": (
+                    "[13] And Moses said to the people, \"Do not be afraid. Stand still, "
+                    "and see the salvation of the LORD, which He will accomplish for you today. "
+                    "For the Egyptians whom you see today, you shall see again no more forever. "
+                    "[14] The LORD will fight for you, and you shall hold your peace.\" "
+                    "[15] And the LORD said to Moses, \"Why do you cry to Me? "
+                    "Tell the children of Israel to go forward. "
+                    "[16] But lift up your rod, and stretch out your hand over the sea and divide it. "
+                    "And the children of Israel shall go on dry ground through the midst of the sea.\""
+                ),
+            },
+        ]
+
+        sample_copyright = "Scripture taken from the New King James Version®. Copyright © 1982 by Thomas Nelson. Used by permission. All rights reserved."
+
         for i, day in enumerate(days[:10]):  # Create readings for first 10 days
-            book = bible_books[i % len(bible_books)]
-            chapter = (i % 5) + 1
-            start_verse = (i % 10) + 1
-            end_verse = start_verse + (i % 5) + 1
-            
+            data = sample_readings[i % len(sample_readings)]
             reading = models.Reading.objects.create(
                 day=day,
-                book=book,
-                start_chapter=chapter,
-                start_verse=start_verse,
-                end_chapter=chapter,
-                end_verse=end_verse,
+                book=data["book"],
+                start_chapter=data["chapter"],
+                start_verse=data["start_verse"],
+                end_chapter=data["chapter"],
+                end_verse=data["end_verse"],
+                text=data["text"],
+                text_copyright=sample_copyright,
+                text_version="NKJV",
+                text_fetched_at=timezone.now(),
             )
             readings.append(reading)
-        
+
         return readings
 
     def _create_reading_contexts(self, readings, llm_prompts):
         """Create reading contexts for readings."""
         # Filter to get only reading prompts
         reading_prompts = [p for p in llm_prompts if p.applies_to == "readings"]
-        
+
         for i, reading in enumerate(readings):
             models.ReadingContext.objects.create(
                 reading=reading,
@@ -473,10 +636,10 @@ class Command(BaseCommand):
             ("Feast of Epiphany", "Աստվածայայտնություն"),
             ("Presentation of Jesus at the Temple", "Տեառնընդառաջ"),
         ]
-        
+
         for i, day in enumerate(days[:5]):  # Create feasts for first 5 days
             name_en, name_hy = feast_names[i % len(feast_names)]
-            
+
             feast = models.Feast.objects.create(
                 day=day,
                 name=name_en,
@@ -484,14 +647,14 @@ class Command(BaseCommand):
             feast.name_hy = name_hy
             feast.save(update_fields=['i18n'])
             feasts.append(feast)
-        
+
         return feasts
 
     def _create_feast_contexts(self, feasts, llm_prompts):
         """Create feast contexts for feasts."""
         # Filter to get only feast prompts
         feast_prompts = [p for p in llm_prompts if p.applies_to == "feasts"]
-        
+
         sample_short_text = "This feast commemorates important saints and events in Christian tradition. It serves as a reminder of God's work through faithful servants."
         sample_text = """This feast day celebrates significant figures in Christian history who devoted their lives to serving God and the Church.
 
@@ -500,7 +663,7 @@ The saints commemorated on this day represent different periods and regions of e
 
 **Spiritual Lessons:**
 These saints teach us about perseverance in faith, the importance of spiritual leadership, and the power of witness in the face of adversity. Their example continues to inspire Christians today to live lives of dedication and service."""
-        
+
         for i, feast in enumerate(feasts):
             models.FeastContext.objects.create(
                 feast=feast,
@@ -530,7 +693,7 @@ These saints teach us about perseverance in faith, the importance of spiritual l
             ("Houston, TX", 29.7604, -95.3698),
             ("Phoenix, AZ", 33.4484, -112.0740),
         ]
-        
+
         for location_text, lat, lng in locations:
             models.GeocodingCache.objects.create(
                 location_text=location_text,
@@ -541,7 +704,7 @@ These saints teach us about perseverance in faith, the importance of spiritual l
     def _create_device_tokens(self, users):
         """Create device tokens for users."""
         device_types = [DeviceToken.IOS, DeviceToken.ANDROID, DeviceToken.WEB]
-        
+
         for i, user in enumerate(users[:4]):  # Create tokens for first 4 users
             DeviceToken.objects.create(
                 user=user,

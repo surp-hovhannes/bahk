@@ -4,7 +4,7 @@ Bahk is an app for Christians curious about how, when, and why to fast.
 
 ## Prerequisites
 
-Bahk runs on [Django](https://www.djangoproject.com/), a "high-level Python web framework". To operate the app, 
+Bahk runs on [Django](https://www.djangoproject.com/), a "high-level Python web framework". To operate the app,
 download the [latest version of Python](https://www.python.org/downloads/)
 (Linux distros will come with Python--check using `python --version`).
 
@@ -20,8 +20,8 @@ Begin by cloning the repo:
 git clone https://github.com/andylitalo/bahk.git
 ```
 
-We recommend separating this project's packages into their own Python virtual environment. 
-If you do not have the `virtualenv` package in your Python installation, install it with 
+We recommend separating this project's packages into their own Python virtual environment.
+If you do not have the `virtualenv` package in your Python installation, install it with
 `python -m pip install virtualenv`.
 Then, enter the project's root directory and create a virtual environment:
 ```
@@ -88,7 +88,7 @@ user1b@email.com
 user2@email.com
 user3@email.com
 ```
-The password is `default123` for each. 
+The password is `default123` for each.
 You can now log into the home page with any of these accounts at http://localhost:8000/hub/web/.
 
 Users `user1a` and `user1b` are part of `Church1` and are participating in `Fast1`. User `user2` is part of `Church2`
@@ -115,6 +115,17 @@ Bahk uses `django-modeltrans` to provide JSON-based translations for selected mo
 Database Notes
 
 - Production is expected to use PostgreSQL (preferred for JSONB). Tests may use SQLite and will still function using Django's built-in `JSONField`.
+
+## Bible Text (API.Bible)
+
+Bahk retrieves Scripture text from the [API.Bible](https://scripture.api.bible/) REST API using NKJV for canonical books and KJVAIC for Apocrypha/Deuterocanonical books. See the [API.Bible Terms of Use](https://docs.api.bible/docs/terms-of-use).
+
+Key compliance measures:
+
+- **Content freshness**: A weekly Celery Beat task refreshes all reading texts so none exceed 30 days old.
+- **Content integrity**: Text is stored exactly as returned by the API with no modifications.
+- **Copyright citation**: The copyright string from the API response is stored and displayed alongside the text.
+- **FUMS**: Fair Use Management System tracking will be implemented before exposing Bible text to the frontend client.
 
 ## Contact Us!
 

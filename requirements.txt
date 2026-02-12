@@ -14,8 +14,8 @@ Pillow
 boto3
 python-decouple
 django-imagekit
-django-celery-beat 
-redis 
+django-celery-beat
+redis
 celery
 django-anymail
 django-markdownx
@@ -44,3 +44,5 @@ scikit-learn==1.5.0    # For DBSCAN clustering
 # OpenAI
 openai
 anthropic
+# Bible API
+requests
