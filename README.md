@@ -125,7 +125,11 @@ Key compliance measures:
 - **Content freshness**: A weekly Celery Beat task refreshes all reading texts so none exceed 30 days old.
 - **Content integrity**: Text is stored exactly as returned by the API with no modifications.
 - **Copyright citation**: The copyright string from the API response is stored and displayed alongside the text.
-- **FUMS**: Fair Use Management System tracking will be implemented before exposing Bible text to the frontend client.
+- **FUMS (Fair Use Management System)**: All API.Bible requests include `fums-version=3`, and the returned `fumsToken` is stored on each `Reading` and served to the frontend via the readings API. The frontend reports tokens to `https://fums.api.bible/f3` with anonymized device, session, and user identifiers each time scripture is displayed.
+- **DRM**: Scripture text is rendered with `selectable={false}` on the frontend to prevent copying on all platforms including web.
+- **Non-commercial use**: The app has no ads, in-app purchases, or revenue generation.
+- **Security**: The API.Bible key is stored server-side only and never exposed to the frontend.
+- **Logo usage**: No API.Bible or Bible version logos are used (per Section 6c, which requires prior written consent). Plain text attribution with hyperlinks is used instead.
 
 ## Contact Us!
 
