@@ -75,6 +75,7 @@ BOOK_NAME_TO_USFM = {
     "St. Paul's Epistle to the Galatians": "GAL",
     "Ephesians": "EPH",
     "St. Paul's Epistle to the Ephesians": "EPH",
+    "Philippians": "PHP",
     "St. Paul's Epistle to the Philippians": "PHP",
     "Colossians": "COL",
     "St. Paul's Epistle to the Colossians": "COL",
