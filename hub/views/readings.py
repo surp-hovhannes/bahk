@@ -205,6 +205,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "text": text_translated or "",
                     "textCopyright": reading.text_copyright or "",
                     "textVersion": reading.text_version or "",
+                    "fumsToken": reading.fums_token or "",
                     **context_dict,
                 }
             )

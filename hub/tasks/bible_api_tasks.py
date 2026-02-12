@@ -67,6 +67,7 @@ def _fetch_and_update_passage(
         text_copyright=result["copyright"],
         text_version=result["version"],
         text_fetched_at=now,
+        fums_token=result.get("fums_token", ""),
     )
 
     return updated
@@ -106,6 +107,7 @@ def fetch_reading_text_task(self, reading_id: int):
             text_copyright=existing.text_copyright,
             text_version=existing.text_version,
             text_fetched_at=existing.text_fetched_at,
+            fums_token=existing.fums_token,
         )
         logger.info(
             "Copied text for Reading %s from existing Reading %s (%s)",
