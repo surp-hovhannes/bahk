@@ -601,6 +601,10 @@ class Reading(models.Model):
         null=True, blank=True,
         help_text="When the text was last fetched from API.Bible"
     )
+    fums_token = models.TextField(
+        blank=True, default="",
+        help_text="FUMS v3 token from API.Bible for fair-use tracking"
+    )
 
     # Translations for user-facing fields
     i18n = TranslationField(fields=('book', 'text'))
