@@ -5,7 +5,7 @@ from django.urls import path
 from django.shortcuts import redirect
 from .models import DeviceToken, PromoEmail, PromoEmailImage
 from .utils import send_push_notification
-from .tasks import send_promo_email_task
+from .tasks import send_promo_email_task, send_push_notification_to_users_task
 from django.contrib.admin import SimpleListFilter
 from hub.models import Fast, Profile, Church
 from django.utils import timezone
@@ -152,7 +152,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                     id__in=selected_ids,
                     is_active=True
                 )
-                
+
                 if not tokens:
                     messages.error(request, 'No active tokens selected')
                     return TemplateResponse(
@@ -161,29 +161,43 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                         context
                     )
 
+                token_count = tokens.count()
                 users = list(tokens.values_list('user', flat=True).distinct())
-                
-                result = send_push_notification(
-                    message=message,
-                    data=data,
-                    users=users
-                )
 
-                if result['success']:
+                if token_count > 100:
+                    # Offload to background worker to avoid request timeout
+                    send_push_notification_to_users_task.delay(
+                        message=message,
+                        data=data,
+                        user_ids=users,
+                    )
                     messages.success(
                         request,
-                        f"Successfully sent notifications to {result['sent']} devices. Failed: {result['failed']}"
+                        f"Sending notifications to {token_count} devices ({len(users)} users) in the background. "
+                        f"They will be delivered in chunks shortly."
                     )
-                    if result['invalid_tokens']:
-                        messages.warning(
-                            request,
-                            f'{len(result["invalid_tokens"])} devices were deactivated due to invalid tokens'
-                        )
                 else:
-                    error_msg = 'Failed to send push notification'
-                    if result['errors']:
-                        error_msg += f': {", ".join(result["errors"])}'
-                    messages.error(request, error_msg)
+                    result = send_push_notification(
+                        message=message,
+                        data=data,
+                        users=users
+                    )
+
+                    if result['success']:
+                        messages.success(
+                            request,
+                            f"Successfully sent notifications to {result['sent']} devices. Failed: {result['failed']}"
+                        )
+                        if result['invalid_tokens']:
+                            messages.warning(
+                                request,
+                                f'{len(result["invalid_tokens"])} devices were deactivated due to invalid tokens'
+                            )
+                    else:
+                        error_msg = 'Failed to send push notification'
+                        if result['errors']:
+                            error_msg += f': {", ".join(result["errors"])}'
+                        messages.error(request, error_msg)
 
                 # Clear session
                 if 'selected_tokens' in request.session:
