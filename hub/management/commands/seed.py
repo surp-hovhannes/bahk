@@ -13,7 +13,7 @@ from learning_resources.models import Video, Article, Recipe, Bookmark
 from events.models import EventType
 
 # Default prompt template for LLM context generation (Readings)
-READING_PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings. 
+READING_PROMPT_TEMPLATE = """You are a biblical scholar and theologian providing contextual understanding for scripture readings.
 
 When provided with a biblical passage reference, provide concise but meaningful context by:
 1. Summarizing the key themes and events leading up to the passage
@@ -66,20 +66,20 @@ class Command(BaseCommand):
     def clear_data(self):
         """Clear all existing data and reset sequences."""
         from django.db import connection
-        
+
         def table_exists(table_name):
             """Check if a table exists in the database."""
             # Use Django's introspection API for database-agnostic table checking
             table_names = connection.introspection.table_names()
             return table_name in table_names
-        
+
         def safe_delete(model_class, model_name, table_name):
             """Safely delete all objects from a model, checking if table exists first."""
             if table_exists(table_name):
                 model_class.objects.all().delete()
             else:
                 self.stdout.write(self.style.WARNING(f"Table {table_name} doesn't exist yet, skipping..."))
-        
+
         # Clear in reverse dependency order
         safe_delete(models.FeastContext, "FeastContext", "hub_feastcontext")
         safe_delete(models.Feast, "Feast", "hub_feast")
@@ -95,7 +95,7 @@ class Command(BaseCommand):
         safe_delete(models.Church, "Church", "hub_church")
         safe_delete(models.LLMPrompt, "LLMPrompt", "hub_llmprompt")
         safe_delete(models.GeocodingCache, "GeocodingCache", "hub_geocodingcache")
-        
+
         # Clear other apps
         safe_delete(DeviceToken, "DeviceToken", "notifications_devicetoken")
         safe_delete(PromoEmail, "PromoEmail", "notifications_promoemail")
@@ -161,14 +161,14 @@ class Command(BaseCommand):
                 url="https://stjohnarmenianchurch.com/lent"
             ),
             models.Fast.objects.create(
-                name="Fast of the Catechumens", 
+                name="Fast of the Catechumens",
                 church=churches[0],
                 description="Preparation for the Nativity of Christ",
                 culmination_feast="Christmas Day",
                 culmination_feast_date=date.today() + timedelta(days=28)
             ),
             models.Fast.objects.create(
-                name="Assumption Fast", 
+                name="Assumption Fast",
                 church=churches[0],
                 description="Fast leading to the Assumption of the Virgin Mary",
                 culmination_feast="Feast of the Assumption",
@@ -179,20 +179,20 @@ class Command(BaseCommand):
         # Create Days for each Fast with non-overlapping dates
         all_days = []
         day_offset = 0  # Track the starting day offset for each fast
-        
+
         for n, fast in enumerate(fasts):
             fast_days = []
             num_days = (n + 1) * 7  # Different durations for each fast (7, 14, 21)
-            
+
             for i in range(num_days):
                 day = models.Day.objects.create(
-                    date=date.today() + timedelta(days=day_offset + i), 
-                    fast=fast, 
+                    date=date.today() + timedelta(days=day_offset + i),
+                    fast=fast,
                     church=fast.church
                 )
                 fast_days.append(day)
                 all_days.append(day)
-            
+
             day_offset += num_days  # Move offset forward for next fast
             fast.save(update_fields=["year"])  # saving fast with day(s) updates the year field
 
@@ -240,14 +240,14 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("All models populated with seed data."))
 
-    @transaction.atomic        
+    @transaction.atomic
     def _create_users(self, emails, names, church, fasts=None):
         users_and_profiles = []
         for email, name in zip(emails, names):
             user = models.User.objects.create_user(username=email, email=email, password=PASSWORD)
             profile = models.Profile.objects.create(
-                user=user, 
-                name=name, 
+                user=user,
+                name=name,
                 church=church,
                 location=f"City in {church.name} region",
                 latitude=40.7128 + len(users_and_profiles) * 0.1,  # Vary coordinates
@@ -261,7 +261,7 @@ class Command(BaseCommand):
             for user, profile in users_and_profiles:
                 profile.fasts.set(fasts)
                 profile.save()
-        
+
         return users_and_profiles
 
     def _create_videos(self):
@@ -415,7 +415,7 @@ class Command(BaseCommand):
         # Create devotionals for some days
         for i, day in enumerate(days[:6]):  # Create devotionals for first 6 days
             video = videos[i % len(videos)]
-            
+
             models.Devotional.objects.create(
                 day=day,
                 description=f"Daily reflection for {day.date.strftime('%B %d')}",
@@ -615,7 +615,7 @@ class Command(BaseCommand):
         """Create reading contexts for readings."""
         # Filter to get only reading prompts
         reading_prompts = [p for p in llm_prompts if p.applies_to == "readings"]
-        
+
         for i, reading in enumerate(readings):
             models.ReadingContext.objects.create(
                 reading=reading,
@@ -636,10 +636,10 @@ class Command(BaseCommand):
             ("Feast of Epiphany", "Աստվածայայտնություն"),
             ("Presentation of Jesus at the Temple", "Տեառնընդառաջ"),
         ]
-        
+
         for i, day in enumerate(days[:5]):  # Create feasts for first 5 days
             name_en, name_hy = feast_names[i % len(feast_names)]
-            
+
             feast = models.Feast.objects.create(
                 day=day,
                 name=name_en,
@@ -647,14 +647,14 @@ class Command(BaseCommand):
             feast.name_hy = name_hy
             feast.save(update_fields=['i18n'])
             feasts.append(feast)
-        
+
         return feasts
 
     def _create_feast_contexts(self, feasts, llm_prompts):
         """Create feast contexts for feasts."""
         # Filter to get only feast prompts
         feast_prompts = [p for p in llm_prompts if p.applies_to == "feasts"]
-        
+
         sample_short_text = "This feast commemorates important saints and events in Christian tradition. It serves as a reminder of God's work through faithful servants."
         sample_text = """This feast day celebrates significant figures in Christian history who devoted their lives to serving God and the Church.
 
@@ -663,7 +663,7 @@ The saints commemorated on this day represent different periods and regions of e
 
 **Spiritual Lessons:**
 These saints teach us about perseverance in faith, the importance of spiritual leadership, and the power of witness in the face of adversity. Their example continues to inspire Christians today to live lives of dedication and service."""
-        
+
         for i, feast in enumerate(feasts):
             models.FeastContext.objects.create(
                 feast=feast,
@@ -693,7 +693,7 @@ These saints teach us about perseverance in faith, the importance of spiritual l
             ("Houston, TX", 29.7604, -95.3698),
             ("Phoenix, AZ", 33.4484, -112.0740),
         ]
-        
+
         for location_text, lat, lng in locations:
             models.GeocodingCache.objects.create(
                 location_text=location_text,
@@ -704,7 +704,7 @@ These saints teach us about perseverance in faith, the importance of spiritual l
     def _create_device_tokens(self, users):
         """Create device tokens for users."""
         device_types = [DeviceToken.IOS, DeviceToken.ANDROID, DeviceToken.WEB]
-        
+
         for i, user in enumerate(users[:4]):  # Create tokens for first 4 users
             DeviceToken.objects.create(
                 user=user,
