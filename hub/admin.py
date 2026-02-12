@@ -474,6 +474,7 @@ class ReadingAdmin(admin.ModelAdmin):
         "book",
         "start_chapter",
         "start_verse",
+        "text_version",
     )
     list_display_links = (
         "church_link",
@@ -493,14 +494,19 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_verse",
     )
     actions = ["force_regenerate_context", "compare_prompts"]
-    exclude = ("book",)  # Avoid duplicate with translation fields
+    readonly_fields = ("text_fetched_at",)
+    exclude = ("book", "text")  # Avoid duplicates with translation fields
 
     fieldsets = (
         (None, {
             'fields': ('day', 'start_chapter', 'start_verse', 'end_chapter', 'end_verse')
         }),
         ('Translations', {
-            'fields': ('book_en', 'book_hy')
+            'fields': ('book_en', 'book_hy', 'text_en', 'text_hy')
+        }),
+        ('Bible Text (API.Bible)', {
+            'fields': ('text_version', 'text_copyright', 'text_fetched_at'),
+            'classes': ('collapse',),
         }),
     )
 
@@ -513,7 +519,7 @@ class ReadingAdmin(admin.ModelAdmin):
                 level=messages.ERROR
             )
             return
-        
+
         reading = queryset.first()
         return redirect(reverse('hub_reading_compare_prompts', args=[reading.id]))
 
@@ -548,7 +554,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
     search_fields = ("role", "prompt")
     ordering = ("id", "active")
     actions = ["duplicate_prompt", "make_active"]
-    
+
     fieldsets = (
         (None, {
             'fields': ('model', 'applies_to', 'role', 'prompt', 'active')
@@ -615,7 +621,7 @@ class LLMPromptAdmin(admin.ModelAdmin):
             f"Successfully duplicated prompt '{prompt.role}' for model '{prompt.model}'.",
         )
         return redirect(reverse('admin:hub_llmprompt_change', args=[new_prompt.id]))
-    
+
     duplicate_prompt.short_description = "Duplicate selected prompt"
 
     def make_active(self, request, queryset):
@@ -629,13 +635,13 @@ class LLMPromptAdmin(admin.ModelAdmin):
             return
 
         prompt = queryset.first()
-        
+
         # First, deactivate the current active prompt for this applies_to type
         current_active = LLMPrompt.objects.filter(
             active=True,
             applies_to=prompt.applies_to
         ).first()
-        
+
         if current_active:
             current_active.active = False
             current_active.save()
@@ -643,16 +649,16 @@ class LLMPromptAdmin(admin.ModelAdmin):
                 request,
                 f"Deactivated previous active prompt '{current_active.role}' for {current_active.applies_to}.",
             )
-        
+
         # Then activate the selected prompt
         prompt.active = True
         prompt.save()
-        
+
         self.message_user(
             request,
             f"Successfully made prompt '{prompt.role}' for {prompt.applies_to} active.",
         )
-    
+
     make_active.short_description = "Make selected prompt active"
 
 
@@ -1035,7 +1041,7 @@ class FeastContextAdmin(admin.ModelAdmin):
 @admin.register(PatristicQuote, site=admin.site)
 class PatristicQuoteAdmin(MarkdownxModelAdmin):
     """Admin interface for PatristicQuote model."""
-    
+
     list_display = (
         'text_preview',
         'attribution',
@@ -1050,7 +1056,7 @@ class PatristicQuoteAdmin(MarkdownxModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
     filter_horizontal = ('churches', 'fasts')
     exclude = ('text', 'attribution')  # Avoid duplicate with translation fields
-    
+
     fieldsets = (
         (None, {
             'fields': ('text_en', 'text_hy', 'attribution_en', 'attribution_hy')
@@ -1063,29 +1069,29 @@ class PatristicQuoteAdmin(MarkdownxModelAdmin):
             'classes': ('collapse',)
         })
     )
-    
+
     def text_preview(self, obj):
         """Display first 100 characters of the quote."""
         return Truncator(obj.text).chars(100)
-    
+
     text_preview.short_description = 'Quote'
-    
+
     def church_links(self, quote):
         """Display links to associated churches."""
         return _get_fk_links_url(quote.churches.all(), 'church')
-    
+
     church_links.short_description = 'Churches'
-    
+
     def fast_links(self, quote):
         """Display links to associated fasts."""
         if quote.fasts.exists():
             return _get_fk_links_url(quote.fasts.all(), 'fast')
         return '-'
-    
+
     fast_links.short_description = 'Fasts'
-    
+
     def tag_list(self, obj):
         """Display tags as comma-separated list."""
         return ', '.join(tag.name for tag in obj.tags.all())
-    
+
     tag_list.short_description = 'Tags'

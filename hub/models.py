@@ -230,8 +230,8 @@ class Profile(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     # User's timezone in IANA format (e.g., 'America/New_York')
     timezone = models.CharField(
-        max_length=100, 
-        default='UTC', 
+        max_length=100,
+        default='UTC',
         help_text="User's timezone in IANA format (e.g., 'America/New_York')"
     )
     profile_image = models.ImageField(
@@ -393,7 +393,7 @@ class DevotionalSet(models.Model):
 
     title = models.CharField(max_length=128)
     description = models.TextField(
-        null=True, 
+        null=True,
         blank=True,
         help_text="Description of the devotional set"
     )
@@ -404,8 +404,8 @@ class DevotionalSet(models.Model):
         help_text="The fast this devotional set is associated with"
     )
     image = models.ImageField(
-        upload_to=devotional_set_image_upload_path, 
-        null=True, 
+        upload_to=devotional_set_image_upload_path,
+        null=True,
         blank=True,
         help_text="Image for the devotional set. Recommended size: 1600x1200 pixels (4:3)"
     )
@@ -437,7 +437,7 @@ class DevotionalSet(models.Model):
             or "image" in kwargs.get("update_fields", [])
             or (not self._state.adding and self.tracker.has_changed("image"))
         )
-        
+
         super().save(**kwargs)
 
         # Handle thumbnail URL caching after the instance and image are fully saved to S3
@@ -506,7 +506,7 @@ class DevotionalSet(models.Model):
             if hasattr(self, '_number_of_days_cache'):
                 delattr(self, '_number_of_days_cache')
             self._cache_version = DevotionalSet._cache_version
-        
+
         if not hasattr(self, '_number_of_days_cache'):
             if self.fast:
                 self._number_of_days_cache = Devotional.objects.filter(day__fast=self.fast).count()
@@ -516,7 +516,7 @@ class DevotionalSet(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.number_of_days} days)"
-    
+
     class Meta:
         ordering = ['-created_at']
 
@@ -563,7 +563,7 @@ class Devotional(models.Model):
 @receiver([post_save, post_delete], sender=Devotional)
 def invalidate_devotional_set_cache(sender, instance, **kwargs):
     """
-    Invalidate the number_of_days cache for all DevotionalSets associated with 
+    Invalidate the number_of_days cache for all DevotionalSets associated with
     the fast when a devotional is created, updated, or deleted.
     """
     if instance.day and instance.day.fast:
@@ -584,8 +584,26 @@ class Reading(models.Model):
         verbose_name="End Verse", help_text="May be same as end verse"
     )
 
+    # Bible text from API.Bible
+    text = models.TextField(
+        blank=True, default="",
+        help_text="Verse content retrieved from API.Bible"
+    )
+    text_copyright = models.TextField(
+        blank=True, default="",
+        help_text="Copyright notice from API.Bible for the retrieved text"
+    )
+    text_version = models.CharField(
+        max_length=16, blank=True, default="",
+        help_text="Bible version used (e.g. NKJV, KJVAIC)"
+    )
+    text_fetched_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the text was last fetched from API.Bible"
+    )
+
     # Translations for user-facing fields
-    i18n = TranslationField(fields=('book',))
+    i18n = TranslationField(fields=('book', 'text'))
 
     class Meta:
         constraints = [
@@ -941,7 +959,7 @@ class FeastContext(models.Model):
 
 class PatristicQuote(models.Model):
     """Model for storing patristic quotes from Church Fathers and Saints."""
-    
+
     text = models.TextField(
         help_text="Quote text in Markdown format"
     )
@@ -962,19 +980,19 @@ class PatristicQuote(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     # Tags using django-taggit
     tags = TaggableManager(
         blank=True,
         help_text='Tags for categorizing quotes (e.g., prayer, fasting, humility)'
     )
-    
+
     # Translations for user-facing fields
     i18n = TranslationField(fields=(
         'text',
         'attribution',
     ))
-    
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Patristic Quote'
@@ -983,7 +1001,7 @@ class PatristicQuote(models.Model):
             models.Index(fields=['created_at']),
             models.Index(fields=['attribution']),
         ]
-    
+
     def __str__(self):
         # Return first 50 characters of the quote text
         from django.utils.text import Truncator
