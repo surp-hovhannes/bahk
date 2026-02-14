@@ -345,7 +345,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
             "reference": "Genesis 1:1-5",
         }
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_refresh_stale_readings(self, MockService):
         """Test that stale readings (text_fetched_at is NULL) are refreshed."""
         mock_service = MagicMock()
@@ -361,7 +361,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         self.assertEqual(reading.text, "Test verse content.")
         self.assertIsNotNone(reading.text_fetched_at)
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_refresh_old_readings(self, MockService):
         """Test that readings older than READING_TEXT_REFRESH_DAYS are refreshed."""
         mock_service = MagicMock()
@@ -380,7 +380,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         reading.refresh_from_db()
         self.assertEqual(reading.text, "Test verse content.")
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_skip_recent_readings(self, MockService):
         """Test that recently fetched readings are not refreshed."""
         mock_service = MagicMock()
@@ -398,7 +398,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         # API should not have been called since reading is recent
         mock_service.get_passage.assert_not_called()
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_deduplication_one_api_call_per_unique_passage(self, MockService):
         """Test that duplicate passages result in only one API call."""
         mock_service = MagicMock()
@@ -423,7 +423,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         for reading in readings:
             self.assertEqual(reading.text, "Test verse content.")
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_refresh_updates_all_matching_readings_not_just_stale(self, MockService):
         """Test that refresh updates ALL matching readings, including fresh ones."""
         mock_service = MagicMock()
@@ -450,7 +450,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         self.assertEqual(fresh.text, "Test verse content.")
 
     @override_settings(MAX_READINGS=10)
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_cleanup_old_readings_when_over_max(self, MockService):
         """Test that oldest readings are deleted when count exceeds MAX_READINGS."""
         mock_service = MagicMock()
@@ -473,7 +473,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         # Should have cleaned up to MAX_READINGS (10)
         self.assertLessEqual(Reading.objects.count(), 10)
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_no_stale_readings_skips_refresh(self, MockService):
         """Test that task exits early when no stale readings exist."""
         mock_service = MagicMock()
@@ -491,7 +491,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
 
         mock_service.get_passage.assert_not_called()
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_api_failure_logged_in_summary(self, MockService):
         """Test that API failures are collected and logged in the error summary."""
         mock_service = MagicMock()
@@ -509,7 +509,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         log_output = "\n".join(log.output)
         self.assertIn("Failed to fetch", log_output)
 
-    @patch('hub.services.bible_api_service.BibleAPIService')
+    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
     def test_no_api_key_aborts_refresh(self, MockService):
         """Test that refresh aborts gracefully when API key is missing."""
         MockService.side_effect = ValueError("API key required.")
