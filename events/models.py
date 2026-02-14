@@ -378,10 +378,17 @@ class Event(models.Model):
         # Extract request metadata
         ip_address = None
         user_agent = ""
+        lang = None
         if request:
             ip_address = cls._get_client_ip(request)
             user_agent = request.META.get('HTTP_USER_AGENT', '')
-        
+            lang = request.GET.get('lang') or request.POST.get('lang')
+
+        # Merge lang into event data if present
+        event_data = data or {}
+        if lang:
+            event_data['lang'] = lang
+
         # Create the event
         event = cls.objects.create(
             event_type=event_type,
@@ -389,7 +396,7 @@ class Event(models.Model):
             target=target,
             title=title,
             description=description,
-            data=data or {},
+            data=event_data,
             ip_address=ip_address,
             user_agent=user_agent,
         )
