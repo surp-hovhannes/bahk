@@ -26,9 +26,6 @@ from hub.services.bible_api_service import (
 
 logger = logging.getLogger(__name__)
 
-# Re-export for backwards compatibility (e.g. existing tests, management commands)
-_fetch_and_update_passage = fetch_and_update_passage
-
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, name='hub.tasks.fetch_reading_text_task')
 def fetch_reading_text_task(self, reading_id: int):
@@ -135,7 +132,7 @@ def refresh_all_reading_texts_task(self):
         passage_ref = f"{book_name} {start_ch}:{start_v}-{end_ch}:{end_v}"
 
         try:
-            updated = _fetch_and_update_passage(
+            updated = fetch_and_update_passage(
                 service, book_name, start_ch, start_v, end_ch, end_v,
             )
             api_calls += 1
