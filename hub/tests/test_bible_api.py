@@ -2,55 +2,42 @@
 
 Tests cover:
     - BibleAPIService (book name resolution, bible ID selection)
-    - fetch_reading_text_task (single reading fetch, deduplication)
+    - fetch_text_for_reading (synchronous single-reading fetch, deduplication)
+    - fetch_reading_text_task (Celery wrapper, used for management commands)
     - refresh_all_reading_texts_task (bulk refresh, cleanup, error summary)
-    - Reading post_save signal (triggers text fetch on creation)
+    - Synchronous text fetch in GetDailyReadingsForDate view
     - API response (includes text fields)
 """
 from datetime import date, timedelta
 from unittest.mock import patch, MagicMock
 
-from django.db.models.signals import post_save
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from hub.constants import BOOK_NAME_TO_USFM, APOCRYPHA_USFM_IDS, CATENA_ABBREV_FOR_BOOK
 from hub.models import Church, Day, Reading
-from hub.services.bible_api_service import BibleAPIService
-from hub.signals import handle_reading_save
+from hub.services.bible_api_service import (
+    BibleAPIService,
+    fetch_and_update_passage,
+    fetch_text_for_reading,
+)
 from hub.tasks.bible_api_tasks import (
     fetch_reading_text_task,
     refresh_all_reading_texts_task,
-    _fetch_and_update_passage,
 )
 
 
-def _disconnect_reading_signal():
-    """Disconnect the Reading post_save signal to avoid side effects in tests."""
-    post_save.disconnect(handle_reading_save, sender=Reading)
-
-
-def _reconnect_reading_signal():
-    """Reconnect the Reading post_save signal."""
-    post_save.connect(handle_reading_save, sender=Reading)
-
-
 def _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5, **kwargs):
-    """Helper to create a Reading with signals disconnected."""
-    _disconnect_reading_signal()
-    try:
-        reading = Reading.objects.create(
-            day=day,
-            book=book,
-            start_chapter=start_ch,
-            start_verse=start_v,
-            end_chapter=end_ch,
-            end_verse=end_v,
-            **kwargs,
-        )
-    finally:
-        _reconnect_reading_signal()
-    return reading
+    """Helper to create a Reading."""
+    return Reading.objects.create(
+        day=day,
+        book=book,
+        start_chapter=start_ch,
+        start_verse=start_v,
+        end_chapter=end_ch,
+        end_verse=end_v,
+        **kwargs,
+    )
 
 
 # ------------------------------------------------------------------ #
@@ -189,15 +176,11 @@ class BibleAPIServiceInitTests(TestCase):
 
 
 # ------------------------------------------------------------------ #
-#  fetch_reading_text_task Tests
+#  fetch_text_for_reading (synchronous) Tests
 # ------------------------------------------------------------------ #
 
-@override_settings(
-    CELERY_TASK_ALWAYS_EAGER=True,
-    CELERY_TASK_EAGER_PROPAGATES=True,
-)
-class FetchReadingTextTaskTests(TestCase):
-    """Tests for the fetch_reading_text_task Celery task."""
+class FetchTextForReadingTests(TestCase):
+    """Tests for the fetch_text_for_reading synchronous helper."""
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
@@ -207,38 +190,41 @@ class FetchReadingTextTaskTests(TestCase):
             "copyright": "Scripture taken from the NKJV. Copyright 1982 Thomas Nelson.",
             "version": "NKJV",
             "reference": "Genesis 1:1-5",
+            "fums_token": "test-fums-token",
         }
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
-    def test_fetch_text_for_new_reading(self, MockService):
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_fetch_text_for_new_reading(self, mock_config, mock_resolve, mock_get_passage):
         """Test fetching text for a reading that has no text yet."""
-        mock_service = MagicMock()
-        mock_service.get_passage.return_value = self.mock_api_response
-        MockService.return_value = mock_service
+        mock_get_passage.return_value = self.mock_api_response
 
         reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
-        fetch_reading_text_task(reading.id)
+        result = fetch_text_for_reading(reading)
 
+        self.assertTrue(result)
         reading.refresh_from_db()
         self.assertEqual(reading.text, self.mock_api_response["content"])
         self.assertEqual(reading.text_copyright, self.mock_api_response["copyright"])
         self.assertEqual(reading.text_version, "NKJV")
+        self.assertEqual(reading.fums_token, "test-fums-token")
         self.assertIsNotNone(reading.text_fetched_at)
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
-    def test_fetch_updates_all_duplicate_readings(self, MockService):
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_fetch_updates_all_duplicate_readings(self, mock_config, mock_resolve, mock_get_passage):
         """Test that fetching text updates ALL readings with the same passage."""
-        mock_service = MagicMock()
-        mock_service.get_passage.return_value = self.mock_api_response
-        MockService.return_value = mock_service
+        mock_get_passage.return_value = self.mock_api_response
 
         # Create two readings with the same passage on different days
         day2 = Day.objects.create(date=date(2026, 3, 15), church=self.church)
         reading1 = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
         reading2 = _create_reading(day2, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
-        fetch_reading_text_task(reading1.id)
+        fetch_text_for_reading(reading1)
 
         # Both readings should have text
         reading1.refresh_from_db()
@@ -246,8 +232,7 @@ class FetchReadingTextTaskTests(TestCase):
         self.assertEqual(reading1.text, self.mock_api_response["content"])
         self.assertEqual(reading2.text, self.mock_api_response["content"])
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
-    def test_fetch_copies_from_existing_reading(self, MockService):
+    def test_fetch_copies_from_existing_reading(self):
         """Test that a new reading copies text from an existing matching reading without an API call."""
         # Create a reading that already has text
         day2 = Day.objects.create(date=date(2026, 3, 15), church=self.church)
@@ -257,34 +242,86 @@ class FetchReadingTextTaskTests(TestCase):
             text_copyright="Existing copyright",
             text_version="NKJV",
             text_fetched_at=timezone.now(),
+            fums_token="existing-fums",
         )
         reading_new = _create_reading(day2, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
-        fetch_reading_text_task(reading_new.id)
+        # No service needed -- should copy from existing without any API call
+        result = fetch_text_for_reading(reading_new)
 
+        self.assertTrue(result)
         reading_new.refresh_from_db()
         self.assertEqual(reading_new.text, "Existing text")
         self.assertEqual(reading_new.text_copyright, "Existing copyright")
-        # API should NOT have been called
-        MockService.assert_not_called()
+        self.assertEqual(reading_new.fums_token, "existing-fums")
+
+    @patch('hub.services.bible_api_service.config', return_value="")
+    def test_fetch_no_api_key_returns_false(self, mock_config):
+        """Test that fetch returns False when API key is not configured."""
+        reading = _create_reading(self.day)
+
+        result = fetch_text_for_reading(reading)
+
+        self.assertFalse(result)
+        reading.refresh_from_db()
+        self.assertEqual(reading.text, "")
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_fetch_with_pre_initialized_service(self, mock_config, mock_resolve, mock_get_passage):
+        """Test fetching with a pre-initialized service (as used by the view)."""
+        mock_get_passage.return_value = self.mock_api_response
+
+        reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+        service = BibleAPIService()
+
+        result = fetch_text_for_reading(reading, service=service)
+
+        self.assertTrue(result)
+        reading.refresh_from_db()
+        self.assertEqual(reading.text, self.mock_api_response["content"])
+
+
+# ------------------------------------------------------------------ #
+#  fetch_reading_text_task (Celery wrapper) Tests
+# ------------------------------------------------------------------ #
+
+@override_settings(
+    CELERY_TASK_ALWAYS_EAGER=True,
+    CELERY_TASK_EAGER_PROPAGATES=True,
+)
+class FetchReadingTextTaskTests(TestCase):
+    """Tests for the fetch_reading_text_task Celery task (management command use)."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2025, 3, 15), church=self.church)
 
     def test_fetch_nonexistent_reading(self):
         """Test that task handles nonexistent reading gracefully."""
         # Should not raise an exception
         fetch_reading_text_task(99999)
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
-    def test_fetch_no_api_key_logs_error(self, MockService):
-        """Test that task handles missing API key gracefully."""
-        MockService.side_effect = ValueError("API key required.")
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_task_delegates_to_fetch_text_for_reading(self, mock_config, mock_resolve, mock_get_passage):
+        """Test that the Celery task delegates to fetch_text_for_reading."""
+        mock_get_passage.return_value = {
+            "content": "Test content.",
+            "copyright": "Test copyright.",
+            "version": "NKJV",
+            "reference": "Genesis 1:1-5",
+            "fums_token": "test-token",
+        }
 
-        reading = _create_reading(self.day)
+        reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
-        # Should not raise, just log the error
         fetch_reading_text_task(reading.id)
 
         reading.refresh_from_db()
-        self.assertEqual(reading.text, "")
+        self.assertEqual(reading.text, "Test content.")
 
 
 # ------------------------------------------------------------------ #
@@ -308,7 +345,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
             "reference": "Genesis 1:1-5",
         }
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_refresh_stale_readings(self, MockService):
         """Test that stale readings (text_fetched_at is NULL) are refreshed."""
         mock_service = MagicMock()
@@ -324,7 +361,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         self.assertEqual(reading.text, "Test verse content.")
         self.assertIsNotNone(reading.text_fetched_at)
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_refresh_old_readings(self, MockService):
         """Test that readings older than READING_TEXT_REFRESH_DAYS are refreshed."""
         mock_service = MagicMock()
@@ -343,7 +380,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         reading.refresh_from_db()
         self.assertEqual(reading.text, "Test verse content.")
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_skip_recent_readings(self, MockService):
         """Test that recently fetched readings are not refreshed."""
         mock_service = MagicMock()
@@ -361,7 +398,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         # API should not have been called since reading is recent
         mock_service.get_passage.assert_not_called()
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_deduplication_one_api_call_per_unique_passage(self, MockService):
         """Test that duplicate passages result in only one API call."""
         mock_service = MagicMock()
@@ -386,7 +423,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         for reading in readings:
             self.assertEqual(reading.text, "Test verse content.")
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_refresh_updates_all_matching_readings_not_just_stale(self, MockService):
         """Test that refresh updates ALL matching readings, including fresh ones."""
         mock_service = MagicMock()
@@ -413,7 +450,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         self.assertEqual(fresh.text, "Test verse content.")
 
     @override_settings(MAX_READINGS=10)
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_cleanup_old_readings_when_over_max(self, MockService):
         """Test that oldest readings are deleted when count exceeds MAX_READINGS."""
         mock_service = MagicMock()
@@ -436,7 +473,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         # Should have cleaned up to MAX_READINGS (10)
         self.assertLessEqual(Reading.objects.count(), 10)
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_no_stale_readings_skips_refresh(self, MockService):
         """Test that task exits early when no stale readings exist."""
         mock_service = MagicMock()
@@ -454,7 +491,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
 
         mock_service.get_passage.assert_not_called()
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_api_failure_logged_in_summary(self, MockService):
         """Test that API failures are collected and logged in the error summary."""
         mock_service = MagicMock()
@@ -472,7 +509,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         log_output = "\n".join(log.output)
         self.assertIn("Failed to fetch", log_output)
 
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService')
+    @patch('hub.services.bible_api_service.BibleAPIService')
     def test_no_api_key_aborts_refresh(self, MockService):
         """Test that refresh aborts gracefully when API key is missing."""
         MockService.side_effect = ValueError("API key required.")
@@ -485,85 +522,117 @@ class RefreshAllReadingTextsTaskTests(TestCase):
 
 
 # ------------------------------------------------------------------ #
-#  Signal Tests
+#  View Synchronous Text Fetch Tests
 # ------------------------------------------------------------------ #
 
-@override_settings(
-    CELERY_TASK_ALWAYS_EAGER=True,
-    CELERY_TASK_EAGER_PROPAGATES=True,
-)
-class ReadingTextSignalTests(TestCase):
-    """Tests for the Reading post_save signal that triggers text fetch."""
+class ViewSynchronousTextFetchTests(TestCase):
+    """Tests that GetDailyReadingsForDate fetches Bible text synchronously."""
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
-        self.day = Day.objects.create(date=date(2025, 4, 1), church=self.church)
+        self.test_date = date(2025, 4, 1)
 
-    @patch('hub.signals.fetch_reading_text_task.delay')
-    def test_signal_triggers_on_reading_creation(self, mock_task_delay):
-        """Test that signal triggers fetch task when Reading is created."""
-        # Disconnect and manually trigger to isolate signal behavior
-        _disconnect_reading_signal()
+    @patch('hub.views.readings.fetch_text_for_reading')
+    @patch('hub.views.readings.BibleAPIService')
+    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.generate_reading_context_task')
+    def test_view_calls_fetch_text_for_new_readings(
+        self, mock_context_task, mock_scrape, MockService, mock_fetch_text,
+    ):
+        """Test that the view fetches text synchronously for newly scraped readings."""
+        from rest_framework.test import APIRequestFactory
+        from hub.views.readings import GetDailyReadingsForDate
 
-        reading = Reading.objects.create(
-            day=self.day,
-            book="Matthew",
-            start_chapter=5,
-            start_verse=1,
-            end_chapter=5,
-            end_verse=12,
+        mock_scrape.return_value = [
+            {
+                "book": "Matthew",
+                "book_en": "Matthew",
+                "start_chapter": 5,
+                "start_verse": 1,
+                "end_chapter": 5,
+                "end_verse": 12,
+            },
+        ]
+        mock_service_instance = MagicMock()
+        MockService.return_value = mock_service_instance
+
+        factory = APIRequestFactory()
+        request = factory.get(f'/readings/?date={self.test_date}')
+        view = GetDailyReadingsForDate.as_view()
+
+        response = view(request)
+
+        self.assertEqual(response.status_code, 200)
+        # fetch_text_for_reading should have been called for the new reading
+        mock_fetch_text.assert_called_once()
+        # The call should have received the pre-initialized service
+        call_kwargs = mock_fetch_text.call_args
+        self.assertEqual(call_kwargs.kwargs.get('service'), mock_service_instance)
+
+    @patch('hub.views.readings.fetch_text_for_reading')
+    @patch('hub.views.readings.BibleAPIService')
+    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.generate_reading_context_task')
+    def test_view_does_not_fetch_text_for_existing_readings(
+        self, mock_context_task, mock_scrape, MockService, mock_fetch_text,
+    ):
+        """Test that the view does not re-fetch text for readings that already exist."""
+        from rest_framework.test import APIRequestFactory
+        from hub.views.readings import GetDailyReadingsForDate
+
+        mock_scrape.return_value = []
+
+        # Pre-create the day and reading
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        _create_reading(
+            day, book="Matthew", start_ch=5, start_v=1, end_ch=5, end_v=12,
+            text="Existing text",
+            text_fetched_at=timezone.now(),
         )
 
-        # Manually trigger the signal handler
-        handle_reading_save(sender=Reading, instance=reading, created=True)
+        factory = APIRequestFactory()
+        request = factory.get(f'/readings/?date={self.test_date}')
+        view = GetDailyReadingsForDate.as_view()
 
-        _reconnect_reading_signal()
+        response = view(request)
 
-        mock_task_delay.assert_called_once_with(reading.id)
+        self.assertEqual(response.status_code, 200)
+        # Should NOT have called fetch_text_for_reading since readings already exist
+        mock_fetch_text.assert_not_called()
+        MockService.assert_not_called()
 
-    @patch('hub.signals.fetch_reading_text_task.delay')
-    def test_signal_does_not_trigger_if_text_exists(self, mock_task_delay):
-        """Test that signal does not trigger if reading already has text."""
-        _disconnect_reading_signal()
+    @patch('hub.views.readings.BibleAPIService')
+    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.generate_reading_context_task')
+    def test_view_graceful_when_api_key_missing(
+        self, mock_context_task, mock_scrape, MockService,
+    ):
+        """Test that the view still returns readings when API key is not configured."""
+        from rest_framework.test import APIRequestFactory
+        from hub.views.readings import GetDailyReadingsForDate
 
-        reading = Reading.objects.create(
-            day=self.day,
-            book="Matthew",
-            start_chapter=5,
-            start_verse=1,
-            end_chapter=5,
-            end_verse=12,
-            text="Pre-existing text",
-        )
+        mock_scrape.return_value = [
+            {
+                "book": "Matthew",
+                "book_en": "Matthew",
+                "start_chapter": 5,
+                "start_verse": 1,
+                "end_chapter": 5,
+                "end_verse": 12,
+            },
+        ]
+        MockService.side_effect = ValueError("API key required.")
 
-        handle_reading_save(sender=Reading, instance=reading, created=True)
+        factory = APIRequestFactory()
+        request = factory.get(f'/readings/?date={self.test_date}')
+        view = GetDailyReadingsForDate.as_view()
 
-        _reconnect_reading_signal()
+        response = view(request)
 
-        mock_task_delay.assert_not_called()
-
-    @patch('hub.signals.fetch_reading_text_task.delay')
-    def test_signal_does_not_trigger_on_update(self, mock_task_delay):
-        """Test that signal does not trigger when existing reading is updated."""
-        _disconnect_reading_signal()
-
-        reading = Reading.objects.create(
-            day=self.day,
-            book="Matthew",
-            start_chapter=5,
-            start_verse=1,
-            end_chapter=5,
-            end_verse=12,
-        )
-
-        mock_task_delay.reset_mock()
-
-        # Simulate an update (created=False)
-        handle_reading_save(sender=Reading, instance=reading, created=False)
-
-        _reconnect_reading_signal()
-
-        mock_task_delay.assert_not_called()
+        # View should still succeed, just without text
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["readings"]), 1)
+        self.assertEqual(response.data["readings"][0]["text"], "")
 
 
 # ------------------------------------------------------------------ #
@@ -639,20 +708,20 @@ class ReadingTextAPIResponseTests(TestCase):
 
 
 # ------------------------------------------------------------------ #
-#  _fetch_and_update_passage unit tests
+#  fetch_and_update_passage unit tests
 # ------------------------------------------------------------------ #
 
 class FetchAndUpdatePassageTests(TestCase):
-    """Tests for the _fetch_and_update_passage helper function."""
+    """Tests for the fetch_and_update_passage helper function."""
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.day = Day.objects.create(date=date(2025, 6, 1), church=self.church)
 
     @patch.object(BibleAPIService, 'get_passage')
-    @patch('hub.tasks.bible_api_tasks.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
     def test_updates_matching_readings(self, mock_resolve, mock_get_passage):
-        """Test that _fetch_and_update_passage updates all matching readings."""
+        """Test that fetch_and_update_passage updates all matching readings."""
         mock_get_passage.return_value = {
             "content": "Verse text here.",
             "copyright": "Copyright info.",
@@ -665,15 +734,15 @@ class FetchAndUpdatePassageTests(TestCase):
         service = MagicMock(spec=BibleAPIService)
         service.get_passage.return_value = mock_get_passage.return_value
 
-        updated = _fetch_and_update_passage(service, "Genesis", 1, 1, 1, 5)
+        updated = fetch_and_update_passage(service, "Genesis", 1, 1, 1, 5)
 
         self.assertEqual(updated, 1)
         reading.refresh_from_db()
         self.assertEqual(reading.text, "Verse text here.")
 
     def test_unknown_book_raises_value_error(self):
-        """Test that _fetch_and_update_passage raises ValueError for unknown books."""
+        """Test that fetch_and_update_passage raises ValueError for unknown books."""
         service = MagicMock(spec=BibleAPIService)
 
         with self.assertRaises(ValueError):
-            _fetch_and_update_passage(service, "Nonexistent Book", 1, 1, 1, 5)
+            fetch_and_update_passage(service, "Nonexistent Book", 1, 1, 1, 5)

@@ -2,9 +2,10 @@
 
 Provides:
     - fetch_reading_text_task: Fetch text for a single Reading (and all duplicates).
-    - refresh_all_reading_texts_task: Weekly scheduled task that refreshes stale
-      readings, deduplicates API calls, cleans up old readings, and logs an error
-      summary.
+      Useful for management commands or ad-hoc backfills.
+    - refresh_all_reading_texts_task: Scheduled task that refreshes stale readings
+      (>READING_TEXT_REFRESH_DAYS old) to comply with API.Bible terms of use,
+      deduplicates API calls, cleans up old readings, and logs an error summary.
 """
 
 import logging
@@ -16,70 +17,26 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from hub.constants import BOOK_NAME_TO_USFM
 from hub.models import Reading
-from hub.services.bible_api_service import BibleAPIService
+from hub.services.bible_api_service import (
+    BibleAPIService,
+    fetch_and_update_passage,
+    fetch_text_for_reading,
+)
 
 logger = logging.getLogger(__name__)
 
-
-def _fetch_and_update_passage(
-    service: BibleAPIService,
-    book_name: str,
-    start_chapter: int,
-    start_verse: int,
-    end_chapter: int,
-    end_verse: int,
-) -> int:
-    """Fetch a passage from API.Bible and update ALL matching Readings.
-
-    Args:
-        service: Initialized BibleAPIService instance.
-        book_name: Book name as stored in Reading.book (English).
-        start_chapter: Starting chapter number.
-        start_verse: Starting verse number.
-        end_chapter: Ending chapter number.
-        end_verse: Ending verse number.
-
-    Returns:
-        Number of Reading rows updated.
-
-    Raises:
-        ValueError: If book name cannot be resolved to a USFM code.
-        requests.HTTPError: On API errors.
-    """
-    usfm_id = BibleAPIService.resolve_book_name(book_name)
-    result = service.get_passage(
-        usfm_id, start_chapter, start_verse, end_chapter, end_verse
-    )
-
-    now = timezone.now()
-
-    # Update ALL readings with this exact passage (across all days/years)
-    updated = Reading.objects.filter(
-        book=book_name,
-        start_chapter=start_chapter,
-        start_verse=start_verse,
-        end_chapter=end_chapter,
-        end_verse=end_verse,
-    ).update(
-        text=result["content"],
-        text_copyright=result["copyright"],
-        text_version=result["version"],
-        text_fetched_at=now,
-        fums_token=result.get("fums_token", ""),
-    )
-
-    return updated
+# Re-export for backwards compatibility (e.g. existing tests, management commands)
+_fetch_and_update_passage = fetch_and_update_passage
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, name='hub.tasks.fetch_reading_text_task')
 def fetch_reading_text_task(self, reading_id: int):
     """Fetch Bible text for a single Reading and all duplicates of the same passage.
 
-    This task is triggered by the post_save signal when a new Reading is created.
-    It makes one API call and updates all Readings sharing the same passage
-    (book, start_chapter, start_verse, end_chapter, end_verse).
+    NOTE: New readings created by the readings view now fetch text synchronously
+    in the request cycle, so this task is no longer triggered by a post_save
+    signal. It remains available for management commands and ad-hoc backfills.
 
     Args:
         reading_id: Primary key of the Reading to fetch text for.
@@ -90,62 +47,12 @@ def fetch_reading_text_task(self, reading_id: int):
         logger.error("Reading with id %s not found.", reading_id)
         return
 
-    # If another Reading with the same passage was recently fetched, reuse its data
-    existing = Reading.objects.filter(
-        book=reading.book,
-        start_chapter=reading.start_chapter,
-        start_verse=reading.start_verse,
-        end_chapter=reading.end_chapter,
-        end_verse=reading.end_verse,
-        text_fetched_at__isnull=False,
-    ).exclude(text="").first()
-
-    if existing and existing.pk != reading.pk:
-        # Copy text from the existing reading instead of making an API call
-        Reading.objects.filter(pk=reading.pk).update(
-            text=existing.text,
-            text_copyright=existing.text_copyright,
-            text_version=existing.text_version,
-            text_fetched_at=existing.text_fetched_at,
-            fums_token=existing.fums_token,
+    success = fetch_text_for_reading(reading)
+    if not success:
+        logger.warning(
+            "Could not fetch text for Reading %s (%s).",
+            reading_id, reading.passage_reference,
         )
-        logger.info(
-            "Copied text for Reading %s from existing Reading %s (%s)",
-            reading_id, existing.pk, reading.passage_reference,
-        )
-        return
-
-    try:
-        service = BibleAPIService()
-    except ValueError as e:
-        logger.error("Cannot initialize BibleAPIService: %s", e)
-        return
-
-    try:
-        updated = _fetch_and_update_passage(
-            service,
-            reading.book,
-            reading.start_chapter,
-            reading.start_verse,
-            reading.end_chapter,
-            reading.end_verse,
-        )
-        logger.info(
-            "Fetched text for Reading %s (%s), updated %d reading(s).",
-            reading_id, reading.passage_reference, updated,
-        )
-    except ValueError as e:
-        logger.error(
-            "Book name mapping failed for Reading %s ('%s'): %s",
-            reading_id, reading.book, e,
-        )
-        raise
-    except Exception as e:
-        logger.error(
-            "API call failed for Reading %s (%s): %s",
-            reading_id, reading.passage_reference, e,
-        )
-        raise self.retry(exc=e)
 
 
 @shared_task(bind=True, max_retries=1, default_retry_delay=300, name='hub.tasks.refresh_all_reading_texts_task')

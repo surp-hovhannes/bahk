@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
+from hub.services.bible_api_service import BibleAPIService, fetch_text_for_reading
 from hub.tasks import generate_reading_context_task
 from hub.utils import get_user_profile_safe, scrape_readings
 
@@ -114,6 +115,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         if not day.readings.exists():
             # import readings for this date into db
             readings = scrape_readings(date_obj, church)
+            new_reading_objs = []
             for reading in readings:
                 reading.update({"day": day})
                 # Extract and remove all book-related fields to handle them separately
@@ -137,6 +139,27 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                 if book_hy and not reading_obj.book_hy:
                     reading_obj.book_hy = book_hy
                     reading_obj.save(update_fields=['i18n'])
+
+                # Track newly created readings that need text fetched
+                if created and not reading_obj.text:
+                    new_reading_objs.append(reading_obj)
+
+            # Fetch Bible text synchronously for all new readings so text is
+            # available in the response immediately (no Celery round-trip).
+            # A single BibleAPIService instance is reused for all readings to
+            # share the HTTP session and avoid repeated key lookups.
+            if new_reading_objs:
+                try:
+                    service = BibleAPIService()
+                    for reading_obj in new_reading_objs:
+                        fetch_text_for_reading(reading_obj, service=service)
+                except ValueError:
+                    # API key not configured; text will remain empty until the
+                    # periodic Celery refresh task runs.
+                    logging.warning(
+                        "BIBLE_API_KEY not configured; skipping synchronous text fetch for %d reading(s).",
+                        len(new_reading_objs),
+                    )
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
