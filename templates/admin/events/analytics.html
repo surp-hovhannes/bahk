@@ -1683,6 +1683,7 @@ function renderChecklistUsageTable(items, append) {
 function switchChecklistTab(tab) {
     if (tab === currentChecklistTab) return;
     currentChecklistTab = tab;
+    currentOffset = 0;
 
     // Update tab button styles
     document.querySelectorAll('.modal-tabs .modal-tab').forEach(btn => {
@@ -1692,12 +1693,8 @@ function switchChecklistTab(tab) {
     const modalBody = document.getElementById('modalBody');
     modalBody.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading...</p></div>';
 
-    if (tab === 'by-item') {
-        fetchModalData('checklist-items', 0, currentSort, false);
-    } else {
-        currentOffset = 0;
-        fetchModalData('checklist-usage', 0, currentSort, false);
-    }
+    currentMetricType = tab === 'by-item' ? 'checklist-items' : 'checklist-usage';
+    fetchModalData(currentMetricType, 0, currentSort, false);
 }
 
 function renderChecklistItemsTable(items, append) {
