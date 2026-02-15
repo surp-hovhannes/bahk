@@ -215,6 +215,7 @@ class EventAdmin(admin.ModelAdmin):
             path('analytics/new-users/', self.admin_site.admin_view(self.new_users_data), name='events_new_users_data'),
             path('analytics/devotional-views/', self.admin_site.admin_view(self.devotional_views_data), name='events_devotional_views_data'),
             path('analytics/checklist-usage/', self.admin_site.admin_view(self.checklist_usage_data), name='events_checklist_usage_data'),
+            path('analytics/checklist-items/', self.admin_site.admin_view(self.checklist_items_data), name='events_checklist_items_data'),
             path('analytics/prayer-views/', self.admin_site.admin_view(self.prayer_views_data), name='events_prayer_views_data'),
             path('export_csv/', self.admin_site.admin_view(self.export_csv), name='events_export_csv'),
         ]
@@ -408,6 +409,20 @@ class EventAdmin(admin.ModelAdmin):
             ],
         }
 
+        # Language usage: count unique users by lang from recent events
+        lang_events = base_qs.filter(
+            timestamp__gte=start_date,
+            timestamp__lt=end_date,
+            data__has_key='lang',
+        ).exclude(user__isnull=True).values_list('data', 'user_id')
+        lang_user_sets = {}
+        for event_data, user_id in lang_events:
+            lang_val = event_data.get('lang') if event_data else None
+            if lang_val:
+                lang_user_sets.setdefault(lang_val, set()).add(user_id)
+        language_en = len(lang_user_sets.get('en', set()))
+        language_hy = len(lang_user_sets.get('hy', set()))
+
         # Recent milestones
         milestones = base_qs.filter(
             event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
@@ -498,8 +513,10 @@ class EventAdmin(admin.ModelAdmin):
             'checklist_usage_by_day': checklist_usage_by_day,
             'prayer_set_views_by_day': prayer_set_views_by_day,
             'feature_usage_over_time': feature_usage_over_time,
+            'language_en': language_en,
+            'language_hy': language_hy,
         }
-        
+
         return render(request, 'admin/events/analytics.html', context)
     
     def analytics_data(self, request):
@@ -679,11 +696,25 @@ class EventAdmin(admin.ModelAdmin):
             }
         )
         
+        # Language usage
+        lang_events = base_qs.filter(
+            timestamp__gte=start_of_window,
+            timestamp__lt=end_date,
+            data__has_key='lang',
+        ).exclude(user__isnull=True).values_list('data', 'user_id')
+        lang_user_sets = {}
+        for event_data, user_id in lang_events:
+            lang_val = event_data.get('lang') if event_data else None
+            if lang_val:
+                lang_user_sets.setdefault(lang_val, set()).add(user_id)
+        language_en = len(lang_user_sets.get('en', set()))
+        language_hy = len(lang_user_sets.get('hy', set()))
+
         try:
             # Summary statistics aligned with per-day buckets
             fast_joins = sum(fast_joins_by_day.values())
             fast_leaves = sum(fast_leaves_by_day.values())
-            
+
             return JsonResponse({
                 'events_by_day': events_by_day,
                 'fast_trends_data': fast_trends_data,
@@ -702,6 +733,8 @@ class EventAdmin(admin.ModelAdmin):
                 'checklist_usage': kpi_totals['checklist_usage'],
                 'prayer_set_views': kpi_totals['prayer_set_views'],
                 'prayer_request_activity': kpi_totals['prayer_request_activity'],
+                'language_en': language_en,
+                'language_hy': language_hy,
             })
             
         except Exception as e:
@@ -1002,6 +1035,82 @@ class EventAdmin(admin.ModelAdmin):
 
             return JsonResponse({
                 'error': 'An error occurred while loading checklist data. Please try again.'
+            }, status=500)
+
+    def checklist_items_data(self, request):
+        """
+        API endpoint for checklist item breakdown.
+        Returns which specific checklist items are being checked and how often.
+        """
+        from django.http import JsonResponse
+        from collections import defaultdict
+
+        ITEM_DISPLAY_NAMES = {
+            'prayer': 'Morning Prayer',
+            'diet': 'Keep the Fast',
+            'scripture': 'Scripture Reading',
+            'charity': 'Act of Charity',
+            'evening_prayer': 'Evening Prayer',
+        }
+
+        try:
+            days = int(request.GET.get('days', 30))
+            sort = request.GET.get('sort', 'most_used')
+
+            if days not in [7, 30, 90]:
+                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
+
+            now = timezone.now()
+            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_of_window = end_of_today - timedelta(days=days)
+
+            checklist_events = Event.objects.filter(
+                event_type__code=EventType.CHECKLIST_USED,
+                timestamp__gte=start_of_window,
+                timestamp__lt=end_of_today
+            ).exclude(user__is_staff=True).select_related('user')
+
+            item_stats = defaultdict(lambda: {'times_checked': 0, 'unique_users': set()})
+
+            for event in checklist_events:
+                if not event.data:
+                    continue
+                action = event.data.get('action', '')
+                if action.startswith('item_toggled_'):
+                    item_id = action[len('item_toggled_'):]
+                    item_stats[item_id]['times_checked'] += 1
+                    if event.user:
+                        item_stats[item_id]['unique_users'].add(event.user.id)
+
+            items_list = []
+            for item_id, stats in item_stats.items():
+                items_list.append({
+                    'item_id': item_id,
+                    'item_name': ITEM_DISPLAY_NAMES.get(item_id, item_id.replace('_', ' ').title()),
+                    'times_checked': stats['times_checked'],
+                    'unique_users': len(stats['unique_users']),
+                })
+
+            if sort == 'most_used':
+                items_list.sort(key=lambda x: x['times_checked'], reverse=True)
+            elif sort == 'least_used':
+                items_list.sort(key=lambda x: x['times_checked'])
+
+            return JsonResponse({
+                'items': items_list,
+                'total_count': len(items_list),
+                'has_more': False,
+                'offset': 0,
+                'limit': len(items_list),
+            })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Checklist items data generation failed: {str(e)}", exc_info=True)
+
+            return JsonResponse({
+                'error': 'An error occurred while loading checklist item data. Please try again.'
             }, status=500)
 
     def prayer_views_data(self, request):
