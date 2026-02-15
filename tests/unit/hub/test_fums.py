@@ -181,7 +181,7 @@ class ReadingAdminFumsTests(TestCase):
         self.assertFalse(self.admin.has_fums_token(reading))
 
 
-class FetchAndUpdatePassageFumsTests(TestCase):
+class FetchAndUpdateReadingFumsTests(TestCase):
     """Tests for FUMS token storage in bible_api_tasks."""
 
     def setUp(self):
@@ -193,9 +193,9 @@ class FetchAndUpdatePassageFumsTests(TestCase):
             date=timezone.now().date(), fast=self.fast, church=self.church
         )
 
-    def test_fetch_and_update_stores_fums_token(self):
-        """_fetch_and_update_passage should store the FUMS token on readings."""
-        from hub.tasks.bible_api_tasks import _fetch_and_update_passage
+    def test_fetch_and_update_reading_stores_fums_token(self):
+        """_fetch_and_update_reading should store the FUMS token on the reading."""
+        from hub.tasks.bible_api_tasks import _fetch_and_update_reading
 
         mock_service = Mock()
         mock_service.resolve_book_name.return_value = "GEN"
@@ -209,15 +209,25 @@ class FetchAndUpdatePassageFumsTests(TestCase):
 
         reading = _create_reading(day=self.day)
 
-        updated = _fetch_and_update_passage(mock_service, "Genesis", 1, 1, 1, 5)
+        _fetch_and_update_reading(mock_service, reading)
 
-        self.assertEqual(updated, 1)
         reading.refresh_from_db()
         self.assertEqual(reading.fums_token, "task-fums-token-999")
 
-    def test_fetch_reading_text_copies_fums_token(self):
-        """fetch_reading_text_task should copy fums_token from existing reading."""
+    @patch("hub.tasks.bible_api_tasks.BibleAPIService")
+    def test_each_reading_gets_own_fums_token(self, MockService):
+        """Each reading should get its own API call and unique FUMS token."""
         from hub.tasks.bible_api_tasks import fetch_reading_text_task
+
+        mock_service = Mock()
+        mock_service.get_passage.return_value = {
+            "reference": "Genesis 1:1-5",
+            "content": "In the beginning...",
+            "copyright": "Copyright NKJV",
+            "version": "NKJV",
+            "fums_token": "new-unique-fums-token",
+        }
+        MockService.return_value = mock_service
 
         # Create an existing reading with text already fetched
         _create_reading(
@@ -240,4 +250,6 @@ class FetchAndUpdatePassageFumsTests(TestCase):
         fetch_reading_text_task(new_reading.pk)
 
         new_reading.refresh_from_db()
-        self.assertEqual(new_reading.fums_token, "existing-fums-token")
+        # Should have its own token from the API call, not the copied one
+        self.assertEqual(new_reading.fums_token, "new-unique-fums-token")
+        mock_service.get_passage.assert_called_once()
