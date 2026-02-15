@@ -1,10 +1,9 @@
 from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 from django.core.cache import cache
-from hub.models import Profile, Feast, Reading
+from hub.models import Profile, Feast
 from hub.tasks.llm_tasks import determine_feast_designation_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
-from hub.tasks.bible_api_tasks import fetch_reading_text_task
 
 @receiver(m2m_changed, sender=Profile.fasts.through)
 def handle_fast_participant_change(sender, instance, action, **kwargs):
@@ -62,16 +61,3 @@ def handle_feast_save(sender, instance, created, **kwargs):
     # Trigger icon matching when feast is created
     if created:
         match_icon_to_feast_task.delay(instance.id)
-
-
-@receiver(post_save, sender=Reading)
-def handle_reading_save(sender, instance, created, **kwargs):
-    """
-    Signal handler that fetches Bible text from API.Bible when a new Reading
-    is created and doesn't already have text populated.
-
-    The task will also update any other Readings with the same passage
-    (book, start_chapter, start_verse, end_chapter, end_verse).
-    """
-    if created and not instance.text:
-        fetch_reading_text_task.delay(instance.id)

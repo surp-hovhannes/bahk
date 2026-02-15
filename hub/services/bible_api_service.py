@@ -12,6 +12,7 @@ import logging
 
 import requests
 from decouple import config
+from django.utils import timezone
 
 from hub.constants import APOCRYPHA_USFM_IDS, BOOK_NAME_TO_USFM
 
@@ -145,3 +146,66 @@ class BibleAPIService:
         if start == end:
             return start
         return f"{start}-{end}"
+
+
+# ------------------------------------------------------------------ #
+#  Module-level helpers (used by views, admin, and Celery tasks)
+# ------------------------------------------------------------------ #
+
+def fetch_text_for_reading(reading, service: BibleAPIService | None = None) -> bool:
+    """Fetch Bible text for a single Reading.
+
+    Each Reading gets its own API call so that it receives a unique FUMS token,
+    as required by API.Bible's Fair Use Management System terms of use.
+
+    Can be called synchronously from views or from Celery tasks.
+
+    Args:
+        reading: A Reading model instance (must be saved to the database).
+        service: Optional pre-initialized BibleAPIService. If None, one will
+                 be created (requires BIBLE_API_KEY to be configured).
+
+    Returns:
+        True if the reading now has text, False if it could not be populated
+        (e.g. missing API key, unknown book).
+    """
+    from hub.models import Reading as ReadingModel  # deferred to avoid circular import
+
+    if service is None:
+        try:
+            service = BibleAPIService()
+        except ValueError as e:
+            logger.error("Cannot initialize BibleAPIService: %s", e)
+            return False
+
+    try:
+        usfm_id = BibleAPIService.resolve_book_name(reading.book)
+        result = service.get_passage(
+            usfm_id, reading.start_chapter, reading.start_verse,
+            reading.end_chapter, reading.end_verse,
+        )
+
+        ReadingModel.objects.filter(pk=reading.pk).update(
+            text=result["content"],
+            text_copyright=result["copyright"],
+            text_version=result["version"],
+            text_fetched_at=timezone.now(),
+            fums_token=result.get("fums_token", ""),
+        )
+        logger.info(
+            "Fetched text for Reading %s (%s).",
+            reading.pk, reading.passage_reference,
+        )
+        return True
+    except ValueError as e:
+        logger.error(
+            "Book name mapping failed for Reading %s ('%s'): %s",
+            reading.pk, reading.book, e,
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            "API call failed for Reading %s (%s): %s",
+            reading.pk, reading.passage_reference, e,
+        )
+        return False
