@@ -445,6 +445,34 @@
         font-size: 16px;
         margin: 0;
     }
+
+    /* Modal tab styles */
+    .modal-tabs {
+        display: flex;
+        gap: 4px;
+        margin-left: 16px;
+    }
+
+    .modal-tab {
+        padding: 6px 14px;
+        border: 1px solid #ccc;
+        border-radius: 16px;
+        background: white;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #555;
+    }
+
+    .modal-tab:hover {
+        background: #e8e8e8;
+    }
+
+    .modal-tab.active {
+        background: #417690;
+        color: white;
+        border-color: #417690;
+    }
 </style>
 {% endblock %}
 
@@ -518,6 +546,12 @@
             <h3>Prayer Requests</h3>
             <p class="stat-value" id="stat-prayer-requests-value">{{ prayer_request_activity }}</p>
             <p class="stat-change" id="stat-prayer-requests-change">Last {{ days }} days</p>
+        </div>
+
+        <div class="stat-card" id="stat-language">
+            <h3>Language Usage</h3>
+            <p class="stat-value" id="stat-language-value" style="font-size: 24px;">{{ language_en }} EN / {{ language_hy }} HY</p>
+            <p class="stat-change" id="stat-language-change">Unique users, last {{ days }} days</p>
         </div>
     </div>
     
@@ -1053,6 +1087,8 @@ function updateCharts() {
         document.getElementById('stat-prayer-sets-value').textContent = data.prayer_set_views;
         document.getElementById('stat-prayer-requests-value').textContent = data.prayer_request_activity;
 
+        document.getElementById('stat-language-value').textContent = `${data.language_en} EN / ${data.language_hy} HY`;
+
         // Recreate charts with new data
         recreateCharts(data);
     })
@@ -1351,6 +1387,7 @@ let currentMetricType = null;
 let currentOffset = 0;
 let currentSort = 'default';
 let currentHasMore = false;
+let currentChecklistTab = 'by-fast';
 
 function openDetailModal(metricType) {
     currentMetricType = metricType;
@@ -1410,6 +1447,22 @@ function openDetailModal(metricType) {
     sortSelect.innerHTML = metricConfig.sortOptions.map(opt =>
         `<option value="${opt.value}" ${opt.value === currentSort ? 'selected' : ''}>${opt.label}</option>`
     ).join('');
+
+    // Add checklist tabs if applicable
+    currentChecklistTab = 'by-fast';
+    const existingTabs = document.querySelector('.modal-tabs');
+    if (existingTabs) existingTabs.remove();
+
+    if (metricType === 'checklist-usage') {
+        const controlsEl = document.querySelector('.modal-controls');
+        const tabsHtml = document.createElement('div');
+        tabsHtml.className = 'modal-tabs';
+        tabsHtml.innerHTML = `
+            <button class="modal-tab active" data-tab="by-fast" onclick="switchChecklistTab('by-fast')">By Fast</button>
+            <button class="modal-tab" data-tab="by-item" onclick="switchChecklistTab('by-item')">By Item</button>
+        `;
+        controlsEl.appendChild(tabsHtml);
+    }
 
     // Show loading
     modalBody.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading...</p></div>';
@@ -1484,6 +1537,9 @@ function renderModalContent(metricType, data, append = false) {
         case 'checklist-usage':
             html = renderChecklistUsageTable(data.items, append);
             break;
+        case 'checklist-items':
+            html = renderChecklistItemsTable(data.items, append);
+            break;
         case 'prayer-views':
             html = renderPrayerViewsTable(data.items, append);
             break;
@@ -1549,10 +1605,17 @@ function renderNewUsersTable(items, append) {
 }
 
 function renderDevotionalViewsTable(items, append) {
+    function devTitleCell(dev) {
+        if (dev.devotional_id) {
+            return `<a href="/admin/hub/devotional/${dev.devotional_id}/change/" target="_blank" style="color: #417690; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${dev.title}</a>`;
+        }
+        return dev.title;
+    }
+
     if (append) {
         return items.map(dev => `
             <tr>
-                <td>${dev.title}</td>
+                <td>${devTitleCell(dev)}</td>
                 <td>${dev.fast_name}</td>
                 <td class="numeric">${dev.views}</td>
                 <td class="numeric">${dev.unique_users}</td>
@@ -1573,7 +1636,7 @@ function renderDevotionalViewsTable(items, append) {
             <tbody>
                 ${items.map(dev => `
                     <tr>
-                        <td>${dev.title}</td>
+                        <td>${devTitleCell(dev)}</td>
                         <td>${dev.fast_name}</td>
                         <td class="numeric">${dev.views}</td>
                         <td class="numeric">${dev.unique_users}</td>
@@ -1610,6 +1673,56 @@ function renderChecklistUsageTable(items, append) {
                         <td>${checklist.checklist_type}</td>
                         <td class="numeric">${checklist.usage_count}</td>
                         <td class="numeric">${checklist.unique_users}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function switchChecklistTab(tab) {
+    if (tab === currentChecklistTab) return;
+    currentChecklistTab = tab;
+    currentOffset = 0;
+
+    // Update tab button styles
+    document.querySelectorAll('.modal-tabs .modal-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    const modalBody = document.getElementById('modalBody');
+    modalBody.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading...</p></div>';
+
+    currentMetricType = tab === 'by-item' ? 'checklist-items' : 'checklist-usage';
+    fetchModalData(currentMetricType, 0, currentSort, false);
+}
+
+function renderChecklistItemsTable(items, append) {
+    if (append) {
+        return items.map(item => `
+            <tr>
+                <td>${item.item_name}</td>
+                <td class="numeric">${item.times_checked}</td>
+                <td class="numeric">${item.unique_users}</td>
+            </tr>
+        `).join('');
+    }
+
+    return `
+        <table class="modal-table">
+            <thead>
+                <tr>
+                    <th>Checklist Item</th>
+                    <th>Times Checked</th>
+                    <th>Unique Users</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(item => `
+                    <tr>
+                        <td>${item.item_name}</td>
+                        <td class="numeric">${item.times_checked}</td>
+                        <td class="numeric">${item.unique_users}</td>
                     </tr>
                 `).join('')}
             </tbody>
