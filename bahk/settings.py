@@ -473,7 +473,8 @@ else:
     print("\033[93m" + "="*50 + "\033[0m")  # Reset color
 
 # handling CORS headers
-CORS_ORIGIN_ALLOW_ALL = config('CORS_ORIGIN_ALLOW_ALL', default=False, cast=bool)
+CORS_ALLOW_ALL_ORIGINS = config('CORS_ORIGIN_ALLOW_ALL', default=False, cast=bool)
+CORS_ORIGIN_ALLOW_ALL = CORS_ALLOW_ALL_ORIGINS  # deprecated alias, kept for backward compatibility
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 
 # Allow analytics tracking headers for frontend apps

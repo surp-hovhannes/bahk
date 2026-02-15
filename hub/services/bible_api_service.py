@@ -58,10 +58,11 @@ class BibleAPIService:
 
         Returns:
             Dict with keys:
-                "reference" - The human-readable reference (e.g. "Genesis 1:1-5")
-                "content"   - The verse text
-                "copyright" - Copyright statement
-                "version"   - "NKJV" or "KJVAIC" depending on which was used
+                "reference"  - The human-readable reference (e.g. "Genesis 1:1-5")
+                "content"    - The verse text
+                "copyright"  - Copyright statement
+                "version"    - "NKJV" or "KJVAIC" depending on which was used
+                "fums_token" - FUMS v3 token for fair-use tracking
 
         Raises:
             requests.HTTPError: On API errors (401, 403, 404, etc.)
@@ -76,6 +77,7 @@ class BibleAPIService:
             "include-verse-numbers": "true",
             "include-titles": "false",
             "include-notes": "false",
+            "fums-version": "3",
         }
 
         url = f"{BASE_URL}/bibles/{bible_id}/passages/{passage_id}"
@@ -84,11 +86,13 @@ class BibleAPIService:
         json_data = resp.json()
 
         data = json_data["data"]
+        fums_token = json_data.get("meta", {}).get("fumsToken", "")
         return {
             "reference": data.get("reference", passage_id),
             "content": data.get("content", ""),
             "copyright": data.get("copyright", ""),
             "version": version,
+            "fums_token": fums_token,
         }
 
     @staticmethod
