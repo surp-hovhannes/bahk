@@ -2,41 +2,25 @@
 import datetime
 from unittest.mock import Mock, patch
 
-from django.db.models.signals import post_save
 from django.test import TestCase
 from django.utils import timezone
 
 from hub.admin import ReadingAdmin
 from hub.models import Church, Day, Fast, Reading
-from hub.services.bible_api_service import BibleAPIService
-from hub.signals import handle_reading_save
-
-
-def _disconnect_reading_signal():
-    """Disconnect the Reading post_save signal to avoid side effects in tests."""
-    post_save.disconnect(handle_reading_save, sender=Reading)
-
-
-def _reconnect_reading_signal():
-    """Reconnect the Reading post_save signal."""
-    post_save.connect(handle_reading_save, sender=Reading)
+from hub.services.bible_api_service import BibleAPIService, fetch_text_for_reading
 
 
 def _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5, **kwargs):
-    """Helper to create a Reading with signals disconnected."""
-    _disconnect_reading_signal()
-    try:
-        return Reading.objects.create(
-            day=day,
-            book=book,
-            start_chapter=start_ch,
-            start_verse=start_v,
-            end_chapter=end_ch,
-            end_verse=end_v,
-            **kwargs,
-        )
-    finally:
-        _reconnect_reading_signal()
+    """Helper to create a Reading."""
+    return Reading.objects.create(
+        day=day,
+        book=book,
+        start_chapter=start_ch,
+        start_verse=start_v,
+        end_chapter=end_ch,
+        end_verse=end_v,
+        **kwargs,
+    )
 
 
 class BibleAPIServiceFumsTests(TestCase):
@@ -181,8 +165,8 @@ class ReadingAdminFumsTests(TestCase):
         self.assertFalse(self.admin.has_fums_token(reading))
 
 
-class FetchAndUpdateReadingFumsTests(TestCase):
-    """Tests for FUMS token storage in bible_api_tasks."""
+class FetchTextForReadingFumsTests(TestCase):
+    """Tests for FUMS token storage via fetch_text_for_reading."""
 
     def setUp(self):
         self.church = Church.objects.create(name="Task Test Church")
@@ -193,12 +177,10 @@ class FetchAndUpdateReadingFumsTests(TestCase):
             date=timezone.now().date(), fast=self.fast, church=self.church
         )
 
-    def test_fetch_and_update_reading_stores_fums_token(self):
-        """_fetch_and_update_reading should store the FUMS token on the reading."""
-        from hub.tasks.bible_api_tasks import _fetch_and_update_reading
-
-        mock_service = Mock()
-        mock_service.resolve_book_name.return_value = "GEN"
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    def test_fetch_text_for_reading_stores_fums_token(self, mock_resolve):
+        """fetch_text_for_reading should store the FUMS token on the reading."""
+        mock_service = Mock(spec=BibleAPIService)
         mock_service.get_passage.return_value = {
             "reference": "Genesis 1:1-5",
             "content": "In the beginning...",
@@ -209,25 +191,24 @@ class FetchAndUpdateReadingFumsTests(TestCase):
 
         reading = _create_reading(day=self.day)
 
-        _fetch_and_update_reading(mock_service, reading)
+        result = fetch_text_for_reading(reading, service=mock_service)
 
+        self.assertTrue(result)
         reading.refresh_from_db()
         self.assertEqual(reading.fums_token, "task-fums-token-999")
 
-    @patch("hub.tasks.bible_api_tasks.BibleAPIService")
-    def test_each_reading_gets_own_fums_token(self, MockService):
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_each_reading_gets_own_fums_token(self, mock_config, mock_resolve, mock_get_passage):
         """Each reading should get its own API call and unique FUMS token."""
-        from hub.tasks.bible_api_tasks import fetch_reading_text_task
-
-        mock_service = Mock()
-        mock_service.get_passage.return_value = {
+        mock_get_passage.return_value = {
             "reference": "Genesis 1:1-5",
             "content": "In the beginning...",
             "copyright": "Copyright NKJV",
             "version": "NKJV",
             "fums_token": "new-unique-fums-token",
         }
-        MockService.return_value = mock_service
 
         # Create an existing reading with text already fetched
         _create_reading(
@@ -247,9 +228,10 @@ class FetchAndUpdateReadingFumsTests(TestCase):
         )
         new_reading = _create_reading(day=day2)
 
-        fetch_reading_text_task(new_reading.pk)
+        result = fetch_text_for_reading(new_reading)
 
+        self.assertTrue(result)
         new_reading.refresh_from_db()
         # Should have its own token from the API call, not the copied one
         self.assertEqual(new_reading.fums_token, "new-unique-fums-token")
-        mock_service.get_passage.assert_called_once()
+        mock_get_passage.assert_called_once()
