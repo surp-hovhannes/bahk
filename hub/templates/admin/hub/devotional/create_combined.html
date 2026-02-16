@@ -49,9 +49,36 @@
     padding: 0;
     margin: 4px 0 0;
   }
-  .new-video-fields { margin-top: 10px; }
   .lang-checkbox { display: inline-block; margin-right: 15px; }
   .lang-checkbox label { font-weight: normal; cursor: pointer; }
+
+  /* Video source toggle (segmented control) */
+  .video-source-toggle {
+    display: inline-flex;
+    border: 1px solid #999;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .video-source-toggle button {
+    padding: 6px 14px;
+    border: none;
+    background: #f8f8f8;
+    color: #333;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .video-source-toggle button + button {
+    border-left: 1px solid #999;
+  }
+  .video-source-toggle button:hover {
+    background: #e8e8e8;
+  }
+  .video-source-toggle button.active {
+    background: #417690;
+    color: #fff;
+  }
 </style>
 {% endblock %}
 
@@ -114,7 +141,6 @@
         </label>
       </span>
     {% endfor %}
-    {# Disabled checkboxes don't submit; hidden input ensures EN is always included #}
     <input type="hidden" name="languages" value="en">
     {{ form.languages.errors }}
   </fieldset>
@@ -127,15 +153,25 @@
       <div class="column lang-section" data-lang="{{ lang.code }}"
            {% if not lang.selected %}style="display:none;"{% endif %}>
         <h3>{{ lang.name }} Video</h3>
-        <div class="form-row">
-          <label for="{{ lang.existing_video.id_for_label }}">{{ lang.existing_video.label }}:</label>
-          {{ lang.existing_video }}
-          {{ lang.existing_video.errors }}
+
+        {# Segmented toggle: Create new vs Use existing #}
+        <div class="video-source-toggle" data-lang="{{ lang.code }}">
+          <button type="button" class="video-mode-btn active" data-mode="new" data-lang="{{ lang.code }}">Create new</button>
+          <button type="button" class="video-mode-btn" data-mode="existing" data-lang="{{ lang.code }}">Use existing</button>
         </div>
-        <div class="form-row">
-          <label><input type="checkbox" class="toggle-new-video" data-lang="{{ lang.code }}" checked> Create new video</label>
+
+        {# --- "Use existing" panel --- #}
+        <div class="video-panel-existing" id="video-existing-{{ lang.code }}" style="display:none;">
+          <div class="form-row">
+            <label for="{{ lang.existing_video.id_for_label }}">{{ lang.existing_video.label }}:</label>
+            {{ lang.existing_video }}
+            {% if lang.existing_video.help_text %}<p class="helptext">{{ lang.existing_video.help_text }}</p>{% endif %}
+            {{ lang.existing_video.errors }}
+          </div>
         </div>
-        <div class="new-video-fields" id="new-video-{{ lang.code }}">
+
+        {# --- "Create new" panel --- #}
+        <div class="video-panel-new" id="video-new-{{ lang.code }}">
           <div class="form-row">
             <label for="{{ lang.video_title.id_for_label }}">{{ lang.video_title.label }}:</label>
             {{ lang.video_title }}
@@ -196,28 +232,39 @@
     });
   });
 
-  // --- Toggle new-video / existing-video per language ---
-  document.querySelectorAll('.toggle-new-video').forEach(function(toggle) {
-    var lang = toggle.dataset.lang;
-    var newFields = document.getElementById('new-video-' + lang);
+  // --- Video source toggle: switch between "Create new" and "Use existing" ---
+  function setVideoMode(lang, mode) {
+    var panelNew = document.getElementById('video-new-' + lang);
+    var panelExisting = document.getElementById('video-existing-' + lang);
+    var buttons = document.querySelectorAll('.video-mode-btn[data-lang="' + lang + '"]');
+
+    if (mode === 'new') {
+      panelNew.style.display = '';
+      panelExisting.style.display = 'none';
+    } else {
+      panelNew.style.display = 'none';
+      panelExisting.style.display = '';
+    }
+
+    buttons.forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+  }
+
+  document.querySelectorAll('.video-mode-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      setVideoMode(this.dataset.lang, this.dataset.mode);
+    });
+  });
+
+  // On page load, if an existing video was selected (e.g. after validation error),
+  // switch to "Use existing" mode for that language.
+  document.querySelectorAll('.video-source-toggle').forEach(function(toggleGroup) {
+    var lang = toggleGroup.dataset.lang;
     var existingSelect = document.getElementById('id_existing_video_' + lang);
-
-    function update() {
-      var createNew = toggle.checked;
-      newFields.style.display = createNew ? '' : 'none';
-      if (existingSelect) {
-        existingSelect.disabled = createNew;
-        if (createNew) existingSelect.value = '';
-      }
-    }
-
-    toggle.addEventListener('change', update);
-
-    // If existing video has a value on page load (e.g. after validation error), uncheck toggle
     if (existingSelect && existingSelect.value) {
-      toggle.checked = false;
+      setVideoMode(lang, 'existing');
     }
-    update();
   });
 
   // --- Auto-fill Fast from Date ---
