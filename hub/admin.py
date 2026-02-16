@@ -11,11 +11,19 @@ from django.utils.html import format_html
 from django.utils.text import Truncator
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from markdownx.admin import MarkdownxModelAdmin
 import logging
 
-from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
+from django.db import transaction
+
+from hub.forms import (
+    AddDaysToFastAdminForm,
+    CombinedDevotionalForm,
+    CreateFastWithDatesAdminForm,
+    SUPPORTED_LANGUAGES,
+)
+from learning_resources.models import Video
 from hub.models import (
     Church,
     Day,
@@ -90,6 +98,35 @@ class DevotionalAdmin(admin.ModelAdmin):
     ordering = ("day__date",)
     search_fields = ("video__title", "description")
     raw_id_fields = ("video", "day")
+    exclude = ("description",)
+    readonly_fields = ("effective_description",)
+
+    fieldsets = (
+        (None, {
+            'fields': ('day', 'video', 'language_code', 'order'),
+        }),
+        ('Description', {
+            'description': (
+                'Leave blank to use the video description (shown below as '
+                '<strong>Effective description</strong>). '
+                'Fill in to override the video description for this devotional.'
+            ),
+            'fields': ('description_en', 'description_hy', 'effective_description'),
+        }),
+    )
+
+    def effective_description(self, obj):
+        """Show the description the API will actually return."""
+        if not obj or not obj.pk:
+            return "-"
+        desc = obj.description
+        if desc:
+            return f"{desc} (from devotional)"
+        if obj.video and obj.video.description:
+            return f"{obj.video.description} (from video)"
+        return "(none)"
+
+    effective_description.short_description = "Effective description (read-only)"
 
     def title(self, obj):
         return obj.video.title if obj.video else ""
@@ -105,6 +142,119 @@ class DevotionalAdmin(admin.ModelAdmin):
         return obj.day.date if obj.day else ""
 
     date.admin_order_field = "day__date"
+
+    def get_urls(self):
+        return [
+            path(
+                "create_combined/",
+                self.admin_site.admin_view(self.create_combined_devotional),
+                name="create-combined-devotional",
+            ),
+            path(
+                "lookup_fast_by_date/",
+                self.admin_site.admin_view(self.lookup_fast_by_date),
+                name="lookup-fast-by-date",
+            ),
+        ] + super().get_urls()
+
+    def lookup_fast_by_date(self, request):
+        """AJAX endpoint: given a date, return the fast(s) associated with existing Days."""
+        date_str = request.GET.get("date", "")
+        if not date_str:
+            return JsonResponse({"fasts": []})
+        days = Day.objects.filter(date=date_str, fast__isnull=False).select_related("fast")
+        fasts = [{"id": day.fast.id, "name": str(day.fast)} for day in days]
+        # Deduplicate (multiple Days on the same date with different churches but same fast)
+        seen = set()
+        unique_fasts = []
+        for f in fasts:
+            if f["id"] not in seen:
+                seen.add(f["id"])
+                unique_fasts.append(f)
+        return JsonResponse({"fasts": unique_fasts})
+
+    def _get_or_create_video(self, data, lang):
+        """Return an existing or newly created Video for the given language."""
+        video = data.get(f'existing_video_{lang}')
+        if video:
+            if video.category != 'devotional':
+                video.category = 'devotional'
+                video.save(update_fields=['category'])
+            return video
+
+        video = Video(
+            title=data[f'video_title_{lang}'],
+            description=data[f'video_description_{lang}'],
+            video=data[f'video_file_{lang}'],
+            category='devotional',
+            language_code=lang,
+        )
+        if data.get(f'video_thumbnail_{lang}'):
+            video.thumbnail = data[f'video_thumbnail_{lang}']
+        video.save()
+        return video
+
+    def create_combined_devotional(self, request):
+        """View to create videos and devotionals for selected languages."""
+        if request.method == "POST":
+            form = CombinedDevotionalForm(request.POST, request.FILES)
+            if form.is_valid():
+                data = form.cleaned_data
+                try:
+                    with transaction.atomic():
+                        # 1. Get or create Day
+                        day, _ = Day.objects.get_or_create(
+                            date=data['date'],
+                            fast=data['fast'],
+                            defaults={'church': data['fast'].church},
+                        )
+
+                        # 2. Create video + devotional for each selected language
+                        selected_languages = data['languages']
+                        first_devotional = None
+                        for lang in selected_languages:
+                            video = self._get_or_create_video(data, lang)
+                            devotional = Devotional.objects.create(
+                                day=day,
+                                video=video,
+                                description=data.get(f'devotional_description_{lang}') or '',
+                                order=data.get('order'),
+                                language_code=lang,
+                            )
+                            if first_devotional is None:
+                                first_devotional = devotional
+
+                    lang_names = ', '.join(
+                        name for code, name, _ in SUPPORTED_LANGUAGES
+                        if code in selected_languages
+                    )
+                    messages.success(
+                        request,
+                        f"Devotionals created successfully for: {lang_names}.",
+                    )
+                    return redirect(
+                        reverse(
+                            f"admin:{self.opts.app_label}_{self.opts.model_name}_change",
+                            args=[first_devotional.pk],
+                        )
+                    )
+                except Exception as e:
+                    messages.error(request, f"Error creating devotionals: {e}")
+        else:
+            form = CombinedDevotionalForm()
+
+        context = dict(
+            self.admin_site.each_context(request),
+            opts=Devotional._meta,
+            title="Add devotional",
+            form=form,
+            language_fields=form.get_language_fields(),
+        )
+        return TemplateResponse(
+            request,
+            "admin/hub/devotional/create_combined.html",
+            context,
+        )
 
 
 @admin.register(DevotionalSet, site=admin.site)

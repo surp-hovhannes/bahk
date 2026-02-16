@@ -535,7 +535,8 @@ class Devotional(models.Model):
         Video, on_delete=models.CASCADE, related_name="devotionals"
     )
     order = models.PositiveIntegerField(
-        help_text="Order of the devotional within the fast",
+        help_text="Only matters when multiple devotionals exist on the same day. "
+        "Controls display order and must be unique per day and language.",
         null=True,
         blank=True,
     )

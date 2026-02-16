@@ -1,0 +1,313 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block extrahead %}
+{{ block.super }}
+{{ form.media }}
+<style>
+  .combined-form fieldset {
+    border: 1px solid #ddd;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+  }
+  .combined-form legend {
+    font-weight: bold;
+    font-size: 1.1em;
+    padding: 0 8px;
+  }
+  .side-by-side {
+    display: flex;
+    gap: 20px;
+  }
+  .side-by-side > .column {
+    flex: 1;
+  }
+  .form-row {
+    margin-bottom: 12px;
+  }
+  .form-row label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  .form-row .helptext {
+    color: #666;
+    font-size: 0.85em;
+  }
+  .form-row input[type="text"],
+  .form-row input[type="number"],
+  .form-row input[type="date"],
+  .form-row select,
+  .form-row textarea {
+    width: 100%;
+    padding: 6px 8px;
+  }
+  .errorlist {
+    color: #ba2121;
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0;
+  }
+  .lang-checkbox { display: inline-block; margin-right: 15px; }
+  .lang-checkbox label { font-weight: normal; cursor: pointer; }
+
+  /* Video source toggle (segmented control) */
+  .video-source-toggle {
+    display: inline-flex;
+    border: 1px solid #999;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .video-source-toggle button {
+    padding: 6px 14px;
+    border: none;
+    background: #f8f8f8;
+    color: #333;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .video-source-toggle button + button {
+    border-left: 1px solid #999;
+  }
+  .video-source-toggle button:hover {
+    background: #e8e8e8;
+  }
+  .video-source-toggle button.active {
+    background: #417690;
+    color: #fff;
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate "Add devotional" %}
+</div>
+{% endblock %}
+
+{% block content %}
+<form action="" method="post" enctype="multipart/form-data" class="combined-form">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="errornote">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
+
+  {# --- Date, Fast & Order (shared) --- #}
+  <fieldset>
+    <legend>Date, Fast &amp; Order</legend>
+    <div class="form-row">
+      <label for="{{ form.date.id_for_label }}">Date:</label>
+      {{ form.date }}
+      {% if form.date.help_text %}<p class="helptext">{{ form.date.help_text }}</p>{% endif %}
+      {{ form.date.errors }}
+    </div>
+    <div class="form-row">
+      <label for="{{ form.fast.id_for_label }}">Fast:</label>
+      {{ form.fast }}
+      <p class="helptext" id="fast-auto-status" style="display:none;"></p>
+      {% if form.fast.help_text %}<p class="helptext">{{ form.fast.help_text }}</p>{% endif %}
+      {{ form.fast.errors }}
+    </div>
+    <div class="form-row">
+      <label for="{{ form.order.id_for_label }}">Order:</label>
+      {{ form.order }}
+      {% if form.order.help_text %}<p class="helptext">{{ form.order.help_text }}</p>{% endif %}
+      {{ form.order.errors }}
+    </div>
+  </fieldset>
+
+  {# --- Language selection --- #}
+  <fieldset>
+    <legend>Languages</legend>
+    <p class="helptext">English is always included. Select additional languages as needed.</p>
+    {% for lang in language_fields %}
+      <span class="lang-checkbox">
+        <label>
+          <input type="checkbox" name="languages" value="{{ lang.code }}"
+            class="lang-toggle"
+            data-lang="{{ lang.code }}"
+            {% if lang.selected %}checked{% endif %}
+            {% if lang.required %}disabled{% endif %}>
+          {{ lang.name }}
+        </label>
+      </span>
+    {% endfor %}
+    <input type="hidden" name="languages" value="en">
+    {{ form.languages.errors }}
+  </fieldset>
+
+  {# --- Videos (dynamic columns per language) --- #}
+  <fieldset>
+    <legend>Videos</legend>
+    <div class="side-by-side">
+      {% for lang in language_fields %}
+      <div class="column lang-section" data-lang="{{ lang.code }}"
+           {% if not lang.selected %}style="display:none;"{% endif %}>
+        <h3>{{ lang.name }} Video</h3>
+
+        {# Segmented toggle: Create new vs Use existing #}
+        <div class="video-source-toggle" data-lang="{{ lang.code }}">
+          <button type="button" class="video-mode-btn active" data-mode="new" data-lang="{{ lang.code }}">Create new</button>
+          <button type="button" class="video-mode-btn" data-mode="existing" data-lang="{{ lang.code }}">Use existing</button>
+        </div>
+
+        {# --- "Use existing" panel --- #}
+        <div class="video-panel-existing" id="video-existing-{{ lang.code }}" style="display:none;">
+          <div class="form-row">
+            <label for="{{ lang.existing_video.id_for_label }}">{{ lang.existing_video.label }}:</label>
+            {{ lang.existing_video }}
+            {% if lang.existing_video.help_text %}<p class="helptext">{{ lang.existing_video.help_text }}</p>{% endif %}
+            {{ lang.existing_video.errors }}
+          </div>
+        </div>
+
+        {# --- "Create new" panel --- #}
+        <div class="video-panel-new" id="video-new-{{ lang.code }}">
+          <div class="form-row">
+            <label for="{{ lang.video_title.id_for_label }}">{{ lang.video_title.label }}:</label>
+            {{ lang.video_title }}
+            {{ lang.video_title.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ lang.video_description.id_for_label }}">{{ lang.video_description.label }}:</label>
+            {{ lang.video_description }}
+            {{ lang.video_description.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ lang.video_file.id_for_label }}">{{ lang.video_file.label }}:</label>
+            {{ lang.video_file }}
+            {% if lang.video_file.help_text %}<p class="helptext">{{ lang.video_file.help_text }}</p>{% endif %}
+            {{ lang.video_file.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ lang.video_thumbnail.id_for_label }}">{{ lang.video_thumbnail.label }}:</label>
+            {{ lang.video_thumbnail }}
+            {{ lang.video_thumbnail.errors }}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  {# --- Devotional descriptions (dynamic columns per language) --- #}
+  <fieldset>
+    <legend>Devotional Descriptions</legend>
+    <div class="side-by-side">
+      {% for lang in language_fields %}
+      <div class="column lang-section" data-lang="{{ lang.code }}"
+           {% if not lang.selected %}style="display:none;"{% endif %}>
+        <div class="form-row">
+          <label for="{{ lang.devotional_description.id_for_label }}">{{ lang.devotional_description.label }}:</label>
+          {{ lang.devotional_description }}
+          {% if lang.devotional_description.help_text %}<p class="helptext">{{ lang.devotional_description.help_text }}</p>{% endif %}
+          {{ lang.devotional_description.errors }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <input type="submit" value="Create devotionals" class="default">
+</form>
+
+<script>
+(function() {
+  // --- Language toggle: show/hide per-language sections ---
+  document.querySelectorAll('.lang-toggle').forEach(function(toggle) {
+    toggle.addEventListener('change', function() {
+      var lang = this.dataset.lang;
+      var sections = document.querySelectorAll('.lang-section[data-lang="' + lang + '"]');
+      sections.forEach(function(section) {
+        section.style.display = toggle.checked ? '' : 'none';
+      });
+    });
+  });
+
+  // --- Video source toggle: switch between "Create new" and "Use existing" ---
+  function setVideoMode(lang, mode) {
+    var panelNew = document.getElementById('video-new-' + lang);
+    var panelExisting = document.getElementById('video-existing-' + lang);
+    var buttons = document.querySelectorAll('.video-mode-btn[data-lang="' + lang + '"]');
+
+    if (mode === 'new') {
+      panelNew.style.display = '';
+      panelExisting.style.display = 'none';
+    } else {
+      panelNew.style.display = 'none';
+      panelExisting.style.display = '';
+    }
+
+    buttons.forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+  }
+
+  document.querySelectorAll('.video-mode-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      setVideoMode(this.dataset.lang, this.dataset.mode);
+    });
+  });
+
+  // On page load, if an existing video was selected (e.g. after validation error),
+  // switch to "Use existing" mode for that language.
+  document.querySelectorAll('.video-source-toggle').forEach(function(toggleGroup) {
+    var lang = toggleGroup.dataset.lang;
+    var existingSelect = document.getElementById('id_existing_video_' + lang);
+    if (existingSelect && existingSelect.value) {
+      setVideoMode(lang, 'existing');
+    }
+  });
+
+  // --- Auto-fill Fast from Date ---
+  var dateInput = document.getElementById('id_date');
+  var fastSelect = document.getElementById('id_fast');
+  var statusEl = document.getElementById('fast-auto-status');
+
+  if (dateInput && fastSelect) {
+    dateInput.addEventListener('change', function() {
+      var dateVal = dateInput.value;
+      if (!dateVal) {
+        statusEl.style.display = 'none';
+        return;
+      }
+      fetch("{% url 'admin:lookup-fast-by-date' %}?date=" + encodeURIComponent(dateVal))
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+          if (data.fasts && data.fasts.length > 0) {
+            var fastId = String(data.fasts[0].id);
+            for (var i = 0; i < fastSelect.options.length; i++) {
+              if (fastSelect.options[i].value === fastId) {
+                fastSelect.value = fastId;
+                statusEl.textContent = 'Auto-filled from existing day for ' + dateVal + '.';
+                statusEl.style.display = '';
+                statusEl.style.color = '#28a745';
+                return;
+              }
+            }
+            statusEl.textContent = 'Found fast "' + data.fasts[0].name + '" but it is not in the dropdown.';
+            statusEl.style.display = '';
+            statusEl.style.color = '#c00';
+          } else {
+            statusEl.textContent = 'No existing day found for ' + dateVal + '. Please select a fast manually.';
+            statusEl.style.display = '';
+            statusEl.style.color = '#666';
+          }
+        })
+        .catch(function() {
+          statusEl.style.display = 'none';
+        });
+    });
+  }
+})();
+</script>
+{% endblock %}
