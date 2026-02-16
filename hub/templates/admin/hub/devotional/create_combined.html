@@ -209,6 +209,7 @@
         <div class="form-row">
           <label for="{{ lang.devotional_description.id_for_label }}">{{ lang.devotional_description.label }}:</label>
           {{ lang.devotional_description }}
+          {% if lang.devotional_description.help_text %}<p class="helptext">{{ lang.devotional_description.help_text }}</p>{% endif %}
           {{ lang.devotional_description.errors }}
         </div>
       </div>

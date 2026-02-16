@@ -188,6 +188,7 @@ class CombinedDevotionalForm(forms.Form):
                 widget=forms.Textarea(attrs={'rows': 3}),
                 required=False,
                 label=f"Devotional description ({code.upper()})",
+                help_text="Optional. Write here to override the video description.",
             )
 
     def get_language_fields(self):
