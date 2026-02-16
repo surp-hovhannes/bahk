@@ -30,6 +30,7 @@ from hub.models import (
     Reading,
     ReadingContext,
 )
+from hub.services.bible_api_service import BibleAPIService, fetch_text_for_reading
 from hub.tasks import (
     generate_reading_context_task,
     generate_feast_context_task,
@@ -493,8 +494,8 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_chapter",
         "start_verse",
     )
-    actions = ["force_regenerate_context", "compare_prompts"]
-    readonly_fields = ("text_fetched_at", "has_fums_token")
+    actions = ["force_regenerate_context", "compare_prompts", "fetch_bible_text"]
+    readonly_fields = ("text_fetched_at", "has_fums_token", "fetch_text_link")
     exclude = ("book", "text", "fums_token")  # Avoid duplicates with translation fields
 
     fieldsets = (
@@ -505,7 +506,7 @@ class ReadingAdmin(admin.ModelAdmin):
             'fields': ('book_en', 'book_hy', 'text_en', 'text_hy')
         }),
         ('Bible Text (API.Bible)', {
-            'fields': ('text_version', 'text_copyright', 'text_fetched_at', 'has_fums_token'),
+            'fields': ('text_version', 'text_copyright', 'text_fetched_at', 'has_fums_token', 'fetch_text_link'),
             'classes': ('collapse',),
             'description': (
                 'FUMS (Fair Use Management System) tokens are required by API.Bible\'s terms of use. '
@@ -520,6 +521,92 @@ class ReadingAdmin(admin.ModelAdmin):
 
     has_fums_token.short_description = "FUMS token captured"
     has_fums_token.boolean = True
+
+    def get_urls(self):
+        """Add per-reading endpoint to fetch Bible text."""
+        custom_urls = [
+            path(
+                "<int:pk>/fetch_bible_text/",
+                self.admin_site.admin_view(self.fetch_bible_text_view),
+                name="hub_reading_fetch_bible_text",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def fetch_text_link(self, obj):
+        """Render a button to fetch/re-fetch Bible text for this reading."""
+        if not obj or not obj.pk:
+            return "-"
+        url = reverse("admin:hub_reading_fetch_bible_text", args=[obj.pk])
+        label = "Re-fetch Bible text" if obj.text else "Fetch Bible text"
+        return format_html('<a class="button" href="{}">{}</a>', url, label)
+
+    fetch_text_link.short_description = "Fetch from API.Bible"
+
+    def fetch_bible_text_view(self, request, pk: int):
+        """Admin view to fetch Bible text for a single reading."""
+        try:
+            reading = Reading.objects.get(pk=pk)
+        except Reading.DoesNotExist as exc:
+            raise Http404 from exc
+        if not self.has_change_permission(request, obj=reading):
+            raise PermissionDenied
+
+        try:
+            service = BibleAPIService()
+        except ValueError:
+            self.message_user(
+                request,
+                "BIBLE_API_KEY is not configured. Cannot fetch text.",
+                level=messages.ERROR,
+            )
+            return redirect(reverse("admin:hub_reading_change", args=[pk]))
+
+        success = fetch_text_for_reading(reading, service=service)
+        if success:
+            self.message_user(
+                request,
+                f"Successfully fetched Bible text for {reading}.",
+                level=messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                f"Failed to fetch Bible text for {reading}. Check logs for details.",
+                level=messages.ERROR,
+            )
+        return redirect(reverse("admin:hub_reading_change", args=[pk]))
+
+    def fetch_bible_text(self, request, queryset):
+        """Fetch Bible text from API.Bible for selected readings."""
+        try:
+            service = BibleAPIService()
+        except ValueError:
+            self.message_user(
+                request,
+                "BIBLE_API_KEY is not configured. Cannot fetch text.",
+                level=messages.ERROR,
+            )
+            return
+
+        success_count = 0
+        fail_count = 0
+        for reading in queryset:
+            if fetch_text_for_reading(reading, service=service):
+                success_count += 1
+            else:
+                fail_count += 1
+
+        parts = [f"Fetched text for {success_count} reading(s)."]
+        if fail_count:
+            parts.append(f"{fail_count} failed (check logs).")
+        self.message_user(
+            request,
+            " ".join(parts),
+            level=messages.SUCCESS if fail_count == 0 else messages.WARNING,
+        )
+
+    fetch_bible_text.short_description = "Fetch Bible text from API.Bible"
 
     def compare_prompts(self, request, queryset):
         """Redirect to a page to compare different LLM prompts for selected readings."""
