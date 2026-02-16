@@ -97,6 +97,35 @@ class DevotionalAdmin(admin.ModelAdmin):
     ordering = ("day__date",)
     search_fields = ("video__title", "description")
     raw_id_fields = ("video", "day")
+    exclude = ("description",)
+    readonly_fields = ("effective_description",)
+
+    fieldsets = (
+        (None, {
+            'fields': ('day', 'video', 'language_code', 'order'),
+        }),
+        ('Description', {
+            'description': (
+                'Leave blank to use the video description (shown below as '
+                '<strong>Effective description</strong>). '
+                'Fill in to override the video description for this devotional.'
+            ),
+            'fields': ('description_en', 'description_hy', 'effective_description'),
+        }),
+    )
+
+    def effective_description(self, obj):
+        """Show the description the API will actually return."""
+        if not obj or not obj.pk:
+            return "-"
+        desc = obj.description
+        if desc:
+            return f"{desc} (from devotional)"
+        if obj.video and obj.video.description:
+            return f"{obj.video.description} (from video)"
+        return "(none)"
+
+    effective_description.short_description = "Effective description (read-only)"
 
     def title(self, obj):
         return obj.video.title if obj.video else ""
