@@ -1,0 +1,224 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block extrahead %}
+{{ block.super }}
+{{ form.media }}
+<style>
+  .combined-form fieldset {
+    border: 1px solid #ddd;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+  }
+  .combined-form legend {
+    font-weight: bold;
+    font-size: 1.1em;
+    padding: 0 8px;
+  }
+  .side-by-side {
+    display: flex;
+    gap: 20px;
+  }
+  .side-by-side > .column {
+    flex: 1;
+  }
+  .form-row {
+    margin-bottom: 12px;
+  }
+  .form-row label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  .form-row .helptext {
+    color: #666;
+    font-size: 0.85em;
+  }
+  .form-row input[type="text"],
+  .form-row input[type="number"],
+  .form-row input[type="date"],
+  .form-row select,
+  .form-row textarea {
+    width: 100%;
+    padding: 6px 8px;
+  }
+  .errorlist {
+    color: #ba2121;
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0;
+  }
+  .new-video-fields { margin-top: 10px; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate "Create combined devotional" %}
+</div>
+{% endblock %}
+
+{% block content %}
+<form action="" method="post" enctype="multipart/form-data" class="combined-form">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="errornote">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
+
+  {# --- Fast, Date & Order (shared) --- #}
+  <fieldset>
+    <legend>Fast, Date &amp; Order</legend>
+    <div class="form-row">
+      <label for="{{ form.fast.id_for_label }}">Fast:</label>
+      {{ form.fast }}
+      {% if form.fast.help_text %}<p class="helptext">{{ form.fast.help_text }}</p>{% endif %}
+      {{ form.fast.errors }}
+    </div>
+    <div class="form-row">
+      <label for="{{ form.date.id_for_label }}">Date:</label>
+      {{ form.date }}
+      {% if form.date.help_text %}<p class="helptext">{{ form.date.help_text }}</p>{% endif %}
+      {{ form.date.errors }}
+    </div>
+    <div class="form-row">
+      <label for="{{ form.order.id_for_label }}">Order:</label>
+      {{ form.order }}
+      {% if form.order.help_text %}<p class="helptext">{{ form.order.help_text }}</p>{% endif %}
+      {{ form.order.errors }}
+    </div>
+  </fieldset>
+
+  {# --- Videos (EN | HY side by side) --- #}
+  <fieldset>
+    <legend>Videos</legend>
+    <div class="side-by-side">
+      {# English video #}
+      <div class="column">
+        <h3>English Video</h3>
+        <div class="form-row">
+          <label for="{{ form.existing_video_en.id_for_label }}">Use existing video:</label>
+          {{ form.existing_video_en }}
+          {{ form.existing_video_en.errors }}
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" class="toggle-new-video" data-lang="en" checked> Create new video</label>
+        </div>
+        <div class="new-video-fields" id="new-video-en">
+          <div class="form-row">
+            <label for="{{ form.video_title_en.id_for_label }}">{{ form.video_title_en.label }}:</label>
+            {{ form.video_title_en }}
+            {{ form.video_title_en.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.video_description_en.id_for_label }}">{{ form.video_description_en.label }}:</label>
+            {{ form.video_description_en }}
+            {{ form.video_description_en.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.video_file_en.id_for_label }}">{{ form.video_file_en.label }}:</label>
+            {{ form.video_file_en }}
+            {% if form.video_file_en.help_text %}<p class="helptext">{{ form.video_file_en.help_text }}</p>{% endif %}
+            {{ form.video_file_en.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.video_thumbnail_en.id_for_label }}">{{ form.video_thumbnail_en.label }}:</label>
+            {{ form.video_thumbnail_en }}
+            {{ form.video_thumbnail_en.errors }}
+          </div>
+        </div>
+      </div>
+
+      {# Armenian video #}
+      <div class="column">
+        <h3>Armenian Video</h3>
+        <div class="form-row">
+          <label for="{{ form.existing_video_hy.id_for_label }}">Use existing video:</label>
+          {{ form.existing_video_hy }}
+          {{ form.existing_video_hy.errors }}
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" class="toggle-new-video" data-lang="hy" checked> Create new video</label>
+        </div>
+        <div class="new-video-fields" id="new-video-hy">
+          <div class="form-row">
+            <label for="{{ form.video_title_hy.id_for_label }}">{{ form.video_title_hy.label }}:</label>
+            {{ form.video_title_hy }}
+            {{ form.video_title_hy.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.video_description_hy.id_for_label }}">{{ form.video_description_hy.label }}:</label>
+            {{ form.video_description_hy }}
+            {{ form.video_description_hy.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.video_file_hy.id_for_label }}">{{ form.video_file_hy.label }}:</label>
+            {{ form.video_file_hy }}
+            {% if form.video_file_hy.help_text %}<p class="helptext">{{ form.video_file_hy.help_text }}</p>{% endif %}
+            {{ form.video_file_hy.errors }}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.video_thumbnail_hy.id_for_label }}">{{ form.video_thumbnail_hy.label }}:</label>
+            {{ form.video_thumbnail_hy }}
+            {{ form.video_thumbnail_hy.errors }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </fieldset>
+
+  {# --- Devotional descriptions (EN | HY side by side) --- #}
+  <fieldset>
+    <legend>Devotional Descriptions</legend>
+    <div class="side-by-side">
+      <div class="column">
+        <div class="form-row">
+          <label for="{{ form.devotional_description_en.id_for_label }}">{{ form.devotional_description_en.label }}:</label>
+          {{ form.devotional_description_en }}
+          {{ form.devotional_description_en.errors }}
+        </div>
+      </div>
+      <div class="column">
+        <div class="form-row">
+          <label for="{{ form.devotional_description_hy.id_for_label }}">{{ form.devotional_description_hy.label }}:</label>
+          {{ form.devotional_description_hy }}
+          {{ form.devotional_description_hy.errors }}
+        </div>
+      </div>
+    </div>
+  </fieldset>
+
+  <input type="submit" value="Create devotionals" class="default">
+</form>
+
+<script>
+(function() {
+  document.querySelectorAll('.toggle-new-video').forEach(function(toggle) {
+    var lang = toggle.dataset.lang;
+    var newFields = document.getElementById('new-video-' + lang);
+    var existingSelect = document.getElementById('id_existing_video_' + lang);
+
+    function update() {
+      var createNew = toggle.checked;
+      newFields.style.display = createNew ? '' : 'none';
+      existingSelect.disabled = createNew;
+      if (createNew) existingSelect.value = '';
+    }
+
+    toggle.addEventListener('change', update);
+
+    // If existing video has a value on page load (e.g. after validation error), uncheck toggle
+    if (existingSelect && existingSelect.value) {
+      toggle.checked = false;
+    }
+    update();
+  });
+})();
+</script>
+{% endblock %}

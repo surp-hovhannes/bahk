@@ -15,7 +15,10 @@ from django.http import Http404
 from markdownx.admin import MarkdownxModelAdmin
 import logging
 
-from hub.forms import AddDaysToFastAdminForm, CreateFastWithDatesAdminForm
+from django.db import transaction
+
+from hub.forms import AddDaysToFastAdminForm, CombinedDevotionalForm, CreateFastWithDatesAdminForm
+from learning_resources.models import Video
 from hub.models import (
     Church,
     Day,
@@ -104,6 +107,100 @@ class DevotionalAdmin(admin.ModelAdmin):
         return obj.day.date if obj.day else ""
 
     date.admin_order_field = "day__date"
+
+    def get_urls(self):
+        return [
+            path(
+                "create_combined/",
+                self.admin_site.admin_view(self.create_combined_devotional),
+                name="create-combined-devotional",
+            ),
+        ] + super().get_urls()
+
+    def _get_or_create_video(self, data, lang):
+        """Return an existing or newly created Video for the given language."""
+        video = data.get(f'existing_video_{lang}')
+        if video:
+            if video.category != 'devotional':
+                video.category = 'devotional'
+                video.save(update_fields=['category'])
+            return video
+
+        video = Video(
+            title=data[f'video_title_{lang}'],
+            description=data[f'video_description_{lang}'],
+            video=data[f'video_file_{lang}'],
+            category='devotional',
+            language_code=lang,
+        )
+        if data.get(f'video_thumbnail_{lang}'):
+            video.thumbnail = data[f'video_thumbnail_{lang}']
+        video.save()
+        return video
+
+    def create_combined_devotional(self, request):
+        """View to create EN + HY Videos, a shared Day, and two Devotionals."""
+        if request.method == "POST":
+            form = CombinedDevotionalForm(request.POST, request.FILES)
+            if form.is_valid():
+                data = form.cleaned_data
+                try:
+                    with transaction.atomic():
+                        # 1. Get or create Day
+                        day, _ = Day.objects.get_or_create(
+                            date=data['date'],
+                            fast=data['fast'],
+                            defaults={'church': data['fast'].church},
+                        )
+
+                        # 2. Create / get videos for each language
+                        video_en = self._get_or_create_video(data, 'en')
+                        video_hy = self._get_or_create_video(data, 'hy')
+
+                        # 3. Create EN devotional
+                        devotional_en = Devotional.objects.create(
+                            day=day,
+                            video=video_en,
+                            description=data.get('devotional_description_en') or '',
+                            order=data.get('order'),
+                            language_code='en',
+                        )
+
+                        # 4. Create HY devotional
+                        Devotional.objects.create(
+                            day=day,
+                            video=video_hy,
+                            description=data.get('devotional_description_hy') or '',
+                            order=data.get('order'),
+                            language_code='hy',
+                        )
+
+                    messages.success(
+                        request,
+                        "EN and HY devotionals created successfully.",
+                    )
+                    return redirect(
+                        reverse(
+                            f"admin:{self.opts.app_label}_{self.opts.model_name}_change",
+                            args=[devotional_en.pk],
+                        )
+                    )
+                except Exception as e:
+                    messages.error(request, f"Error creating devotionals: {e}")
+        else:
+            form = CombinedDevotionalForm()
+
+        context = dict(
+            self.admin_site.each_context(request),
+            opts=Devotional._meta,
+            title="Create combined devotional",
+            form=form,
+        )
+        return TemplateResponse(
+            request,
+            "admin/hub/devotional/create_combined.html",
+            context,
+        )
 
 
 @admin.register(DevotionalSet, site=admin.site)
