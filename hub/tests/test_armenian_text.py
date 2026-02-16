@@ -385,9 +385,9 @@ class ArmenianTextSignalTests(TestCase):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.day = Day.objects.create(date=date(2026, 3, 1), church=self.church)
 
-    @patch("hub.signals.fetch_armenian_reading_text_task.delay")
+    @patch("hub.signals.fetch_armenian_reading_text_task")
     @patch("hub.signals.fetch_reading_text_task.delay")
-    def test_signal_triggers_armenian_fetch_on_creation(self, mock_en_delay, mock_hy_delay):
+    def test_signal_triggers_armenian_fetch_on_creation(self, mock_en_delay, mock_hy_task):
         """Test that signal triggers Armenian text fetch when Reading is created."""
         _disconnect_reading_signal()
 
@@ -404,11 +404,11 @@ class ArmenianTextSignalTests(TestCase):
 
         _reconnect_reading_signal()
 
-        mock_hy_delay.assert_called_once_with(reading.id)
+        mock_hy_task.assert_called_once_with(reading.id)
 
-    @patch("hub.signals.fetch_armenian_reading_text_task.delay")
+    @patch("hub.signals.fetch_armenian_reading_text_task")
     @patch("hub.signals.fetch_reading_text_task.delay")
-    def test_signal_does_not_trigger_if_text_hy_exists(self, mock_en_delay, mock_hy_delay):
+    def test_signal_does_not_trigger_if_text_hy_exists(self, mock_en_delay, mock_hy_task):
         """Test that signal does not trigger Armenian fetch if text_hy already exists."""
         _disconnect_reading_signal()
 
@@ -428,11 +428,11 @@ class ArmenianTextSignalTests(TestCase):
 
         _reconnect_reading_signal()
 
-        mock_hy_delay.assert_not_called()
+        mock_hy_task.assert_not_called()
 
-    @patch("hub.signals.fetch_armenian_reading_text_task.delay")
+    @patch("hub.signals.fetch_armenian_reading_text_task")
     @patch("hub.signals.fetch_reading_text_task.delay")
-    def test_signal_does_not_trigger_on_update(self, mock_en_delay, mock_hy_delay):
+    def test_signal_does_not_trigger_on_update(self, mock_en_delay, mock_hy_task):
         """Test that signal does not trigger on Reading update."""
         _disconnect_reading_signal()
 
@@ -445,11 +445,11 @@ class ArmenianTextSignalTests(TestCase):
             end_verse=20,
         )
 
-        mock_hy_delay.reset_mock()
+        mock_hy_task.reset_mock()
 
         # Simulate an update (created=False)
         handle_reading_save(sender=Reading, instance=reading, created=False)
 
         _reconnect_reading_signal()
 
-        mock_hy_delay.assert_not_called()
+        mock_hy_task.assert_not_called()
