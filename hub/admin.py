@@ -671,7 +671,7 @@ class ReadingAdmin(admin.ModelAdmin):
     armenian_text_links.short_description = "Armenian text fetch"
 
     def fetch_armenian_text_view(self, request, pk: int):
-        """View to enqueue Armenian text fetch for a single reading."""
+        """Fetch Armenian text for a single reading synchronously."""
         try:
             reading = Reading.objects.select_related("day", "day__church").get(pk=pk)
         except Reading.DoesNotExist as exc:
@@ -679,12 +679,27 @@ class ReadingAdmin(admin.ModelAdmin):
         if not self.has_change_permission(request, obj=reading):
             raise PermissionDenied
 
-        fetch_armenian_reading_text_task.delay(reading.id)
-        self.message_user(
-            request,
-            f"Enqueued Armenian text fetch for reading {reading.id} ({reading}).",
-            level=messages.SUCCESS,
-        )
+        try:
+            fetch_armenian_reading_text_task(reading.id)
+            reading.refresh_from_db()
+            if reading.text_hy:
+                self.message_user(
+                    request,
+                    f"Fetched Armenian text for reading {reading.id} ({reading}).",
+                    level=messages.SUCCESS,
+                )
+            else:
+                self.message_user(
+                    request,
+                    f"No matching Armenian text found for reading {reading.id} ({reading}).",
+                    level=messages.WARNING,
+                )
+        except Exception as e:
+            self.message_user(
+                request,
+                f"Error fetching Armenian text for reading {reading.id}: {e}",
+                level=messages.ERROR,
+            )
         return redirect(reverse("admin:hub_reading_change", args=[reading.pk]))
 
     def fetch_armenian_text(self, request, queryset):
