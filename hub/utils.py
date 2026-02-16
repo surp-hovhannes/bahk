@@ -312,6 +312,10 @@ def scrape_armenian_reading_texts(date_obj, church, date_format="%Y%m%d"):
         clean_text = re.sub(r"<[^>]+>", "", clean_text)  # Remove any remaining HTML tags
         clean_text = re.sub(r"\s+", " ", clean_text).strip()
 
+        # Wrap verse/chapter numbers in brackets: "16 Լdelays..." -> "[16] Լdelays..."
+        # Matches standalone digits followed by Armenian characters (U+0531-U+058A)
+        clean_text = re.sub(r"(^|\s)(\d+)(?=\s[\u0531-\u058A])", r"\1[\2]", clean_text)
+
         if clean_text:
             results.append({
                 "start_chapter": start_chapter,

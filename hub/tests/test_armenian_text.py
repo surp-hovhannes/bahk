@@ -131,6 +131,8 @@ class ScrapeArmenianReadingTextsTests(TestCase):
         self.assertEqual(results[0]["end_chapter"], 1)
         self.assertEqual(results[0]["end_verse"], 20)
         self.assertIn("\u053c\u0578\u0582\u0561\u0581\u0578\u0582\u0565\u0581\u0567", results[0]["text_hy"])
+        # Verse number should be wrapped in brackets
+        self.assertTrue(results[0]["text_hy"].startswith("[16]"))
 
     @patch("hub.utils.urllib.request.urlopen")
     def test_multiple_readings_parsed(self, mock_urlopen):
@@ -211,6 +213,36 @@ class ScrapeArmenianReadingTextsTests(TestCase):
         # Should not contain any HTML tags
         self.assertNotIn("<br>", results[0]["text_hy"])
         self.assertNotIn("<b>", results[0]["text_hy"])
+
+    @patch("hub.utils.urllib.request.urlopen")
+    def test_verse_numbers_wrapped_in_brackets(self, mock_urlopen):
+        """Test that verse numbers are wrapped in brackets before Armenian text."""
+        # HTML with multiple Armenian verses (verse 16, 17, 18)
+        multi_verse_html = (
+            '<html><body><td><!--body-->'
+            '<div class="dsound">16 date</div>'
+            '<div class="dname">Feast</div>'
+            '<center><hr color="#152451" width="80%" size="1"></center>'
+            '<br><b>\u0535\u057d\u0561\u0575\u0578\u0582 1.16-18</b><br><br>'
+            '16 \u053c\u0578\u0582\u0561\u0581\u0578\u0582\u0565\u0581\u0567\u055b\u0584 '
+            '17 \u054d\u0578\u057e\u0578\u0580\u0565\u0581\u0567\u0584 '
+            '18 \u0535\u056f\u0567\u0584'
+            '<br><br><center><hr color="#152451" width="70%" size="1"></center>'
+            '<br><br><!--/body--></td></body></html>'
+        ).encode("utf-8")
+        mock_urlopen.return_value = _mock_urlopen(multi_verse_html)
+
+        results = scrape_armenian_reading_texts(self.test_date, self.church)
+
+        self.assertEqual(len(results), 1)
+        text = results[0]["text_hy"]
+        # All verse numbers should be bracketed
+        self.assertIn("[16]", text)
+        self.assertIn("[17]", text)
+        self.assertIn("[18]", text)
+        # No bare verse numbers (number followed by Armenian without brackets)
+        self.assertNotRegex(text, r"(?<!\[)16(?!\])")
+        self.assertNotRegex(text, r"(?<!\[)17(?!\])")
 
     @patch("hub.utils.urllib.request.urlopen")
     def test_correct_url_constructed(self, mock_urlopen):
