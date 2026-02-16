@@ -3,10 +3,9 @@ import logging
 from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 from django.core.cache import cache
-from hub.models import Profile, Feast, Reading
+from hub.models import Profile, Feast
 from hub.tasks.llm_tasks import determine_feast_designation_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
-from hub.tasks.armenian_text_tasks import fetch_armenian_reading_text_task
 
 logger = logging.getLogger(__name__)
 
@@ -66,24 +65,3 @@ def handle_feast_save(sender, instance, created, **kwargs):
     # Trigger icon matching when feast is created
     if created:
         match_icon_to_feast_task.delay(instance.id)
-
-
-@receiver(post_save, sender=Reading)
-def handle_reading_save(sender, instance, created, **kwargs):
-    """
-    Signal handler that fetches Armenian Bible text when a new Reading is created.
-
-    English text is fetched synchronously in the view (GetDailyReadingsForDate).
-    Armenian text is scraped from sacredtradition.am here via post_save signal.
-    """
-    if created:
-        if not instance.text_hy:
-            try:
-                fetch_armenian_reading_text_task(instance.id)
-            except Exception:
-                logger.exception(
-                    "Failed to fetch Armenian text for Reading %s in signal; "
-                    "falling back to async.",
-                    instance.id,
-                )
-                fetch_armenian_reading_text_task.delay(instance.id)

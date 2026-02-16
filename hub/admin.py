@@ -528,12 +528,17 @@ class ReadingAdmin(admin.ModelAdmin):
     has_fums_token.boolean = True
 
     def get_urls(self):
-        """Add per-reading endpoint to fetch Bible text."""
+        """Add per-reading endpoints to fetch Bible text and Armenian text."""
         custom_urls = [
             path(
                 "<int:pk>/fetch_bible_text/",
                 self.admin_site.admin_view(self.fetch_bible_text_view),
                 name="hub_reading_fetch_bible_text",
+            ),
+            path(
+                "<int:pk>/fetch_armenian_text/",
+                self.admin_site.admin_view(self.fetch_armenian_text_view),
+                name="hub_reading_fetch_armenian_text",
             ),
         ]
         return custom_urls + super().get_urls()
@@ -646,17 +651,6 @@ class ReadingAdmin(admin.ModelAdmin):
     force_regenerate_context.short_description = (
         "Force regenerate AI context for selected readings"
     )
-
-    def get_urls(self):
-        """Add per-reading endpoint to fetch Armenian text."""
-        custom_urls = [
-            path(
-                "<int:pk>/fetch_armenian_text/",
-                self.admin_site.admin_view(self.fetch_armenian_text_view),
-                name="hub_reading_fetch_armenian_text",
-            ),
-        ]
-        return custom_urls + super().get_urls()
 
     def armenian_text_links(self, reading):
         """Render a button to fetch Armenian text for this reading."""

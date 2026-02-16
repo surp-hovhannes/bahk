@@ -3,46 +3,28 @@
 Tests cover:
     - scrape_armenian_reading_texts (HTML parsing, chapter/verse extraction)
     - fetch_armenian_reading_text_task (task behavior, matching, error handling)
-    - Reading post_save signal (triggers Armenian text fetch on creation)
 """
 from datetime import date
 from unittest.mock import patch, MagicMock
 
-from django.db.models.signals import post_save
 from django.test import TestCase, override_settings
 
 from hub.models import Church, Day, Reading
-from hub.signals import handle_reading_save
 from hub.tasks.armenian_text_tasks import fetch_armenian_reading_text_task
 from hub.utils import scrape_armenian_reading_texts
 
 
-def _disconnect_reading_signal():
-    """Disconnect the Reading post_save signal to avoid side effects in tests."""
-    post_save.disconnect(handle_reading_save, sender=Reading)
-
-
-def _reconnect_reading_signal():
-    """Reconnect the Reading post_save signal."""
-    post_save.connect(handle_reading_save, sender=Reading)
-
-
 def _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5, **kwargs):
-    """Helper to create a Reading with signals disconnected."""
-    _disconnect_reading_signal()
-    try:
-        reading = Reading.objects.create(
-            day=day,
-            book=book,
-            start_chapter=start_ch,
-            start_verse=start_v,
-            end_chapter=end_ch,
-            end_verse=end_v,
-            **kwargs,
-        )
-    finally:
-        _reconnect_reading_signal()
-    return reading
+    """Helper to create a Reading."""
+    return Reading.objects.create(
+        day=day,
+        book=book,
+        start_chapter=start_ch,
+        start_verse=start_v,
+        end_chapter=end_ch,
+        end_verse=end_v,
+        **kwargs,
+    )
 
 
 # Sample HTML mimicking sacredtradition.am Armenian readings page (single reading)
@@ -368,88 +350,3 @@ class FetchArmenianReadingTextTaskTests(TestCase):
 
         reading.refresh_from_db()
         self.assertEqual(reading.text_hy, "Isaiah Armenian text")
-
-
-# ------------------------------------------------------------------ #
-#  Signal Tests
-# ------------------------------------------------------------------ #
-
-@override_settings(
-    CELERY_TASK_ALWAYS_EAGER=True,
-    CELERY_TASK_EAGER_PROPAGATES=True,
-)
-class ArmenianTextSignalTests(TestCase):
-    """Tests for the Reading post_save signal triggering Armenian text fetch."""
-
-    def setUp(self):
-        self.church = Church.objects.get(pk=Church.get_default_pk())
-        self.day = Day.objects.create(date=date(2026, 3, 1), church=self.church)
-
-    @patch("hub.signals.fetch_armenian_reading_text_task")
-    @patch("hub.signals.fetch_reading_text_task.delay")
-    def test_signal_triggers_armenian_fetch_on_creation(self, mock_en_delay, mock_hy_task):
-        """Test that signal triggers Armenian text fetch when Reading is created."""
-        _disconnect_reading_signal()
-
-        reading = Reading.objects.create(
-            day=self.day,
-            book="Isaiah",
-            start_chapter=1,
-            start_verse=16,
-            end_chapter=1,
-            end_verse=20,
-        )
-
-        handle_reading_save(sender=Reading, instance=reading, created=True)
-
-        _reconnect_reading_signal()
-
-        mock_hy_task.assert_called_once_with(reading.id)
-
-    @patch("hub.signals.fetch_armenian_reading_text_task")
-    @patch("hub.signals.fetch_reading_text_task.delay")
-    def test_signal_does_not_trigger_if_text_hy_exists(self, mock_en_delay, mock_hy_task):
-        """Test that signal does not trigger Armenian fetch if text_hy already exists."""
-        _disconnect_reading_signal()
-
-        reading = Reading.objects.create(
-            day=self.day,
-            book="Isaiah",
-            start_chapter=1,
-            start_verse=16,
-            end_chapter=1,
-            end_verse=20,
-        )
-        # Set text_hy manually
-        reading.text_hy = "Pre-existing Armenian text"
-        reading.save(update_fields=["i18n"])
-
-        handle_reading_save(sender=Reading, instance=reading, created=True)
-
-        _reconnect_reading_signal()
-
-        mock_hy_task.assert_not_called()
-
-    @patch("hub.signals.fetch_armenian_reading_text_task")
-    @patch("hub.signals.fetch_reading_text_task.delay")
-    def test_signal_does_not_trigger_on_update(self, mock_en_delay, mock_hy_task):
-        """Test that signal does not trigger on Reading update."""
-        _disconnect_reading_signal()
-
-        reading = Reading.objects.create(
-            day=self.day,
-            book="Isaiah",
-            start_chapter=1,
-            start_verse=16,
-            end_chapter=1,
-            end_verse=20,
-        )
-
-        mock_hy_task.reset_mock()
-
-        # Simulate an update (created=False)
-        handle_reading_save(sender=Reading, instance=reading, created=False)
-
-        _reconnect_reading_signal()
-
-        mock_hy_task.assert_not_called()
