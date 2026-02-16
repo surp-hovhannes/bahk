@@ -516,7 +516,7 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
         # Should not raise despite API failure
-        with self.assertLogs("hub.services.bible_api_service", level="ERROR") as log:
+        with self.assertLogs("hub.services.reading_text_service", level="ERROR") as log:
             refresh_all_reading_texts_task()
 
         # Check that the failure was logged
@@ -544,14 +544,14 @@ class ViewSynchronousTextFetchTests(TestCase):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 4, 1)
 
-    @patch('hub.views.readings.fetch_text_for_reading')
-    @patch('hub.views.readings.BibleAPIService')
+    @patch('hub.views.readings.fetch_all_reading_texts')
+    @patch('hub.views.readings.prepare_shared_resources')
     @patch('hub.views.readings.scrape_readings')
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_view_calls_fetch_text_for_new_readings(
-        self, mock_context_task, mock_scrape, MockService, mock_fetch_text,
+    def test_view_calls_fetch_all_for_new_readings(
+        self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_all,
     ):
-        """Test that the view fetches text synchronously for newly scraped readings."""
+        """Test that the view fetches text (all languages) for newly scraped readings."""
         from rest_framework.test import APIRequestFactory
         from hub.views.readings import GetDailyReadingsForDate
 
@@ -565,8 +565,7 @@ class ViewSynchronousTextFetchTests(TestCase):
                 "end_verse": 12,
             },
         ]
-        mock_service_instance = MagicMock()
-        MockService.return_value = mock_service_instance
+        mock_prepare.return_value = {"service": "mock_svc", "armenian_texts": []}
 
         factory = APIRequestFactory()
         request = factory.get(f'/readings/?date={self.test_date}')
@@ -575,18 +574,21 @@ class ViewSynchronousTextFetchTests(TestCase):
         response = view(request)
 
         self.assertEqual(response.status_code, 200)
-        # fetch_text_for_reading should have been called for the new reading
-        mock_fetch_text.assert_called_once()
-        # The call should have received the pre-initialized service
-        call_kwargs = mock_fetch_text.call_args
-        self.assertEqual(call_kwargs.kwargs.get('service'), mock_service_instance)
+        # prepare_shared_resources should have been called once for the batch
+        mock_prepare.assert_called_once()
+        # fetch_all_reading_texts should have been called for the new reading
+        mock_fetch_all.assert_called_once()
+        # The call should include the shared resources from prepare
+        call_kwargs = mock_fetch_all.call_args
+        self.assertEqual(call_kwargs.kwargs.get('service'), "mock_svc")
+        self.assertEqual(call_kwargs.kwargs.get('armenian_texts'), [])
 
-    @patch('hub.views.readings.fetch_text_for_reading')
-    @patch('hub.views.readings.BibleAPIService')
+    @patch('hub.views.readings.fetch_all_reading_texts')
+    @patch('hub.views.readings.prepare_shared_resources')
     @patch('hub.views.readings.scrape_readings')
     @patch('hub.views.readings.generate_reading_context_task')
     def test_view_does_not_fetch_text_for_existing_readings(
-        self, mock_context_task, mock_scrape, MockService, mock_fetch_text,
+        self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_all,
     ):
         """Test that the view does not re-fetch text for readings that already exist."""
         from rest_framework.test import APIRequestFactory
@@ -609,17 +611,18 @@ class ViewSynchronousTextFetchTests(TestCase):
         response = view(request)
 
         self.assertEqual(response.status_code, 200)
-        # Should NOT have called fetch_text_for_reading since readings already exist
-        mock_fetch_text.assert_not_called()
-        MockService.assert_not_called()
+        # Should NOT have called fetch since readings already exist
+        mock_fetch_all.assert_not_called()
+        mock_prepare.assert_not_called()
 
-    @patch('hub.views.readings.BibleAPIService')
+    @patch('hub.views.readings.fetch_all_reading_texts')
+    @patch('hub.views.readings.prepare_shared_resources')
     @patch('hub.views.readings.scrape_readings')
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_view_graceful_when_api_key_missing(
-        self, mock_context_task, mock_scrape, MockService,
+    def test_view_graceful_when_prepare_partial(
+        self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_all,
     ):
-        """Test that the view still returns readings when API key is not configured."""
+        """Test that the view still returns readings when some resources fail to prepare."""
         from rest_framework.test import APIRequestFactory
         from hub.views.readings import GetDailyReadingsForDate
 
@@ -633,7 +636,8 @@ class ViewSynchronousTextFetchTests(TestCase):
                 "end_verse": 12,
             },
         ]
-        MockService.side_effect = ValueError("API key required.")
+        # Simulate partial preparation (e.g. API key missing, Armenian scrape failed)
+        mock_prepare.return_value = {}
 
         factory = APIRequestFactory()
         request = factory.get(f'/readings/?date={self.test_date}')
@@ -644,7 +648,8 @@ class ViewSynchronousTextFetchTests(TestCase):
         # View should still succeed, just without text
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["readings"]), 1)
-        self.assertEqual(response.data["readings"][0]["text"], "")
+        # fetch_all was still called (with empty shared resources)
+        mock_fetch_all.assert_called_once()
 
 
 # ------------------------------------------------------------------ #

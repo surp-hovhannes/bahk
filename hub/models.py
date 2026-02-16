@@ -606,6 +606,24 @@ class Reading(models.Model):
         help_text="FUMS v3 token from API.Bible for fair-use tracking"
     )
 
+    # Armenian text metadata (from sacredtradition.am)
+    text_hy_version = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="Armenian Bible version used (e.g. \u0546\u0578\u0580 \u0537\u057b\u0574\u056b\u0561\u056e\u056b\u0576)"
+    )
+    text_hy_copyright = models.TextField(
+        blank=True, default="",
+        help_text="Copyright notice for the Armenian text"
+    )
+    text_hy_fetched_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the Armenian text was last fetched from sacredtradition.am"
+    )
+    text_hy_fums_token = models.TextField(
+        blank=True, default="",
+        help_text="FUMS token for Armenian text (reserved for future use)"
+    )
+
     # Translations for user-facing fields
     i18n = TranslationField(fields=('book', 'text'))
 

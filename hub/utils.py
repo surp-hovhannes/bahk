@@ -201,6 +201,135 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
     return combined_readings
 
 
+def scrape_armenian_reading_texts(date_obj, church, date_format="%Y%m%d"):
+    """Scrapes Armenian Bible verse text from sacredtradition.am.
+
+    Fetches the Armenian readings page (iL=0) for the given date and extracts
+    the verse text for each reading block. Each block is delimited by a ``<b>``
+    reference tag and the next ``<hr>`` separator.
+
+    Args:
+        date_obj: datetime.date object for the date to scrape.
+        church: Church object (must be a supported church).
+        date_format: Format string for date in URL.
+
+    Returns:
+        List of dicts, each with keys:
+            - start_chapter (int)
+            - start_verse (int)
+            - end_chapter (int)
+            - end_verse (int)
+            - text_hy (str): The Armenian Bible verse text.
+        Returns an empty list if the page cannot be fetched or parsed.
+    """
+    if church not in SUPPORTED_CHURCHES:
+        logging.error(
+            "Web-scraping for Armenian reading texts only set up for: %r. %s not supported.",
+            SUPPORTED_CHURCHES, church,
+        )
+        return []
+
+    date_str = date_obj.strftime(date_format)
+    url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL=0&ymd={date_str}"
+
+    try:
+        response = urllib.request.urlopen(url)
+    except urllib.error.URLError:
+        logging.error("Invalid url %s", url)
+        return []
+
+    if response.status != 200:
+        logging.error(
+            "Could not access Armenian readings from url %s. Failed with status %r",
+            url, response.status,
+        )
+        return []
+
+    data = response.read()
+    html_content = data.decode("utf-8")
+
+    # Extract body content between comment markers
+    body_start = html_content.find("<!--body-->")
+    body_end = html_content.find("<!--/body-->")
+    if body_start == -1 or body_end == -1:
+        logging.error("Could not find body markers in Armenian readings page %s", url)
+        return []
+
+    body = html_content[body_start:body_end]
+
+    results = []
+    pos = 0
+    while True:
+        # Find next <b> tag (reading reference)
+        b_open = body.find("<b>", pos)
+        if b_open == -1:
+            break
+        b_close = body.find("</b>", b_open)
+        if b_close == -1:
+            break
+
+        reference = body[b_open + 3:b_close]
+
+        # Parse the reference to get chapter/verse numbers
+        # Handle comma-separated references the same way as scrape_readings
+        if "," in reference:
+            reference = reference.split(",")[0]
+
+        groups = re.search(PARSER_REGEX, reference)
+        if groups is None:
+            logging.error(
+                "Could not parse Armenian reading reference '%s' from %s",
+                reference, url,
+            )
+            pos = b_close + 1
+            continue
+
+        try:
+            start_chapter = int(groups.group(2).strip(".")) if groups.group(2) else 1
+            start_verse = int(groups.group(3))
+            end_chapter = int(groups.group(4).strip(".")) if groups.group(4) else start_chapter
+            end_verse = int(groups.group(5)) if groups.group(5) else start_verse
+        except Exception:
+            logging.error(
+                "Could not parse chapter/verse from Armenian reference '%s' at %s",
+                reference, url, exc_info=True,
+            )
+            pos = b_close + 1
+            continue
+
+        # Extract text after </b> until the next <center><hr or <!--/body-->
+        text_start = b_close + len("</b>")
+        # Find the next separator: <center><hr
+        next_sep = body.find("<center><hr", text_start)
+        if next_sep == -1:
+            # Fall back to end of body
+            next_sep = len(body)
+
+        raw_text = body[text_start:next_sep]
+
+        # Clean up the text: remove <br> tags and extra whitespace
+        clean_text = re.sub(r"<br\s*/?>", " ", raw_text)
+        clean_text = re.sub(r"<[^>]+>", "", clean_text)  # Remove any remaining HTML tags
+        clean_text = re.sub(r"\s+", " ", clean_text).strip()
+
+        # Wrap verse/chapter numbers in brackets: "16 Լdelays..." -> "[16] Լdelays..."
+        # Matches standalone digits followed by Armenian characters (U+0531-U+058A)
+        clean_text = re.sub(r"(^|\s)(\d+)(?=\s[\u0531-\u058A])", r"\1[\2]", clean_text)
+
+        if clean_text:
+            results.append({
+                "start_chapter": start_chapter,
+                "start_verse": start_verse,
+                "end_chapter": end_chapter,
+                "end_verse": end_verse,
+                "text_hy": clean_text,
+            })
+
+        pos = next_sep + 1
+
+    return results
+
+
 def send_fast_reminders():
     today = datetime.today().date()
     tomorrow = today + timedelta(days=1)

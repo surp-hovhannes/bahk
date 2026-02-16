@@ -1,9 +1,13 @@
+import logging
+
 from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 from django.core.cache import cache
 from hub.models import Profile, Feast
 from hub.tasks.llm_tasks import determine_feast_designation_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
+
+logger = logging.getLogger(__name__)
 
 @receiver(m2m_changed, sender=Profile.fasts.through)
 def handle_fast_participant_change(sender, instance, action, **kwargs):

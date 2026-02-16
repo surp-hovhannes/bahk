@@ -15,7 +15,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
-from hub.services.bible_api_service import BibleAPIService, fetch_text_for_reading
+from hub.services.reading_text_service import (
+    fetch_all_reading_texts,
+    get_reading_text_fields,
+    prepare_shared_resources,
+)
 from hub.tasks import generate_reading_context_task
 from hub.utils import get_user_profile_safe, scrape_readings
 
@@ -141,25 +145,16 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     reading_obj.save(update_fields=['i18n'])
 
                 # Track newly created readings that need text fetched
-                if created and not reading_obj.text:
+                if created:
                     new_reading_objs.append(reading_obj)
 
-            # Fetch Bible text synchronously for all new readings so text is
-            # available in the response immediately (no Celery round-trip).
-            # A single BibleAPIService instance is reused for all readings to
-            # share the HTTP session and avoid repeated key lookups.
+            # Fetch text for all languages synchronously so it is available in
+            # the response immediately.  Shared resources (API session, scraped
+            # pages, etc.) are created once for the whole batch.
             if new_reading_objs:
-                try:
-                    service = BibleAPIService()
-                    for reading_obj in new_reading_objs:
-                        fetch_text_for_reading(reading_obj, service=service)
-                except ValueError:
-                    # API key not configured; text will remain empty until the
-                    # periodic Celery refresh task runs.
-                    logging.warning(
-                        "BIBLE_API_KEY not configured; skipping synchronous text fetch for %d reading(s).",
-                        len(new_reading_objs),
-                    )
+                shared = prepare_shared_resources(date_obj, church)
+                for reading_obj in new_reading_objs:
+                    fetch_all_reading_texts(reading_obj, **shared)
 
         # Now ensure we have up-to-date queryset
         day.refresh_from_db()
@@ -213,9 +208,6 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "context_thumbs_down": active_context.thumbs_down,
                 }
 
-            # Get translated text (falls back to English)
-            text_translated = getattr(reading, 'text_i18n', reading.text)
-
             formatted_readings.append(
                 {
                     "id": reading.id,
@@ -225,10 +217,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
-                    "text": text_translated or "",
-                    "textCopyright": reading.text_copyright or "",
-                    "textVersion": reading.text_version or "",
-                    "fumsToken": reading.fums_token or "",
+                    **get_reading_text_fields(reading, lang),
                     **context_dict,
                 }
             )

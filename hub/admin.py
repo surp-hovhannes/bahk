@@ -35,6 +35,7 @@ from hub.tasks import (
     generate_reading_context_task,
     generate_feast_context_task,
     match_icon_to_feast_task,
+    fetch_armenian_reading_text_task,
 )
 
 _MAX_NUM_TO_SHOW = 3  # maximum object names to show in list
@@ -494,16 +495,16 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_chapter",
         "start_verse",
     )
-    actions = ["force_regenerate_context", "compare_prompts", "fetch_bible_text"]
-    readonly_fields = ("text_fetched_at", "has_fums_token", "fetch_text_link")
-    exclude = ("book", "text", "fums_token")  # Avoid duplicates with translation fields
+    actions = ["force_regenerate_context", "compare_prompts", "fetch_bible_text", "fetch_armenian_text"]
+    readonly_fields = ("text_fetched_at", "has_fums_token", "fetch_text_link", "armenian_text_links", "text_hy_fetched_at", "has_hy_fums_token")
+    exclude = ("book", "text", "fums_token", "text_hy_fums_token")  # Avoid duplicates with translation fields
 
     fieldsets = (
         (None, {
             'fields': ('day', 'start_chapter', 'start_verse', 'end_chapter', 'end_verse')
         }),
         ('Translations', {
-            'fields': ('book_en', 'book_hy', 'text_en', 'text_hy')
+            'fields': ('book_en', 'book_hy', 'text_en', 'text_hy', 'armenian_text_links')
         }),
         ('Bible Text (API.Bible)', {
             'fields': ('text_version', 'text_copyright', 'text_fetched_at', 'has_fums_token', 'fetch_text_link'),
@@ -514,6 +515,10 @@ class ReadingAdmin(admin.ModelAdmin):
                 'API.Bible to track anonymized usage for rights holders and publishers.'
             ),
         }),
+        ('Armenian Text (sacredtradition.am)', {
+            'fields': ('text_hy_version', 'text_hy_copyright', 'text_hy_fetched_at', 'has_hy_fums_token'),
+            'classes': ('collapse',),
+        }),
     )
 
     def has_fums_token(self, obj):
@@ -523,12 +528,17 @@ class ReadingAdmin(admin.ModelAdmin):
     has_fums_token.boolean = True
 
     def get_urls(self):
-        """Add per-reading endpoint to fetch Bible text."""
+        """Add per-reading endpoints to fetch Bible text and Armenian text."""
         custom_urls = [
             path(
                 "<int:pk>/fetch_bible_text/",
                 self.admin_site.admin_view(self.fetch_bible_text_view),
                 name="hub_reading_fetch_bible_text",
+            ),
+            path(
+                "<int:pk>/fetch_armenian_text/",
+                self.admin_site.admin_view(self.fetch_armenian_text_view),
+                name="hub_reading_fetch_armenian_text",
             ),
         ]
         return custom_urls + super().get_urls()
@@ -608,6 +618,12 @@ class ReadingAdmin(admin.ModelAdmin):
 
     fetch_bible_text.short_description = "Fetch Bible text from API.Bible"
 
+    def has_hy_fums_token(self, obj):
+        return bool(obj.text_hy_fums_token)
+
+    has_hy_fums_token.short_description = "FUMS token captured"
+    has_hy_fums_token.boolean = True
+
     def compare_prompts(self, request, queryset):
         """Redirect to a page to compare different LLM prompts for selected readings."""
         if queryset.count() != 1:
@@ -635,6 +651,64 @@ class ReadingAdmin(admin.ModelAdmin):
     force_regenerate_context.short_description = (
         "Force regenerate AI context for selected readings"
     )
+
+    def armenian_text_links(self, reading):
+        """Render a button to fetch Armenian text for this reading."""
+        if not reading or not reading.pk:
+            return "-"
+        url = reverse("admin:hub_reading_fetch_armenian_text", args=[reading.pk])
+        return format_html(
+            '<a class="button" href="{}">Fetch Armenian text</a>',
+            url,
+        )
+
+    armenian_text_links.short_description = "Armenian text fetch"
+
+    def fetch_armenian_text_view(self, request, pk: int):
+        """Fetch Armenian text for a single reading synchronously."""
+        try:
+            reading = Reading.objects.select_related("day", "day__church").get(pk=pk)
+        except Reading.DoesNotExist as exc:
+            raise Http404 from exc
+        if not self.has_change_permission(request, obj=reading):
+            raise PermissionDenied
+
+        try:
+            fetch_armenian_reading_text_task(reading.id)
+            reading.refresh_from_db()
+            if reading.text_hy:
+                self.message_user(
+                    request,
+                    f"Fetched Armenian text for reading {reading.id} ({reading}).",
+                    level=messages.SUCCESS,
+                )
+            else:
+                self.message_user(
+                    request,
+                    f"No matching Armenian text found for reading {reading.id} ({reading}).",
+                    level=messages.WARNING,
+                )
+        except Exception as e:
+            self.message_user(
+                request,
+                f"Error fetching Armenian text for reading {reading.id}: {e}",
+                level=messages.ERROR,
+            )
+        return redirect(reverse("admin:hub_reading_change", args=[reading.pk]))
+
+    def fetch_armenian_text(self, request, queryset):
+        """Enqueue Armenian text fetch for selected readings."""
+        count = 0
+        for reading in queryset:
+            fetch_armenian_reading_text_task.delay(reading.id)
+            count += 1
+        self.message_user(
+            request,
+            f"Enqueued Armenian text fetch for {count} readings.",
+            level=messages.SUCCESS,
+        )
+
+    fetch_armenian_text.short_description = "Fetch Armenian text for selected readings"
 
     def church_link(self, reading):
         if not reading.day or not reading.day.church:
