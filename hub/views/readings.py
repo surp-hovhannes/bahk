@@ -213,8 +213,17 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "context_thumbs_down": active_context.thumbs_down,
                 }
 
-            # Get translated text (falls back to English)
-            text_translated = getattr(reading, 'text_i18n', reading.text)
+            # Get language-specific text, version, copyright, and FUMS token
+            if lang == 'hy':
+                text_value = reading.text_hy or ""
+                text_version = reading.text_hy_version or ""
+                text_copyright = reading.text_hy_copyright or ""
+                fums_token = reading.text_hy_fums_token or ""
+            else:
+                text_value = reading.text or ""
+                text_version = reading.text_version or ""
+                text_copyright = reading.text_copyright or ""
+                fums_token = reading.fums_token or ""
 
             formatted_readings.append(
                 {
@@ -225,10 +234,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
-                    "text": text_translated or "",
-                    "textCopyright": reading.text_copyright or "",
-                    "textVersion": reading.text_version or "",
-                    "fumsToken": reading.fums_token or "",
+                    "text": text_value,
+                    "textCopyright": text_copyright,
+                    "textVersion": text_version,
+                    "fumsToken": fums_token,
                     **context_dict,
                 }
             )
