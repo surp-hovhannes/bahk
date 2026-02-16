@@ -1,13 +1,17 @@
 """Unified service for fetching Bible reading text in all supported languages.
 
 Provides a registry of per-language fetchers and an orchestrator that calls
-them all for a given Reading.  Adding a new language is a two-step process:
+them all for a given Reading.  Adding a new language is a three-step process:
 
     1. Write a ``fetch_<lang>_text`` function with the standard signature.
     2. Register it in ``TEXT_FETCHERS``.
+    3. (Optional) Register a resource preparer in ``RESOURCE_PREPARERS`` if the
+       fetcher benefits from batch-level shared state (e.g. a scraped page or
+       HTTP session that can be reused across multiple readings).
 
-The view calls ``fetch_all_reading_texts`` once after creating readings.
-Celery tasks and management commands can call individual fetchers directly.
+The view calls ``prepare_shared_resources`` once per batch, then
+``fetch_all_reading_texts`` once per reading.  ``get_reading_text_fields``
+resolves model fields for the API response without hard-coding language names.
 """
 
 import logging
@@ -169,19 +173,80 @@ TEXT_FETCHERS: dict[str, callable] = {
 }
 
 
+# ------------------------------------------------------------------ #
+#  Shared-resource preparation
+# ------------------------------------------------------------------ #
+
+def _prepare_english_resources(**_kwargs) -> dict[str, Any]:
+    """Create a shared BibleAPIService instance for the English fetcher."""
+    try:
+        return {"service": BibleAPIService()}
+    except ValueError:
+        logger.warning("BIBLE_API_KEY not configured; English text will be skipped.")
+        return {}
+
+
+def _prepare_armenian_resources(*, date_obj, church, **_kwargs) -> dict[str, Any]:
+    """Pre-scrape the Armenian readings page once for the whole batch."""
+    from hub.utils import scrape_armenian_reading_texts
+
+    try:
+        return {"armenian_texts": scrape_armenian_reading_texts(date_obj, church)}
+    except Exception:
+        logger.warning(
+            "Failed to scrape Armenian texts for %s; Armenian text will be skipped.",
+            date_obj,
+            exc_info=True,
+        )
+        return {}
+
+
+RESOURCE_PREPARERS: dict[str, callable] = {
+    "en": _prepare_english_resources,
+    "hy": _prepare_armenian_resources,
+}
+
+
+def prepare_shared_resources(date_obj, church) -> dict[str, Any]:
+    """Build the shared-resource dict consumed by ``fetch_all_reading_texts``.
+
+    Iterates over ``RESOURCE_PREPARERS`` and merges their results into a
+    single dict.  Each preparer receives ``date_obj`` and ``church`` as
+    keyword arguments and returns a dict of key/value pairs to forward to
+    the fetchers.
+
+    Args:
+        date_obj: The date for which readings are being fetched.
+        church: The Church instance.
+
+    Returns:
+        Dict of shared resources, e.g.
+        ``{"service": <BibleAPIService>, "armenian_texts": [...]}``.
+    """
+    shared: dict[str, Any] = {}
+    for lang, preparer in RESOURCE_PREPARERS.items():
+        try:
+            shared.update(preparer(date_obj=date_obj, church=church))
+        except Exception:
+            logger.exception("Failed to prepare resources for %s", lang)
+    return shared
+
+
+# ------------------------------------------------------------------ #
+#  Orchestrator
+# ------------------------------------------------------------------ #
+
 def fetch_all_reading_texts(reading, **shared_resources) -> dict[str, bool]:
     """Fetch reading text for every registered language.
 
     Iterates over ``TEXT_FETCHERS`` and calls each fetcher, forwarding any
-    ``shared_resources`` as keyword arguments (e.g. a pre-initialized
-    ``service`` for English, pre-scraped ``armenian_texts`` for Armenian).
+    ``shared_resources`` as keyword arguments.  Each fetcher accepts
+    ``**_kwargs`` so unknown keys are silently ignored.
 
     Args:
         reading: A saved Reading model instance.
         **shared_resources: Keyword arguments forwarded to every fetcher.
-            Recognised keys (each fetcher ignores unknown kwargs via **_kwargs):
-                service:        BibleAPIService instance (English fetcher)
-                armenian_texts: list of scraped dicts   (Armenian fetcher)
+            Typically produced by ``prepare_shared_resources()``.
 
     Returns:
         Dict mapping language code to success boolean, e.g.
@@ -198,3 +263,39 @@ def fetch_all_reading_texts(reading, **shared_resources) -> dict[str, bool]:
             )
             results[lang] = False
     return results
+
+
+# ------------------------------------------------------------------ #
+#  Response field resolution
+# ------------------------------------------------------------------ #
+
+# Maps language code → (text_field, version_field, copyright_field, fums_field)
+# English uses the base field names; other languages use the <field>_<lang> convention.
+LANGUAGE_FIELD_MAP: dict[str, tuple[str, str, str, str]] = {
+    "en": ("text",    "text_version",    "text_copyright",    "fums_token"),
+    "hy": ("text_hy", "text_hy_version", "text_hy_copyright", "text_hy_fums_token"),
+}
+
+
+def get_reading_text_fields(reading, lang: str) -> dict[str, str]:
+    """Return the text/version/copyright/FUMS fields for *lang* as a dict.
+
+    Falls back to English if the requested language is not in the registry.
+
+    Args:
+        reading: A Reading model instance.
+        lang: ISO 639-1 language code (e.g. ``"en"``, ``"hy"``).
+
+    Returns:
+        Dict with keys ``text``, ``textVersion``, ``textCopyright``,
+        ``fumsToken`` — ready to be merged into the API response.
+    """
+    text_f, version_f, copyright_f, fums_f = LANGUAGE_FIELD_MAP.get(
+        lang, LANGUAGE_FIELD_MAP["en"],
+    )
+    return {
+        "text": getattr(reading, text_f, "") or "",
+        "textVersion": getattr(reading, version_f, "") or "",
+        "textCopyright": getattr(reading, copyright_f, "") or "",
+        "fumsToken": getattr(reading, fums_f, "") or "",
+    }

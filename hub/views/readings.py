@@ -15,10 +15,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
-from hub.services.bible_api_service import BibleAPIService
-from hub.services.reading_text_service import fetch_all_reading_texts
+from hub.services.reading_text_service import (
+    fetch_all_reading_texts,
+    get_reading_text_fields,
+    prepare_shared_resources,
+)
 from hub.tasks import generate_reading_context_task
-from hub.utils import get_user_profile_safe, scrape_armenian_reading_texts, scrape_readings
+from hub.utils import get_user_profile_safe, scrape_readings
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -147,25 +150,9 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
 
             # Fetch text for all languages synchronously so it is available in
             # the response immediately.  Shared resources (API session, scraped
-            # Armenian page) are created once for the whole batch.
+            # pages, etc.) are created once for the whole batch.
             if new_reading_objs:
-                shared: dict = {}
-                try:
-                    shared["service"] = BibleAPIService()
-                except ValueError:
-                    logging.warning(
-                        "BIBLE_API_KEY not configured; English text will be skipped for %d reading(s).",
-                        len(new_reading_objs),
-                    )
-                try:
-                    shared["armenian_texts"] = scrape_armenian_reading_texts(date_obj, church)
-                except Exception:
-                    logging.warning(
-                        "Failed to scrape Armenian texts for %s; Armenian text will be skipped.",
-                        date_obj,
-                        exc_info=True,
-                    )
-
+                shared = prepare_shared_resources(date_obj, church)
                 for reading_obj in new_reading_objs:
                     fetch_all_reading_texts(reading_obj, **shared)
 
@@ -221,18 +208,6 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "context_thumbs_down": active_context.thumbs_down,
                 }
 
-            # Get language-specific text, version, copyright, and FUMS token
-            if lang == 'hy':
-                text_value = reading.text_hy or ""
-                text_version = reading.text_hy_version or ""
-                text_copyright = reading.text_hy_copyright or ""
-                fums_token = reading.text_hy_fums_token or ""
-            else:
-                text_value = reading.text or ""
-                text_version = reading.text_version or ""
-                text_copyright = reading.text_copyright or ""
-                fums_token = reading.fums_token or ""
-
             formatted_readings.append(
                 {
                     "id": reading.id,
@@ -242,10 +217,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
-                    "text": text_value,
-                    "textCopyright": text_copyright,
-                    "textVersion": text_version,
-                    "fumsToken": fums_token,
+                    **get_reading_text_fields(reading, lang),
                     **context_dict,
                 }
             )
