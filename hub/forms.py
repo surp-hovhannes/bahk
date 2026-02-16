@@ -18,7 +18,7 @@ _MAX_FAST_LENGTH = 60  # days
 class AddDaysToFastAdminForm(forms.Form):
     dates = forms.CharField(
         help_text="Type in each date on a new line in the format month/day/year. "
-                  "For example, 8/15/2024 for August 15, 2024", 
+                  "For example, 8/15/2024 for August 15, 2024",
         widget=forms.Textarea
     )
 
@@ -31,9 +31,9 @@ class AddDaysToFastAdminForm(forms.Form):
                 dates.append(datetime.datetime.strptime(date_str, DATE_FORMAT_STRING).date())
             except:
                 raise ValidationError(f"{date_str} not in valid date format (<month>/<day>/<year>)")
-        
+
         return dates
-        
+
 
 class CreateFastWithDatesAdminForm(forms.ModelForm):
     first_day = forms.DateField(widget=forms.SelectDateWidget)
@@ -42,12 +42,12 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
     class Meta:
         model = Fast
         # "image" is excluded because it is not clear how to save an image with a form
-        fields = ["name", "church", "year", "description", "culmination_feast", 
+        fields = ["name", "church", "year", "description", "culmination_feast",
                   "culmination_feast_date", "culmination_feast_salutation",
                   "culmination_feast_message", "culmination_feast_message_attribution", "url"]
 
     def clean_last_day(self):
-        """Ensure last day is 
+        """Ensure last day is
         - not before the first day
         - not longer than max length
         - before the culmination feast.
@@ -58,7 +58,7 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
         length_of_fast = (last_day - first_day).days + 1
         if length_of_fast < 1:
             raise ValidationError(f"Last day ({last_day}) cannot be before the first day ({first_day})")
-        # length of fast must be within limit 
+        # length of fast must be within limit
         if length_of_fast > _MAX_FAST_LENGTH:
             raise ValidationError(f"Tried to create a fast lasting {length_of_fast} days. "
                                   f"Fasts longer than {_MAX_FAST_LENGTH} days are not permitted.")
@@ -82,7 +82,7 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
 class CustomUserCreationForm(UserCreationForm):
     email = forms.EmailField(required=True)
     church = forms.ChoiceField(label="Churches", choices=[])
-    
+
     class Meta:
         model = User
         fields = ["email", "password1", "password2"]
@@ -95,11 +95,11 @@ class CustomUserCreationForm(UserCreationForm):
         new_email = self.cleaned_data.get("email")
         if User.objects.filter(email=new_email).exists():
             raise ValidationError(f"Cannot register with email {new_email}. User already exists with this address.")
-        
+
 
 class JoinFastsForm(forms.Form):
     fasts = forms.ModelMultipleChoiceField(queryset=Fast.objects.none(), widget=forms.SelectMultiple)
-    
+
     def __init__(self, *args, **kwargs):
         request = kwargs.pop("request", None)  # Extract the request object
         super().__init__(*args, **kwargs)
@@ -136,7 +136,11 @@ class CombinedDevotionalForm(forms.Form):
         widget=forms.DateInput(attrs={'type': 'date'}),
         help_text="Date for the devotional day.",
     )
-    order = forms.IntegerField(required=False, help_text="Order of the devotional within the day.")
+    order = forms.IntegerField(
+        required=False,
+        help_text="Only matters when multiple devotionals exist on the same day. "
+        "Controls display order and must be unique per day and language.",
+    )
 
     # --- English Video ---
     existing_video_en = forms.ModelChoiceField(
