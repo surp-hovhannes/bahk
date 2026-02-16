@@ -50,6 +50,8 @@
     margin: 4px 0 0;
   }
   .new-video-fields { margin-top: 10px; }
+  .lang-checkbox { display: inline-block; margin-right: 15px; }
+  .lang-checkbox label { font-weight: normal; cursor: pointer; }
 </style>
 {% endblock %}
 
@@ -96,102 +98,85 @@
     </div>
   </fieldset>
 
-  {# --- Videos (EN | HY side by side) --- #}
+  {# --- Language selection --- #}
+  <fieldset>
+    <legend>Languages</legend>
+    <p class="helptext">English is always included. Select additional languages as needed.</p>
+    {% for lang in language_fields %}
+      <span class="lang-checkbox">
+        <label>
+          <input type="checkbox" name="languages" value="{{ lang.code }}"
+            class="lang-toggle"
+            data-lang="{{ lang.code }}"
+            {% if lang.selected %}checked{% endif %}
+            {% if lang.required %}disabled{% endif %}>
+          {{ lang.name }}
+        </label>
+      </span>
+    {% endfor %}
+    {# Disabled checkboxes don't submit; hidden input ensures EN is always included #}
+    <input type="hidden" name="languages" value="en">
+    {{ form.languages.errors }}
+  </fieldset>
+
+  {# --- Videos (dynamic columns per language) --- #}
   <fieldset>
     <legend>Videos</legend>
     <div class="side-by-side">
-      {# English video #}
-      <div class="column">
-        <h3>English Video</h3>
+      {% for lang in language_fields %}
+      <div class="column lang-section" data-lang="{{ lang.code }}"
+           {% if not lang.selected %}style="display:none;"{% endif %}>
+        <h3>{{ lang.name }} Video</h3>
         <div class="form-row">
-          <label for="{{ form.existing_video_en.id_for_label }}">Use existing video:</label>
-          {{ form.existing_video_en }}
-          {{ form.existing_video_en.errors }}
+          <label for="{{ lang.existing_video.id_for_label }}">{{ lang.existing_video.label }}:</label>
+          {{ lang.existing_video }}
+          {{ lang.existing_video.errors }}
         </div>
         <div class="form-row">
-          <label><input type="checkbox" class="toggle-new-video" data-lang="en" checked> Create new video</label>
+          <label><input type="checkbox" class="toggle-new-video" data-lang="{{ lang.code }}" checked> Create new video</label>
         </div>
-        <div class="new-video-fields" id="new-video-en">
+        <div class="new-video-fields" id="new-video-{{ lang.code }}">
           <div class="form-row">
-            <label for="{{ form.video_title_en.id_for_label }}">{{ form.video_title_en.label }}:</label>
-            {{ form.video_title_en }}
-            {{ form.video_title_en.errors }}
+            <label for="{{ lang.video_title.id_for_label }}">{{ lang.video_title.label }}:</label>
+            {{ lang.video_title }}
+            {{ lang.video_title.errors }}
           </div>
           <div class="form-row">
-            <label for="{{ form.video_description_en.id_for_label }}">{{ form.video_description_en.label }}:</label>
-            {{ form.video_description_en }}
-            {{ form.video_description_en.errors }}
+            <label for="{{ lang.video_description.id_for_label }}">{{ lang.video_description.label }}:</label>
+            {{ lang.video_description }}
+            {{ lang.video_description.errors }}
           </div>
           <div class="form-row">
-            <label for="{{ form.video_file_en.id_for_label }}">{{ form.video_file_en.label }}:</label>
-            {{ form.video_file_en }}
-            {% if form.video_file_en.help_text %}<p class="helptext">{{ form.video_file_en.help_text }}</p>{% endif %}
-            {{ form.video_file_en.errors }}
+            <label for="{{ lang.video_file.id_for_label }}">{{ lang.video_file.label }}:</label>
+            {{ lang.video_file }}
+            {% if lang.video_file.help_text %}<p class="helptext">{{ lang.video_file.help_text }}</p>{% endif %}
+            {{ lang.video_file.errors }}
           </div>
           <div class="form-row">
-            <label for="{{ form.video_thumbnail_en.id_for_label }}">{{ form.video_thumbnail_en.label }}:</label>
-            {{ form.video_thumbnail_en }}
-            {{ form.video_thumbnail_en.errors }}
+            <label for="{{ lang.video_thumbnail.id_for_label }}">{{ lang.video_thumbnail.label }}:</label>
+            {{ lang.video_thumbnail }}
+            {{ lang.video_thumbnail.errors }}
           </div>
         </div>
       </div>
-
-      {# Armenian video #}
-      <div class="column">
-        <h3>Armenian Video</h3>
-        <div class="form-row">
-          <label for="{{ form.existing_video_hy.id_for_label }}">Use existing video:</label>
-          {{ form.existing_video_hy }}
-          {{ form.existing_video_hy.errors }}
-        </div>
-        <div class="form-row">
-          <label><input type="checkbox" class="toggle-new-video" data-lang="hy" checked> Create new video</label>
-        </div>
-        <div class="new-video-fields" id="new-video-hy">
-          <div class="form-row">
-            <label for="{{ form.video_title_hy.id_for_label }}">{{ form.video_title_hy.label }}:</label>
-            {{ form.video_title_hy }}
-            {{ form.video_title_hy.errors }}
-          </div>
-          <div class="form-row">
-            <label for="{{ form.video_description_hy.id_for_label }}">{{ form.video_description_hy.label }}:</label>
-            {{ form.video_description_hy }}
-            {{ form.video_description_hy.errors }}
-          </div>
-          <div class="form-row">
-            <label for="{{ form.video_file_hy.id_for_label }}">{{ form.video_file_hy.label }}:</label>
-            {{ form.video_file_hy }}
-            {% if form.video_file_hy.help_text %}<p class="helptext">{{ form.video_file_hy.help_text }}</p>{% endif %}
-            {{ form.video_file_hy.errors }}
-          </div>
-          <div class="form-row">
-            <label for="{{ form.video_thumbnail_hy.id_for_label }}">{{ form.video_thumbnail_hy.label }}:</label>
-            {{ form.video_thumbnail_hy }}
-            {{ form.video_thumbnail_hy.errors }}
-          </div>
-        </div>
-      </div>
+      {% endfor %}
     </div>
   </fieldset>
 
-  {# --- Devotional descriptions (EN | HY side by side) --- #}
+  {# --- Devotional descriptions (dynamic columns per language) --- #}
   <fieldset>
     <legend>Devotional Descriptions</legend>
     <div class="side-by-side">
-      <div class="column">
+      {% for lang in language_fields %}
+      <div class="column lang-section" data-lang="{{ lang.code }}"
+           {% if not lang.selected %}style="display:none;"{% endif %}>
         <div class="form-row">
-          <label for="{{ form.devotional_description_en.id_for_label }}">{{ form.devotional_description_en.label }}:</label>
-          {{ form.devotional_description_en }}
-          {{ form.devotional_description_en.errors }}
+          <label for="{{ lang.devotional_description.id_for_label }}">{{ lang.devotional_description.label }}:</label>
+          {{ lang.devotional_description }}
+          {{ lang.devotional_description.errors }}
         </div>
       </div>
-      <div class="column">
-        <div class="form-row">
-          <label for="{{ form.devotional_description_hy.id_for_label }}">{{ form.devotional_description_hy.label }}:</label>
-          {{ form.devotional_description_hy }}
-          {{ form.devotional_description_hy.errors }}
-        </div>
-      </div>
+      {% endfor %}
     </div>
   </fieldset>
 
@@ -200,7 +185,18 @@
 
 <script>
 (function() {
-  // --- Toggle new-video / existing-video sections ---
+  // --- Language toggle: show/hide per-language sections ---
+  document.querySelectorAll('.lang-toggle').forEach(function(toggle) {
+    toggle.addEventListener('change', function() {
+      var lang = this.dataset.lang;
+      var sections = document.querySelectorAll('.lang-section[data-lang="' + lang + '"]');
+      sections.forEach(function(section) {
+        section.style.display = toggle.checked ? '' : 'none';
+      });
+    });
+  });
+
+  // --- Toggle new-video / existing-video per language ---
   document.querySelectorAll('.toggle-new-video').forEach(function(toggle) {
     var lang = toggle.dataset.lang;
     var newFields = document.getElementById('new-video-' + lang);
@@ -209,8 +205,10 @@
     function update() {
       var createNew = toggle.checked;
       newFields.style.display = createNew ? '' : 'none';
-      existingSelect.disabled = createNew;
-      if (createNew) existingSelect.value = '';
+      if (existingSelect) {
+        existingSelect.disabled = createNew;
+        if (createNew) existingSelect.value = '';
+      }
     }
 
     toggle.addEventListener('change', update);
@@ -239,7 +237,6 @@
         .then(function(data) {
           if (data.fasts && data.fasts.length > 0) {
             var fastId = String(data.fasts[0].id);
-            // Select the matching option in the dropdown
             for (var i = 0; i < fastSelect.options.length; i++) {
               if (fastSelect.options[i].value === fastId) {
                 fastSelect.value = fastId;
@@ -249,7 +246,6 @@
                 return;
               }
             }
-            // Fast exists but not in dropdown (shouldn't happen)
             statusEl.textContent = 'Found fast "' + data.fasts[0].name + '" but it is not in the dropdown.';
             statusEl.style.display = '';
             statusEl.style.color = '#c00';

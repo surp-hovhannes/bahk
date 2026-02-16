@@ -124,8 +124,17 @@ class FastForm(forms.ModelForm):
         fields = ['name', 'description', 'image']
 
 
+SUPPORTED_LANGUAGES = [
+    # (code, display_name, required)
+    ('en', 'English', True),
+    ('hy', 'Armenian', False),
+]
+
+DEFAULT_LANGUAGE = 'en'
+
+
 class CombinedDevotionalForm(forms.Form):
-    """Single form to create EN + HY Videos, a shared Day, and two Devotionals."""
+    """Single form to create videos and devotionals for selected languages."""
 
     # --- Date, Fast & Order (shared) ---
     date = forms.DateField(
@@ -142,51 +151,69 @@ class CombinedDevotionalForm(forms.Form):
         "Controls display order and must be unique per day and language.",
     )
 
-    # --- English Video ---
-    existing_video_en = forms.ModelChoiceField(
-        queryset=Video.objects.order_by('-created_at'),
-        required=False,
-        label="Use existing EN video",
-        help_text="Select an existing video, or leave blank to create a new one.",
+    # --- Language selection ---
+    languages = forms.MultipleChoiceField(
+        choices=[(code, name) for code, name, _ in SUPPORTED_LANGUAGES],
+        initial=[DEFAULT_LANGUAGE],
+        help_text="English is always included. Select additional languages as needed.",
     )
-    video_title_en = forms.CharField(max_length=200, required=False, label="Video title (EN)")
-    video_description_en = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 3}), required=False, label="Video description (EN)",
-    )
-    video_file_en = forms.CharField(
-        required=False,
-        widget=S3FileInput(attrs={'accept': 'video/*'}),
-        label="Video file (EN)",
-        help_text="Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 20MB.",
-    )
-    video_thumbnail_en = forms.ImageField(required=False, label="Video thumbnail (EN)")
 
-    # --- Armenian Video ---
-    existing_video_hy = forms.ModelChoiceField(
-        queryset=Video.objects.order_by('-created_at'),
-        required=False,
-        label="Use existing HY video",
-        help_text="Select an existing video, or leave blank to create a new one.",
-    )
-    video_title_hy = forms.CharField(max_length=200, required=False, label="Video title (HY)")
-    video_description_hy = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 3}), required=False, label="Video description (HY)",
-    )
-    video_file_hy = forms.CharField(
-        required=False,
-        widget=S3FileInput(attrs={'accept': 'video/*'}),
-        label="Video file (HY)",
-        help_text="Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 20MB.",
-    )
-    video_thumbnail_hy = forms.ImageField(required=False, label="Video thumbnail (HY)")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for code, name, _ in SUPPORTED_LANGUAGES:
+            self.fields[f'existing_video_{code}'] = forms.ModelChoiceField(
+                queryset=Video.objects.order_by('-created_at'),
+                required=False,
+                label=f"Use existing {code.upper()} video",
+                help_text="Select an existing video, or leave blank to create a new one.",
+            )
+            self.fields[f'video_title_{code}'] = forms.CharField(
+                max_length=200, required=False, label=f"Video title ({code.upper()})",
+            )
+            self.fields[f'video_description_{code}'] = forms.CharField(
+                widget=forms.Textarea(attrs={'rows': 3}),
+                required=False,
+                label=f"Video description ({code.upper()})",
+            )
+            self.fields[f'video_file_{code}'] = forms.CharField(
+                required=False,
+                widget=S3FileInput(attrs={'accept': 'video/*'}),
+                label=f"Video file ({code.upper()})",
+                help_text="Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 20MB.",
+            )
+            self.fields[f'video_thumbnail_{code}'] = forms.ImageField(
+                required=False, label=f"Video thumbnail ({code.upper()})",
+            )
+            self.fields[f'devotional_description_{code}'] = forms.CharField(
+                widget=forms.Textarea(attrs={'rows': 3}),
+                required=False,
+                label=f"Devotional description ({code.upper()})",
+            )
 
-    # --- Devotional descriptions ---
-    devotional_description_en = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 3}), required=False, label="Devotional description (EN)",
-    )
-    devotional_description_hy = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 3}), required=False, label="Devotional description (HY)",
-    )
+    def get_language_fields(self):
+        """Return structured field groups per language for template rendering."""
+        selected = self.data.getlist('languages') if self.is_bound else [DEFAULT_LANGUAGE]
+        result = []
+        for code, name, required in SUPPORTED_LANGUAGES:
+            result.append({
+                'code': code,
+                'name': name,
+                'required': required,
+                'selected': required or code in selected,
+                'existing_video': self[f'existing_video_{code}'],
+                'video_title': self[f'video_title_{code}'],
+                'video_description': self[f'video_description_{code}'],
+                'video_file': self[f'video_file_{code}'],
+                'video_thumbnail': self[f'video_thumbnail_{code}'],
+                'devotional_description': self[f'devotional_description_{code}'],
+            })
+        return result
+
+    def clean_languages(self):
+        langs = self.cleaned_data.get('languages', [])
+        if DEFAULT_LANGUAGE not in langs:
+            langs = [DEFAULT_LANGUAGE] + list(langs)
+        return langs
 
     def _validate_video_side(self, cleaned, lang):
         """Validate one language's video fields. Require new-video fields if no existing video."""
@@ -201,18 +228,19 @@ class CombinedDevotionalForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        selected_languages = cleaned.get('languages', [DEFAULT_LANGUAGE])
 
-        self._validate_video_side(cleaned, 'en')
-        self._validate_video_side(cleaned, 'hy')
+        for lang in selected_languages:
+            self._validate_video_side(cleaned, lang)
 
-        # Check unique constraints (day, order, language_code) for both languages
+        # Check unique constraints (day, order, language_code) for selected languages
         fast = cleaned.get('fast')
         date = cleaned.get('date')
         order = cleaned.get('order')
         if fast and date and order is not None:
             day = Day.objects.filter(fast=fast, date=date).first()
             if day:
-                for lang in ('en', 'hy'):
+                for lang in selected_languages:
                     if Devotional.objects.filter(
                         day=day, order=order, language_code=lang,
                     ).exists():

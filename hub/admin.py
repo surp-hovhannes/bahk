@@ -17,7 +17,12 @@ import logging
 
 from django.db import transaction
 
-from hub.forms import AddDaysToFastAdminForm, CombinedDevotionalForm, CreateFastWithDatesAdminForm
+from hub.forms import (
+    AddDaysToFastAdminForm,
+    CombinedDevotionalForm,
+    CreateFastWithDatesAdminForm,
+    SUPPORTED_LANGUAGES,
+)
 from learning_resources.models import Video
 from hub.models import (
     Church,
@@ -160,7 +165,7 @@ class DevotionalAdmin(admin.ModelAdmin):
         return video
 
     def create_combined_devotional(self, request):
-        """View to create EN + HY Videos, a shared Day, and two Devotionals."""
+        """View to create videos and devotionals for selected languages."""
         if request.method == "POST":
             form = CombinedDevotionalForm(request.POST, request.FILES)
             if form.is_valid():
@@ -174,36 +179,33 @@ class DevotionalAdmin(admin.ModelAdmin):
                             defaults={'church': data['fast'].church},
                         )
 
-                        # 2. Create / get videos for each language
-                        video_en = self._get_or_create_video(data, 'en')
-                        video_hy = self._get_or_create_video(data, 'hy')
+                        # 2. Create video + devotional for each selected language
+                        selected_languages = data['languages']
+                        first_devotional = None
+                        for lang in selected_languages:
+                            video = self._get_or_create_video(data, lang)
+                            devotional = Devotional.objects.create(
+                                day=day,
+                                video=video,
+                                description=data.get(f'devotional_description_{lang}') or '',
+                                order=data.get('order'),
+                                language_code=lang,
+                            )
+                            if first_devotional is None:
+                                first_devotional = devotional
 
-                        # 3. Create EN devotional
-                        devotional_en = Devotional.objects.create(
-                            day=day,
-                            video=video_en,
-                            description=data.get('devotional_description_en') or '',
-                            order=data.get('order'),
-                            language_code='en',
-                        )
-
-                        # 4. Create HY devotional
-                        Devotional.objects.create(
-                            day=day,
-                            video=video_hy,
-                            description=data.get('devotional_description_hy') or '',
-                            order=data.get('order'),
-                            language_code='hy',
-                        )
-
+                    lang_names = ', '.join(
+                        name for code, name, _ in SUPPORTED_LANGUAGES
+                        if code in selected_languages
+                    )
                     messages.success(
                         request,
-                        "EN and HY devotionals created successfully.",
+                        f"Devotionals created successfully for: {lang_names}.",
                     )
                     return redirect(
                         reverse(
                             f"admin:{self.opts.app_label}_{self.opts.model_name}_change",
-                            args=[devotional_en.pk],
+                            args=[first_devotional.pk],
                         )
                     )
                 except Exception as e:
@@ -216,6 +218,7 @@ class DevotionalAdmin(admin.ModelAdmin):
             opts=Devotional._meta,
             title="Create combined devotional",
             form=form,
+            language_fields=form.get_language_fields(),
         )
         return TemplateResponse(
             request,
