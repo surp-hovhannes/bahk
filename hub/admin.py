@@ -216,7 +216,7 @@ class DevotionalAdmin(admin.ModelAdmin):
         context = dict(
             self.admin_site.each_context(request),
             opts=Devotional._meta,
-            title="Create combined devotional",
+            title="Add devotional",
             form=form,
             language_fields=form.get_language_fields(),
         )
