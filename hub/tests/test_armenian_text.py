@@ -274,7 +274,7 @@ class FetchArmenianReadingTextTaskTests(TestCase):
 
     @patch("hub.utils.scrape_armenian_reading_texts")
     def test_updates_text_hy_on_matching_reading(self, mock_scrape):
-        """Test that task updates text_hy when a matching reading is found."""
+        """Test that task updates text_hy and metadata when a matching reading is found."""
         mock_scrape.return_value = [
             {
                 "start_chapter": 1,
@@ -293,6 +293,11 @@ class FetchArmenianReadingTextTaskTests(TestCase):
 
         reading.refresh_from_db()
         self.assertEqual(reading.text_hy, "Armenian verse text for Isaiah 1:16-20")
+        # Metadata should be populated
+        self.assertEqual(reading.text_hy_version, "\u0546\u0578\u0580 \u0537\u057b\u0574\u056b\u0561\u056e\u056b\u0576")
+        self.assertIsNotNone(reading.text_hy_fetched_at)
+        self.assertEqual(reading.text_hy_copyright, "")
+        self.assertEqual(reading.text_hy_fums_token, "")
 
     @patch("hub.utils.scrape_armenian_reading_texts")
     def test_no_match_leaves_text_hy_empty(self, mock_scrape):

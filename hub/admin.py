@@ -496,8 +496,8 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_verse",
     )
     actions = ["force_regenerate_context", "compare_prompts", "fetch_bible_text", "fetch_armenian_text"]
-    readonly_fields = ("text_fetched_at", "has_fums_token", "fetch_text_link", "armenian_text_links")
-    exclude = ("book", "text", "fums_token")  # Avoid duplicates with translation fields
+    readonly_fields = ("text_fetched_at", "has_fums_token", "fetch_text_link", "armenian_text_links", "text_hy_fetched_at", "has_hy_fums_token")
+    exclude = ("book", "text", "fums_token", "text_hy_fums_token")  # Avoid duplicates with translation fields
 
     fieldsets = (
         (None, {
@@ -514,6 +514,10 @@ class ReadingAdmin(admin.ModelAdmin):
                 'Each token is sent to the FUMS endpoint when a user views scripture, allowing '
                 'API.Bible to track anonymized usage for rights holders and publishers.'
             ),
+        }),
+        ('Armenian Text (sacredtradition.am)', {
+            'fields': ('text_hy_version', 'text_hy_copyright', 'text_hy_fetched_at', 'has_hy_fums_token'),
+            'classes': ('collapse',),
         }),
     )
 
@@ -608,6 +612,12 @@ class ReadingAdmin(admin.ModelAdmin):
         )
 
     fetch_bible_text.short_description = "Fetch Bible text from API.Bible"
+
+    def has_hy_fums_token(self, obj):
+        return bool(obj.text_hy_fums_token)
+
+    has_hy_fums_token.short_description = "FUMS token captured"
+    has_hy_fums_token.boolean = True
 
     def compare_prompts(self, request, queryset):
         """Redirect to a page to compare different LLM prompts for selected readings."""

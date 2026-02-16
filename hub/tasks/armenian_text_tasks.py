@@ -8,8 +8,11 @@ Provides:
 import logging
 
 from celery import shared_task
+from django.utils import timezone
 
 from hub.models import Reading
+
+ARMENIAN_TEXT_VERSION = "\u0546\u0578\u0580 \u0537\u057b\u0574\u056b\u0561\u056e\u056b\u0576"
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +76,11 @@ def fetch_armenian_reading_text_task(self, reading_id: int):
         )
         return
 
-    # Update text_hy via the i18n field
+    # Update text_hy via the i18n field and populate metadata
     reading.text_hy = matched_text
-    reading.save(update_fields=["i18n"])
+    reading.text_hy_version = ARMENIAN_TEXT_VERSION
+    reading.text_hy_fetched_at = timezone.now()
+    reading.save(update_fields=["i18n", "text_hy_version", "text_hy_fetched_at"])
 
     logger.info(
         "Fetched Armenian text for Reading %s (%s).",
