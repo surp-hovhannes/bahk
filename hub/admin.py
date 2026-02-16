@@ -11,7 +11,7 @@ from django.utils.html import format_html
 from django.utils.text import Truncator
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from markdownx.admin import MarkdownxModelAdmin
 import logging
 
@@ -115,7 +115,28 @@ class DevotionalAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.create_combined_devotional),
                 name="create-combined-devotional",
             ),
+            path(
+                "lookup_fast_by_date/",
+                self.admin_site.admin_view(self.lookup_fast_by_date),
+                name="lookup-fast-by-date",
+            ),
         ] + super().get_urls()
+
+    def lookup_fast_by_date(self, request):
+        """AJAX endpoint: given a date, return the fast(s) associated with existing Days."""
+        date_str = request.GET.get("date", "")
+        if not date_str:
+            return JsonResponse({"fasts": []})
+        days = Day.objects.filter(date=date_str, fast__isnull=False).select_related("fast")
+        fasts = [{"id": day.fast.id, "name": str(day.fast)} for day in days]
+        # Deduplicate (multiple Days on the same date with different churches but same fast)
+        seen = set()
+        unique_fasts = []
+        for f in fasts:
+            if f["id"] not in seen:
+                seen.add(f["id"])
+                unique_fasts.append(f)
+        return JsonResponse({"fasts": unique_fasts})
 
     def _get_or_create_video(self, data, lang):
         """Return an existing or newly created Video for the given language."""

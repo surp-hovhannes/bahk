@@ -127,14 +127,14 @@ class FastForm(forms.ModelForm):
 class CombinedDevotionalForm(forms.Form):
     """Single form to create EN + HY Videos, a shared Day, and two Devotionals."""
 
-    # --- Fast & Date (shared) ---
-    fast = forms.ModelChoiceField(
-        queryset=Fast.objects.select_related('church').order_by('-year', 'name'),
-        help_text="Select the fast this devotional belongs to.",
-    )
+    # --- Date, Fast & Order (shared) ---
     date = forms.DateField(
         widget=forms.DateInput(attrs={'type': 'date'}),
-        help_text="Date for the devotional day.",
+        help_text="Date for the devotional day. If a day already exists for this date, the fast will auto-fill.",
+    )
+    fast = forms.ModelChoiceField(
+        queryset=Fast.objects.select_related('church').order_by('-year', 'name'),
+        help_text="Auto-filled when an existing day matches the date above. Can be changed manually.",
     )
     order = forms.IntegerField(
         required=False,

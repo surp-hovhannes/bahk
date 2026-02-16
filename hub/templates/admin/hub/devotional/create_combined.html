@@ -72,20 +72,21 @@
     </div>
   {% endif %}
 
-  {# --- Fast, Date & Order (shared) --- #}
+  {# --- Date, Fast & Order (shared) --- #}
   <fieldset>
-    <legend>Fast, Date &amp; Order</legend>
-    <div class="form-row">
-      <label for="{{ form.fast.id_for_label }}">Fast:</label>
-      {{ form.fast }}
-      {% if form.fast.help_text %}<p class="helptext">{{ form.fast.help_text }}</p>{% endif %}
-      {{ form.fast.errors }}
-    </div>
+    <legend>Date, Fast &amp; Order</legend>
     <div class="form-row">
       <label for="{{ form.date.id_for_label }}">Date:</label>
       {{ form.date }}
       {% if form.date.help_text %}<p class="helptext">{{ form.date.help_text }}</p>{% endif %}
       {{ form.date.errors }}
+    </div>
+    <div class="form-row">
+      <label for="{{ form.fast.id_for_label }}">Fast:</label>
+      {{ form.fast }}
+      <p class="helptext" id="fast-auto-status" style="display:none;"></p>
+      {% if form.fast.help_text %}<p class="helptext">{{ form.fast.help_text }}</p>{% endif %}
+      {{ form.fast.errors }}
     </div>
     <div class="form-row">
       <label for="{{ form.order.id_for_label }}">Order:</label>
@@ -199,6 +200,7 @@
 
 <script>
 (function() {
+  // --- Toggle new-video / existing-video sections ---
   document.querySelectorAll('.toggle-new-video').forEach(function(toggle) {
     var lang = toggle.dataset.lang;
     var newFields = document.getElementById('new-video-' + lang);
@@ -219,6 +221,49 @@
     }
     update();
   });
+
+  // --- Auto-fill Fast from Date ---
+  var dateInput = document.getElementById('id_date');
+  var fastSelect = document.getElementById('id_fast');
+  var statusEl = document.getElementById('fast-auto-status');
+
+  if (dateInput && fastSelect) {
+    dateInput.addEventListener('change', function() {
+      var dateVal = dateInput.value;
+      if (!dateVal) {
+        statusEl.style.display = 'none';
+        return;
+      }
+      fetch("{% url 'admin:lookup-fast-by-date' %}?date=" + encodeURIComponent(dateVal))
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+          if (data.fasts && data.fasts.length > 0) {
+            var fastId = String(data.fasts[0].id);
+            // Select the matching option in the dropdown
+            for (var i = 0; i < fastSelect.options.length; i++) {
+              if (fastSelect.options[i].value === fastId) {
+                fastSelect.value = fastId;
+                statusEl.textContent = 'Auto-filled from existing day for ' + dateVal + '.';
+                statusEl.style.display = '';
+                statusEl.style.color = '#28a745';
+                return;
+              }
+            }
+            // Fast exists but not in dropdown (shouldn't happen)
+            statusEl.textContent = 'Found fast "' + data.fasts[0].name + '" but it is not in the dropdown.';
+            statusEl.style.display = '';
+            statusEl.style.color = '#c00';
+          } else {
+            statusEl.textContent = 'No existing day found for ' + dateVal + '. Please select a fast manually.';
+            statusEl.style.display = '';
+            statusEl.style.color = '#666';
+          }
+        })
+        .catch(function() {
+          statusEl.style.display = 'none';
+        });
+    });
+  }
 })();
 </script>
 {% endblock %}
