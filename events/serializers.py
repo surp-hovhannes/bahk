@@ -202,17 +202,16 @@ class UserActivityFeedSerializer(serializers.ModelSerializer, ThumbnailCacheMixi
         
         target = obj.target
         
-        # Handle Fast thumbnails
-        if hasattr(target, 'image') and target.image:
+        # Handle Fast thumbnails (image field with image_thumbnail spec)
+        if hasattr(target, 'image_thumbnail') and hasattr(target, 'image') and target.image:
             try:
                 # Use cached thumbnail URL if available
                 cached_url = self.update_thumbnail_cache(target, 'image', 'image_thumbnail')
                 if cached_url:
                     return cached_url
-                
+
                 # Fall back to direct thumbnail URL
-                if hasattr(target, 'image_thumbnail'):
-                    return target.image_thumbnail.url
+                return target.image_thumbnail.url
             except Exception:
                 pass
         
