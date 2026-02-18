@@ -160,6 +160,7 @@ class CombinedDevotionalForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        video_field_id = Video._meta.get_field('video').id
         for code, name, _ in SUPPORTED_LANGUAGES:
             self.fields[f'existing_video_{code}'] = forms.ModelChoiceField(
                 queryset=Video.objects.order_by('-created_at'),
@@ -177,7 +178,7 @@ class CombinedDevotionalForm(forms.Form):
             )
             self.fields[f'video_file_{code}'] = forms.CharField(
                 required=False,
-                widget=S3FileInput(attrs={'accept': 'video/*'}),
+                widget=S3FileInput(attrs={'accept': 'video/*', 'data-field-id': video_field_id}),
                 label=f"Video file ({code.upper()})",
                 help_text="Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 20MB.",
             )
