@@ -2,9 +2,19 @@ from datetime import date, timedelta
 
 from django.test import TestCase
 from rest_framework import status
+from rest_framework.filters import BaseFilterBackend
+from unittest.mock import patch
 
 from hub.models import Church, Day, Devotional, Fast
+from hub.views.devotionals import DevotionalListView
 from learning_resources.models import Video
+
+
+class OrderByDateFilterBackend(BaseFilterBackend):
+    """Test backend that forces ordering to validate filter pipeline behavior."""
+
+    def filter_queryset(self, request, queryset, view):
+        return queryset.order_by("-day__date")
 
 
 class DevotionalListAPITests(TestCase):
@@ -123,4 +133,14 @@ class DevotionalListAPITests(TestCase):
         self.assertEqual(
             [item["title"] for item in response.data["results"]],
             ["Lent Steps Part 2", "Lent Steps Part 1"],
+        )
+
+    def test_limit_works_with_filter_backends_ordering(self):
+        with patch.object(DevotionalListView, "filter_backends", [OrderByDateFilterBackend]):
+            response = self._get_list(limit=3)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 3)
+        self.assertEqual(
+            [item["date"] for item in response.data["results"]],
+            ["2026-01-06", "2026-01-05", "2026-01-04"],
         )

@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
 from django.utils.translation import activate, get_language_from_request
 
 from .mixins import ChurchContextMixin, TimezoneMixin
@@ -211,8 +212,23 @@ class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
         if ordering:
             qs = qs.order_by(ordering, "order")
 
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        """
+        Apply `limit` after DRF filter backends run to avoid returning a sliced
+        queryset from `get_queryset()`, which can break backend filtering/ordering.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
         limit = self._get_limit()
         if limit:
-            qs = qs[:limit]
+            queryset = queryset[:limit]
 
-        return qs
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
