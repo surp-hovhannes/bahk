@@ -102,6 +102,7 @@ class DevotionalListAPITests(TestCase):
     def test_recent_devotionals_ordering_and_limit(self):
         response = self._get_list(ordering="-day__date", limit=5)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 5)
         self.assertEqual(len(response.data["results"]), 5)
         self.assertEqual(
             [item["date"] for item in response.data["results"]],
@@ -110,6 +111,7 @@ class DevotionalListAPITests(TestCase):
 
         alias_response = self._get_list(ordering="-date", limit=5)
         self.assertEqual(alias_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(alias_response.data["count"], 5)
         self.assertEqual(
             [item["date"] for item in alias_response.data["results"]],
             ["2026-01-06", "2026-01-05", "2026-01-04", "2026-01-03", "2026-01-02"],
@@ -139,6 +141,7 @@ class DevotionalListAPITests(TestCase):
         with patch.object(DevotionalListView, "filter_backends", [OrderByDateFilterBackend]):
             response = self._get_list(limit=3)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 3)
         self.assertEqual(len(response.data["results"]), 3)
         self.assertEqual(
             [item["date"] for item in response.data["results"]],

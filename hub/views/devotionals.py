@@ -129,6 +129,7 @@ class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
     """
     serializer_class = DevotionalSerializer
     permission_classes = [permissions.AllowAny]
+    pagination_class = PageNumberPagination
     queryset = Devotional.objects.all()
     ORDERING_ALIASES = {
         "date": "day__date",
