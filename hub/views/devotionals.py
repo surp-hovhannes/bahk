@@ -1,10 +1,13 @@
 """Views for accessing and editing daily devotionals."""
 import datetime
 import logging
+from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
 from django.utils.translation import activate, get_language_from_request
 
 from .mixins import ChurchContextMixin, TimezoneMixin
@@ -126,13 +129,107 @@ class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
     """
     serializer_class = DevotionalSerializer
     permission_classes = [permissions.AllowAny]
+    pagination_class = PageNumberPagination
     queryset = Devotional.objects.all()
+    ORDERING_ALIASES = {
+        "date": "day__date",
+        "-date": "-day__date",
+    }
+    ALLOWED_ORDERING = {"day__date", "-day__date"}
+
+    def _build_search_query(self, search_term, lang):
+        """
+        Build search query across devotional/video title/description fields with
+        translation fallback support.
+        """
+        fields = [
+            "description",
+            "video__title",
+            "video__description",
+        ]
+
+        modeltrans_languages = getattr(settings, "MODELTRANS_AVAILABLE_LANGUAGES", [])
+
+        # Search requested language translations when available.
+        if lang in modeltrans_languages and lang != "en":
+            fields.extend([
+                f"description_{lang}",
+                f"video__title_{lang}",
+                f"video__description_{lang}",
+            ])
+
+        # Always include English fallback translation fields.
+        if "en" in modeltrans_languages:
+            fields.extend([
+                "description_en",
+                "video__title_en",
+                "video__description_en",
+            ])
+
+        query = Q()
+        for field in fields:
+            query |= Q(**{f"{field}__icontains": search_term})
+        return query
+
+    def _get_ordering(self):
+        ordering = self.request.query_params.get("ordering")
+        if not ordering:
+            return None
+
+        ordering = self.ORDERING_ALIASES.get(ordering, ordering)
+        if ordering not in self.ALLOWED_ORDERING:
+            return None
+        return ordering
+
+    def _get_limit(self):
+        limit = self.request.query_params.get("limit")
+        if not limit:
+            return None
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            return None
+        return limit if limit > 0 else None
 
     def get_queryset(self):
         church = self.get_church()
         lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
         activate(lang)
-        qs = Devotional.objects.filter(day__church=church, language_code=lang)
+        qs = Devotional.objects.select_related("day", "video").filter(
+            day__church=church,
+            language_code=lang,
+        )
         if not qs.exists():
-            qs = Devotional.objects.filter(day__church=church, language_code='en')
+            qs = Devotional.objects.select_related("day", "video").filter(
+                day__church=church,
+                language_code="en",
+            )
+
+        search_term = self.request.query_params.get("search")
+        if search_term:
+            qs = qs.filter(self._build_search_query(search_term, lang))
+
+        ordering = self._get_ordering()
+        if ordering:
+            qs = qs.order_by(ordering, "order")
+
         return qs
+
+    def list(self, request, *args, **kwargs):
+        """
+        Apply `limit` after DRF filter backends run to avoid returning a sliced
+        queryset from `get_queryset()`, which can break backend filtering/ordering.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
+        limit = self._get_limit()
+        if limit:
+            queryset = queryset[:limit]
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
