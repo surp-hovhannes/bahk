@@ -1,11 +1,16 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework import status
+from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.filters import BaseFilterBackend
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
-from hub.models import Church, Day, Devotional, Fast
+from django.utils import timezone
+
+from hub.models import Church, Day, Devotional, Fast, Profile
 from hub.views.devotionals import DevotionalListView
 from learning_resources.models import Video
 
@@ -32,6 +37,18 @@ class DevotionalListAPITests(TestCase):
             church=self.other_church,
             description="Other description",
             culmination_feast="Other culmination",
+        )
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="devotional-user",
+            password="testpass123",
+            email="devotional-user@example.com",
+        )
+        self.user_profile = Profile.objects.create(
+            user=self.user,
+            church=self.church,
+            timezone="America/Los_Angeles",
         )
 
         base_date = date(2026, 1, 1)
@@ -85,6 +102,25 @@ class DevotionalListAPITests(TestCase):
             language_code="en",
         )
 
+        future_day = Day.objects.create(
+            date=date.today() + timedelta(days=5),
+            fast=self.fast,
+            church=self.church,
+        )
+        future_video = Video.objects.create(
+            title="Future Devotional",
+            description="Should not appear yet",
+            category="devotional",
+            language_code="en",
+        )
+        Devotional.objects.create(
+            day=future_day,
+            description="Future church devotional",
+            video=future_video,
+            order=1,
+            language_code="en",
+        )
+
     def _get_list(self, **params):
         query = {"church_id": self.church.id, **params}
         return self.client.get("/api/devotionals/", query)
@@ -98,6 +134,30 @@ class DevotionalListAPITests(TestCase):
         self.assertIn("results", response.data)
         self.assertEqual(response.data["count"], 6)
         self.assertEqual(response.data["results"][0]["date"], "2026-01-01")
+
+    def test_authenticated_user_profile_timezone_controls_local_cutoff(self):
+        request = APIRequestFactory().get("/api/devotionals/")
+        force_authenticate(request, user=self.user)
+
+        with patch("hub.views.devotionals.timezone.now") as mocked_now:
+            mocked_now.return_value = timezone.make_aware(
+                datetime(2026, 1, 2, 6, 30),
+                timezone=ZoneInfo("UTC"),
+            )
+            response = DevotionalListView.as_view()(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["date"], "2026-01-01")
+
+    def test_future_dated_devotionals_are_excluded(self):
+        response = self._get_list(ordering="-day__date")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 6)
+        self.assertNotIn(
+            "Future Devotional",
+            [item["title"] for item in response.data["results"]],
+        )
 
     def test_recent_devotionals_ordering_and_limit(self):
         response = self._get_list(ordering="-day__date", limit=5)

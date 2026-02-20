@@ -1,6 +1,6 @@
 from rest_framework.exceptions import ValidationError
 from ..models import Church
-from django.utils import timezone
+from django.core.exceptions import ObjectDoesNotExist
 import pytz
 
 
@@ -38,6 +38,12 @@ class TimezoneMixin:
 
     def get_timezone(self):
         tz_str = self.request.query_params.get('tz')
+        if not tz_str and self.request.user.is_authenticated:
+            try:
+                tz_str = self.request.user.profile.timezone
+            except ObjectDoesNotExist:
+                tz_str = None
+
         if tz_str:
             return pytz.timezone(tz_str)
         return pytz.UTC

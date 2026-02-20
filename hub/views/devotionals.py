@@ -119,7 +119,7 @@ class DevotionalDetailView(generics.RetrieveAPIView):
         return super().get(request, *args, **kwargs)
 
 
-class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
+class DevotionalListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
     API endpoint that provides a list of devotionals for a given church.
 
@@ -195,13 +195,16 @@ class DevotionalListView(ChurchContextMixin, generics.ListAPIView):
         church = self.get_church()
         lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
         activate(lang)
+        local_today = timezone.localdate(timezone=self.get_timezone())
         qs = Devotional.objects.select_related("day", "video").filter(
             day__church=church,
+            day__date__lte=local_today,
             language_code=lang,
         )
         if not qs.exists():
             qs = Devotional.objects.select_related("day", "video").filter(
                 day__church=church,
+                day__date__lte=local_today,
                 language_code="en",
             )
 
