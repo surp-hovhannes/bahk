@@ -69,6 +69,11 @@ class Fast(models.Model):
         blank=True,
         help_text="Attribution or author of the culmination feast message"
     )
+    start_day_number = models.PositiveIntegerField(
+        default=1,
+        help_text="The day number assigned to the first day of the fast (e.g., 0 if the fast has a 'Day 0')",
+    )
+
     # auto-saved to be the year of the first day of the fast
     year = models.IntegerField(
         validators=[MinValueValidator(2024), MaxValueValidator(3000)],

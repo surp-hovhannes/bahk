@@ -276,14 +276,16 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
     def get_current_day_number(self, obj):
         """Use annotated value if available"""
         try:
+            offset = obj.start_day_number - 1
+
             # Use the annotation if available
             if hasattr(obj, 'current_day_count'):
-                return obj.current_day_count
-            
+                return obj.current_day_count + offset
+
             # Otherwise compute it
             days = obj.days.filter(date__lte=self.current_date).order_by('date')
             if days.exists():
-                return days.count()
+                return days.count() + offset
             else:
                 return None
         except Exception as e:
