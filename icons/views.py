@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.conf import settings
 
+from rest_framework.pagination import PageNumberPagination
+
 from icons.models import Icon
 from icons.serializers import IconSerializer
 from hub.services.llm_service import get_llm_service
@@ -13,21 +15,28 @@ from hub.services.llm_service import get_llm_service
 logger = logging.getLogger(__name__)
 
 
+class IconPagination(PageNumberPagination):
+    """Larger page size for icon grid browsing."""
+    page_size = 15
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class IconListView(generics.ListAPIView):
     """
     API endpoint that allows icons to be viewed and filtered.
-    
+
     Permissions:
         - GET: Any user can view icons
-    
+
     Query Parameters:
         - church: Filter by church ID
         - tags: Filter by tag name (can be comma-separated)
         - search: Search in title
-    
+
     Returns:
         A paginated list of icons with their details.
-    
+
     Example Requests:
         GET /api/icons/
         GET /api/icons/?church=1
@@ -36,6 +45,7 @@ class IconListView(generics.ListAPIView):
     """
     serializer_class = IconSerializer
     permission_classes = [AllowAny]
+    pagination_class = IconPagination
     
     def get_queryset(self):
         """Get icons with optional filtering."""
