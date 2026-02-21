@@ -12,8 +12,8 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name='fast',
-            name='start_day_number',
-            field=models.PositiveIntegerField(default=1, help_text="The day number assigned to the first day of the fast (e.g., 0 if the fast has a 'Day 0')"),
+            name='has_day_zero',
+            field=models.BooleanField(default=False, help_text='If True, the fast starts counting from Day 0 instead of Day 1'),
         ),
         migrations.AlterField(
             model_name='devotional',

@@ -565,4 +565,92 @@ class FastByFeastDateViewTest(TestCase):
         self.assertTrue(hasattr(first_fast, 'total_days'))
         self.assertTrue(hasattr(first_fast, 'start_date'))
         self.assertTrue(hasattr(first_fast, 'end_date'))
-        self.assertTrue(hasattr(first_fast, 'current_day_count')) 
+        self.assertTrue(hasattr(first_fast, 'current_day_count'))
+
+
+class FastSerializerDayNumberTest(TestCase):
+    """Tests for current_day_number and total_number_of_days with has_day_zero."""
+
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Day0 Church")
+        self.user = TestDataFactory.create_user(
+            username='dayzero@example.com',
+            email='dayzero@example.com',
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.factory = APIRequestFactory()
+        self.today = timezone.now().date()
+
+    def _make_fast(self, has_day_zero=False, day_offsets=None):
+        """Create a fast with days at the given offsets relative to today."""
+        if day_offsets is None:
+            day_offsets = list(range(-4, 1))  # 5 days: -4 through 0 (today)
+        fast = TestDataFactory.create_fast(church=self.church)
+        fast.has_day_zero = has_day_zero
+        fast.save()
+        for offset in day_offsets:
+            Day.objects.create(
+                date=self.today + timedelta(days=offset),
+                fast=fast,
+                church=self.church,
+            )
+        return fast
+
+    def _serialize(self, fast):
+        """Serialize a single fast through FastSerializer."""
+        from hub.serializers import FastSerializer
+        request = self.factory.get('/api/fasts/')
+        force_authenticate(request, user=self.user)
+        request.user = self.user
+        request.query_params = {'tz': 'UTC'}
+        context = {'request': request, 'tz': pytz.UTC}
+        return FastSerializer(fast, context=context).data
+
+    def test_current_day_number_without_day_zero(self):
+        """Default fast (has_day_zero=False): first day is Day 1."""
+        fast = self._make_fast(
+            has_day_zero=False,
+            day_offsets=list(range(-4, 1)),  # 5 days up to today
+        )
+        data = self._serialize(fast)
+        self.assertEqual(data['current_day_number'], 5)
+
+    def test_current_day_number_with_day_zero(self):
+        """Fast with has_day_zero=True: first day is Day 0."""
+        fast = self._make_fast(
+            has_day_zero=True,
+            day_offsets=list(range(-4, 1)),  # 5 days up to today
+        )
+        data = self._serialize(fast)
+        # 5 elapsed days minus 1 offset = Day 4
+        self.assertEqual(data['current_day_number'], 4)
+
+    def test_total_number_of_days_without_day_zero(self):
+        """Default fast: total equals the raw day count."""
+        fast = self._make_fast(
+            has_day_zero=False,
+            day_offsets=list(range(-4, 6)),  # 10 days total
+        )
+        data = self._serialize(fast)
+        self.assertEqual(data['total_number_of_days'], 10)
+
+    def test_total_number_of_days_with_day_zero(self):
+        """Fast with Day 0: total excludes the zeroth day."""
+        fast = self._make_fast(
+            has_day_zero=True,
+            day_offsets=list(range(-4, 6)),  # 10 day rows
+        )
+        data = self._serialize(fast)
+        self.assertEqual(data['total_number_of_days'], 9)
+
+    def test_current_day_number_no_elapsed_days(self):
+        """When no days have elapsed yet, current_day_number is None."""
+        fast = self._make_fast(
+            has_day_zero=False,
+            day_offsets=[1, 2, 3],  # all in the future
+        )
+        data = self._serialize(fast)
+        self.assertIsNone(data['current_day_number'])

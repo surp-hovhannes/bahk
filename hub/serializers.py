@@ -270,13 +270,16 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return None
     
     def get_total_number_of_days(self, obj):
-        """Use annotated value if available"""
-        return getattr(obj, 'total_days', obj.days.count())
+        """Use annotated value if available, excluding Day 0 from the count."""
+        total = getattr(obj, 'total_days', obj.days.count())
+        if obj.has_day_zero:
+            total -= 1
+        return total
     
     def get_current_day_number(self, obj):
         """Use annotated value if available"""
         try:
-            offset = obj.start_day_number - 1
+            offset = -1 if obj.has_day_zero else 0
 
             # Use the annotation if available
             if hasattr(obj, 'current_day_count'):
@@ -289,7 +292,7 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             else:
                 return None
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logging.error(f"Error computing current_day_number for Fast {obj.id}: {e}")
             return None
 
     def get_thumbnail(self, obj):
