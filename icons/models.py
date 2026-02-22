@@ -4,7 +4,7 @@ import logging
 from django.db import models
 from django.utils import timezone
 from imagekit.models import ImageSpecField
-from imagekit.processors import ResizeToFill
+from imagekit.processors import ResizeToFit
 from model_utils.tracker import FieldTracker
 from taggit.managers import TaggableManager
 
@@ -27,11 +27,11 @@ class Icon(models.Model):
     )
     image = models.ImageField(
         upload_to=icon_image_upload_path,
-        help_text='Main icon image. Recommended size: 1600x1200 pixels (4:3)'
+        help_text='Main icon image. Thumbnail will be resized to fit within 400x300 preserving aspect ratio.'
     )
     thumbnail = ImageSpecField(
         source='image',
-        processors=[ResizeToFill(400, 300)],  # 4:3 aspect ratio
+        processors=[ResizeToFit(400, 300)],
         format='JPEG',
         options={'quality': 85}
     )
