@@ -1,7 +1,17 @@
 """Views for the icons app."""
 import logging
 from rest_framework import generics, status, views
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
+
+
+class IsAdminOrReadOnly(BasePermission):
+    """
+    Custom permission: allow read access to anyone, write (POST/PUT/DELETE) to admins only.
+    """
+    def has_permission(self, request, view):
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return True
+        return request.user and request.user.is_staff
 from rest_framework.response import Response
 from django.db.models import Q
 from django.conf import settings
@@ -22,17 +32,24 @@ class IconPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class IconListView(generics.ListAPIView):
+class IconListView(generics.ListCreateAPIView):
     """
-    API endpoint that allows icons to be viewed and filtered.
+    API endpoint that allows icons to be viewed, filtered, and uploaded.
 
     Permissions:
         - GET: Any user can view icons
+        - POST: Admin users only
 
-    Query Parameters:
+    Query Parameters (GET):
         - church: Filter by church ID
         - tags: Filter by tag name (can be comma-separated)
         - search: Search in title
+
+    POST Body (multipart/form-data):
+        - title: string (required)
+        - church: integer (required) - church ID
+        - image: file (required) - icon image file
+        - tags: string (optional) - comma-separated tags
 
     Returns:
         A paginated list of icons with their details.
@@ -42,9 +59,14 @@ class IconListView(generics.ListAPIView):
         GET /api/icons/?church=1
         GET /api/icons/?tags=cross,saint
         GET /api/icons/?search=nativity
+
+        POST /api/icons/ (admin only, multipart/form-data)
+        curl -X POST /api/icons/ -H "Authorization: Bearer TOKEN" \
+          -F "title=St. Gregory" -F "church=1" -F "image=@icon.jpg" \
+          -F "tags=patriarch,doctor"
     """
     serializer_class = IconSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
     pagination_class = IconPagination
     
     def get_queryset(self):
