@@ -66,11 +66,9 @@ class FastOnDateEndpointTests(TestCase):
             fast.culmination_feast_date = datetime.date(2024, 3, 27)
             fast.save()
         
-        # Create a day for the fast using TestDataFactory
-        day = TestDataFactory.create_day(
-            date=datetime.date(2024, 3, 25),
-            church=self.church
-        )
+        # Reuse the existing sample_day from setUp (2024-03-25 + self.church already
+        # exists; creating it again would violate the unique constraint on (date, church)).
+        day = self.sample_day
         day.fast = fast
         day.save()
         

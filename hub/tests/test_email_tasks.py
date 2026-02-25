@@ -124,19 +124,12 @@ class TestSendFastReminders(TestCase):
             church=self.church
         )
         
-        # Create days for the new fast (starting in 1 day)
+        # Create a single day for the new fast starting in 1 day (today+1 doesn't
+        # overlap with setUp's self.fast which starts at today+2).
         start_date = timezone.now().date() + timedelta(days=1)
-        end_date = timezone.now().date() + timedelta(days=3)
-        
-        current_date = start_date
-        while current_date <= end_date:
-            day = TestDataFactory.create_day(
-                date=current_date,
-                church=self.church
-            )
-            day.fast = another_fast
-            day.save()
-            current_date += timedelta(days=1)
+        day = TestDataFactory.create_day(date=start_date, church=self.church)
+        day.fast = another_fast
+        day.save()
         
         # Add profile to the new fast
         another_fast.profiles.add(self.profile)
