@@ -30,9 +30,50 @@ def remove_duplicate_days(apps, schema_editor):
         )
         keeper = days[0]
         for extra in days[1:]:
-            Reading.objects.filter(day=extra).update(day=keeper)
-            Devotional.objects.filter(day=extra).update(day=keeper)
-            Feast.objects.filter(day=extra).update(day=keeper)
+            # Handle Readings: check for unique constraint conflicts
+            for reading in Reading.objects.filter(day=extra):
+                # Check if keeper already has a reading with same (book, chapters, verses)
+                if Reading.objects.filter(
+                    day=keeper,
+                    book=reading.book,
+                    start_chapter=reading.start_chapter,
+                    start_verse=reading.start_verse,
+                    end_chapter=reading.end_chapter,
+                    end_verse=reading.end_verse,
+                ).exists():
+                    # Keeper already has this reading, delete the extra one
+                    reading.delete()
+                else:
+                    # Safe to update
+                    reading.day = keeper
+                    reading.save()
+            
+            # Handle Devotionals: check for unique constraint conflicts
+            for devotional in Devotional.objects.filter(day=extra):
+                # Check if keeper already has a devotional with same (order, language_code)
+                if Devotional.objects.filter(
+                    day=keeper,
+                    order=devotional.order,
+                    language_code=devotional.language_code,
+                ).exists():
+                    # Keeper already has this devotional, delete the extra one
+                    devotional.delete()
+                else:
+                    # Safe to update
+                    devotional.day = keeper
+                    devotional.save()
+            
+            # Handle Feasts: only one feast per day, so delete extra if keeper has one
+            extra_feast = Feast.objects.filter(day=extra).first()
+            if extra_feast:
+                if Feast.objects.filter(day=keeper).exists():
+                    # Keeper already has a feast, delete the extra one
+                    extra_feast.delete()
+                else:
+                    # Safe to update
+                    extra_feast.day = keeper
+                    extra_feast.save()
+            
             extra.delete()
 
 

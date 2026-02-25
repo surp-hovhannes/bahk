@@ -208,6 +208,8 @@ class DevotionalAdmin(admin.ModelAdmin):
                             church=data['fast'].church,
                             defaults={'fast': data['fast']},
                         )
+                        # Ensure fast is set even if Day already existed
+                        data['fast'].days.add(day)
 
                         # 2. Create video + devotional for each selected language
                         selected_languages = data['languages']
