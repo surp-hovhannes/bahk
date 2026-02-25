@@ -68,7 +68,9 @@ class FastOnDateEndpointTests(TestCase):
             fast.culmination_feast_date = feast_date
             fast.save()
         
-        # Create a day for the fast using TestDataFactory
+        # create_day is get_or_create-based, so this returns setUp's self.today
+        # for (today, church) rather than creating a duplicate Day (which the
+        # unique_day_per_church constraint would reject).
         day = TestDataFactory.create_day(
             date=day_date,
             church=self.church
