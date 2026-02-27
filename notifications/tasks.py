@@ -831,11 +831,13 @@ def send_prayer_acceptance_nudge_task():
 
     # Acceptances for active requests where the user hasn't prayed recently.
     # Exclude auto-acceptances (counts_for_milestones=False means requester's own).
+    # Only consider acceptances that are at least 2 days old to respect the grace period.
     overdue = (
         PrayerRequestAcceptance.objects.filter(
             prayer_request__in=active_requests,
             counts_for_milestones=True,
             user__is_active=True,
+            accepted_at__date__lte=two_days_ago,
         )
         .annotate(recently_prayed=Exists(recent_prayer))
         .filter(recently_prayed=False)
