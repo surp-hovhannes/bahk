@@ -341,7 +341,7 @@ def track_fast_participant_milestone(fast, participant_count, milestone_type="pa
     """
     Utility function to track when a fast reaches participation milestones.
     This should be called manually when checking participation levels.
-    
+
     Args:
         fast: Fast instance
         participant_count: Current number of participants
@@ -350,15 +350,30 @@ def track_fast_participant_milestone(fast, participant_count, milestone_type="pa
     try:
         # Define milestone thresholds
         milestones = [10, 25, 50, 100, 250, 500, 1000]
-        
+
         # Check if we hit a milestone
         milestone_hit = None
         for milestone in milestones:
             if participant_count == milestone:
                 milestone_hit = milestone
                 break
-        
+
         if milestone_hit:
+            # Deduplicate: skip if this milestone has already been recorded for this fast
+            from django.contrib.contenttypes.models import ContentType
+            fast_ct = ContentType.objects.get_for_model(fast)
+            already_recorded = Event.objects.filter(
+                event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
+                content_type=fast_ct,
+                object_id=fast.id,
+                data__milestone=milestone_hit,
+            ).exists()
+            if already_recorded:
+                logger.debug(
+                    f"Milestone {milestone_hit} for fast {fast} already recorded, skipping"
+                )
+                return False
+
             Event.create_event(
                 event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
                 user=None,  # System event
@@ -375,11 +390,36 @@ def track_fast_participant_milestone(fast, participant_count, milestone_type="pa
                 }
             )
             logger.info(f"Tracked FAST_PARTICIPANT_MILESTONE event: {fast} reached {milestone_hit} participants")
+
+            # Send push to all joined users for milestones of 100+
+            if milestone_hit >= 100:
+                from django.contrib.auth import get_user_model
+                from notifications.tasks import send_push_notification_to_users_task
+                from notifications.constants import FAST_PARTICIPANT_MILESTONE_MESSAGE
+                User = get_user_model()
+                user_ids = list(
+                    User.objects.filter(profile__fasts=fast).values_list('id', flat=True)
+                )
+                if user_ids:
+                    message = FAST_PARTICIPANT_MILESTONE_MESSAGE.format(
+                        count=milestone_hit,
+                        fast_name=fast.name,
+                    )
+                    send_push_notification_to_users_task.delay(
+                        message=message,
+                        data={'screen': f'fast/{fast.id}'},
+                        user_ids=user_ids,
+                    )
+                    logger.info(
+                        f"Sent milestone push for {fast.name} ({milestone_hit} participants) "
+                        f"to {len(user_ids)} users"
+                    )
+
             return True
-            
+
     except Exception as e:
         logger.error(f"Error tracking fast participant milestone: {e}")
-        
+
     return False
 
 
