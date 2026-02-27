@@ -835,6 +835,7 @@ def send_prayer_acceptance_nudge_task():
         PrayerRequestAcceptance.objects.filter(
             prayer_request__in=active_requests,
             counts_for_milestones=True,
+            user__is_active=True,
         )
         .annotate(recently_prayed=Exists(recent_prayer))
         .filter(recently_prayed=False)
