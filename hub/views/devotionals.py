@@ -25,7 +25,8 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
     """
     API endpoint that provides details of a single devotional.
 
-    If no devotional exists for the given date, returns null.
+    If no devotional exists for the given date, returns HTTP 200 with a null body.
+    Not every day has a devotional, so this is an expected, non-error response.
 
     Permissions:
         - GET: Any user can view devotional
@@ -40,7 +41,7 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
         # Activate requested language
         lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
         activate(lang)
-        
+
         date_str = self.request.query_params.get('date')
         tz = self.get_timezone()
 
@@ -54,7 +55,7 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
             # Default to the current date
             target_date = timezone.localdate(timezone=tz)
 
-        # Try requested language, then fallback to default 'en'
+        # Try requested language, then fallback to 'en', then any language for that date.
         try:
             return Devotional.objects.get(day__church=church, day__date=target_date, language_code=lang)
         except Devotional.DoesNotExist:
@@ -65,8 +66,16 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
         try:
             return Devotional.objects.get(day__church=church, day__date=target_date)
         except Devotional.DoesNotExist:
-            logging.error(f"Devotional not found for {target_date} for church {church.name}")
+            # No devotional for this date — this is expected for some churches/days.
+            logging.debug(f"No devotional for {target_date} for church {church.name}")
             return None
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance is None:
+            return Response(None)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class DevotionalsByFastView(generics.ListAPIView):
