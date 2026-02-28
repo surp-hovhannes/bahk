@@ -6,12 +6,24 @@ from hub.models import Day
 from django.utils import timezone
 from datetime import timedelta
 from hub.models import User
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Count, Q
+from django.core.cache import cache
 import logging
 import time
-from .constants import DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE, ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE
+from .constants import (
+    DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE,
+    ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE, FAST_NONJOIN_NUDGE_MESSAGE,
+    ACTIVITY_FEED_NUDGE_MESSAGE, INACTIVE_FAST_MEMBER_MESSAGE,
+    PRAYER_NUDGE_SINGLE_MESSAGE, PRAYER_NUDGE_MULTIPLE_MESSAGE,
+)
 from .utils import is_weekly_fast
 from .models import PromoEmail
+
+# Shared re-engagement nudge deduplication: tasks 4 and 5 use the same key
+# so a user only ever receives one re-engagement push per 7-day window.
+_REENGAGEMENT_CACHE_KEY = 'bahk:reengagement_nudge:{user_id}'
+_REENGAGEMENT_TTL = 7 * 24 * 60 * 60  # 7 days
+_INACTIVITY_DAYS = 5
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -626,3 +638,238 @@ def send_weekly_prayer_request_push_notification_task():
         f'Push Notification: Weekly prayer request notification sent to '
         f'{total_users_to_notify} users ({total_active_requests} total active requests)'
     )
+
+
+@shared_task
+def send_fast_nonjoin_nudge_task():
+    """
+    On days 2, 10, and 20 of an active fast, nudge church members who haven't joined.
+
+    Message: "Join X others participating in the FAST NAME"
+    Deep link: fast/{id}
+    No per-user deduplication — three nudges across the fast period is intentional.
+    """
+    today = timezone.now().date()
+    nudge_days = {2, 10, 20}
+
+    active_fasts = Fast.objects.filter(days__date=today).prefetch_related('days').distinct()
+
+    for fast in active_fasts:
+        start_date = (
+            fast.days.order_by('date').values_list('date', flat=True).first()
+        )
+        if not start_date:
+            continue
+
+        days_elapsed = (today - start_date).days
+        current_day = days_elapsed if fast.has_day_zero else days_elapsed + 1
+
+        if current_day not in nudge_days:
+            continue
+
+        participant_count = fast.profiles.count()
+        if participant_count == 0:
+            continue
+
+        non_joiners = User.objects.filter(
+            profile__church=fast.church,
+            is_active=True,
+        ).exclude(profile__fasts=fast)
+
+        user_ids = list(non_joiners.values_list('id', flat=True))
+        if not user_ids:
+            continue
+
+        message = FAST_NONJOIN_NUDGE_MESSAGE.format(
+            count=participant_count,
+            fast_name=fast.name,
+        )
+        send_push_notification_to_users_task.delay(
+            message=message,
+            data={'screen': f'fast/{fast.id}'},
+            user_ids=user_ids,
+        )
+        logger.info(
+            f'Push Notification: Non-joiner nudge for {fast.name} (day {current_day}) '
+            f'sent to {len(user_ids)} users'
+        )
+
+
+@shared_task
+def send_inactive_fast_member_nudge_task():
+    """
+    Nudge users who joined an active fast but haven't opened the app in 5+ days.
+
+    Uses a shared Redis key with send_activity_feed_nudge_task so a user only
+    receives one re-engagement push per 7-day window regardless of which task fires.
+
+    Runs at 10 AM — before the activity feed nudge at 11 AM — so the fast-context
+    message takes priority when both conditions apply.
+    """
+    from events.models import Event, EventType
+
+    today = timezone.now().date()
+    cutoff = timezone.now() - timedelta(days=_INACTIVITY_DAYS)
+
+    active_fasts = Fast.objects.filter(days__date=today).distinct()
+    if not active_fasts.exists():
+        logger.info('Push Notification: No active fasts for inactive member nudge')
+        return
+
+    recently_active_ids = set(
+        Event.objects.filter(
+            event_type__code__in=[EventType.APP_OPEN, EventType.SESSION_START],
+            timestamp__gte=cutoff,
+            user__isnull=False,
+        ).values_list('user_id', flat=True).distinct()
+    )
+
+    total_sent = 0
+    for fast in active_fasts:
+        inactive_joined = User.objects.filter(
+            profile__fasts=fast,
+            is_active=True,
+        ).exclude(id__in=recently_active_ids)
+
+        for user in inactive_joined:
+            cache_key = _REENGAGEMENT_CACHE_KEY.format(user_id=user.id)
+            if cache.get(cache_key):
+                continue
+
+            send_push_notification_to_users_task.delay(
+                message=INACTIVE_FAST_MEMBER_MESSAGE.format(fast_name=fast.name),
+                data={'screen': f'fast/{fast.id}'},
+                user_ids=[user.id],
+            )
+            cache.set(cache_key, True, timeout=_REENGAGEMENT_TTL)
+            total_sent += 1
+
+    logger.info(f'Push Notification: Inactive fast member nudge sent to {total_sent} users')
+
+
+@shared_task
+def send_activity_feed_nudge_task():
+    """
+    Nudge users with 5+ unread activity feed items who haven't opened the app in 5+ days.
+
+    Uses the same Redis key as send_inactive_fast_member_nudge_task so a user only
+    receives one re-engagement push per 7-day window.
+
+    Runs at 11 AM — after the inactive fast member nudge at 10 AM.
+    """
+    from events.models import Event, EventType, UserActivityFeed
+
+    cutoff = timezone.now() - timedelta(days=_INACTIVITY_DAYS)
+    unread_threshold = 5
+
+    recently_active_ids = set(
+        Event.objects.filter(
+            event_type__code__in=[EventType.APP_OPEN, EventType.SESSION_START],
+            timestamp__gte=cutoff,
+            user__isnull=False,
+        ).values_list('user_id', flat=True).distinct()
+    )
+
+    users_with_enough_unread = (
+        User.objects.filter(is_active=True)
+        .annotate(
+            unread_count=Count(
+                'activity_feed_items',
+                filter=Q(activity_feed_items__is_read=False),
+            )
+        )
+        .filter(unread_count__gte=unread_threshold)
+        .exclude(id__in=recently_active_ids)
+    )
+
+    total_sent = 0
+    for user in users_with_enough_unread:
+        cache_key = _REENGAGEMENT_CACHE_KEY.format(user_id=user.id)
+        if cache.get(cache_key):
+            continue
+
+        send_push_notification_to_users_task.delay(
+            message=ACTIVITY_FEED_NUDGE_MESSAGE.format(count=user.unread_count),
+            data={'screen': 'activity'},
+            user_ids=[user.id],
+        )
+        cache.set(cache_key, True, timeout=_REENGAGEMENT_TTL)
+        total_sent += 1
+
+    logger.info(f'Push Notification: Activity feed nudge sent to {total_sent} users')
+
+
+@shared_task
+def send_prayer_acceptance_nudge_task():
+    """
+    Remind users who accepted a prayer request but haven't logged a prayer for it
+    in the last 2 days.
+
+    - 1 overdue request  → message names it, deep links to prayer-request/{id}
+    - 2+ overdue requests → grouped message, deep links to prayer-requests screen
+
+    Deduplication: one nudge per user per day via a 24-hour Redis cache key.
+    Auto-acceptances (requester's own request) are excluded.
+    """
+    from prayers.models import PrayerRequest, PrayerRequestAcceptance, PrayerRequestPrayerLog
+    from django.db.models import Exists, OuterRef
+
+    _PRAYER_NUDGE_CACHE_KEY = 'bahk:prayer_nudge:{user_id}'
+    _PRAYER_NUDGE_TTL = 24 * 60 * 60  # 24 hours
+    _PRAYER_NUDGE_WINDOW_DAYS = 2
+
+    two_days_ago = timezone.now().date() - timedelta(days=_PRAYER_NUDGE_WINDOW_DAYS)
+
+    active_requests = PrayerRequest.objects.get_active_approved()
+
+    # Subquery: did this user log a prayer for this request within the nudge window?
+    recent_prayer = PrayerRequestPrayerLog.objects.filter(
+        prayer_request=OuterRef('prayer_request'),
+        user=OuterRef('user'),
+        prayed_on_date__gte=two_days_ago,
+    )
+
+    # Acceptances for active requests where the user hasn't prayed recently.
+    # Exclude auto-acceptances (counts_for_milestones=False means requester's own).
+    # Only consider acceptances that are at least 2 days old to respect the grace period.
+    overdue = (
+        PrayerRequestAcceptance.objects.filter(
+            prayer_request__in=active_requests,
+            counts_for_milestones=True,
+            user__is_active=True,
+            accepted_at__date__lte=two_days_ago,
+        )
+        .annotate(recently_prayed=Exists(recent_prayer))
+        .filter(recently_prayed=False)
+        .select_related('user', 'prayer_request')
+    )
+
+    # Group overdue acceptances by user
+    by_user = {}
+    for acceptance in overdue:
+        by_user.setdefault(acceptance.user_id, []).append(acceptance.prayer_request)
+
+    total_sent = 0
+    for user_id, requests in by_user.items():
+        cache_key = _PRAYER_NUDGE_CACHE_KEY.format(user_id=user_id)
+        if cache.get(cache_key):
+            continue
+
+        count = len(requests)
+        if count == 1:
+            pr = requests[0]
+            message = PRAYER_NUDGE_SINGLE_MESSAGE.format(title=pr.title)
+            data = {'screen': f'prayer-request/{pr.id}'}
+        else:
+            message = PRAYER_NUDGE_MULTIPLE_MESSAGE.format(count=count)
+            data = {'screen': 'prayer-requests'}
+
+        send_push_notification_to_users_task.delay(
+            message=message,
+            data=data,
+            user_ids=[user_id],
+        )
+        cache.set(cache_key, True, timeout=_PRAYER_NUDGE_TTL)
+        total_sent += 1
+
+    logger.info(f'Push Notification: Prayer acceptance nudge sent to {total_sent} users')

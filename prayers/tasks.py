@@ -464,19 +464,27 @@ def check_expired_prayer_requests_task():
 
     Runs frequently via Celery beat to minimize delay between expiration and completion.
     """
+    from notifications.tasks import send_push_notification_to_users_task
+    from notifications.constants import PRAYER_REQUEST_COMPLETED_MESSAGE
+
     now = timezone.now()
 
     # Find prayer requests that have expired but are still approved
     expired_requests = PrayerRequest.objects.filter(
         status='approved',
         expiration_date__lte=now
-    )
+    ).select_related('requester')
 
     count = 0
     for prayer_request in expired_requests:
         _, completed = prayer_request.complete_if_expired_with_side_effects()
         if completed:
             count += 1
+            send_push_notification_to_users_task.delay(
+                message=PRAYER_REQUEST_COMPLETED_MESSAGE.format(title=prayer_request.title),
+                data={'screen': f'prayer-request/{prayer_request.id}'},
+                user_ids=[prayer_request.requester_id],
+            )
 
     logger.info(f"Marked {count} prayer requests as completed")
     return {'success': True, 'completed_count': count}
