@@ -147,6 +147,42 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'send-fast-nonjoin-nudge-daily': {
+        'task': 'notifications.tasks.send_fast_nonjoin_nudge_task',
+        'schedule': crontab(hour=9, minute=0),  # 9 AM daily
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-fast-nonjoin-nudge',
+            }
+        }
+    },
+    'send-inactive-fast-member-nudge-daily': {
+        'task': 'notifications.tasks.send_inactive_fast_member_nudge_task',
+        'schedule': crontab(hour=10, minute=0),  # 10 AM daily
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-inactive-fast-member-nudge',
+            }
+        }
+    },
+    'send-activity-feed-nudge-daily': {
+        'task': 'notifications.tasks.send_activity_feed_nudge_task',
+        'schedule': crontab(hour=11, minute=0),  # 11 AM daily
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-activity-feed-nudge',
+            }
+        }
+    },
+    'send-prayer-acceptance-nudge-daily': {
+        'task': 'notifications.tasks.send_prayer_acceptance_nudge_task',
+        'schedule': crontab(hour=19, minute=0),  # 7 PM daily
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-prayer-acceptance-nudge',
+            }
+        }
+    },
     'refresh-reading-texts-weekly': {
         'task': 'hub.tasks.refresh_all_reading_texts_task',
         'schedule': crontab(day_of_week='monday', hour=4, minute=0),  # Monday 4:00 AM
