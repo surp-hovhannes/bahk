@@ -1,8 +1,15 @@
 """Views for the icons app."""
 import logging
+from django.conf import settings
+from django.db.models import Q
 from rest_framework import generics, status, views
-from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.response import Response
 
+from hub.services.llm_service import get_llm_service
+from icons.models import Icon
+from icons.serializers import IconSerializer
 
 class IsAdminOrReadOnly(BasePermission):
     """
@@ -12,15 +19,6 @@ class IsAdminOrReadOnly(BasePermission):
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return True
         return request.user and request.user.is_staff
-from rest_framework.response import Response
-from django.db.models import Q
-from django.conf import settings
-
-from rest_framework.pagination import PageNumberPagination
-
-from icons.models import Icon
-from icons.serializers import IconSerializer
-from hub.services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 

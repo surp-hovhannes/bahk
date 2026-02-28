@@ -53,22 +53,3 @@ class IconSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
                 icon.tags.set(tag_list)
 
         return icon
-
-    def update(self, instance, validated_data):
-        """Handle tag updates on icon update."""
-        tags_string = validated_data.pop('tags', None)
-
-        # Update all other fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        # Update tags if provided
-        if tags_string is not None:
-            tag_list = [tag.strip() for tag in tags_string.split(',') if tag.strip()]
-            if tag_list:
-                instance.tags.set(tag_list)
-            else:
-                instance.tags.clear()
-
-        return instance
