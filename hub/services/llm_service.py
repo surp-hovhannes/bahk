@@ -3,6 +3,7 @@ from typing import Optional
 import logging
 import json
 import os
+import re
 from difflib import SequenceMatcher
 import anthropic
 from openai import OpenAI
@@ -101,20 +102,21 @@ If none match, return: []
         client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",  # Fast, cheap model for filtering
+            model="claude-sonnet-4-6",  # Sonnet for better Armenian/transliteration matching
             max_tokens=200,
             temperature=0.0,  # Deterministic
             system="You are a precise feast matching assistant. Return only JSON arrays of indices.",
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+            messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": "["},  # Prefill to force JSON array output
+            ]
         )
 
         if response and response.content:
             raw_response = response.content[0].text
             logger.debug(f"LLM filter raw response: '{raw_response}'")
-            response_text = raw_response.strip()
+            # Prepend the prefilled "[" that was used to force JSON array output
+            response_text = ("[" + raw_response).strip()
             logger.debug(f"LLM filter cleaned response: '{response_text}'")
 
             # Remove markdown code fences if present
@@ -123,6 +125,16 @@ If none match, return: []
             if not response_text:
                 logger.warning("LLM filter returned empty response, using all candidates")
                 return candidates
+
+            # Extract JSON array from response in case the LLM included reasoning text
+            array_match = re.search(r'\[[\d,\s]*\]', response_text)
+            if array_match:
+                if array_match.group(0) != response_text:
+                    logger.warning(
+                        "LLM filter returned reasoning text instead of bare JSON; "
+                        "extracted array from response"
+                    )
+                response_text = array_match.group(0)
 
             # Parse the JSON array of indices
             indices = json.loads(response_text)
