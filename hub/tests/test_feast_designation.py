@@ -22,6 +22,12 @@ class FeastDesignationTaskTests(TestCase):
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
+        # Disconnect signal so feast creation doesn't eagerly call the real LLM
+        # (CELERY_TASK_ALWAYS_EAGER=True in test settings causes synchronous execution)
+        post_save.disconnect(handle_feast_save, sender=Feast)
+
+    def tearDown(self):
+        post_save.connect(handle_feast_save, sender=Feast)
 
     def test_determine_designation_task_skips_if_designation_exists(self):
         """Test that task skips if designation is already set."""
@@ -404,6 +410,11 @@ class FeastDesignationAPITests(TestCase):
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
+        # Disconnect signal so feast creation doesn't eagerly call the real LLM
+        post_save.disconnect(handle_feast_save, sender=Feast)
+
+    def tearDown(self):
+        post_save.connect(handle_feast_save, sender=Feast)
 
     def test_api_response_includes_designation(self):
         """Test that API response includes designation field."""
