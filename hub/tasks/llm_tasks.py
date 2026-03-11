@@ -1,4 +1,5 @@
 import logging
+import re
 
 from celery import shared_task
 from django.conf import settings
@@ -235,6 +236,11 @@ def generate_feast_context_task(
         logger.error("Feast with id %s not found.", feast_id)
         return
 
+    # Skip context generation for generic fast days — they are never displayed
+    if feast.designation == Feast.Designation.FAST:
+        logger.info("Feast %s is a generic fast day, skipping context generation.", feast_id)
+        return
+
     active_context = feast.active_context
     if active_context and not force_regeneration:
         if _check_all_feast_translations_present(active_context, AVAILABLE_LANGUAGES):
@@ -302,6 +308,16 @@ def determine_feast_designation_task(self, feast_id: int):
     # Skip if designation is already set (don't overwrite manual assignments)
     if feast.designation:
         logger.info("Feast %s already has designation '%s', skipping.", feast_id, feast.designation)
+        return
+
+    # Short-circuit for generic numbered fast days — pattern like "Seventeenth day of Great Lent"
+    # These never commemorate a specific saint so the LLM is not needed
+    if re.match(r'^[\w\s]+ day of ', feast.name, re.IGNORECASE) and not re.search(
+        r'Saint|Martyr|Blessed|Holy\s+(?!Cross)|Prophet|Apostle|Patriarch|Vartapet', feast.name, re.IGNORECASE
+    ):
+        feast.designation = Feast.Designation.FAST
+        feast.save(update_fields=['designation'])
+        logger.info("Regex fast-day pattern matched, assigned 'Fast' to Feast %s (%s)", feast_id, feast.name)
         return
 
     # Determine which LLM service to use based on active prompt or default

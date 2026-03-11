@@ -108,15 +108,13 @@ If none match, return: []
             system="You are a precise feast matching assistant. Return only JSON arrays of indices.",
             messages=[
                 {"role": "user", "content": prompt},
-                {"role": "assistant", "content": "["},  # Prefill to force JSON array output
             ]
         )
 
         if response and response.content:
             raw_response = response.content[0].text
             logger.debug(f"LLM filter raw response: '{raw_response}'")
-            # Prepend the prefilled "[" that was used to force JSON array output
-            response_text = ("[" + raw_response).strip()
+            response_text = raw_response.strip()
             logger.debug(f"LLM filter cleaned response: '{response_text}'")
 
             # Remove markdown code fences if present
@@ -135,6 +133,9 @@ If none match, return: []
                         "extracted array from response"
                     )
                 response_text = array_match.group(0)
+            else:
+                logger.warning(f"LLM filter returned no JSON array: '{response_text}', using all candidates")
+                return candidates
 
             # Parse the JSON array of indices
             indices = json.loads(response_text)
@@ -697,26 +698,33 @@ class AnthropicService(LLMService):
             'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets',
             'Patriarchs, Vartapets',
             'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord',
-            'Martyrs'
+            'Martyrs',
+            'Fast',
         ]
-        
+
         feast_info = f"Feast name: {feast.name}"
         if feast.name_hy:
             feast_info += f"\nArmenian name: {feast.name_hy}"
-        
+
         system_prompt = (
             "You are a classification expert for Armenian Orthodox Church feasts. "
-            "Determine the appropriate designation category for a feast based solely on its name."
+            "Determine the appropriate designation category for a feast based solely on its name. "
+            "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast]' "
+            "(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent', 'Third day of the Fast') "
+            "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration."
         )
-        
+
         user_message = (
             f"{feast_info}\n\n"
             "Based on the feast name above, determine which of the following designation categories it belongs to:\n"
-            f"1. {designation_options[0]}\n"
-            f"2. {designation_options[1]}\n"
-            f"3. {designation_options[2]}\n"
-            f"4. {designation_options[3]}\n"
-            f"5. {designation_options[4]}\n\n"
+            f"1. {designation_options[0]} — Sundays and major feast days of the Lord (Christmas, Easter, Ascension, etc.)\n"
+            f"2. {designation_options[1]} — St. Gregory the Illuminator, Apostles, Prophets, and their companions\n"
+            f"3. {designation_options[2]} — Patriarchs, Catholicos, and Vartapets (vardapets) of the Armenian Church\n"
+            f"4. {designation_options[3]} — Nativity, Theophany, Presentation, and Marian feasts\n"
+            f"5. {designation_options[4]} — Holy martyrs who died for the faith\n"
+            f"6. {designation_options[5]} — A generic numbered day within a fasting period, with NO specific saint or feast named "
+            f"(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent'). "
+            f"If the name is just '[number/ordinal] day of [Fast name]' with no saint mentioned, choose this.\n\n"
             "Return ONLY the exact designation text from the list above, with no additional explanation or formatting."
         )
 

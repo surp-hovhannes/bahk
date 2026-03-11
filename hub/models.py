@@ -718,6 +718,10 @@ class Feast(models.Model):
             'Martyrs',
             'Martyrs'
         )
+        FAST = (
+            'Fast',
+            'Fast'
+        )
 
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="feasts")
     name = models.CharField(max_length=256)
