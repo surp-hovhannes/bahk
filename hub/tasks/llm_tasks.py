@@ -311,8 +311,14 @@ def determine_feast_designation_task(self, feast_id: int):
         return
 
     # Short-circuit for generic numbered fast days — pattern like "Seventeenth day of Great Lent"
-    # These never commemorate a specific saint so the LLM is not needed
-    if re.match(r'^[\w\s]+ day of ', feast.name, re.IGNORECASE) and not re.search(
+    # These never commemorate a specific saint so the LLM is not needed.
+    # Require "fast" or "lent" in the name to avoid false positives.
+    # Explicitly exclude Mijink (Median day of Great Lent) — a named feast, not a generic fast day.
+    if re.match(r'^[\w\s]+ day of ', feast.name, re.IGNORECASE) and re.search(
+        r'fast|lent', feast.name, re.IGNORECASE
+    ) and not re.search(
+        r'Mijink|Median', feast.name, re.IGNORECASE
+    ) and not re.search(
         r'Saint|Martyr|Blessed|Holy\s+(?!Cross)|Prophet|Apostle|Patriarch|Vartapet', feast.name, re.IGNORECASE
     ):
         feast.designation = Feast.Designation.FAST
