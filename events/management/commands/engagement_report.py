@@ -689,7 +689,22 @@ class Command(BaseCommand):
                 users_with_multiple += 1
         
         avg_days_between_checklist_uses = (total_days_between / users_with_multiple) if users_with_multiple > 0 else 0
-        
+
+        # Tutorial Video Engagement
+        tutorial_video_events = events_in_range.filter(event_type__code=EventType.TUTORIAL_VIDEO_VIEWED)
+        total_tutorial_video_views = tutorial_video_events.count()
+        unique_tutorial_video_viewers = tutorial_video_events.values('user_id').distinct().count()
+        avg_tutorial_videos_per_user = (total_tutorial_video_views / unique_tutorial_video_viewers) if unique_tutorial_video_viewers > 0 else 0
+        top_tutorial_videos_qs = (
+            tutorial_video_events.values('data__video_id', 'data__title')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:10]
+        )
+        top_tutorial_videos = [
+            {"video_id": x['data__video_id'], "title": x['data__title'], "views": x['count']}
+            for x in top_tutorial_videos_qs
+        ]
+
         # Cross-engagement analysis
         devotional_user_ids = set(devotional_events.values_list('user_id', flat=True))
         checklist_user_ids = set(checklist_events.values_list('user_id', flat=True))
@@ -756,6 +771,12 @@ class Command(BaseCommand):
                     "unique_users": unique_checklist_users,
                     "avg_per_user": round(avg_checklists_per_user, 2),
                     "avg_days_between_uses": round(avg_days_between_checklist_uses, 2),
+                },
+                "tutorial_videos": {
+                    "total_views": total_tutorial_video_views,
+                    "unique_users": unique_tutorial_video_viewers,
+                    "avg_per_user": round(avg_tutorial_videos_per_user, 2),
+                    "top_videos": top_tutorial_videos,
                 },
                 "cross_engagement": {
                     "users_both_devotional_and_checklist": both_devotional_and_checklist,

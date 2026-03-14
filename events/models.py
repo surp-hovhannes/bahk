@@ -31,6 +31,7 @@ class EventType(models.Model):
     PRAYER_SET_VIEWED = 'prayer_set_viewed'
     PRAYER_VIEWED = 'prayer_viewed'
     PRAYER_REQUEST_VIEWED = 'prayer_request_viewed'
+    TUTORIAL_VIDEO_VIEWED = 'tutorial_video_viewed'
     
     # Event type constants
     USER_JOINED_FAST = 'user_joined_fast'
@@ -86,6 +87,7 @@ class EventType(models.Model):
         (PRAYER_SET_VIEWED, 'Prayer Set Viewed'),
         (PRAYER_VIEWED, 'Prayer Viewed'),
         (PRAYER_REQUEST_VIEWED, 'Prayer Request Viewed'),
+        (TUTORIAL_VIDEO_VIEWED, 'Tutorial Video Viewed'),
     ]
     
     # Core fields
@@ -181,6 +183,7 @@ class EventType(models.Model):
             cls.PRAYER_SET_VIEWED,
             cls.PRAYER_VIEWED,
             cls.PRAYER_REQUEST_VIEWED,
+            cls.TUTORIAL_VIDEO_VIEWED,
         ]:
             return 'analytics'
         return 'user_action'
@@ -201,6 +204,7 @@ class EventType(models.Model):
             cls.PRAYER_SET_VIEWED,
             cls.PRAYER_VIEWED,
             cls.PRAYER_REQUEST_VIEWED,
+            cls.TUTORIAL_VIDEO_VIEWED,
             # Note: CHECKLIST_USED removed - can be used without a specific fast
         ]
 
