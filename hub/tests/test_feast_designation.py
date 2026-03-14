@@ -404,8 +404,6 @@ class FeastDesignationSignalTests(TestCase):
 
 
 @tag('slow', 'integration')
-@patch('hub.utils.scrape_feast', return_value=None)
-@patch('hub.views.feasts.generate_feast_context_task')
 class FeastDesignationAPITests(TestCase):
     """Tests for API response including designation."""
 
@@ -418,7 +416,7 @@ class FeastDesignationAPITests(TestCase):
     def tearDown(self):
         post_save.connect(handle_feast_save, sender=Feast)
 
-    def test_api_response_includes_designation(self, mock_generate_feast_context_task, mock_scrape_feast):
+    def test_api_response_includes_designation(self):
         """Test that API response includes designation field."""
         from hub.views.feasts import GetFeastForDate
         from rest_framework.test import APIRequestFactory
@@ -443,7 +441,7 @@ class FeastDesignationAPITests(TestCase):
             Feast.Designation.NATIVITY_MOTHER_OF_GOD
         )
 
-    def test_api_response_designation_null(self, mock_generate_feast_context_task, mock_scrape_feast):
+    def test_api_response_designation_null(self):
         """Test that API response includes None designation when not set."""
         from hub.views.feasts import GetFeastForDate
         from rest_framework.test import APIRequestFactory
@@ -465,7 +463,7 @@ class FeastDesignationAPITests(TestCase):
         self.assertIsNone(response.data['feast']['designation'])
 
     @patch('hub.views.feasts.get_or_create_feast_for_date')
-    def test_view_uses_check_fast_false(self, mock_get_or_create, mock_generate_feast_context_task, mock_scrape_feast):
+    def test_view_uses_check_fast_false(self, mock_get_or_create):
         """Test that GetFeastForDate view uses check_fast=False."""
         from hub.views.feasts import GetFeastForDate
         from rest_framework.test import APIRequestFactory

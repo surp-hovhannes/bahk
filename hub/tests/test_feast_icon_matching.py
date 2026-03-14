@@ -404,8 +404,6 @@ class FeastIconModelTests(TestCase):
 
 
 @tag('slow', 'integration')
-@patch('hub.utils.scrape_feast', return_value=None)
-@patch('hub.views.feasts.generate_feast_context_task')
 class FeastIconAPITests(TestCase):
     """Tests for API response including icon."""
 
@@ -413,7 +411,7 @@ class FeastIconAPITests(TestCase):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
 
-    def test_feast_api_includes_icon_when_present(self, mock_generate_feast_context_task, mock_scrape_feast):
+    def test_feast_api_includes_icon_when_present(self):
         """Test that API response includes icon when icon is set."""
         from rest_framework.test import APIClient
         from rest_framework import status
@@ -446,7 +444,7 @@ class FeastIconAPITests(TestCase):
         self.assertIsNotNone(response.data['feast']['icon'])
         self.assertEqual(response.data['feast']['icon']['id'], icon.id)
 
-    def test_feast_api_includes_null_icon_when_not_present(self, mock_generate_feast_context_task, mock_scrape_feast):
+    def test_feast_api_includes_null_icon_when_not_present(self):
         """Test that API response includes null icon when icon is not set."""
         from rest_framework.test import APIClient
         from rest_framework import status
