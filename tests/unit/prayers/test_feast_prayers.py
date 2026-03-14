@@ -1,5 +1,6 @@
 """Tests for FeastPrayer model and functionality."""
 from datetime import date
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
@@ -169,15 +170,17 @@ class FeastPrayerSerializerTests(TestCase):
             self.assertIn(field, data)
 
 
+@patch('hub.utils.scrape_feast', return_value=None)
+@patch('hub.views.feasts.generate_feast_context_task')
 class FeastPrayerAPITests(TestCase):
     """Test FeastPrayer API integration."""
 
     def setUp(self):
         """Set up test data."""
+        from django.conf import settings
         self.client = APIClient()
-        self.church = Church.objects.create(name='Test Church')
-        # Set as default church
-        Church._default_pk = self.church.pk
+        # Use DEFAULT_CHURCH_NAME so the view's Church.get_default_pk() lookup matches
+        self.church, _ = Church.objects.get_or_create(name=settings.DEFAULT_CHURCH_NAME)
 
         self.day = Day.objects.create(
             church=self.church,
@@ -195,7 +198,7 @@ class FeastPrayerAPITests(TestCase):
             text='On this holy day of {feast_name}, we rejoice.'
         )
 
-    def test_feast_endpoint_includes_prayer_field(self):
+    def test_feast_endpoint_includes_prayer_field(self, mock_generate_feast_context_task, mock_scrape_feast):
         """Test that feast endpoint includes prayer field in response."""
         response = self.client.get('/api/feasts/', {'date': '2026-01-06', 'lang': 'en'})
 
@@ -208,7 +211,7 @@ class FeastPrayerAPITests(TestCase):
             # Prayer can be None if there's no matching prayer for the designation
             # This is expected behavior
 
-    def test_feast_endpoint_without_prayer(self):
+    def test_feast_endpoint_without_prayer(self, mock_generate_feast_context_task, mock_scrape_feast):
         """Test that feast endpoint handles missing prayer gracefully."""
         # Create a feast with different designation that has no prayer
         day2 = Day.objects.create(
@@ -232,7 +235,7 @@ class FeastPrayerAPITests(TestCase):
         prayer = response.data['feast']['prayer']
         self.assertIsNone(prayer)
 
-    def test_feast_endpoint_armenian_translation(self):
+    def test_feast_endpoint_armenian_translation(self, mock_generate_feast_context_task, mock_scrape_feast):
         """Test feast endpoint with Armenian language accepts lang parameter."""
         response = self.client.get('/api/feasts/', {'date': '2026-01-06', 'lang': 'hy'})
 
@@ -242,7 +245,3 @@ class FeastPrayerAPITests(TestCase):
         # Verify the endpoint accepts Armenian language parameter
         # The actual translation rendering is tested in model tests
 
-    def tearDown(self):
-        """Clean up after tests."""
-        # Reset default church
-        Church._default_pk = None
