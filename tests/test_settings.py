@@ -69,6 +69,13 @@ SECRET_KEY = 'test-secret-key-for-testing-only'
 AWS_LOCATION_API_KEY = None  # Disable AWS Location Service
 SEND_PUSH_NOTIFICATIONS = False  # Disable push notifications
 
+# Disable real LLM API calls during tests.
+# Without these overrides, Celery tasks that fire synchronously (CELERY_TASK_ALWAYS_EAGER=True)
+# can make real API calls when signals trigger LLM tasks on Feast creation.
+# Tests that need to mock LLM responses already use @patch decorators and are unaffected.
+ANTHROPIC_API_KEY = ''
+OPENAI_API_KEY = ''
+
 # JWT Settings for testing
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

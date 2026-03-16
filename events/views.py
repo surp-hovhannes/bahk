@@ -579,6 +579,41 @@ class TrackPrayerRequestViewedView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class TrackTutorialVideoViewedView(APIView):
+    """
+    Track when a user opens a tutorial video.
+    POST body: { "video_id": number }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        video_id = request.data.get('video_id')
+        if not video_id:
+            return Response({"error": "video_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from learning_resources.models import Video
+            video = Video.objects.get(id=int(video_id), category='tutorial')
+        except (ValueError, Video.DoesNotExist):
+            return Response({"error": "Invalid video_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            Event.create_event(
+                event_type_code=EventType.TUTORIAL_VIDEO_VIEWED,
+                user=request.user,
+                target=video,
+                title="Tutorial video viewed",
+                data={
+                    "video_id": video.id,
+                    "title": video.title,
+                },
+                request=request,
+            )
+            return Response({"status": "ok"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAdminUser])
 def trigger_milestone_check(request, fast_id):
