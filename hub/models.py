@@ -391,6 +391,9 @@ class Day(models.Model):
             models.Index(fields=["date"]),
             models.Index(fields=["church", "date"]),
         ]
+        constraints = [
+            models.UniqueConstraint(fields=["date", "church"], name="unique_day_per_church"),
+        ]
 
 
 class DevotionalSet(models.Model):

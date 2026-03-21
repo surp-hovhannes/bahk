@@ -205,8 +205,8 @@ class DevotionalAdmin(admin.ModelAdmin):
                         # 1. Get or create Day
                         day, _ = Day.objects.get_or_create(
                             date=data['date'],
-                            fast=data['fast'],
-                            defaults={'church': data['fast'].church},
+                            church=data['fast'].church,
+                            defaults={'fast': data['fast']},
                         )
 
                         # 2. Create video + devotional for each selected language
@@ -396,7 +396,7 @@ class FastAdmin(admin.ModelAdmin):
             form = AddDaysToFastAdminForm(request.POST)
             if form.is_valid():
                 days = [
-                    Day.objects.get_or_create(date=date)[0]
+                    Day.objects.get_or_create(date=date, church=fast.church)[0]
                     for date in form.cleaned_data["dates"]
                 ]
                 fast.days.add(*days)
@@ -489,7 +489,7 @@ class FastAdmin(admin.ModelAdmin):
                     data["first_day"] + datetime.timedelta(days=num_days)
                     for num_days in range(data["length_of_fast"])
                 ]
-                days = [Day.objects.get_or_create(date=date)[0] for date in dates]
+                days = [Day.objects.get_or_create(date=date, church=duplicate_fast.church)[0] for date in dates]
                 duplicate_fast.days.set(days)
                 duplicate_fast.save()  # run save method to ensure year is set
 

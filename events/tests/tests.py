@@ -1920,12 +1920,13 @@ class UserMilestoneTasksTest(TestCase):
             year=2024
         )
         
-        # Create days for the weekly fast (ended yesterday)
+        # Create days for the weekly fast (ended 2 days ago; using a date different
+        # from setUp's yesterday to avoid the unique constraint on (date, church)).
         from django.utils import timezone
         from datetime import timedelta
-        
-        yesterday = timezone.now().date() - timedelta(days=1)
-        Day.objects.create(fast=weekly_fast, date=yesterday)
+
+        two_days_ago = timezone.now().date() - timedelta(days=2)
+        Day.objects.create(fast=weekly_fast, date=two_days_ago)
         
         # User participated in the weekly fast
         self.profile.fasts.add(weekly_fast)

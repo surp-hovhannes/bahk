@@ -41,10 +41,12 @@ class FastListViewTest(TestCase):
                 description=f"Test Description {i}"
             )
             self.fasts.append(fast)
-            
-            # Create days for each fast (30 days before and after today) using TestDataFactory
-            for j in range(-30, 31):
-                date = today + timedelta(days=j)
+
+            # Use non-overlapping 7-day windows per fast within [-10, +10] to satisfy
+            # the unique constraint on (date, church): i=0→[-10,-4], i=1→[-3,+3], i=2→[+4,+10]
+            start_offset = i * 7 - 10
+            for j in range(7):
+                date = today + timedelta(days=start_offset + j)
                 day = TestDataFactory.create_day(
                     date=date,
                     church=self.church
@@ -299,10 +301,12 @@ class FastByFeastDateViewTest(TestCase):
             description="Test Fast No Feast"
         )
         
-        # Create days for each fast
-        for fast in [self.fast_1, self.fast_2, self.fast_no_feast]:
-            for j in range(-10, 30):
-                date = today + timedelta(days=j)
+        # Create days for each fast using non-overlapping 15-day windows to satisfy
+        # the unique constraint on (date, church).
+        for idx, fast in enumerate([self.fast_1, self.fast_2, self.fast_no_feast]):
+            start_offset = idx * 15 - 10
+            for j in range(15):
+                date = today + timedelta(days=start_offset + j)
                 day = TestDataFactory.create_day(
                     date=date,
                     church=self.church
