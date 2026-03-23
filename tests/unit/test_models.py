@@ -109,14 +109,14 @@ class ModelCreationTests(TestCase):
         self.assertIsNotNone(day)
         self.assertEqual(day.date, date)
     
-    def test_create_duplicate_days(self):
-        """Tests that duplicate days can be created (Days are not unique by date alone)."""
-        date = datetime.date.today()
-        day1 = TestDataFactory.create_day(date=date)
-        # Days are not unique by date alone, so this should succeed
-        day2 = TestDataFactory.create_day(date=date)
+    def test_days_with_different_churches_can_share_date(self):
+        """Days for different churches can share the same date."""
+        d = datetime.date.today()
+        day1 = TestDataFactory.create_day(date=d)
+        day2 = TestDataFactory.create_day(date=d)
         self.assertIsNotNone(day2)
-        self.assertEqual(day2.date, date)
+        self.assertEqual(day2.date, d)
+        self.assertNotEqual(day1.church_id, day2.church_id)
 
 
 class CompleteModelTests(TestCase):

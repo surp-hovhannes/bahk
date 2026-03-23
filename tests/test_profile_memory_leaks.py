@@ -68,8 +68,8 @@ class ProfileMemoryLeakTestCase(APITestCase):
                 description=f"Description for fast {i}"
             )
             
-            # Create days for the fast
-            base_date = date.today() - timedelta(days=days_per_fast)
+            # Each fast gets a non-overlapping date range so Days stay unique per church
+            base_date = date.today() - timedelta(days=days_per_fast * (i + 1))
             for j in range(days_per_fast):
                 day = TestDataFactory.create_day(
                     date=base_date + timedelta(days=j),
@@ -362,8 +362,8 @@ class ProfileStressTestCase(APITestCase):
                 church=self.church
             )
             
-            # Create days for each fast
-            base_date = date.today() - timedelta(days=days_per_fast)
+            # Each fast gets a non-overlapping date range so Days stay unique per church
+            base_date = date.today() - timedelta(days=days_per_fast * (i + 1))
             for j in range(days_per_fast):
                 day = TestDataFactory.create_day(
                     date=base_date + timedelta(days=j),

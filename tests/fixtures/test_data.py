@@ -86,12 +86,13 @@ class TestDataFactory:
     
     @staticmethod
     def create_day(date=None, church=None):
-        """Create a test day."""
+        """Create (or retrieve) a test Day, respecting the unique (date, church) constraint."""
         if date is None:
             date = datetime.date.today()
         if church is None:
             church = TestDataFactory.create_church()
-        return Day.objects.create(date=date, church=church)
+        day, _ = Day.objects.get_or_create(date=date, church=church)
+        return day
     
     @staticmethod
     def create_complete_fast(church=None, num_days=5, num_participants=2):

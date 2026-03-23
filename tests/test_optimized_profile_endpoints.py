@@ -56,20 +56,20 @@ class OptimizedProfileEndpointTests(APITestCase):
         self.profile_url = reverse('profile-detail')
         self.fast_stats_url = reverse('fast-stats')
         
-    def create_fasts_with_days(self, num_fasts=10, days_per_fast=10):
+    def create_fasts_with_days(self, num_fasts=10, days_per_fast=10, date_offset=0):
         """Create multiple fasts with many days for testing."""
         fasts = []
         
         for i in range(num_fasts):
             # Create fast
             fast = TestDataFactory.create_fast(
-                name=f"Optimized Fast {i}",
+                name=f"Optimized Fast {i} (offset {date_offset})",
                 church=self.church,
                 description=f"Description for optimized fast {i}"
             )
             
-            # Create days for the fast
-            base_date = date.today() - timedelta(days=days_per_fast)
+            # Each fast gets a non-overlapping date range so Days stay unique per church
+            base_date = date.today() - timedelta(days=days_per_fast * (i + 1) + date_offset)
             for j in range(days_per_fast):
                 day = TestDataFactory.create_day(
                     date=base_date + timedelta(days=j),
@@ -115,8 +115,8 @@ class OptimizedProfileEndpointTests(APITestCase):
         response = self.client.get(self.fast_stats_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        # Add more fasts
-        self.create_fasts_with_days(num_fasts=20, days_per_fast=15)
+        # Add more fasts (offset so date ranges don't overlap with the first batch)
+        self.create_fasts_with_days(num_fasts=20, days_per_fast=15, date_offset=50)
         
         # Count queries with 25 fasts total
         queries_25_fasts = self.count_queries(get_fast_stats)
@@ -334,8 +334,8 @@ class OptimizedEndpointStressTest(APITestCase):
                 church=self.church
             )
             
-            # Create days for each fast
-            base_date = date.today() - timedelta(days=days_per_fast)
+            # Each fast gets a non-overlapping date range so Days stay unique per church
+            base_date = date.today() - timedelta(days=days_per_fast * (i + 1))
             for j in range(days_per_fast):
                 day = TestDataFactory.create_day(
                     date=base_date + timedelta(days=j),
