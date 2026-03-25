@@ -494,7 +494,10 @@ class DevotionalSerializer(serializers.ModelSerializer):
     thumbnail_small = serializers.SerializerMethodField()
     video = serializers.SerializerMethodField()
     date = serializers.DateField(source='day.date')
-    fast_id = serializers.IntegerField(source='day.fast.id')
+    fast_id = serializers.SerializerMethodField()
+
+    def get_fast_id(self, obj):
+        return obj.day.fast_id
     created_at = serializers.DateTimeField(source='video.created_at')
     updated_at = serializers.DateTimeField(source='video.updated_at')
 
