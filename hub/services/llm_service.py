@@ -709,22 +709,26 @@ class AnthropicService(LLMService):
         system_prompt = (
             "You are a classification expert for Armenian Orthodox Church feasts. "
             "Determine the appropriate designation category for a feast based solely on its name. "
-            "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast]' "
+            "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast/Lent]' "
             "(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent', 'Third day of the Fast') "
-            "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration."
+            "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration. "
+            "EXCEPTION: Names in the pattern '[ordinal] day of Easter' (e.g. 'Second day of Easter', "
+            "'Fourth day of Easter') are NOT fasting days. The 50 days after Easter are a sacred feast "
+            "period in the Armenian Apostolic Church, not a fast. Classify these as 'Sundays, Dominical Feast Days'."
         )
 
         user_message = (
             f"{feast_info}\n\n"
             "Based on the feast name above, determine which of the following designation categories it belongs to:\n"
-            f"1. {designation_options[0]} — Sundays and major feast days of the Lord (Christmas, Easter, Ascension, etc.)\n"
+            f"1. {designation_options[0]} — Sundays and major feast days of the Lord (Christmas, Easter, Ascension, etc.), "
+            f"and the 50-day Easter season including days named '[ordinal] day of Easter'\n"
             f"2. {designation_options[1]} — St. Gregory the Illuminator, Apostles, Prophets, and their companions\n"
             f"3. {designation_options[2]} — Patriarchs, Catholicos, and Vartapets (vardapets) of the Armenian Church\n"
             f"4. {designation_options[3]} — Nativity, Theophany, Presentation, and Marian feasts\n"
             f"5. {designation_options[4]} — Holy martyrs who died for the faith\n"
-            f"6. {designation_options[5]} — A generic numbered day within a fasting period, with NO specific saint or feast named "
-            f"(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent'). "
-            f"If the name is just '[number/ordinal] day of [Fast name]' with no saint mentioned, choose this.\n\n"
+            f"6. {designation_options[5]} — A generic numbered day within a fasting period (Great Lent, Advent Fast, etc.), "
+            f"with NO specific saint or feast named (e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent'). "
+            f"NEVER choose this for days of Easter — those are feast days, not fast days.\n\n"
             "Return ONLY the exact designation text from the list above, with no additional explanation or formatting."
         )
 
@@ -933,22 +937,26 @@ class OpenAIService(LLMService):
         system_prompt = (
             "You are a classification expert for Armenian Orthodox Church feasts. "
             "Determine the appropriate designation category for a feast based solely on its name. "
-            "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast]' "
+            "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast/Lent]' "
             "(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent', 'Third day of the Fast') "
-            "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration."
+            "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration. "
+            "EXCEPTION: Names in the pattern '[ordinal] day of Easter' (e.g. 'Second day of Easter', "
+            "'Fourth day of Easter') are NOT fasting days. The 50 days after Easter are a sacred feast "
+            "period in the Armenian Apostolic Church, not a fast. Classify these as 'Sundays, Dominical Feast Days'."
         )
 
         user_message = (
             f"{feast_info}\n\n"
             "Based on the feast name above, determine which of the following designation categories it belongs to:\n"
-            f"1. {designation_options[0]} — Sundays and major feast days of the Lord (Christmas, Easter, Ascension, etc.)\n"
+            f"1. {designation_options[0]} — Sundays and major feast days of the Lord (Christmas, Easter, Ascension, etc.), "
+            f"and the 50-day Easter season including days named '[ordinal] day of Easter'\n"
             f"2. {designation_options[1]} — St. Gregory the Illuminator, Apostles, Prophets, and their companions\n"
             f"3. {designation_options[2]} — Patriarchs, Catholicos, and Vartapets (vardapets) of the Armenian Church\n"
             f"4. {designation_options[3]} — Nativity, Theophany, Presentation, and Marian feasts\n"
             f"5. {designation_options[4]} — Holy martyrs who died for the faith\n"
-            f"6. {designation_options[5]} — A generic numbered day within a fasting period, with NO specific saint or feast named "
-            f"(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent'). "
-            f"If the name is just '[number/ordinal] day of [Fast name]' with no saint mentioned, choose this.\n\n"
+            f"6. {designation_options[5]} — A generic numbered day within a fasting period (Great Lent, Advent Fast, etc.), "
+            f"with NO specific saint or feast named (e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent'). "
+            f"NEVER choose this for days of Easter — those are feast days, not fast days.\n\n"
             "Return ONLY the exact designation text from the list above, with no additional explanation or formatting."
         )
 
