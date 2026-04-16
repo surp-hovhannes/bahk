@@ -219,4 +219,7 @@ class TestPushNotificationTests(APITestCase):
         response = self.client.post(url, {}, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        mock_send_push.delay.assert_called_once_with(self.user.id) 
+        mock_send_push.delay.assert_called_once_with(
+            message='Test notification',
+            user_ids=[self.user.id],
+        )
