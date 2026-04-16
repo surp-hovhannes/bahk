@@ -184,4 +184,5 @@ certificate.pem
 certificates/
 *.pem
 *.p12
-*.keytest_media/
+*.key
+test_media/

@@ -40,7 +40,6 @@ logger = logging.getLogger(__name__)
 # TODO: These tasks are not functional if the app has more than one church with active fasts.
 # We need to update the tasks to send notifications to all churches when there are multiple churches.
 
-@shared_task
 @shared_task(bind=True, max_retries=3)
 def send_push_notification_task(self, message, data=None, user_ids=None, notification_type=None):
     """
