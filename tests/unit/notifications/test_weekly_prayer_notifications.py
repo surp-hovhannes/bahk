@@ -54,8 +54,8 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify notification was sent
-        mock_send.assert_called_once()
-        args, kwargs = mock_send.call_args
+        mock_send.delay.assert_called_once()
+        args, kwargs = mock_send.delay.call_args
         message, data, users, notification_type = args
 
         # Message may be singular or plural depending on personalized count.
@@ -73,7 +73,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify no notification was sent
-        mock_send.assert_not_called()
+        mock_send.delay.assert_not_called()
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_excludes_expired_requests(self, mock_send):
@@ -87,7 +87,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify no notification was sent (no active requests)
-        mock_send.assert_not_called()
+        mock_send.delay.assert_not_called()
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_excludes_users_who_accepted_all_requests(self, mock_send):
@@ -105,10 +105,10 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify notification was sent, but user1 is not in the list
-        if mock_send.called:
-            args, kwargs = mock_send.call_args
+        if mock_send.delay.called:
+            args, kwargs = mock_send.delay.call_args
             message, data, users, notification_type = args
-            self.assertNotIn(self.user1, users)
+            self.assertNotIn(self.user1.id, users)
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_includes_users_with_unaccepted_requests(self, mock_send):
@@ -122,10 +122,10 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify user1 is in the notification list
-        mock_send.assert_called_once()
-        args, kwargs = mock_send.call_args
+        mock_send.delay.assert_called_once()
+        args, kwargs = mock_send.delay.call_args
         message, data, users, notification_type = args
-        self.assertIn(self.user1, users)
+        self.assertIn(self.user1.id, users)
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_message_format_includes_count(self, mock_send):
@@ -139,8 +139,8 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify message contains a number
-        mock_send.assert_called_once()
-        args, kwargs = mock_send.call_args
+        mock_send.delay.assert_called_once()
+        args, kwargs = mock_send.delay.call_args
         message, data, users, notification_type = args
 
         # Check message format
@@ -161,7 +161,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify no notification (no approved requests)
-        mock_send.assert_not_called()
+        mock_send.delay.assert_not_called()
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_excludes_inactive_users(self, mock_send):
@@ -177,10 +177,10 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify user1 is not in notification list
-        if mock_send.called:
-            args, kwargs = mock_send.call_args
+        if mock_send.delay.called:
+            args, kwargs = mock_send.delay.call_args
             message, data, users, notification_type = args
-            self.assertNotIn(self.user1, users)
+            self.assertNotIn(self.user1.id, users)
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_handles_anonymous_requests(self, mock_send):
@@ -195,7 +195,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify notification was sent
-        mock_send.assert_called_once()
+        mock_send.delay.assert_called_once()
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_deep_link_payload_format(self, mock_send):
@@ -207,8 +207,8 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify payload format
-        mock_send.assert_called_once()
-        args, kwargs = mock_send.call_args
+        mock_send.delay.assert_called_once()
+        args, kwargs = mock_send.delay.call_args
         message, data, users, notification_type = args
 
         self.assertEqual(data, {"screen": "prayer-requests"})
@@ -246,13 +246,13 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # We expect two sends: one for user1 (1 unaccepted) and one for user2 (3 unaccepted)
-        self.assertEqual(mock_send.call_count, 2)
+        self.assertEqual(mock_send.delay.call_count, 2)
 
         # Extract (message, data, users, notification_type) for each call
-        calls = [call_args[0] for call_args in mock_send.call_args_list]
+        calls = [call_args[0] for call_args in mock_send.delay.call_args_list]
 
         # Find the call containing user1
-        user1_calls = [args for args in calls if self.user1 in args[2]]
+        user1_calls = [args for args in calls if self.user1.id in args[2]]
         self.assertEqual(len(user1_calls), 1)
         user1_message, user1_data, user1_users, user1_type = user1_calls[0]
         self.assertIn('1', user1_message)
@@ -261,7 +261,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         self.assertEqual(user1_type, 'weekly_prayer_requests')
 
         # Find the call containing user2
-        user2_calls = [args for args in calls if self.user2 in args[2]]
+        user2_calls = [args for args in calls if self.user2.id in args[2]]
         self.assertEqual(len(user2_calls), 1)
         user2_message, user2_data, user2_users, user2_type = user2_calls[0]
         self.assertIn('3', user2_message)
@@ -284,7 +284,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
 
         # Run task - should send notification
         send_weekly_prayer_request_push_notification_task()
-        mock_send.assert_called_once()
+        mock_send.delay.assert_called_once()
 
         # Set expiration to 1 hour ago
         prayer_request.expiration_date = timezone.now() - timedelta(hours=1)
@@ -330,7 +330,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify no notification (no approved requests)
-        mock_send.assert_not_called()
+        mock_send.delay.assert_not_called()
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_excludes_completed_requests(self, mock_send):
@@ -345,7 +345,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify no notification (no active requests)
-        mock_send.assert_not_called()
+        mock_send.delay.assert_not_called()
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_excludes_deleted_requests(self, mock_send):
@@ -360,7 +360,7 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify no notification (no active requests)
-        mock_send.assert_not_called()
+        mock_send.delay.assert_not_called()
 
     @patch('notifications.tasks.send_push_notification_task')
     def test_notification_type_is_correct(self, mock_send):
@@ -372,8 +372,8 @@ class WeeklyPrayerRequestNotificationTests(BaseTestCase):
         send_weekly_prayer_request_push_notification_task()
 
         # Verify notification type
-        mock_send.assert_called_once()
-        args, kwargs = mock_send.call_args
+        mock_send.delay.assert_called_once()
+        args, kwargs = mock_send.delay.call_args
         message, data, users, notification_type = args
 
         self.assertEqual(notification_type, 'weekly_prayer_requests')
