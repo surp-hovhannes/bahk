@@ -4,14 +4,12 @@ Provides comprehensive views for events, event types, and analytics.
 """
 
 from django.contrib import admin
-from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Q, Avg, FloatField
 from django.db.models.functions import Cast, TruncDate
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.urls import path, reverse
 from django.utils.html import format_html
-from django.utils.safestring import mark_safe
 from django.utils import timezone
 from datetime import timedelta
 import json
@@ -165,7 +163,7 @@ class EventAdmin(admin.ModelAdmin):
                 model_name = content_type.model
                 url = reverse(f'admin:{app_label}_{model_name}_change', args=[obj.object_id])
                 return format_html('<a href="{}">{}</a>', url, str(obj.target)[:50])
-            except:
+            except Exception:
                 return str(obj.target)[:50]
         return "-"
     target_link.short_description = "Target"
@@ -430,7 +428,7 @@ class EventAdmin(admin.ModelAdmin):
         ).order_by('-timestamp')[:5]
         
         # Get current and upcoming fasts
-        from hub.models import Fast, Day
+        from hub.models import Fast
         today = timezone.now().date()
         
         # Current fasts (have days that include today)
@@ -524,7 +522,6 @@ class EventAdmin(admin.ModelAdmin):
         AJAX endpoint for fetching analytics data with different date ranges.
         """
         from django.http import JsonResponse
-        from django.contrib.contenttypes.models import ContentType
         
         try:
             # Get date range from request with validation
@@ -663,7 +660,7 @@ class EventAdmin(admin.ModelAdmin):
         }
         
         # Get current and upcoming fasts
-        from hub.models import Fast, Day
+        from hub.models import Fast
         today = timezone.now().date()
         
         # Current fasts (have days that include today)
@@ -835,7 +832,6 @@ class EventAdmin(admin.ModelAdmin):
         Returns paginated list of devotionals with view counts and unique users.
         """
         from django.http import JsonResponse
-        from django.db.models import Count
 
         try:
             # Get parameters
@@ -1244,7 +1240,6 @@ class EventAdmin(admin.ModelAdmin):
         """
         App Analytics Dashboard: shows analytics-category events only.
         """
-        from django.http import JsonResponse
         from django.db.models.functions import ExtractHour
 
         days = int(request.GET.get('days', 30))
@@ -1281,7 +1276,6 @@ class EventAdmin(admin.ModelAdmin):
         events_by_day = daily_aggregates['events_by_day']
 
         # App opens by hour of day (0-23) within window
-        from django.db.models import IntegerField
         from django.db.models.functions import ExtractHour
         app_open_hours = base_qs.filter(event_type__code=EventType.APP_OPEN).annotate(
             hour=ExtractHour('timestamp')

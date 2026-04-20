@@ -1,13 +1,9 @@
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from django.core.signing import TimestampSigner
-import base64
-import hmac
-import hashlib
 
-from hub.models import User, Profile, Church
+from hub.models import User
 from tests.fixtures.test_data import TestDataFactory
 
 User = get_user_model()

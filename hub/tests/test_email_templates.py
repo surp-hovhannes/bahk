@@ -1,9 +1,6 @@
 from django.test import TestCase, override_settings
-from django.contrib.auth.models import User
 from django.template.loader import render_to_string
-from django.urls import reverse
 from django.conf import settings
-from django.contrib.staticfiles.storage import StaticFilesStorage
 from django.core.files.storage import FileSystemStorage
 from tests.fixtures.test_data import TestDataFactory
 

@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.utils.translation import activate
 from hub.models import Church, Fast, Day, DevotionalSet, Devotional
 from learning_resources.models import Video, Article, Recipe
-from events.models import Announcement, UserActivityFeed
+from events.models import Announcement
 
 
 class Command(BaseCommand):

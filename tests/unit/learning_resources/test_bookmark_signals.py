@@ -1,7 +1,5 @@
 """Unit tests for bookmark signal handlers."""
 
-from django.test import TestCase
-from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from learning_resources.models import Video, Article, Recipe, Bookmark
 from hub.models import DevotionalSet

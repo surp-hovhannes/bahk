@@ -13,7 +13,6 @@ from typing import Set, Optional, List, Dict, Any
 from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import User
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 

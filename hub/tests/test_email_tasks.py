@@ -1,10 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
-from hub.models import Fast, Profile, Day, Church
+from hub.models import Day
 from hub.utils import send_fast_reminders
 from tests.fixtures.test_data import TestDataFactory
 

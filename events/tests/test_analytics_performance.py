@@ -7,9 +7,8 @@ This module tests:
 - Performance optimizations
 """
 
-import json
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.test.utils import tag

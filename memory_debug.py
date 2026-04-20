@@ -15,7 +15,6 @@ import gc
 import time
 import resource
 import importlib
-import traceback
 from collections import defaultdict
 
 # --------------- Configuration ---------------

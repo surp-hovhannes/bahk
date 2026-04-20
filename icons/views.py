@@ -4,10 +4,9 @@ from django.conf import settings
 from django.db.models import Q
 from rest_framework import generics, status, views
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 
-from hub.services.llm_service import get_llm_service
 from icons.models import Icon
 from icons.serializers import IconSerializer
 

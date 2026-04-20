@@ -255,7 +255,7 @@ class PatristicQuoteOfTheDayView(views.APIView):
             try:
                 user_tz = pytz.timezone(request.user.profile.timezone)
                 current_date = datetime.now(user_tz).date()
-            except:
+            except Exception:
                 current_date = datetime.now().date()
         else:
             current_date = datetime.now().date()

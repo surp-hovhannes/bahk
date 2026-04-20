@@ -15,4 +15,3 @@ class HubConfig(AppConfig):
         configure_profanity_filter()
 
         # Import signals to register them
-        import hub.signals

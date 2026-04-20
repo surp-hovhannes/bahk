@@ -3,7 +3,6 @@ Django REST Framework serializers for the events app.
 """
 
 from rest_framework import serializers
-from django.contrib.contenttypes.models import ContentType
 from .models import Event, EventType
 from .models import UserActivityFeed
 from django.utils import timezone

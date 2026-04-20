@@ -1,4 +1,3 @@
-from django.test import TestCase
 
 # Test settings
 SITE_URL = 'http://testserver'
