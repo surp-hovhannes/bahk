@@ -1,10 +1,9 @@
 """Serializers for the icons app."""
 from rest_framework import serializers
-from hub.mixins import ThumbnailCacheMixin
 from icons.models import Icon
 
 
-class IconSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
+class IconSerializer(serializers.ModelSerializer):
     """Serializer for Icon model."""
 
     church_name = serializers.CharField(source='church.name', read_only=True)
