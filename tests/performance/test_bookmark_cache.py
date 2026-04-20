@@ -1,11 +1,9 @@
 """Performance tests for bookmark caching functionality."""
 
 import time
-from django.test import TestCase
 from django.test.utils import tag
-from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
-from learning_resources.models import Video, Article, Recipe, Bookmark
+from learning_resources.models import Video, Bookmark
 from learning_resources.cache import BookmarkCacheManager, BookmarkCacheService
 from tests.base import BaseTestCase
 

@@ -2,12 +2,12 @@
 Tests for bookmark performance optimizations and bulk operations.
 """
 from unittest.mock import patch, MagicMock, call
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.test.utils import tag
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from tests.base import BaseTransactionTestCase
-from learning_resources.models import Bookmark, Video, Article
+from learning_resources.models import Bookmark, Video
 from learning_resources.cache import BookmarkCacheManager
 from learning_resources import signals
 

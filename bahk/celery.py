@@ -2,7 +2,6 @@ from __future__ import absolute_import, unicode_literals
 import os
 from celery import Celery
 from celery.schedules import crontab
-from ssl import CERT_NONE
 from celery.signals import celeryd_init, beat_init
 import sentry_sdk
 from sentry_sdk.integrations.celery import CeleryIntegration

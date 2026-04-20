@@ -7,14 +7,13 @@ from django.contrib.auth.models import Group, User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework import serializers
-from django.utils.translation import activate, get_language
+from django.utils.translation import activate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
-from django.conf import settings
 from django.utils.functional import cached_property
 
 from hub import models
@@ -36,7 +35,7 @@ class ProfileSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.profile_image_thumbnail.url
-            except:
+            except Exception:
                 return None
         return None
 
@@ -527,7 +526,7 @@ class DevotionalSerializer(serializers.ModelSerializer):
             # Fall back to generating URL
             try:
                 return obj.video.thumbnail_small.url
-            except:
+            except Exception:
                 return None
         return None
 

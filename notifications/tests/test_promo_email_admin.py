@@ -1,15 +1,13 @@
 from django.test import TestCase, Client, override_settings, modify_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.core import mail
 from django.utils import timezone
 from django.contrib.auth.models import Permission, Group
 from django.contrib.contenttypes.models import ContentType
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import datetime
 
 from notifications.models import PromoEmail
-from hub.models import Church, Fast, Profile
 from tests.fixtures.test_data import TestDataFactory
 
 User = get_user_model()

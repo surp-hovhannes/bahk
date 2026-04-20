@@ -1,6 +1,5 @@
 """Test utilities for cleanup and setup."""
 import os
-import shutil
 from django.conf import settings
 
 

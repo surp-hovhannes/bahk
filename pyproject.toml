@@ -1,0 +1,35 @@
+[tool.ruff]
+# Target Python 3.11
+target-version = "py311"
+
+# Line length matching common Django convention
+line-length = 120
+
+# Exclude auto-generated and vendored files
+exclude = [
+    "*/migrations/*",
+    "venv/",
+    "node_modules/",
+    "staticfiles/",
+    ".git/",
+]
+
+[tool.ruff.lint]
+# Phase 1: Critical errors only (safe, won't break CI on style)
+# E9: Runtime errors (syntax errors, etc.)
+# F63: Invalid assertions
+# F7: Syntax errors in type comments
+# F82: Undefined names
+# F401: Unused imports
+# E722: Bare except
+select = ["E9", "F63", "F7", "F82", "F401", "E722"]
+
+# Per-file ignores
+[tool.ruff.lint.per-file-ignores]
+# Allow wildcard imports in settings
+"bahk/settings.py" = ["F401"]
+"tests/test_settings.py" = ["F401"]
+# __init__.py files commonly re-export
+"__init__.py" = ["F401"]
+# Django signal registration pattern
+"*/apps.py" = ["F401"]

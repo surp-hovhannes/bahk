@@ -1,6 +1,5 @@
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render, get_object_or_404
-from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from hub.models import Reading, LLMPrompt

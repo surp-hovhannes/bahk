@@ -1,10 +1,7 @@
 """Unit tests for bookmark models."""
 
-from django.test import TestCase
-from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError
-from django.core.exceptions import ValidationError
 from learning_resources.models import Video, Article, Recipe, Bookmark
 from hub.models import DevotionalSet
 from tests.base import BaseTestCase
@@ -175,7 +172,6 @@ class BookmarkModelTests(BaseTestCase):
     
     def test_get_content_representation_nonexistent_object(self):
         """Test get_content_representation when content object is deleted."""
-        from django.test.utils import override_settings
         from django.db.models.signals import post_delete
         from learning_resources.signals import video_deleted_signal
         

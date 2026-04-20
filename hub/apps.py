@@ -2,8 +2,8 @@ from django.apps import AppConfig
 
 
 class HubConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'hub'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "hub"
 
     def ready(self):
         """
@@ -12,7 +12,8 @@ class HubConfig(AppConfig):
         """
         # Configure global profanity filter overrides (used across multiple apps).
         from hub.profanity import configure_profanity_filter
+
         configure_profanity_filter()
 
         # Import signals to register them
-        import hub.signals
+        import hub.signals  # noqa: F401

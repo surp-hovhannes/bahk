@@ -1,4 +1,4 @@
-from django.test import TestCase, Client
+from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -6,12 +6,10 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 import tempfile
 from PIL import Image
-import json
 
 from hub.models import Church, Fast, DevotionalSet, Day, Devotional
 from learning_resources.models import Video, Article, Recipe, Bookmark
 from learning_resources.serializers import DevotionalSetSerializer
-from tests.fixtures.test_data import TestDataFactory
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 

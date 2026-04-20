@@ -1,10 +1,9 @@
 from datetime import date
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from hub.models import Church, Day, LLMPrompt, Reading, ReadingContext
