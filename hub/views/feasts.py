@@ -46,13 +46,6 @@ class GetFeastForDate(generics.GenericAPIView):
         }
     """
 
-    def get_queryset(self):
-        return Feast.objects.select_related('icon', 'day').only(
-            'id', 'name', 'name_en', 'name_hy', 'designation',
-            'icon__id', 'icon__title', 'icon__cached_thumbnail_url',
-            'icon__cached_thumbnail_updated', 'day__date', 'day__church'
-        )
-
     def get(self, request, *args, **kwargs):
         date_format = "%Y-%m-%d"
 
