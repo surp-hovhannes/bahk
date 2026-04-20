@@ -95,8 +95,8 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
         """
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
         try:
-            response = urllib.request.urlopen(url)
-        except urllib.error.URLError:
+            response = urllib.request.urlopen(url, timeout=10)
+        except (urllib.error.URLError, OSError):
             logging.error("Invalid url %s", url)
             return []
 
@@ -417,8 +417,8 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
         req = urllib.request.Request(url, headers={'User-agent': 'Mozilla/5.0'})
         
         try:
-            response = urllib.request.urlopen(req)
-        except urllib.error.URLError:
+            response = urllib.request.urlopen(req, timeout=10)
+        except (urllib.error.URLError, OSError):
             logging.error("Invalid url %s", url)
             return None
 
