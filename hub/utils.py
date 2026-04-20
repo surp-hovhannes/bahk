@@ -96,16 +96,14 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
         try:
             response = urllib.request.urlopen(url, timeout=10)
+            if response.status != 200:
+                logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
+                return []
+            data = response.read()
+            html_content = data.decode("utf-8")
         except (urllib.error.URLError, OSError):
             logging.error("Invalid url %s", url)
             return []
-
-        if response.status != 200:
-            logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
-            return []
-
-        data = response.read()
-        html_content = data.decode("utf-8")
 
         book_start = html_content.find("<b>")
 
@@ -418,16 +416,14 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
         
         try:
             response = urllib.request.urlopen(req, timeout=10)
+            if response.status != 200:
+                logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
+                return None
+            data = response.read()
+            html_content = data.decode("utf-8")
         except (urllib.error.URLError, OSError):
             logging.error("Invalid url %s", url)
             return None
-
-        if response.status != 200:
-            logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
-            return None
-
-        data = response.read()
-        html_content = data.decode("utf-8")
 
         # Look for elements with class="dname" or class=dname (with or without quotes)
         # Match various HTML tags with class dname
