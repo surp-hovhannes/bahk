@@ -761,23 +761,30 @@ def send_inactive_fast_member_nudge_task():
 
     total_sent = 0
     for fast in active_fasts:
-        inactive_joined = User.objects.filter(
-            profile__fasts=fast,
-            is_active=True,
-        ).exclude(id__in=recently_active_ids)
+        inactive_joined = list(
+            User.objects.filter(
+                profile__fasts=fast,
+                is_active=True,
+            ).exclude(id__in=recently_active_ids).values_list('id', flat=True)
+        )
 
-        for user in inactive_joined:
-            cache_key = _REENGAGEMENT_CACHE_KEY.format(user_id=user.id)
-            if cache.get(cache_key):
-                continue
+        if not inactive_joined:
+            continue
 
-            send_push_notification_to_users_task.delay(
-                message=INACTIVE_FAST_MEMBER_MESSAGE.format(fast_name=fast.name),
-                data={'screen': f'fast/{fast.id}'},
-                user_ids=[user.id],
-            )
-            cache.set(cache_key, True, timeout=_REENGAGEMENT_TTL)
-            total_sent += 1
+        cache_keys = {uid: _REENGAGEMENT_CACHE_KEY.format(user_id=uid) for uid in inactive_joined}
+        cached = cache.get_many(list(cache_keys.values()))
+        eligible_ids = [uid for uid, key in cache_keys.items() if key not in cached]
+
+        if not eligible_ids:
+            continue
+
+        send_push_notification_to_users_task.delay(
+            message=INACTIVE_FAST_MEMBER_MESSAGE.format(fast_name=fast.name),
+            data={'screen': f'fast/{fast.id}'},
+            user_ids=eligible_ids,
+        )
+        cache.set_many({cache_keys[uid]: True for uid in eligible_ids}, timeout=_REENGAGEMENT_TTL)
+        total_sent += len(eligible_ids)
 
     logger.info(f'Push Notification: Inactive fast member nudge sent to {total_sent} users')
 
