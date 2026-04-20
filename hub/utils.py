@@ -515,8 +515,20 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
     
     # Check if feast already exists for this day
     existing_feast = day.feasts.first() if day.feasts.exists() else None
-    
-    # Scrape feast data (always scrape to potentially update existing feast with missing translations)
+
+    # If feast exists and has all translations, return it immediately (no scrape needed)
+    if existing_feast and existing_feast.name and existing_feast.name_hy:
+        return (
+            existing_feast,
+            False,
+            {
+                "status": "skipped",
+                "reason": "feast_already_exists",
+                "date": str(date_obj)
+            }
+        )
+
+    # Scrape feast data only if feast doesn't exist or is missing translations
     feast_data = scrape_feast(date_obj, church)
     
     if not feast_data:

@@ -4,7 +4,6 @@ import logging
 import json
 import re
 from django.utils import timezone
-from django.db.models import Q
 from .constants import NOTIFICATION_TYPE_FILTERS
 
 logger = logging.getLogger(__name__)

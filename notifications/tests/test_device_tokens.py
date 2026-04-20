@@ -1,13 +1,9 @@
-from django.test import TestCase
 from django.urls import reverse
-from django.contrib.auth.models import User
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from ..models import DeviceToken
-from ..views import DeviceTokenCreateView, TestPushNotificationView
 from tests.fixtures.test_data import TestDataFactory
-import json
 
 class DeviceTokenTests(APITestCase):
     def setUp(self):

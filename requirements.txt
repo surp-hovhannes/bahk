@@ -46,3 +46,5 @@ openai
 anthropic
 # Bible API
 requests
+# Linting
+ruff

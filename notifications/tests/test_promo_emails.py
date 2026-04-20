@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 
 from notifications.tasks import send_promo_email_task
 from notifications.models import PromoEmail
-from hub.models import User, Profile, Church, Fast
+from hub.models import Church
 from tests.fixtures.test_data import TestDataFactory
 
 

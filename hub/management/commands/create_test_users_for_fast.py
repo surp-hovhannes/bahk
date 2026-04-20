@@ -1,14 +1,12 @@
 """
 Management command to generate test users with valid profiles and add them to a specified fast.
 """
-import os
 import random
 import uuid
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.contrib.auth.models import User
 from hub.models import Fast, Profile, Church
-from django.utils import timezone
 from faker import Faker
 
 class Command(BaseCommand):

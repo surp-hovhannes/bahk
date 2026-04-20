@@ -3,11 +3,9 @@ Analytics query optimization module.
 Provides high-performance analytics data aggregation to replace N+1 query patterns.
 """
 
-from django.db.models import Count, Case, When, Q
-from django.db.models.functions import TruncDate
+from django.db.models import Count, Case, When
 from django.utils import timezone
 from datetime import timedelta
-from collections import defaultdict
 from .models import Event, EventType
 
 

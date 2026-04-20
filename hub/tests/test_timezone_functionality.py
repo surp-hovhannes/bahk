@@ -2,13 +2,10 @@
 Tests for timezone functionality in user profiles.
 """
 from django.test import TestCase, RequestFactory
-from django.contrib.auth.models import User
 from django.http import HttpResponse
-from hub.models import Profile
 from hub.serializers import ProfileSerializer
 from hub.middleware import TimezoneUpdateMiddleware
 from tests.fixtures.test_data import TestDataFactory
-import pytz
 
 
 class TimezoneModelTest(TestCase):

@@ -7,14 +7,13 @@ from django.contrib.auth.models import Group, User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework import serializers
-from django.utils.translation import activate, get_language
+from django.utils.translation import activate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
-from django.conf import settings
 from django.utils.functional import cached_property
 
 from hub import models
@@ -36,7 +35,7 @@ class ProfileSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.profile_image_thumbnail.url
-            except:
+            except Exception:
                 return None
         return None
 
@@ -208,27 +207,28 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return obj.id in self._user_fast_ids
 
     def get_participant_count(self, obj):
-        """Use annotated count if available"""
-        return getattr(obj, 'participant_count', obj.profiles.count())
+        """Use annotated count if available, otherwise query"""
+        if hasattr(obj, 'participant_count'):
+            return obj.participant_count
+        return obj.profiles.count()
     
     def get_countdown(self, obj):
-        """Use cached current_date and optimize database queries"""
+        """Use cached current_date and annotated end_date to avoid extra queries"""
         if obj.culmination_feast and obj.culmination_feast_date:
             days_to_feast = (obj.culmination_feast_date - self.current_date).days
             if days_to_feast < 0:
                 return f"{obj.culmination_feast} has passed"
             return f"<span class='days_to_finish'>{days_to_feast}</span> day{'' if days_to_feast == 1 else 's'} until {obj.culmination_feast}"
-        
-        # Optimized version: Use database aggregation instead of loading all days into memory
-        # This replaces the inefficient [day.date for day in obj.days.all()]
-        from django.db.models import Max
-        
-        # Use database aggregation to get the latest date without loading all objects
-        latest_day = obj.days.aggregate(max_date=Max('date'))['max_date']
-        
+
+        # Use annotated end_date if available, otherwise fall back to aggregate
+        latest_day = getattr(obj, 'end_date', None)
+        if latest_day is None:
+            from django.db.models import Max
+            latest_day = obj.days.aggregate(max_date=Max('date'))['max_date']
+
         if not latest_day:
             return f"No days available for {obj.name}"
-        
+
         days_to_finish = (latest_day - self.current_date).days + 1  # + 1 to get days until first day *after* fast
         if days_to_finish < 0:
             return f"{obj.name} has passed"
@@ -244,14 +244,18 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return None
 
     def get_start_date(self, obj):
-        """Use annotated value if available"""
-        return getattr(obj, 'start_date', 
-                     obj.days.order_by('date').first().date if obj.days.exists() else None)
-    
+        """Use annotated value if available, otherwise query"""
+        if hasattr(obj, 'start_date'):
+            return obj.start_date
+        first_day = obj.days.order_by('date').values_list('date', flat=True).first()
+        return first_day
+
     def get_end_date(self, obj):
-        """Use annotated value if available"""
-        return getattr(obj, 'end_date',
-                     obj.days.order_by('date').last().date if obj.days.exists() else None)
+        """Use annotated value if available, otherwise query"""
+        if hasattr(obj, 'end_date'):
+            return obj.end_date
+        last_day = obj.days.order_by('-date').values_list('date', flat=True).first()
+        return last_day
     
     def get_has_passed(self, obj):
         """Use cached current_date and optimize end_date check"""
@@ -261,17 +265,13 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return end_date < self.current_date
     
     def get_next_fast_date(self, obj):
-        """Use cached current_date"""
-        if obj.days.count() == 0:
-            return None
-        next_day = obj.days.filter(date__gte=self.current_date).order_by('date').first()
-        if next_day is not None:
-            return next_day.date
-        return None
+        """Use cached current_date, single query instead of count + filter"""
+        next_day = obj.days.filter(date__gte=self.current_date).order_by('date').values_list('date', flat=True).first()
+        return next_day
     
     def get_total_number_of_days(self, obj):
         """Use annotated value if available, excluding Day 0 from the count."""
-        total = getattr(obj, 'total_days', obj.days.count())
+        total = obj.total_days if hasattr(obj, 'total_days') else obj.days.count()
         if obj.has_day_zero:
             total -= 1
         return total
@@ -527,7 +527,7 @@ class DevotionalSerializer(serializers.ModelSerializer):
             # Fall back to generating URL
             try:
                 return obj.video.thumbnail_small.url
-            except:
+            except Exception:
                 return None
         return None
 

@@ -2,10 +2,7 @@
 import datetime
 from django.test import TestCase
 from django.urls import reverse
-from django.contrib.auth.models import User
 from rest_framework.test import APIRequestFactory
-from hub.models import Church, Fast, Day, Profile
-from hub.views.fast import FastOnDate
 from rest_framework import status
 from tests.fixtures.test_data import TestDataFactory
 

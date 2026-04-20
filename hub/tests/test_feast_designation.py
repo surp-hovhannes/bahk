@@ -7,7 +7,7 @@ from django.db.models.signals import post_save
 
 from hub.models import Church, Day, Feast, LLMPrompt
 from hub.tasks.llm_tasks import determine_feast_designation_task
-from hub.services.llm_service import AnthropicService, OpenAIService, get_llm_service
+from hub.services.llm_service import AnthropicService, OpenAIService
 from hub.signals import handle_feast_save
 
 

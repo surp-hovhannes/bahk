@@ -29,7 +29,7 @@ class AddDaysToFastAdminForm(forms.Form):
         for date_str in self.cleaned_data["dates"].splitlines():
             try:
                 dates.append(datetime.datetime.strptime(date_str, DATE_FORMAT_STRING).date())
-            except:
+            except (ValueError, TypeError):
                 raise ValidationError(f"{date_str} not in valid date format (<month>/<day>/<year>)")
 
         return dates

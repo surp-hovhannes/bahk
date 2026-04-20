@@ -1,7 +1,5 @@
 """Unit tests for bookmark cache functionality."""
 
-from django.test import TestCase
-from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from learning_resources.models import Video, Article, Bookmark

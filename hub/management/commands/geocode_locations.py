@@ -4,7 +4,7 @@ Command to geocode user locations using AWS Location Service
 This management command allows administrators to geocode all user locations
 in the database, either all at once or only those without coordinates.
 """
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from hub.tasks import batch_geocode_profiles
 from hub.models import Profile
 

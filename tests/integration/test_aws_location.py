@@ -4,8 +4,6 @@ AWS Location Service Geocoding Integration Test
 This test verifies that the AWS Location Service geocoding functionality
 is working correctly with our Django application.
 """
-import os
-import sys
 import time
 import logging
 from django.conf import settings

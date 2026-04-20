@@ -1,7 +1,6 @@
 """
 Celery tasks for learning resources operations.
 """
-import logging
 from typing import Dict, Any, Optional
 from django.db import transaction
 from django.utils import timezone

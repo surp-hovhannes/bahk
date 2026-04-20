@@ -3,7 +3,6 @@ import re
 
 from celery import shared_task
 from django.conf import settings
-from django.utils import timezone
 
 from hub.models import LLMPrompt, Reading, ReadingContext, Feast, FeastContext
 from hub.services.llm_service import get_llm_service

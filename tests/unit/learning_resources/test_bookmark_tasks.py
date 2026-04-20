@@ -1,12 +1,9 @@
 """
 Tests for learning resources Celery tasks.
 """
-from django.test import TestCase
 from django.test.utils import override_settings
-from unittest.mock import patch, MagicMock
 from tests.base import BaseTestCase
 from learning_resources.models import Bookmark
-from django.contrib.contenttypes.models import ContentType
 
 
 class BookmarkTasksTests(BaseTestCase):
@@ -39,7 +36,6 @@ class BookmarkTasksTests(BaseTestCase):
     def test_management_command_async_option(self):
         """Test that management command has async options."""
         from django.core.management import get_commands
-        from django.core.management.base import BaseCommand
         from learning_resources.management.commands.cleanup_orphaned_bookmarks import Command
         
         # Verify the command exists

@@ -1,7 +1,5 @@
 """Celery tasks for the prayers app."""
 import logging
-from datetime import date, timedelta
-from collections import defaultdict
 
 from better_profanity import profanity
 from celery import shared_task
@@ -11,7 +9,6 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
-from hub.services.llm_service import get_llm_service
 from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
 from prayers.models import PrayerRequest, PrayerRequestPrayerLog

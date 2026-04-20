@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
 from events.models import UserMilestone
-from hub.models import Fast, Profile
+from hub.models import Fast
 from notifications.utils import is_weekly_fast
 
 User = get_user_model()

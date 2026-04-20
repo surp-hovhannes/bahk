@@ -1,14 +1,13 @@
 """
 Test batch processing and index calculation correctness in promo email tasks.
 """
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.core import mail
 from django.core.cache import cache
-from django.test import TestCase, override_settings, tag
+from django.test import TestCase, override_settings
 
 from notifications.tasks import send_promo_email_task
 from notifications.models import PromoEmail
-from hub.models import User
 from tests.fixtures.test_data import TestDataFactory
 
 
