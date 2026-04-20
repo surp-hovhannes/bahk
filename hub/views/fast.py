@@ -147,9 +147,6 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             days__date__lte=end_date
         ).select_related(
             'church'
-        ).prefetch_related(
-            'days',
-            'profiles'
         ).distinct()
 
         # Cache the queryset for 10 minutes
@@ -211,7 +208,7 @@ class FastDetailView(TimezoneMixin, generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        return Fast.objects.all().select_related('church').prefetch_related('days', 'profiles')
+        return Fast.objects.all().select_related('church')
 
     def get_object(self):
         # Return the model instance as expected by DRF
@@ -311,15 +308,12 @@ class FastByDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             days__date=target_date
         ).select_related(
             'church'
-        ).prefetch_related(
-            'days',
-            'profiles'
         )
-        
+
         # Cache the list of Fast IDs instead of the queryset
         fast_ids = list(queryset.values_list('id', flat=True))
         cache.set(cache_key, fast_ids, CACHE_TTL)
-        
+
         return queryset
 
 
@@ -392,15 +386,12 @@ class FastByFeastDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIVie
             culmination_feast_date=feast_date
         ).select_related(
             'church'
-        ).prefetch_related(
-            'days',
-            'profiles'
         )
-        
+
         # Cache the list of Fast IDs instead of the queryset
         fast_ids = list(queryset.values_list('id', flat=True))
         cache.set(cache_key, fast_ids, CACHE_TTL)
-        
+
         return queryset
 
 
