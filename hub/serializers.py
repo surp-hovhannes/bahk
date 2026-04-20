@@ -213,18 +213,15 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return obj.profiles.count()
     
     def get_countdown(self, obj):
-        """Use cached current_date and annotated end_date to avoid extra queries"""
+        """Use cached current_date; last day from all fast days (not queryset filters)."""
         if obj.culmination_feast and obj.culmination_feast_date:
             days_to_feast = (obj.culmination_feast_date - self.current_date).days
             if days_to_feast < 0:
                 return f"{obj.culmination_feast} has passed"
             return f"<span class='days_to_finish'>{days_to_feast}</span> day{'' if days_to_feast == 1 else 's'} until {obj.culmination_feast}"
 
-        # Use annotated end_date if available, otherwise fall back to aggregate
-        latest_day = getattr(obj, 'end_date', None)
-        if latest_day is None:
-            from django.db.models import Max
-            latest_day = obj.days.aggregate(max_date=Max('date'))['max_date']
+        from django.db.models import Max
+        latest_day = obj.days.aggregate(max_date=Max('date'))['max_date']
 
         if not latest_day:
             return f"No days available for {obj.name}"
