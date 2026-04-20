@@ -2,6 +2,7 @@ from rest_framework.exceptions import ValidationError
 from ..models import Church
 from django.core.exceptions import ObjectDoesNotExist
 import pytz
+from pytz.exceptions import UnknownTimeZoneError
 
 
 class ChurchContextMixin:
@@ -45,5 +46,8 @@ class TimezoneMixin:
                 tz_str = None
 
         if tz_str:
-            return pytz.timezone(tz_str)
+            try:
+                return pytz.timezone(tz_str)
+            except UnknownTimeZoneError:
+                pass
         return pytz.UTC
