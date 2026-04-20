@@ -772,7 +772,7 @@ def send_inactive_fast_member_nudge_task():
             continue
 
         cache_keys = {uid: _REENGAGEMENT_CACHE_KEY.format(user_id=uid) for uid in inactive_joined}
-        cached = cache.get_many(cache_keys.values())
+        cached = cache.get_many(list(cache_keys.values()))
         eligible_ids = [uid for uid, key in cache_keys.items() if key not in cached]
 
         if not eligible_ids:

@@ -102,7 +102,7 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
             data = response.read()
             html_content = data.decode("utf-8")
         except (urllib.error.URLError, OSError):
-            logging.error("Invalid url %s", url)
+            logging.error("Failed to fetch %s", url)
             return []
 
         book_start = html_content.find("<b>")
@@ -422,7 +422,7 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
             data = response.read()
             html_content = data.decode("utf-8")
         except (urllib.error.URLError, OSError):
-            logging.error("Invalid url %s", url)
+            logging.error("Failed to fetch %s", url)
             return None
 
         # Look for elements with class="dname" or class=dname (with or without quotes)
