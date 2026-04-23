@@ -24,6 +24,54 @@ from rest_framework_simplejwt.views import (
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+
+
+class HealthCheckView(APIView):
+    """Health check endpoint for Render and other monitoring services.
+    
+    Verifies critical dependencies (database, cache) and returns 200 only
+    when the app is actually functional, not just when the process is running.
+    """
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        health = {
+            "status": "healthy",
+            "service": "fast-and-pray-api",
+        }
+        status_code = status.HTTP_200_OK
+
+        # Verify database connectivity
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            health["database"] = "connected"
+        except Exception as e:
+            health["database"] = f"unreachable: {e}"
+            health["status"] = "unhealthy"
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+        # Verify cache connectivity (Redis)
+        try:
+            from django.core.cache import cache
+            cache.set("health_check", "ok", 1)
+            result = cache.get("health_check")
+            if result == "ok":
+                health["cache"] = "connected"
+            else:
+                health["cache"] = "unexpected response"
+                health["status"] = "unhealthy"
+                status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        except Exception as e:
+            health["cache"] = f"unreachable: {e}"
+            health["status"] = "unhealthy"
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+        return Response(health, status=status_code)
 
 
 class TrackingTokenObtainPairView(TokenObtainPairView):
@@ -51,6 +99,7 @@ class TrackingTokenObtainPairView(TokenObtainPairView):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', HealthCheckView.as_view(), name='health_check'),
     path('hub/', include('hub.urls')),
     path('', RedirectView.as_view(url='hub/', permanent=True)),
 
