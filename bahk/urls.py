@@ -50,8 +50,8 @@ class HealthCheckView(APIView):
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
             health["database"] = "connected"
-        except Exception as e:
-            health["database"] = f"unreachable: {e}"
+        except Exception:
+            health["database"] = "unreachable"
             health["status"] = "unhealthy"
             status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
@@ -66,8 +66,8 @@ class HealthCheckView(APIView):
                 health["cache"] = "unexpected response"
                 health["status"] = "unhealthy"
                 status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        except Exception as e:
-            health["cache"] = f"unreachable: {e}"
+        except Exception:
+            health["cache"] = "unreachable"
             health["status"] = "unhealthy"
             status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
