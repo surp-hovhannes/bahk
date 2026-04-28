@@ -1,14 +1,12 @@
 """Django form classes."""
 import datetime
 
-from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django import forms
-from django.contrib.auth.models import User
 from s3_file_field.widgets import S3FileInput
 
 from hub.constants import DATE_FORMAT_STRING
-from hub.models import Church, Day, Devotional, Fast, Profile
+from hub.models import Day, Devotional, Fast
 from learning_resources.models import Video
 
 
@@ -79,43 +77,6 @@ class CreateFastWithDatesAdminForm(forms.ModelForm):
         return last_day
 
 
-class CustomUserCreationForm(UserCreationForm):
-    email = forms.EmailField(required=True)
-    church = forms.ChoiceField(label="Churches", choices=[])
-
-    class Meta:
-        model = User
-        fields = ["email", "password1", "password2"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['church'].choices = [(church.name, church.name) for church in Church.objects.all()]
-
-    def clean_email(self):
-        new_email = self.cleaned_data.get("email")
-        if User.objects.filter(email=new_email).exists():
-            raise ValidationError(f"Cannot register with email {new_email}. User already exists with this address.")
-
-
-class JoinFastsForm(forms.Form):
-    fasts = forms.ModelMultipleChoiceField(queryset=Fast.objects.none(), widget=forms.SelectMultiple)
-
-    def __init__(self, *args, **kwargs):
-        request = kwargs.pop("request", None)  # Extract the request object
-        super().__init__(*args, **kwargs)
-        if request is not None:
-            self.fields["fasts"].queryset = Fast.objects.filter(church=request.user.profile.church)
-
-
-class ProfileForm(forms.ModelForm):
-    class Meta:
-        model = Profile
-        fields = ['church', 'profile_image','location', 'timezone', 'receive_upcoming_fast_reminders']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['church'].widget.attrs.update({'class': 'form-control'})
-        self.fields['timezone'].widget.attrs.update({'class': 'form-control'})
 
 
 class FastForm(forms.ModelForm):

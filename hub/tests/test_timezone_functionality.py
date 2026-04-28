@@ -172,12 +172,7 @@ class TimezoneIntegrationTest(TestCase):
         new_profile = TestDataFactory.create_profile(user=new_user)
         self.assertEqual(new_profile.timezone, 'UTC')
     
-    def test_timezone_field_in_form_fields(self):
-        """Test that timezone field is included in ProfileForm."""
-        from hub.forms import ProfileForm
-        form = ProfileForm()
-        self.assertIn('timezone', form.fields)
-    
+
     def test_timezone_tracking_field_changes(self):
         """Test that timezone changes are tracked by FieldTracker."""
         # Initial state - no changes
