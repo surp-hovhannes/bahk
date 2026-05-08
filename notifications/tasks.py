@@ -31,9 +31,6 @@ from django.conf import settings
 from django.urls import reverse
 from django.core.signing import TimestampSigner
 from django.core.cache import cache
-from celery.exceptions import RetryTaskError
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -133,8 +130,8 @@ def increment_email_count():
             # Another process set it, increment it
             return cache.incr('email_count')
 
-@shared_task(bind=True, max_retries=3)
-def send_promo_email_task(self, promo_id, batch_start_index=0):
+@shared_task
+def send_promo_email_task(promo_id, batch_start_index=0):
     """
     Send a promotional email to all eligible recipients based on the email's targeting options.
     Implements rate limiting to ensure emails are sent within the configured hourly limit.
@@ -355,9 +352,6 @@ def send_promo_email_task(self, promo_id, batch_start_index=0):
         
     except PromoEmail.DoesNotExist:
         logger.error(f"Promotional email with ID {promo_id} not found for sending")
-    except RetryTaskError:
-        # Let the retry mechanism handle rescheduling
-        raise
     except Exception as e:
         logger.exception(f"Unhandled error in send_promo_email_task for promo_id {promo_id}: {str(e)}") # Use logger.exception
         # Clean up cache in exception handlers
