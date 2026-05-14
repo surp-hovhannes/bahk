@@ -47,3 +47,26 @@ class IconSerializer(serializers.ModelSerializer):
                 icon.tags.set(tag_list)
 
         return icon
+
+
+class IconFeedbackSerializer(serializers.Serializer):
+    """Write-only serializer for icon feedback submissions."""
+
+    feedback_type = serializers.ChoiceField(
+        choices=['mislabel', 'suggested_tags', 'general']
+    )
+    description = serializers.CharField(min_length=10, max_length=2000)
+    suggested_tags = serializers.CharField(
+        required=False, allow_blank=True, default=''
+    )
+    submitter_email = serializers.EmailField(
+        required=False, allow_blank=True, default=''
+    )
+
+    def validate(self, attrs):
+        """If feedback_type is 'suggested_tags', require suggested_tags."""
+        if attrs.get('feedback_type') == 'suggested_tags' and not attrs.get('suggested_tags', '').strip():
+            raise serializers.ValidationError({
+                'suggested_tags': 'Suggested tags are required when feedback type is "Suggest Tags".'
+            })
+        return attrs
