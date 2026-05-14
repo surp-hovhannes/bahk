@@ -95,17 +95,15 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
         """
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
         try:
-            response = urllib.request.urlopen(url)
-        except urllib.error.URLError:
-            logging.error("Invalid url %s", url)
+            response = urllib.request.urlopen(url, timeout=10)
+            if response.status != 200:
+                logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
+                return []
+            data = response.read()
+            html_content = data.decode("utf-8")
+        except (urllib.error.URLError, OSError):
+            logging.error("Failed to fetch %s", url)
             return []
-
-        if response.status != 200:
-            logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
-            return []
-
-        data = response.read()
-        html_content = data.decode("utf-8")
 
         book_start = html_content.find("<b>")
 
@@ -417,17 +415,15 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
         req = urllib.request.Request(url, headers={'User-agent': 'Mozilla/5.0'})
         
         try:
-            response = urllib.request.urlopen(req)
-        except urllib.error.URLError:
-            logging.error("Invalid url %s", url)
+            response = urllib.request.urlopen(req, timeout=10)
+            if response.status != 200:
+                logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
+                return None
+            data = response.read()
+            html_content = data.decode("utf-8")
+        except (urllib.error.URLError, OSError):
+            logging.error("Failed to fetch %s", url)
             return None
-
-        if response.status != 200:
-            logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
-            return None
-
-        data = response.read()
-        html_content = data.decode("utf-8")
 
         # Look for elements with class="dname" or class=dname (with or without quotes)
         # Match various HTML tags with class dname
@@ -519,8 +515,20 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
     
     # Check if feast already exists for this day
     existing_feast = day.feasts.first() if day.feasts.exists() else None
-    
-    # Scrape feast data (always scrape to potentially update existing feast with missing translations)
+
+    # If feast exists and has all translations, return it immediately (no scrape needed)
+    if existing_feast and existing_feast.name and existing_feast.name_hy:
+        return (
+            existing_feast,
+            False,
+            {
+                "status": "skipped",
+                "reason": "feast_already_exists",
+                "date": str(date_obj)
+            }
+        )
+
+    # Scrape feast data only if feast doesn't exist or is missing translations
     feast_data = scrape_feast(date_obj, church)
     
     if not feast_data:

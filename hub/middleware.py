@@ -3,7 +3,6 @@ Middleware for handling timezone updates based on API request timezone informati
 """
 import pytz
 import logging
-from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 from .utils import get_user_profile_safe
 

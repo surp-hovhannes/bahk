@@ -46,8 +46,6 @@ class GetFeastForDate(generics.GenericAPIView):
         }
     """
 
-    queryset = Feast.objects.all()
-
     def get(self, request, *args, **kwargs):
         date_format = "%Y-%m-%d"
 

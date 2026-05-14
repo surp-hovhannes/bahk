@@ -92,7 +92,10 @@ class TestPushNotificationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        send_push_notification_task.delay(request.user.id)
+        send_push_notification_task.delay(
+            message="Test notification",
+            user_ids=[request.user.id],
+        )
         return Response({"message": "Test notification sent"}, status=status.HTTP_200_OK)
 
 def unsubscribe(request):

@@ -1,13 +1,11 @@
 """Tests for patristic quotes feature."""
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch
 
-from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
 

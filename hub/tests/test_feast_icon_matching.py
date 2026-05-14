@@ -1,14 +1,13 @@
 """Tests for feast icon matching functionality."""
 from datetime import date
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.test import TestCase, override_settings
 from django.test.utils import tag
 from django.db.models.signals import post_save
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from hub.models import Church, Day, Feast
-from hub.constants import ICON_MATCH_CONFIDENCE_THRESHOLD
-from hub.tasks.icon_tasks import match_icon_to_feast_task, _match_icons_with_llm, _simple_match_icons
+from hub.tasks.icon_tasks import match_icon_to_feast_task, _simple_match_icons
 from hub.signals import handle_feast_save
 from icons.models import Icon
 

@@ -1,15 +1,16 @@
 """Views for the icons app."""
+import ipaddress
 import logging
 from django.conf import settings
 from django.db.models import Q
 from rest_framework import generics, status, views
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 
-from hub.services.llm_service import get_llm_service
-from icons.models import Icon
-from icons.serializers import IconSerializer
+from icons.models import Icon, IconFeedback
+from icons.serializers import IconSerializer, IconFeedbackSerializer
 
 class IsAdminOrReadOnly(BasePermission):
     """
@@ -472,3 +473,88 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
         # Sort by score descending and return IDs
         scored_icons.sort(reverse=True, key=lambda x: x[0])
         return [icon_id for _, icon_id in scored_icons[:max_results]]
+
+
+class FeedbackAnonRateThrottle(AnonRateThrottle):
+    """Scoped throttle for the icon feedback endpoint (20 requests/hour)."""
+    rate = '20/hour'
+    scope = 'feedback'
+
+
+class IconFeedbackCreateView(views.APIView):
+    """
+    POST-only endpoint for submitting icon feedback.
+
+    Accepts:
+        - feedback_type: 'mislabel' | 'suggested_tags' | 'general'
+        - description: text (10-2000 chars)
+        - suggested_tags: comma-separated (required if type=suggested_tags)
+        - submitter_email: optional valid email
+
+    Snapshots icon title and tags at submission time.
+    Anonymizes the submitter's IP (last octet zeroed).
+    Returns 404 if icon does not exist.
+    """
+    permission_classes = [AllowAny]
+
+    def get_throttles(self):
+        """Conditionally apply scoped throttling based on settings."""
+        if settings.ENABLE_FEEDBACK_THROTTLING:
+            return [FeedbackAnonRateThrottle()]
+        return []
+
+    def post(self, request, pk):
+        # 1. Resolve icon
+        try:
+            icon = Icon.objects.get(pk=pk)
+        except Icon.DoesNotExist:
+            return Response(
+                {'error': 'Icon not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 2. Validate payload
+        serializer = IconFeedbackSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Snapshot icon state
+        tags_string = ', '.join(tag.name for tag in icon.tags.all())
+
+        # 4. Anonymize IP
+        raw_ip = request.META.get('REMOTE_ADDR', '')
+        anonymized_ip = None
+        if raw_ip:
+            if '.' in raw_ip:
+                # IPv4 — zero out last octet
+                parts = raw_ip.split('.')
+                parts[-1] = '0'
+                anonymized_ip = '.'.join(parts)
+            else:
+                # IPv6 — preserve /48 prefix, zero out the rest
+                try:
+                    addr = ipaddress.IPv6Address(raw_ip)
+                    masked = ipaddress.IPv6Address(
+                        int(addr) & 0xffff_ffff_ffff_0000_0000_0000_0000_0000
+                    )
+                    anonymized_ip = str(masked)
+                except (ipaddress.AddressValueError, ValueError):
+                    anonymized_ip = raw_ip
+
+        # 5. Create feedback record
+        IconFeedback.objects.create(
+            icon=icon,
+            feedback_type=serializer.validated_data['feedback_type'],
+            description=serializer.validated_data['description'],
+            suggested_tags=serializer.validated_data.get('suggested_tags', ''),
+            submitter_email=serializer.validated_data.get('submitter_email', ''),
+            icon_title_at_time=icon.title,
+            icon_tags_at_time=tags_string,
+            http_user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            ip_address=anonymized_ip,
+        )
+
+        return Response(
+            {'message': 'Thank you for your feedback!'},
+            status=status.HTTP_201_CREATED
+        )

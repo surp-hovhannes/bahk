@@ -1,5 +1,4 @@
 """Regenerate feast contexts to apply new parsing logic."""
-import logging
 
 from django.core.management.base import BaseCommand
 

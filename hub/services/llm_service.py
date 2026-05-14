@@ -3,6 +3,7 @@ from typing import Optional
 import logging
 import json
 import os
+import re
 from difflib import SequenceMatcher
 import anthropic
 from openai import OpenAI
@@ -101,14 +102,13 @@ If none match, return: []
         client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",  # Fast, cheap model for filtering
+            model="claude-sonnet-4-6",  # Sonnet for better Armenian/transliteration matching
             max_tokens=200,
             temperature=0.0,  # Deterministic
             system="You are a precise feast matching assistant. Return only JSON arrays of indices.",
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+            messages=[
+                {"role": "user", "content": prompt},
+            ]
         )
 
         if response and response.content:
@@ -122,6 +122,19 @@ If none match, return: []
 
             if not response_text:
                 logger.warning("LLM filter returned empty response, using all candidates")
+                return candidates
+
+            # Extract JSON array from response in case the LLM included reasoning text
+            array_match = re.search(r'\[[\d,\s]*\]', response_text)
+            if array_match:
+                if array_match.group(0) != response_text:
+                    logger.warning(
+                        "LLM filter returned reasoning text instead of bare JSON; "
+                        "extracted array from response"
+                    )
+                response_text = array_match.group(0)
+            else:
+                logger.warning(f"LLM filter returned no JSON array: '{response_text}', using all candidates")
                 return candidates
 
             # Parse the JSON array of indices
@@ -685,26 +698,37 @@ class AnthropicService(LLMService):
             'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets',
             'Patriarchs, Vartapets',
             'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord',
-            'Martyrs'
+            'Martyrs',
+            'Fast',
         ]
-        
+
         feast_info = f"Feast name: {feast.name}"
         if feast.name_hy:
             feast_info += f"\nArmenian name: {feast.name_hy}"
-        
+
         system_prompt = (
             "You are a classification expert for Armenian Orthodox Church feasts. "
-            "Determine the appropriate designation category for a feast based solely on its name."
+            "Determine the appropriate designation category for a feast based solely on its name. "
+            "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast/Lent]' "
+            "(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent', 'Third day of the Fast') "
+            "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration. "
+            "EXCEPTION: Names in the pattern '[ordinal] day of Easter' (e.g. 'Second day of Easter', "
+            "'Fourth day of Easter') are NOT fasting days. The 50 days after Easter are a sacred feast "
+            "period in the Armenian Apostolic Church, not a fast. Classify these as 'Sundays, Dominical Feast Days'."
         )
-        
+
         user_message = (
             f"{feast_info}\n\n"
             "Based on the feast name above, determine which of the following designation categories it belongs to:\n"
-            f"1. {designation_options[0]}\n"
-            f"2. {designation_options[1]}\n"
-            f"3. {designation_options[2]}\n"
-            f"4. {designation_options[3]}\n"
-            f"5. {designation_options[4]}\n\n"
+            f"1. {designation_options[0]} — Sundays and major feast days of the Lord (Christmas, Easter, Ascension, etc.), "
+            f"and the 50-day Easter season including days named '[ordinal] day of Easter'\n"
+            f"2. {designation_options[1]} — St. Gregory the Illuminator, Apostles, Prophets, and their companions\n"
+            f"3. {designation_options[2]} — Patriarchs, Catholicos, and Vartapets (vardapets) of the Armenian Church\n"
+            f"4. {designation_options[3]} — Nativity, Theophany, Presentation, and Marian feasts\n"
+            f"5. {designation_options[4]} — Holy martyrs who died for the faith\n"
+            f"6. {designation_options[5]} — A generic numbered day within a fasting period (Great Lent, Advent Fast, etc.), "
+            f"with NO specific saint or feast named (e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent'). "
+            f"NEVER choose this for days of Easter — those are feast days, not fast days.\n\n"
             "Return ONLY the exact designation text from the list above, with no additional explanation or formatting."
         )
 
@@ -902,26 +926,37 @@ class OpenAIService(LLMService):
             'St. Gregory the Illuminator, St. Hripsime and her companions, the Apostles, the Prophets',
             'Patriarchs, Vartapets',
             'Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord',
-            'Martyrs'
+            'Martyrs',
+            'Fast',
         ]
-        
+
         feast_info = f"Feast name: {feast.name}"
         if feast.name_hy:
             feast_info += f"\nArmenian name: {feast.name_hy}"
-        
+
         system_prompt = (
             "You are a classification expert for Armenian Orthodox Church feasts. "
-            "Determine the appropriate designation category for a feast based solely on its name."
+            "Determine the appropriate designation category for a feast based solely on its name. "
+            "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast/Lent]' "
+            "(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent', 'Third day of the Fast') "
+            "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration. "
+            "EXCEPTION: Names in the pattern '[ordinal] day of Easter' (e.g. 'Second day of Easter', "
+            "'Fourth day of Easter') are NOT fasting days. The 50 days after Easter are a sacred feast "
+            "period in the Armenian Apostolic Church, not a fast. Classify these as 'Sundays, Dominical Feast Days'."
         )
-        
+
         user_message = (
             f"{feast_info}\n\n"
             "Based on the feast name above, determine which of the following designation categories it belongs to:\n"
-            f"1. {designation_options[0]}\n"
-            f"2. {designation_options[1]}\n"
-            f"3. {designation_options[2]}\n"
-            f"4. {designation_options[3]}\n"
-            f"5. {designation_options[4]}\n\n"
+            f"1. {designation_options[0]} — Sundays and major feast days of the Lord (Christmas, Easter, Ascension, etc.), "
+            f"and the 50-day Easter season including days named '[ordinal] day of Easter'\n"
+            f"2. {designation_options[1]} — St. Gregory the Illuminator, Apostles, Prophets, and their companions\n"
+            f"3. {designation_options[2]} — Patriarchs, Catholicos, and Vartapets (vardapets) of the Armenian Church\n"
+            f"4. {designation_options[3]} — Nativity, Theophany, Presentation, and Marian feasts\n"
+            f"5. {designation_options[4]} — Holy martyrs who died for the faith\n"
+            f"6. {designation_options[5]} — A generic numbered day within a fasting period (Great Lent, Advent Fast, etc.), "
+            f"with NO specific saint or feast named (e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent'). "
+            f"NEVER choose this for days of Easter — those are feast days, not fast days.\n\n"
             "Return ONLY the exact designation text from the list above, with no additional explanation or formatting."
         )
 

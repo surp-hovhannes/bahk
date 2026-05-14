@@ -9,9 +9,6 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from unittest.mock import patch
 from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
-from django.core.management import call_command
-from django.test.utils import override_settings
 
 from events.models import Event, EventType, UserActivityFeed
 from hub.models import Fast, Church, Profile, Day
@@ -932,7 +929,6 @@ class UserActivityFeedSignalsTest(TestCase):
     
     def test_signal_creates_feed_item_sync(self):
         """Test that signal creates feed item synchronously."""
-        from django.conf import settings
         
         # Ensure sync mode
         with self.settings(USE_ASYNC_ACTIVITY_FEED=False):
@@ -957,7 +953,6 @@ class UserActivityFeedSignalsTest(TestCase):
     @patch('events.tasks.create_activity_feed_item_task')
     def test_signal_creates_feed_item_async(self, mock_task):
         """Test that signal creates feed item asynchronously."""
-        from django.conf import settings
         
         # Ensure async mode
         with self.settings(USE_ASYNC_ACTIVITY_FEED=True):
@@ -1185,7 +1180,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     def test_populate_activity_feeds_command(self):
         """Test populate_activity_feeds management command."""
         from django.core.management import call_command
-        from django.core.management.base import CommandError
         from io import StringIO
         
         # Clear any existing feed items
@@ -2147,7 +2141,6 @@ class AnnouncementTasksTest(TestCase):
     
     def test_create_announcement_feed_items_task(self):
         """Test the announcement feed items creation task."""
-        from events.tasks import create_announcement_feed_items_task
         from events.models import Announcement, UserActivityFeed
         
         # Create announcement

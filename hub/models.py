@@ -718,6 +718,10 @@ class Feast(models.Model):
             'Martyrs',
             'Martyrs'
         )
+        FAST = (
+            'Fast',
+            'Fast'
+        )
 
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="feasts")
     name = models.CharField(max_length=256)
@@ -821,6 +825,7 @@ class LLMPrompt(models.Model):
         ("gpt-5-mini-2025-08-07", "GPT 5 Mini (2025-08-07)"),
         ("gpt-5", "GPT 5"),
         ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
         ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
         ("claude-3-7-sonnet-20250219", "Claude 3.7 Sonnet"),
         ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet")

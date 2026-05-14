@@ -1,5 +1,5 @@
-from unittest.mock import Mock, patch, MagicMock
-from django.test import TestCase, override_settings
+from unittest.mock import patch
+from django.test import TestCase
 from django.utils import timezone
 
 from hub.models import Reading, ReadingContext, LLMPrompt, Day, Fast, Church

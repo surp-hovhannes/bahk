@@ -1,15 +1,12 @@
-from django.test import TestCase, Client
 from django.test.utils import tag
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
-from hub.models import Fast, Church, Profile, Day
+from hub.models import Day
 from tests.fixtures.test_data import TestDataFactory
 from datetime import datetime, timedelta
 import time
-import json
-import pytz
 
 User = get_user_model()
 

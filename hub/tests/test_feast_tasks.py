@@ -1,12 +1,11 @@
 """Tests for feast-related Celery tasks."""
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import patch, Mock
 
 from django.test import TestCase, override_settings
 
-from hub.models import Church, Day, Feast, Fast
+from hub.models import Church, Feast
 from hub.tasks.feast_tasks import create_feast_date_task
-from tests.fixtures.test_data import TestDataFactory
 
 
 @override_settings(

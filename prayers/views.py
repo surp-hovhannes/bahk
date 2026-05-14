@@ -4,7 +4,7 @@ from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
 
-from learning_resources.cache import BookmarkCacheManager
+from notifications.tasks import send_push_notification_to_users_task
 from prayers.models import Prayer, PrayerSet
 from prayers.serializers import (
     PrayerSerializer,
@@ -221,13 +221,11 @@ class PrayerSetDetailView(generics.RetrieveAPIView):
 
 # Prayer Request Views
 
-from datetime import date
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
@@ -642,6 +640,9 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             first_letter = request.user.email[0].upper() if request.user.email else 'U'
             sender_name = f'User {first_letter}'
         
+        # Collect recipient user IDs for push notification
+        recipient_ids = list(acceptances.values_list('user_id', flat=True))
+
         for acceptance in acceptances:
             UserActivityFeed.objects.create(
                 user=acceptance.user,
@@ -654,6 +655,17 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
                     'from_user_id': request.user.id,
                 }
             )
+
+        # Send push notifications to recipients (don't expose prayer request title in push data)
+        notification_message = f'🙏 Thank you from {sender_name}: "{message}"'
+        send_push_notification_to_users_task.delay(
+            message=notification_message,
+            data={
+                'screen': f'prayer-request/{prayer_request.id}',
+                'prayer_request_id': prayer_request.id,
+            },
+            user_ids=recipient_ids,
+        )
 
         return Response({
             'detail': f'Thank you message sent to {recipient_count} people.',

@@ -6,7 +6,6 @@ with clustering support for areas with many participants.
 """
 import time
 import logging
-from io import BytesIO
 from uuid import uuid4
 from django.core.files.base import ContentFile
 from django.utils import timezone
@@ -23,7 +22,6 @@ import numpy as np
 import geopandas as gpd
 # import contextily as ctx  # Removing dependency on contextily
 from shapely.geometry import Point, Polygon
-import pandas as pd
 from pathlib import Path
 from sklearn.cluster import DBSCAN
 import urllib.request

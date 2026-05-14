@@ -683,7 +683,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             content=[SimpleNamespace(text='{"approved": true, "reason": "ok"}')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), patch('anthropic.Anthropic') as mock_anthropic:
+        with patch('anthropic.Anthropic') as mock_anthropic:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
             result = moderate_prayer_request_task(prayer_request.id)
@@ -720,8 +720,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic:
+        with patch('anthropic.Anthropic') as mock_anthropic:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
             result = moderate_prayer_request_task(prayer_request.id)
@@ -772,7 +771,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), patch('anthropic.Anthropic') as mock_anthropic:
+        with patch('anthropic.Anthropic') as mock_anthropic:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
             result = moderate_prayer_request_task(prayer_request.id)
@@ -809,7 +808,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), patch('anthropic.Anthropic') as mock_anthropic:
+        with patch('anthropic.Anthropic') as mock_anthropic:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
             result = moderate_prayer_request_task(prayer_request.id)
@@ -846,8 +845,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic, \
+        with patch('anthropic.Anthropic') as mock_anthropic, \
              patch('prayers.tasks._send_moderation_alert_email') as mock_email:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
@@ -887,8 +885,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic, \
+        with patch('anthropic.Anthropic') as mock_anthropic, \
              patch('prayers.tasks._send_moderation_alert_email') as mock_email:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
@@ -925,8 +922,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic:
+        with patch('anthropic.Anthropic') as mock_anthropic:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
             result = moderate_prayer_request_task(prayer_request.id)
@@ -961,8 +957,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic, \
+        with patch('anthropic.Anthropic') as mock_anthropic, \
              patch('prayers.tasks._send_moderation_alert_email') as mock_email:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
@@ -1011,8 +1006,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic, \
+        with patch('anthropic.Anthropic') as mock_anthropic, \
              patch('prayers.tasks._send_moderation_alert_email') as mock_email:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
@@ -1061,8 +1055,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic, \
+        with patch('anthropic.Anthropic') as mock_anthropic, \
              patch('prayers.tasks._send_moderation_alert_email') as mock_email:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response
@@ -1101,8 +1094,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
             }''')]
         )
 
-        with patch('prayers.tasks.get_llm_service'), \
-             patch('anthropic.Anthropic') as mock_anthropic, \
+        with patch('anthropic.Anthropic') as mock_anthropic, \
              patch('prayers.tasks._send_moderation_alert_email') as mock_email:
             mock_client = mock_anthropic.return_value
             mock_client.messages.create.return_value = mock_response

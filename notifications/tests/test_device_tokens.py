@@ -1,13 +1,9 @@
-from django.test import TestCase
 from django.urls import reverse
-from django.contrib.auth.models import User
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from ..models import DeviceToken
-from ..views import DeviceTokenCreateView, TestPushNotificationView
 from tests.fixtures.test_data import TestDataFactory
-import json
 
 class DeviceTokenTests(APITestCase):
     def setUp(self):
@@ -191,7 +187,10 @@ class TestPushNotificationTests(APITestCase):
         response = self.client.post(url, self.notification_data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        mock_send_push.delay.assert_called_once_with(self.user.id)
+        mock_send_push.delay.assert_called_once_with(
+            message='Test notification',
+            user_ids=[self.user.id],
+        )
 
     @patch('notifications.views.send_push_notification_task')
     def test_push_notification_no_token(self, mock_send_push):
@@ -204,7 +203,10 @@ class TestPushNotificationTests(APITestCase):
         
         # The view doesn't check for device token existence, so it will still return 200
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        mock_send_push.delay.assert_called_once_with(self.user.id)
+        mock_send_push.delay.assert_called_once_with(
+            message='Test notification',
+            user_ids=[self.user.id],
+        )
 
     @patch('notifications.views.send_push_notification_task')
     def test_push_notification_default_message(self, mock_send_push):
@@ -213,4 +215,7 @@ class TestPushNotificationTests(APITestCase):
         response = self.client.post(url, {}, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        mock_send_push.delay.assert_called_once_with(self.user.id) 
+        mock_send_push.delay.assert_called_once_with(
+            message='Test notification',
+            user_ids=[self.user.id],
+        )

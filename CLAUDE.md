@@ -118,20 +118,19 @@ npm run watch-css
 
 **Standard test command** (excludes performance tests):
 ```bash
-docker exec bahk_devcontainer-app-1 python manage.py test --exclude-tag=performance --settings=tests.test_settings
+docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings
 ```
+
+> **Note:** `--keepdb` skips recreating the test database on subsequent runs for faster local iteration. If you add or modify migrations, drop `--keepdb` once to rebuild the schema, then add it back.
 
 **Other test commands**:
 ```bash
 # Run all tests
-docker exec bahk_devcontainer-app-1 python manage.py test --settings=tests.test_settings
+docker exec bahk_devcontainer-app-1 python manage.py test --parallel --settings=tests.test_settings
 
 # Run specific app tests
 docker exec bahk_devcontainer-app-1 python manage.py test tests.unit.hub --settings=tests.test_settings
 docker exec bahk_devcontainer-app-1 python manage.py test tests.integration --settings=tests.test_settings
-
-# Run with keepdb for faster iterations
-docker exec bahk_devcontainer-app-1 python manage.py test --keepdb --exclude-tag=performance --settings=tests.test_settings
 
 # Run specific test class or method
 docker exec bahk_devcontainer-app-1 python manage.py test tests.unit.hub.test_models.ModelCreationTests --settings=tests.test_settings
@@ -223,7 +222,7 @@ docker exec bahk_devcontainer-app-1 python manage.py cleanup_orphaned_bookmarks
 - When adding models, always create migrations: `docker exec bahk_devcontainer-app-1 python manage.py makemigrations`
 - Add translations to new user-facing fields using `TranslationField`
 - Create activity feed events for significant user actions
-- Run full test suite before submitting PRs: `docker exec bahk_devcontainer-app-1 python manage.py test --exclude-tag=performance --settings=tests.test_settings`
+- Run full test suite before submitting PRs: `docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings`
 - Follow PEP 8 style guidelines
 - Avoid changing unrelated code when implementing new features
 
