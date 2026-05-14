@@ -17,14 +17,12 @@ Usage:
 import time
 import tracemalloc
 from datetime import date, timedelta
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.urls import reverse
-from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from django.db import connection
 from django.test.utils import override_settings, tag
-from hub.models import Church, Fast, Day, Profile
 from tests.fixtures.test_data import TestDataFactory
 
 
@@ -174,7 +172,7 @@ class OptimizedProfileEndpointTests(APITestCase):
         
         response_time = time.time() - start_time
         
-        print(f"Optimized FastStatsView with 100 fasts:")
+        print("Optimized FastStatsView with 100 fasts:")
         print(f"  - Response time: {response_time:.3f}s")
         print(f"  - Peak memory: {peak / 1024 / 1024:.2f} MB")
         print(f"  - Current memory: {current / 1024 / 1024:.2f} MB")
@@ -208,7 +206,7 @@ class OptimizedProfileEndpointTests(APITestCase):
         response = self.client.get(self.profile_url)
         response_time = time.time() - start_time
         
-        print(f"Optimized ProfileDetailView:")
+        print("Optimized ProfileDetailView:")
         print(f"  - Queries: {query_count}")
         print(f"  - Response time: {response_time:.3f}s")
         
@@ -238,7 +236,7 @@ class OptimizedProfileEndpointTests(APITestCase):
         profile_response = self.client.get(self.profile_url)
         profile_time = time.time() - start_time
         
-        print(f"\nOptimized Performance Summary:")
+        print("\nOptimized Performance Summary:")
         print(f"  - Test data: {num_fasts} fasts with {days_per_fast} days each")
         print(f"  - Total days: {num_fasts * days_per_fast}")
         print(f"  - FastStatsView time: {fast_stats_time:.3f}s")
@@ -285,7 +283,7 @@ class OptimizedProfileEndpointTests(APITestCase):
             
             self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        print(f"\nMemory Usage Stability Test:")
+        print("\nMemory Usage Stability Test:")
         for measurement in memory_measurements:
             print(f"  - {measurement['fasts']} fasts: Peak {measurement['peak_mb']:.2f}MB, Current {measurement['current_mb']:.2f}MB")
         
@@ -362,7 +360,7 @@ class OptimizedEndpointStressTest(APITestCase):
         
         response_time = time.time() - start_time
         
-        print(f"Optimized extreme load test results:")
+        print("Optimized extreme load test results:")
         print(f"  - Fasts: {num_fasts}")
         print(f"  - Total days: {num_fasts * days_per_fast}")
         print(f"  - Response time: {response_time:.3f}s")

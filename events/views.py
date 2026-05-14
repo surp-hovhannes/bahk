@@ -3,7 +3,7 @@ API views for the events app.
 Provides endpoints for retrieving events, analytics, and statistics.
 """
 
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import generics, permissions, status
@@ -16,7 +16,7 @@ from .models import Event, EventType, UserActivityFeed
 from .serializers import (
     EventSerializer, EventListSerializer, EventTypeSerializer,
     EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer,
-    UserActivityFeedSerializer, UserActivityFeedSummarySerializer
+    UserActivityFeedSerializer
 )
 
 

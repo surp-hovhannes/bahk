@@ -30,7 +30,6 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.urls import reverse
 from django.core.signing import TimestampSigner
-from django.core.cache import cache
 from celery.exceptions import RetryTaskError
 
 
@@ -799,7 +798,7 @@ def send_activity_feed_nudge_task():
 
     Runs at 11 AM — after the inactive fast member nudge at 10 AM.
     """
-    from events.models import Event, EventType, UserActivityFeed
+    from events.models import Event, EventType
 
     cutoff = timezone.now() - timedelta(days=_INACTIVITY_DAYS)
     unread_threshold = 5

@@ -1,10 +1,10 @@
 """Tests for the get_or_create_feast_for_date utility function."""
 from datetime import date
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 from django.test import TestCase
 
-from hub.models import Church, Day, Feast, Fast
+from hub.models import Church, Day, Feast
 from hub.utils import get_or_create_feast_for_date
 from tests.fixtures.test_data import TestDataFactory
 

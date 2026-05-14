@@ -94,7 +94,7 @@ class FeastModelTests(TestCase):
             name="Epiphany",
         )
 
-        expected = f'Epiphany (2025-12-25)'
+        expected = 'Epiphany (2025-12-25)'
         self.assertEqual(str(feast), expected)
 
     def test_feast_related_name(self):

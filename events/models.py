@@ -804,7 +804,7 @@ class UserActivityFeed(models.Model):
         Create an article published feed item.
         """
         title = f"New Article: {article.title}"
-        description = f"A new article has been published"
+        description = "A new article has been published"
         
         return cls.objects.create(
             user=user,
@@ -826,7 +826,7 @@ class UserActivityFeed(models.Model):
         Create a recipe published feed item.
         """
         title = f"New Recipe: {recipe.title}"
-        description = f"A new recipe has been published"
+        description = "A new recipe has been published"
         
         return cls.objects.create(
             user=user,

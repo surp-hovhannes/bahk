@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """Standalone script to clean up test media files."""
 import os
-import shutil
-import sys
 
 
 def cleanup_test_media():

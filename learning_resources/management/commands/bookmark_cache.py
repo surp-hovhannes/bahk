@@ -219,7 +219,7 @@ class Command(BaseCommand):
             speedup_individual = db_time / cache_time if cache_time > 0 else float('inf')
             speedup_batch = db_time / batch_cache_time if batch_cache_time > 0 else float('inf')
             
-            self.stdout.write(f"\n🎯 Performance Improvement:")
+            self.stdout.write("\n🎯 Performance Improvement:")
             self.stdout.write(f"   Individual cache: {speedup_individual:.1f}x faster")
             self.stdout.write(f"   Batch cache: {speedup_batch:.1f}x faster")
         

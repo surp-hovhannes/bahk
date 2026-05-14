@@ -7,20 +7,16 @@ from .models import DeviceToken, PromoEmail, PromoEmailImage
 from .utils import send_push_notification
 from .tasks import send_promo_email_task, send_push_notification_to_users_task
 from django.contrib.admin import SimpleListFilter
-from hub.models import Fast, Profile, Church
+from hub.models import Fast
 from django.utils import timezone
 from django import forms
 from django.urls import reverse
 from django.template.loader import render_to_string
 from django.conf import settings
 from django_celery_beat.models import PeriodicTask, ClockedSchedule
-from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.contrib.auth import get_user_model
-from django.db.models import Q
 from django.utils.html import format_html
-from django.utils.html import strip_tags
 from django.utils.safestring import mark_safe
-from datetime import datetime
 
 import json
 import logging
@@ -462,7 +458,7 @@ class PromoEmailAdmin(admin.ModelAdmin):
         admin_user = User.objects.filter(is_staff=True).first()
         
         # Create unsubscribe URL for preview
-        unsubscribe_token = f"0:preview"
+        unsubscribe_token = "0:preview"
         unsubscribe_url = f"{settings.BACKEND_URL}{reverse('notifications:unsubscribe')}?token={unsubscribe_token}"
         
         # Prepare email content with preview markers

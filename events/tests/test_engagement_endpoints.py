@@ -6,7 +6,7 @@ This module tests the API endpoints that track user engagement:
 - TrackChecklistUsedView
 """
 
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient

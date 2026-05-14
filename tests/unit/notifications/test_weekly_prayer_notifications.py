@@ -1,8 +1,7 @@
 """Unit tests for weekly prayer request notifications."""
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from django.test import TestCase
 from django.utils import timezone
 
 from notifications.tasks import send_weekly_prayer_request_push_notification_task

@@ -1,10 +1,9 @@
 """Generates seed data for app with python manage.py seed."""
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta
 from django.utils import timezone
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.core.exceptions import ObjectDoesNotExist
 
 import hub.models as models
 from notifications.models import DeviceToken, PromoEmail

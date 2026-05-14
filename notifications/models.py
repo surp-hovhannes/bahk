@@ -177,7 +177,7 @@ class PromoEmail(models.Model):
             admin_user = User.objects.filter(is_staff=True).first()
             
             # Create unsubscribe URL for preview
-            unsubscribe_token = f"0:preview" # Use a placeholder token for preview
+            unsubscribe_token = "0:preview" # Use a placeholder token for preview
             unsubscribe_url = f"{settings.BACKEND_URL}{reverse('notifications:unsubscribe')}?token={unsubscribe_token}"
             
             # Prepare email content with preview markers

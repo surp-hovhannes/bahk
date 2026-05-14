@@ -11,7 +11,6 @@ from unittest.mock import patch
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
-from django.test.utils import override_settings
 
 from events.models import Event, EventType, UserActivityFeed
 from hub.models import Fast, Church, Profile, Day
@@ -932,7 +931,6 @@ class UserActivityFeedSignalsTest(TestCase):
     
     def test_signal_creates_feed_item_sync(self):
         """Test that signal creates feed item synchronously."""
-        from django.conf import settings
         
         # Ensure sync mode
         with self.settings(USE_ASYNC_ACTIVITY_FEED=False):
@@ -957,7 +955,6 @@ class UserActivityFeedSignalsTest(TestCase):
     @patch('events.tasks.create_activity_feed_item_task')
     def test_signal_creates_feed_item_async(self, mock_task):
         """Test that signal creates feed item asynchronously."""
-        from django.conf import settings
         
         # Ensure async mode
         with self.settings(USE_ASYNC_ACTIVITY_FEED=True):
@@ -1184,8 +1181,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     
     def test_populate_activity_feeds_command(self):
         """Test populate_activity_feeds management command."""
-        from django.core.management import call_command
-        from django.core.management.base import CommandError
         from io import StringIO
         
         # Clear any existing feed items
@@ -1210,7 +1205,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     
     def test_populate_activity_feeds_command_dry_run(self):
         """Test populate_activity_feeds command with dry run."""
-        from django.core.management import call_command
         from io import StringIO
         
         # Clear any existing feed items
@@ -1234,7 +1228,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     
     def test_populate_activity_feeds_command_specific_user(self):
         """Test populate_activity_feeds command for specific user."""
-        from django.core.management import call_command
         from io import StringIO
         
         # Clear any existing feed items
@@ -1252,7 +1245,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     
     def test_cleanup_activity_feeds_command(self):
         """Test cleanup_activity_feeds management command."""
-        from django.core.management import call_command
         from datetime import timedelta
         from io import StringIO
         
@@ -1286,7 +1278,6 @@ class UserActivityFeedManagementCommandsTest(TestCase):
     
     def test_cleanup_activity_feeds_command_dry_run(self):
         """Test cleanup_activity_feeds command with dry run."""
-        from django.core.management import call_command
         from datetime import timedelta
         from io import StringIO
         
@@ -2147,7 +2138,6 @@ class AnnouncementTasksTest(TestCase):
     
     def test_create_announcement_feed_items_task(self):
         """Test the announcement feed items creation task."""
-        from events.tasks import create_announcement_feed_items_task
         from events.models import Announcement, UserActivityFeed
         
         # Create announcement
@@ -2163,7 +2153,6 @@ class AnnouncementTasksTest(TestCase):
         self.assertIn(self.user, target_users)
         
         # Manually create feed item
-        from django.contrib.contenttypes.models import ContentType
         announcement_ct = ContentType.objects.get_for_model(announcement)
         
         created_count = 0
@@ -2198,7 +2187,6 @@ class AnnouncementTasksTest(TestCase):
         """Test that duplicate announcement feed items are not created."""
         from events.tasks import create_announcement_feed_items_task
         from events.models import Announcement, UserActivityFeed
-        from django.contrib.contenttypes.models import ContentType
         
         # Create announcement
         announcement = Announcement.objects.create(
@@ -2283,7 +2271,6 @@ class RetroactiveMilestoneCommandTest(TestCase):
     
     def test_award_first_fast_join_milestones(self):
         """Test awarding retroactive first fast join milestones."""
-        from django.core.management import call_command
         from events.models import UserMilestone
         from io import StringIO
         
@@ -2335,7 +2322,6 @@ class RetroactiveMilestoneCommandTest(TestCase):
     
     def test_retroactive_milestones_skip_existing(self):
         """Test that retroactive command skips users who already have milestones."""
-        from django.core.management import call_command
         from events.models import UserMilestone
         from io import StringIO
         

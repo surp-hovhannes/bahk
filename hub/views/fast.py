@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
-from ..models import Fast, Church, Day, Profile, FastParticipantMap
-from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer, DaySerializer, FastParticipantMapSerializer
+from ..models import Fast, Church, Profile, FastParticipantMap
+from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer, FastParticipantMapSerializer
 from .mixins import ChurchContextMixin, TimezoneMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -11,7 +11,7 @@ import logging
 import pytz
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from django.views.decorators.vary import vary_on_headers, vary_on_cookie
+from django.views.decorators.vary import vary_on_headers
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
@@ -850,7 +850,7 @@ def _parse_date_str(date_str):
     """Parses a date string in the format yyyymmdd into a date object."""
     try:
         date = datetime.datetime.strptime(date_str, "%Y%m%d").date()
-    except ValueError as e:
+    except ValueError:
         logging.error("Date string %s did not follow the expected format yyyymmdd. Returning None.", date_str)
         return None
 

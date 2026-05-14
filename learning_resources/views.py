@@ -1,10 +1,10 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q, Prefetch
+from django.db.models import Q
 import logging
 from .models import Video, Article, Recipe, Bookmark
 from .serializers import (
@@ -610,9 +610,9 @@ def bookmark_delete_view(request, content_type, object_id):
         object_id = int(object_id)
         if object_id <= 0:
             raise ValueError("Object ID must be positive")
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError):
         return Response(
-            {'error': f'Invalid object_id: must be a positive integer'}, 
+            {'error': 'Invalid object_id: must be a positive integer'}, 
             status=status.HTTP_400_BAD_REQUEST
         )
     

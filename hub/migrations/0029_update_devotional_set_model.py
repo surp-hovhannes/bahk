@@ -2,9 +2,6 @@
 
 from django.db import migrations, models
 import django.db.models.deletion
-import imagekit.models.fields
-import imagekit.processors
-import model_utils.fields
 
 
 class Migration(migrations.Migration):

@@ -179,7 +179,7 @@ class Command(BaseCommand):
                 bookmarks_qs = bookmarks_qs.filter(
                     content_type__model=content_type_filter
                 )
-            except Exception as e:
+            except Exception:
                 self.stdout.write(
                     self.style.ERROR(f"Invalid content type filter: {content_type_filter}")
                 )

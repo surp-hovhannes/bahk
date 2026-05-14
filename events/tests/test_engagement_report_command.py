@@ -5,15 +5,13 @@ import json
 import tempfile
 import os
 from datetime import datetime, timedelta
-from io import StringIO
-from unittest.mock import patch, MagicMock
 
 from django.test import TestCase
 from django.core.management import call_command
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from events.models import Event, EventType, UserActivityFeed
+from events.models import EventType, UserActivityFeed
 from events.management.commands.engagement_report import Command
 from hub.models import Fast, Church, Profile
 

@@ -126,7 +126,7 @@ class DeleteAccountView(APIView):
                 {"detail": "Account successfully deleted."},
                 status=status.HTTP_204_NO_CONTENT
             )
-        except Exception as e:
+        except Exception:
             return Response(
                 {"detail": "Failed to delete account."},
                 status=status.HTTP_400_BAD_REQUEST

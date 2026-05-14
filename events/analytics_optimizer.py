@@ -3,11 +3,10 @@ Analytics query optimization module.
 Provides high-performance analytics data aggregation to replace N+1 query patterns.
 """
 
-from django.db.models import Count, Case, When, Q
+from django.db.models import Count, Case, When
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
-from collections import defaultdict
 from .models import Event, EventType
 
 
@@ -50,7 +49,6 @@ class AnalyticsQueryOptimizer:
         end_of_window = start_of_window + timedelta(days=num_days)
         
         # Single query with conditional aggregation using Django's database-agnostic date truncation
-        from django.db.models.functions import TruncDate
         
         # Base queryset with optional filters
         queryset = Event.objects.filter(
@@ -162,7 +160,6 @@ class AnalyticsQueryOptimizer:
         
         for fast in fast_queryset:
             # Get daily data for this fast with a single query using Django's database-agnostic date truncation
-            from django.db.models.functions import TruncDate
             
             base_qs = Event.objects.filter(
                 content_type=fast_content_type,

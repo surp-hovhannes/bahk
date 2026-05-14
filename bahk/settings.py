@@ -18,7 +18,6 @@ import ssl
 
 from pathlib import Path
 from decouple import config, Csv
-from ssl import CERT_NONE
 
 # Sentry SDK for error and performance monitoring
 import sentry_sdk
@@ -29,7 +28,6 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 import logging
 
 
-import sentry_sdk
 
 # Initialize Sentry SDK
 if not (config('CI', default=False, cast=bool) or 'test' in sys.argv):
@@ -180,7 +178,6 @@ WSGI_APPLICATION = 'bahk.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-import dj_database_url
 
 if config('DATABASE_URL', default=None):
     # We are running on Heroku, use the DATABASE_URL environment variable

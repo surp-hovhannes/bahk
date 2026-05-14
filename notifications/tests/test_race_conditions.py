@@ -3,7 +3,7 @@ Test race conditions and concurrency issues in promo email tasks.
 """
 import threading
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.core import mail
 from django.core.cache import cache
 from django.test import TestCase, override_settings, TransactionTestCase, tag
@@ -12,7 +12,6 @@ from django.db.utils import OperationalError
 
 from notifications.tasks import send_promo_email_task, increment_email_count, get_email_count
 from notifications.models import PromoEmail
-from hub.models import User, Profile, Church
 from tests.fixtures.test_data import TestDataFactory
 
 
@@ -133,7 +132,7 @@ class RaceConditionTests(TransactionTestCase):
         
         def update_status():
             # Ensure thread-local DB connection (SQLite locking is especially sensitive here).
-            from django.db import connections, transaction
+            from django.db import connections
 
             connections.close_all()
 

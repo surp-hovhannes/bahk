@@ -17,14 +17,12 @@ Usage:
 import time
 import tracemalloc
 from datetime import date, timedelta
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.urls import reverse
-from django.contrib.auth.models import User
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from django.db import connection
 from django.test.utils import override_settings, tag
-from hub.models import Church, Fast, Day, Profile
 from tests.fixtures.test_data import TestDataFactory
 
 
@@ -393,7 +391,7 @@ class ProfileStressTestCase(APITestCase):
         
         response_time = time.time() - start_time
         
-        print(f"Extreme load test results:")
+        print("Extreme load test results:")
         print(f"  - Fasts: {num_fasts}")
         print(f"  - Total days: {num_fasts * days_per_fast}")
         print(f"  - Response time: {response_time:.3f}s")

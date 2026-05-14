@@ -11,4 +11,3 @@ class EventsConfig(AppConfig):
         Connect signals when the app is ready.
         This ensures our event tracking signals are properly registered.
         """
-        import events.signals  # Import to register the signals

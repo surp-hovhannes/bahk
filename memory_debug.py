@@ -15,7 +15,6 @@ import gc
 import time
 import resource
 import importlib
-import traceback
 from collections import defaultdict
 
 # --------------- Configuration ---------------
@@ -148,7 +147,7 @@ import_and_track('celery')
 try:
     log_memory(f"Before importing Celery app from {CELERY_APP_MODULE}")
     celery_app_module = importlib.import_module(CELERY_APP_MODULE)
-    log_memory(f"After importing Celery app", force_gc=True)
+    log_memory("After importing Celery app", force_gc=True)
     
     # Check if 'app' attribute exists in the module
     if hasattr(celery_app_module, 'app'):

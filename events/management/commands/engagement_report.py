@@ -7,11 +7,11 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandParser
-from django.db.models import Count, DateField, F, Q
+from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
@@ -352,8 +352,6 @@ class Command(BaseCommand):
         Compute detailed timeline of user activities.
         Returns last 10 activities per user, plus daily aggregations if they have more.
         """
-        from django.db.models import Window
-        from django.db.models.functions import RowNumber
         
         # Get all activity feed items in period
         activities = UserActivityFeed.objects.filter(

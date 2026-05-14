@@ -2,7 +2,6 @@
 from bahk.settings import *  # Import all default settings
 from datetime import timedelta
 import os
-import tempfile
 
 # Override cache to use local memory instead of Redis for tests
 CACHES = {

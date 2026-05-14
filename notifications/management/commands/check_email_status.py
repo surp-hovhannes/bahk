@@ -11,7 +11,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Check current rate limiting status
         current_count = cache.get('email_count', 0)
-        self.stdout.write(f"\n📧 Email Rate Limiting Status:")
+        self.stdout.write("\n📧 Email Rate Limiting Status:")
         self.stdout.write(f"  Current count: {current_count}/{settings.EMAIL_RATE_LIMIT}")
         self.stdout.write(f"  Window: {settings.EMAIL_RATE_LIMIT_WINDOW} seconds")
         
@@ -29,7 +29,7 @@ class Command(BaseCommand):
             created_at__gte=yesterday
         ).order_by('-created_at')
 
-        self.stdout.write(f"\n📊 Recent Promotional Emails (last 24h):")
+        self.stdout.write("\n📊 Recent Promotional Emails (last 24h):")
         
         status_counts = {
             PromoEmail.DRAFT: 0,
@@ -66,7 +66,7 @@ class Command(BaseCommand):
         )
         
         if problematic_emails.exists():
-            self.stdout.write(f"\n🔍 Emails needing attention:")
+            self.stdout.write("\n🔍 Emails needing attention:")
             for email in problematic_emails:
                 status_icon = "❌" if email.status == PromoEmail.FAILED else "⏳"
                 self.stdout.write(f"  {status_icon} ID {email.id}: {email.title}")
@@ -78,7 +78,7 @@ class Command(BaseCommand):
                 self.stdout.write("")
 
         # Suggestions
-        self.stdout.write(f"\n💡 Suggestions:")
+        self.stdout.write("\n💡 Suggestions:")
         if status_counts[PromoEmail.FAILED] > 0:
             self.stdout.write("  • Run: python manage.py retry_failed_emails --dry-run")
             self.stdout.write("  • Check Mailgun logs for specific error details")

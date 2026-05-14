@@ -8,6 +8,6 @@ class LearningResourcesConfig(AppConfig):
     def ready(self):
         """Import signals when the app is ready."""
         try:
-            from . import signals  # Import signals module to register signal handlers
+            from . import signals  # noqa: F401 — Import signals module to register signal handlers
         except ImportError:
             pass

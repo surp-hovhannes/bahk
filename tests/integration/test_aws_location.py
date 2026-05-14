@@ -4,8 +4,6 @@ AWS Location Service Geocoding Integration Test
 This test verifies that the AWS Location Service geocoding functionality
 is working correctly with our Django application.
 """
-import os
-import sys
 import time
 import logging
 from django.conf import settings
@@ -189,8 +187,8 @@ class AWSLocationServiceTests(TestCase):
         retrieved = GeocodingCache.objects.get(location_text=test_location.lower())
         self.assertEqual(retrieved.latitude, test_lat)
         self.assertEqual(retrieved.longitude, test_lon)
-        logger.info(f"✓ Retrieved cache entry correctly")
+        logger.info("✓ Retrieved cache entry correctly")
         
         # Cleanup
         cache_entry.delete()
-        logger.info(f"✓ Deleted test cache entry") 
+        logger.info("✓ Deleted test cache entry") 
