@@ -1,6 +1,6 @@
 """Admin interface for the icons app."""
 from django.contrib import admin
-from icons.models import Icon
+from icons.models import Icon, IconFeedback
 
 
 @admin.register(Icon)
@@ -30,3 +30,40 @@ class IconAdmin(admin.ModelAdmin):
         return ', '.join([tag.name for tag in obj.tags.all()])
     
     get_tag_list.short_description = 'Tags'
+
+
+@admin.register(IconFeedback)
+class IconFeedbackAdmin(admin.ModelAdmin):
+    """Admin interface for IconFeedback model."""
+
+    list_display = ['icon_title', 'feedback_type', 'submitter_email', 'created_at', 'is_resolved']
+    list_filter = ['feedback_type', 'is_resolved']
+    date_hierarchy = 'created_at'
+    search_fields = ['icon__title', 'description', 'submitter_email', 'admin_notes']
+
+    readonly_fields = [
+        'icon', 'feedback_type', 'description', 'suggested_tags',
+        'submitter_email', 'icon_title_at_time', 'icon_tags_at_time',
+        'created_at', 'http_user_agent', 'ip_address',
+    ]
+
+    fieldsets = (
+        ('Submission Data', {
+            'fields': (
+                'icon', 'feedback_type', 'description', 'suggested_tags',
+                'submitter_email', 'icon_title_at_time', 'icon_tags_at_time',
+            )
+        }),
+        ('Request Metadata', {
+            'fields': ('http_user_agent', 'ip_address', 'created_at'),
+            'classes': ('collapse',)
+        }),
+        ('Moderation', {
+            'fields': ('is_resolved', 'resolved_at', 'admin_notes')
+        }),
+    )
+
+    def icon_title(self, obj):
+        return obj.icon.title
+    icon_title.short_description = 'Icon'
+    icon_title.admin_order_field = 'icon__title'

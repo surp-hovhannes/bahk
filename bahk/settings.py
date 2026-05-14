@@ -111,6 +111,9 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv(
 # Determine if we are running in production
 IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
 
+# Enable/disable rate limiting on the icon feedback endpoint
+ENABLE_FEEDBACK_THROTTLING = config('ENABLE_FEEDBACK_THROTTLING', default=True, cast=bool)
+
 
 # Application definition
 
