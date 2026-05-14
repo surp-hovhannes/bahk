@@ -1,4 +1,5 @@
 """Views for the icons app."""
+import ipaddress
 import logging
 from django.conf import settings
 from django.db.models import Q
@@ -6,6 +7,7 @@ from rest_framework import generics, status, views
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 
 from hub.services.llm_service import get_llm_service
 from icons.models import Icon, IconFeedback
@@ -520,17 +522,25 @@ class IconFeedbackCreateView(views.APIView):
         # 3. Snapshot icon state
         tags_string = ', '.join(tag.name for tag in icon.tags.all())
 
-        # 4. Anonymize IP (zero out last octet)
+        # 4. Anonymize IP
         raw_ip = request.META.get('REMOTE_ADDR', '')
         anonymized_ip = None
         if raw_ip:
-            parts = raw_ip.split('.')
-            if len(parts) == 4:  # IPv4
+            if '.' in raw_ip:
+                # IPv4 — zero out last octet
+                parts = raw_ip.split('.')
                 parts[-1] = '0'
                 anonymized_ip = '.'.join(parts)
             else:
-                # IPv6 — store as-is (could mask further, but IPv4 is primary)
-                anonymized_ip = raw_ip
+                # IPv6 — preserve /48 prefix, zero out the rest
+                try:
+                    addr = ipaddress.IPv6Address(raw_ip)
+                    masked = ipaddress.IPv6Address(
+                        int(addr) & 0xffff_ffff_ffff_0000_0000_0000_0000_0000
+                    )
+                    anonymized_ip = str(masked)
+                except (ipaddress.AddressValueError, ValueError):
+                    anonymized_ip = raw_ip
 
         # 5. Create feedback record
         IconFeedback.objects.create(

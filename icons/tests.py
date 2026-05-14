@@ -1,5 +1,7 @@
 """Tests for the icons app."""
-from django.test import TestCase
+from unittest.mock import patch
+
+from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -261,3 +263,87 @@ class IconFeedbackAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('suggested_tags', response.data)
+
+    def test_suggested_tags_empty_string_rejected(self):
+        """Test that empty string for suggested_tags is rejected when type is 'suggested_tags'."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(
+                feedback_type='suggested_tags',
+                suggested_tags=''
+            ),
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('suggested_tags', response.data)
+
+    def test_ip_anonymization_ipv4(self):
+        """Test that IPv4 addresses are anonymized (last octet zeroed)."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(),
+            format='json',
+            REMOTE_ADDR='192.168.1.42'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        feedback = IconFeedback.objects.first()
+        self.assertEqual(feedback.ip_address, '192.168.1.0')
+
+    def test_ip_anonymization_ipv6(self):
+        """Test that IPv6 addresses are anonymized (preserve /48, zero rest)."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(),
+            format='json',
+            REMOTE_ADDR='2001:db8::1:2:3:4'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        feedback = IconFeedback.objects.first()
+        # With /48 masking, the suffix should be zeroed
+        self.assertEqual(feedback.ip_address, '2001:db8::')
+
+    def test_no_ip_stored_when_not_provided(self):
+        """Test that ip_address is None when REMOTE_ADDR is empty."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(),
+            format='json',
+            REMOTE_ADDR=''
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        feedback = IconFeedback.objects.first()
+        self.assertIsNone(feedback.ip_address)
+
+    def test_user_agent_captured(self):
+        """Test that HTTP_USER_AGENT is captured on submission."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(),
+            format='json',
+            HTTP_USER_AGENT='TestBot/1.0'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        feedback = IconFeedback.objects.first()
+        self.assertEqual(feedback.http_user_agent, 'TestBot/1.0')
+
+    def test_user_agent_defaults_to_empty(self):
+        """Test that http_user_agent defaults to empty string when not sent."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(),
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        feedback = IconFeedback.objects.first()
+        self.assertEqual(feedback.http_user_agent, '')
+
+    @override_settings(ENABLE_FEEDBACK_THROTTLING=False)
+    def test_throttling_bypassed_when_disabled(self):
+        """Test that hitting the endpoint repeatedly works when throttling is off."""
+        for _ in range(25):
+            response = self.client.post(
+                self.feedback_url,
+                self._valid_payload(),
+                format='json'
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)

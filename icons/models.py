@@ -153,7 +153,7 @@ class IconFeedback(models.Model):
     admin_notes = models.TextField(blank=True, help_text='Internal admin notes')
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
-    http_user_agent = models.TextField(blank=True)
+    http_user_agent = models.TextField(blank=True, default='')
     ip_address = models.GenericIPAddressField(blank=True, null=True)
 
     class Meta:
