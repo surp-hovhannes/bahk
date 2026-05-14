@@ -1,12 +1,12 @@
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from hub.models import Church, Fast, Day, Profile
+from hub.models import Day
 from hub.views.fast import FastListView, FastByFeastDateView
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.test import APIRequestFactory
 from rest_framework.test import force_authenticate
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.core.cache import cache
 from tests.fixtures.test_data import TestDataFactory
 from rest_framework.exceptions import ValidationError

@@ -11,7 +11,7 @@ This module tests the complete analytics flow including:
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.test import TestCase, RequestFactory, override_settings
+from django.test import RequestFactory, override_settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.urls import reverse

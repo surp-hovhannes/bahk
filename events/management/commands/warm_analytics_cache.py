@@ -27,7 +27,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from events.analytics_cache import AnalyticsCacheWarmer, AnalyticsCacheService
+        from events.analytics_cache import AnalyticsCacheService
         from events.analytics_optimizer import AnalyticsQueryOptimizer
         
         force = options['force']

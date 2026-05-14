@@ -658,7 +658,7 @@ def check_completed_fast_milestones_task():
     This task runs daily to check for fasts that ended yesterday.
     """
     try:
-        from hub.models import Fast, Profile
+        from hub.models import Fast
         from django.utils import timezone
         from datetime import timedelta
         from django.db import models

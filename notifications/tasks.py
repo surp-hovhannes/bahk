@@ -41,8 +41,43 @@ logger = logging.getLogger(__name__)
 # We need to update the tasks to send notifications to all churches when there are multiple churches.
 
 @shared_task
-def send_push_notification_task(message, data=None, tokens=None, notification_type=None):
-    send_push_notification(message, data, tokens, notification_type)
+def send_push_notification_task(message, data=None, user_ids=None, notification_type=None):
+    """
+    Send push notifications to a list of users by their IDs.
+
+    This task is dispatched to a Celery worker so that large batches
+    do not block the main task chain.
+
+    Args:
+        message (str): The notification message.
+        data (dict, optional): Additional data payload.
+        user_ids (list, optional): List of user IDs to send to.
+        notification_type (str, optional): Notification type for preference filtering.
+    """
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    if not user_ids:
+        logger.warning("send_push_notification_task called with no user_ids")
+        return
+
+    users = list(User.objects.filter(id__in=user_ids, is_active=True))
+    if not users:
+        logger.warning("send_push_notification_task: no active users found for ids: %s", user_ids)
+        return
+
+    result = send_push_notification(
+        message=message,
+        data=data,
+        users=users,
+        notification_type=notification_type,
+    )
+    logger.info(
+        "send_push_notification_task result: sent=%d, failed=%d",
+        result.get('sent', 0),
+        result.get('failed', 0),
+    )
+    return result
 
 
 @shared_task
@@ -401,7 +436,7 @@ def send_upcoming_fast_push_notification_task():
         }
 
         if len(users_to_notify) > 0:
-            send_push_notification_task(message, data, users_to_notify, 'upcoming_fast')
+            send_push_notification_task.delay(message, data, list(users_to_notify.values_list('id', flat=True)), 'upcoming_fast')
             logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for upcoming fasts')
         else:
             logger.info("Push Notification: No users to notify for upcoming fasts")
@@ -444,8 +479,8 @@ def send_ongoing_fast_push_notification_task():
                 "fast_name": ongoing_fast_to_display.name,
             }
 
-        if len(users_to_notify) > 0:    
-            send_push_notification_task(message, data, users_to_notify, 'ongoing_fast')
+        if len(users_to_notify) > 0:
+            send_push_notification_task.delay(message, data, list(users_to_notify.values_list('id', flat=True)), 'ongoing_fast')
             logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for ongoing fasts')
         else:
             logger.info("Push Notification: No users to notify for ongoing fasts")
@@ -481,7 +516,7 @@ def send_daily_fast_push_notification_task():
     }
 
     if len(users_to_notify) > 0:
-        send_push_notification_task(message, data, users_to_notify, 'daily_fast')
+        send_push_notification_task.delay(message, data, list(users_to_notify.values_list('id', flat=True)), 'daily_fast')
         logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for daily fasts')
     else:
         logger.info("Push Notification: No users to notify for daily fasts")
@@ -537,7 +572,7 @@ def send_culmination_feast_push_notification_task():
         }
         
         # Send the push notification
-        send_push_notification_task(message, data, users_to_notify, 'culmination_feast')
+        send_push_notification_task.delay(message, data, list(users_to_notify.values_list('id', flat=True)), 'culmination_feast')
         logger.info(
             f'Push Notification: Culmination feast notification sent to {len(users_to_notify)} users '
             f'for {fast.name} ({fast.culmination_feast or "unnamed feast"})'
@@ -627,10 +662,10 @@ def send_weekly_prayer_request_push_notification_task():
             plural_suffix=plural_suffix,
         )
 
-        send_push_notification_task(
+        send_push_notification_task.delay(
             message,
             data,
-            users_to_notify,
+            [u.id for u in users_to_notify],
             'weekly_prayer_requests'
         )
 
@@ -726,23 +761,30 @@ def send_inactive_fast_member_nudge_task():
 
     total_sent = 0
     for fast in active_fasts:
-        inactive_joined = User.objects.filter(
-            profile__fasts=fast,
-            is_active=True,
-        ).exclude(id__in=recently_active_ids)
+        inactive_joined = list(
+            User.objects.filter(
+                profile__fasts=fast,
+                is_active=True,
+            ).exclude(id__in=recently_active_ids).values_list('id', flat=True)
+        )
 
-        for user in inactive_joined:
-            cache_key = _REENGAGEMENT_CACHE_KEY.format(user_id=user.id)
-            if cache.get(cache_key):
-                continue
+        if not inactive_joined:
+            continue
 
-            send_push_notification_to_users_task.delay(
-                message=INACTIVE_FAST_MEMBER_MESSAGE.format(fast_name=fast.name),
-                data={'screen': f'fast/{fast.id}'},
-                user_ids=[user.id],
-            )
-            cache.set(cache_key, True, timeout=_REENGAGEMENT_TTL)
-            total_sent += 1
+        cache_keys = {uid: _REENGAGEMENT_CACHE_KEY.format(user_id=uid) for uid in inactive_joined}
+        cached = cache.get_many(list(cache_keys.values()))
+        eligible_ids = [uid for uid, key in cache_keys.items() if key not in cached]
+
+        if not eligible_ids:
+            continue
+
+        send_push_notification_to_users_task.delay(
+            message=INACTIVE_FAST_MEMBER_MESSAGE.format(fast_name=fast.name),
+            data={'screen': f'fast/{fast.id}'},
+            user_ids=eligible_ids,
+        )
+        cache.set_many({cache_keys[uid]: True for uid in eligible_ids}, timeout=_REENGAGEMENT_TTL)
+        total_sent += len(eligible_ids)
 
     logger.info(f'Push Notification: Inactive fast member nudge sent to {total_sent} users')
 
@@ -757,7 +799,7 @@ def send_activity_feed_nudge_task():
 
     Runs at 11 AM — after the inactive fast member nudge at 10 AM.
     """
-    from events.models import Event, EventType, UserActivityFeed
+    from events.models import Event, EventType
 
     cutoff = timezone.now() - timedelta(days=_INACTIVITY_DAYS)
     unread_threshold = 5

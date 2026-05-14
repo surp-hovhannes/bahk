@@ -132,7 +132,7 @@ class BookmarkAdmin(admin.ModelAdmin):
                     url,
                     content
                 )
-            except:
+            except Exception:
                 return str(content)
         return "Content not found"
     content_object_link.short_description = 'Content Object'

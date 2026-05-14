@@ -3,14 +3,13 @@ import datetime
 import os
 from unittest.mock import patch
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.utils import IntegrityError
 from django.test import TestCase, TransactionTestCase
 from django.test.utils import tag
 from tests.fixtures.test_data import TestDataFactory
 
-from hub.models import Church, Day, Fast, Profile
+from hub.models import Fast
 
 
 class ModelCreationTests(TestCase):

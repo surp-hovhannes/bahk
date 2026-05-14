@@ -5,7 +5,7 @@ from django.conf import settings
 from django.db.models import Q
 from rest_framework import generics, status, views
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 

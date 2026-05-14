@@ -5,7 +5,7 @@ These signals listen for specific model changes and create corresponding event r
 
 import logging
 from django.contrib.auth.signals import user_logged_in, user_logged_out
-from django.db.models.signals import post_save, post_delete, m2m_changed, pre_save
+from django.db.models.signals import post_save, m2m_changed, pre_save
 from django.dispatch import receiver
 from hub.utils import get_user_profile_safe
 @receiver(pre_save, sender='hub.Fast')
@@ -35,7 +35,6 @@ def cache_fast_original_values(sender, instance, **kwargs):
     except Exception as e:
         logger.error(f"Error caching original Fast values: {e}")
 
-from django.contrib.contenttypes.models import ContentType
 
 from .models import Event, EventType
 

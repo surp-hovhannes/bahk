@@ -2,10 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import User
-from hub.models import Church, Profile
 from tests.fixtures.test_data import TestDataFactory
-import datetime
 
 class AuthenticationTest(APITestCase):
     def setUp(self):

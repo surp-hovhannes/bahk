@@ -1,10 +1,10 @@
 """Tests for the get_or_create_feast_for_date utility function."""
 from datetime import date
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 from django.test import TestCase
 
-from hub.models import Church, Day, Feast, Fast
+from hub.models import Church, Day, Feast
 from hub.utils import get_or_create_feast_for_date
 from tests.fixtures.test_data import TestDataFactory
 
@@ -57,14 +57,14 @@ class GetOrCreateFeastForDateTests(TestCase):
             self.test_date, self.church, check_fast=True
         )
 
-        # Verify existing feast is returned
+        # Verify existing feast is returned without scraping
         self.assertEqual(feast_obj, existing_feast)
         self.assertFalse(created)
         self.assertEqual(status_dict["status"], "skipped")
         self.assertEqual(status_dict["reason"], "feast_already_exists")
-        
-        # Verify scrape_feast was called (we always scrape now to check for updates)
-        mock_scrape.assert_called_once_with(self.test_date, self.church)
+
+        # Verify scrape_feast was NOT called (feast exists with all translations)
+        mock_scrape.assert_not_called()
 
     def test_skip_when_fast_associated_with_check_fast_true(self):
         """Test skipping feast lookup when Fast is associated and check_fast=True."""

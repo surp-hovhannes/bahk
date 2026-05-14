@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.test import TestCase
 from django.utils.translation import activate
+from django.test.utils import tag
 from rest_framework.test import APIClient, APIRequestFactory
 
 from hub.models import Church, Day, Feast
@@ -169,6 +170,7 @@ class FeastPrayerSerializerTests(TestCase):
             self.assertIn(field, data)
 
 
+@tag('slow', 'integration')
 class FeastPrayerAPITests(TestCase):
     """Test FeastPrayer API integration."""
 
@@ -194,6 +196,11 @@ class FeastPrayerAPITests(TestCase):
             title='Prayer for {feast_name}',
             text='On this holy day of {feast_name}, we rejoice.'
         )
+
+    def tearDown(self):
+        """Clean up after tests."""
+        # Reset default church
+        Church._default_pk = None
 
     def test_feast_endpoint_includes_prayer_field(self):
         """Test that feast endpoint includes prayer field in response."""
@@ -242,7 +249,3 @@ class FeastPrayerAPITests(TestCase):
         # Verify the endpoint accepts Armenian language parameter
         # The actual translation rendering is tested in model tests
 
-    def tearDown(self):
-        """Clean up after tests."""
-        # Reset default church
-        Church._default_pk = None

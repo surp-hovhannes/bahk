@@ -10,7 +10,7 @@ import logging
 import boto3
 from django.conf import settings
 from botocore.exceptions import ClientError, BotoCoreError
-from typing import Dict, Tuple, Optional, List, Any
+from typing import Dict, Tuple, Optional, List
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from django.contrib.contenttypes.models import ContentType
-from django.utils import timezone
 from hub.mixins import ThumbnailCacheMixin
 from .models import Article, Recipe, Video, Bookmark
 from django.utils.translation import activate
@@ -68,7 +67,7 @@ class VideoSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSeriali
             # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.thumbnail_small.url
-            except:
+            except Exception:
                 return None
         return None
 
@@ -102,7 +101,7 @@ class ArticleSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSeria
             # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.thumbnail.url
-            except:
+            except Exception:
                 return None
         return None 
     
