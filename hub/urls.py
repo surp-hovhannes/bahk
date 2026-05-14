@@ -37,16 +37,7 @@ from .views.patristic_quotes import (
     PatristicQuotesByFastView,
     PatristicQuoteOfTheDayView,
 )
-from .views.web import (
-    home, 
-    test_email_view, 
-    add_fast_to_profile, 
-    remove_fast_from_profile, 
-    register, 
-    join_fasts, 
-    edit_profile, 
-    changelog,
-)
+
 from hub.views.admin import compare_reading_prompts
 
 
@@ -105,14 +96,7 @@ urlpatterns = [
     path('patristic-quotes/by-fast/<int:fast_id>/', PatristicQuotesByFastView.as_view(), name='patristic-quotes-by-fast'),
     path('patristic-quotes/quote-of-the-day/', PatristicQuoteOfTheDayView.as_view(), name='patristic-quote-of-the-day'),
 
-    # Web endpoints
-    path("web/", home, name="web_home"),
-    path('add_fast_to_profile/<int:fast_id>/', add_fast_to_profile, name='add_fast_to_profile'),
-    path('remove_fast_from_profile/<int:fast_id>/', remove_fast_from_profile, name='remove_fast_from_profile'),
-    path("create_user/web/", register, name="register"),
-    path("join_fasts/web/", join_fasts, name="join_fasts"),
-    path("edit_profile/web/", edit_profile, name="edit_profile"),
-    path('changelog/web/', changelog, name='changelog'),
+
 
     # Readings endpoints
     path("readings/", GetDailyReadingsForDate.as_view(), name="daily-readings"),
@@ -122,8 +106,7 @@ urlpatterns = [
     path("feasts/", GetFeastForDate.as_view(), name="feast-for-date"),
     path("feasts/<int:pk>/feedback/", FeastContextFeedbackView.as_view(), name="feast-context-feedback"),
 
-    # Misc endpoints
-    path('test_email/', test_email_view, name='test_email'),
+
 
     # Push Notifications endpoints
     path('notifications/', include('notifications.urls')),
