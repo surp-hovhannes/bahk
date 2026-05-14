@@ -474,6 +474,12 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
         return [icon_id for _, icon_id in scored_icons[:max_results]]
 
 
+class FeedbackAnonRateThrottle(AnonRateThrottle):
+    """Scoped throttle for the icon feedback endpoint (20 requests/hour)."""
+    rate = '20/hour'
+    scope = 'feedback'
+
+
 class IconFeedbackCreateView(views.APIView):
     """
     POST-only endpoint for submitting icon feedback.
@@ -491,10 +497,9 @@ class IconFeedbackCreateView(views.APIView):
     permission_classes = [AllowAny]
 
     def get_throttles(self):
-        """Conditionally apply throttling based on settings."""
+        """Conditionally apply scoped throttling based on settings."""
         if settings.ENABLE_FEEDBACK_THROTTLING:
-            from rest_framework.throttling import AnonRateThrottle
-            return [AnonRateThrottle()]
+            return [FeedbackAnonRateThrottle()]
         return []
 
     def post(self, request, pk):
