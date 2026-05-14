@@ -57,7 +57,7 @@ class IconFeedbackSerializer(serializers.Serializer):
     )
     description = serializers.CharField(min_length=10, max_length=2000)
     suggested_tags = serializers.CharField(
-        required=False, allow_blank=True, default=''
+        required=False, allow_blank=True, default='', max_length=500
     )
     submitter_email = serializers.EmailField(
         required=False, allow_blank=True, default=''

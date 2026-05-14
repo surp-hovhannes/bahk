@@ -540,7 +540,7 @@ class IconFeedbackCreateView(views.APIView):
                     )
                     anonymized_ip = str(masked)
                 except (ipaddress.AddressValueError, ValueError):
-                    anonymized_ip = raw_ip
+                    anonymized_ip = None
 
         # 5. Create feedback record
         IconFeedback.objects.create(
