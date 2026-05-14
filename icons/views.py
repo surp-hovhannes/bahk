@@ -9,7 +9,6 @@ from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
-from hub.services.llm_service import get_llm_service
 from icons.models import Icon, IconFeedback
 from icons.serializers import IconSerializer, IconFeedbackSerializer
 
