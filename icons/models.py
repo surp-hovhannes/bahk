@@ -114,3 +114,55 @@ class Icon(models.Model):
                 super().save(
                     update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated']
                 )
+
+
+class IconFeedback(models.Model):
+    """Feedback / correction submissions for icons."""
+
+    class FeedbackType(models.TextChoices):
+        MISLABEL = 'mislabel', 'Mislabeled'
+        SUGGESTED_TAGS = 'suggested_tags', 'Suggest Tags'
+        GENERAL = 'general', 'General'
+
+    icon = models.ForeignKey(
+        Icon, on_delete=models.CASCADE, related_name='feedback'
+    )
+    feedback_type = models.CharField(
+        max_length=20, choices=FeedbackType.choices
+    )
+    description = models.TextField(help_text='The actual feedback text')
+    suggested_tags = models.CharField(
+        max_length=500, blank=True,
+        help_text='Comma-separated tags, shown when type is suggested_tags'
+    )
+    submitter_email = models.EmailField(
+        blank=True, help_text='Optional email for follow-up'
+    )
+    # Snapshots at submission time — immutable once created
+    icon_title_at_time = models.CharField(
+        max_length=200, blank=True,
+        help_text='Snapshot of icon title at submission time'
+    )
+    icon_tags_at_time = models.TextField(
+        blank=True,
+        help_text='Snapshot of icon tags (comma-separated) at submission time'
+    )
+    # Moderation / resolution
+    is_resolved = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    admin_notes = models.TextField(blank=True, help_text='Internal admin notes')
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    http_user_agent = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Icon Feedback'
+        verbose_name_plural = 'Icon Feedback'
+        indexes = [
+            models.Index(fields=['icon', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"Feedback #{self.pk} on {self.icon} ({self.feedback_type})"
