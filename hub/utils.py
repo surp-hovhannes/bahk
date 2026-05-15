@@ -4,6 +4,7 @@ import logging
 import re
 import urllib
 import urllib.parse
+import hashlib
 
 import sentry_sdk
 
@@ -32,6 +33,11 @@ SCRAPE_CIRCUIT_BREAKER_MAX_FAILURES = 3
 SCRAPE_CACHE_TIMEOUT = 21600  # 6 hours
 
 
+def _stable_url_key(url: str) -> str:
+    """Stable hash for URL cache keys (unlike Python's salted hash())."""
+    return hashlib.md5(url.encode()).hexdigest()[:16]
+
+
 def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
     """Fetch a sacredtradition.am page with retries, circuit breaker, and caching.
     
@@ -48,19 +54,21 @@ def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
         logger.error("Invalid URL for sacredtradition.am scrape: %s", url)
         return None
     
+    url_key = _stable_url_key(url)
+    
     # Check circuit breaker
-    circuit_key = f"circuit_breaker:{hash(url)}"
+    circuit_key = f"circuit_breaker:{url_key}"
     circuit_open = cache.get(circuit_key)
     if circuit_open:
         logger.warning("Circuit breaker open for %s, skipping scrape", url)
         # Try cache fallback anyway
-        cached = cache.get(f"scrape_result:{hash(url)}")
+        cached = cache.get(f"scrape_result:{url_key}")
         if cached:
             return cached
         return None
     
     # Try cached result first
-    cache_key = f"scrape_result:{hash(url)}"
+    cache_key = f"scrape_result:{url_key}"
     cached = cache.get(cache_key)
     if cached:
         return cached

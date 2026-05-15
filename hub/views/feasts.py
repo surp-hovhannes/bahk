@@ -73,8 +73,8 @@ class GetFeastForDate(generics.GenericAPIView):
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 
-        # Cache key for feast lookup
-        cache_key = f"feast:{date_obj}:{church.id}"
+        # Cache key for feast lookup (includes lang to prevent cross-language poisoning)
+        cache_key = f"feast:{date_obj}:{church.id}:{lang}"
         cached_result = cache.get(cache_key)
         if cached_result:
             return Response(cached_result)

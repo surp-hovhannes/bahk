@@ -8,7 +8,7 @@ from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 
 from hub.models import Church, Day, Feast
-from hub.utils import _fetch_sacredtradition
+from hub.utils import _fetch_sacredtradition, _stable_url_key
 
 
 class FeastViewDegradedResponseTests(TestCase):
@@ -152,7 +152,7 @@ class CircuitBreakerTests(TestCase):
             self.assertIsNone(result)
 
         # Circuit breaker should now be open
-        circuit_key = f"circuit_breaker:{hash(url)}"
+        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
         self.assertTrue(cache.get(circuit_key))
 
         # Fourth call should return None immediately (circuit open)
@@ -183,7 +183,7 @@ class CircuitBreakerTests(TestCase):
         _fetch_sacredtradition(url)
         _fetch_sacredtradition(url)
 
-        circuit_key = f"circuit_breaker:{hash(url)}"
+        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
         # After 2 failures (< max), circuit should NOT be open
         self.assertIsNone(cache.get(circuit_key))
 
@@ -197,6 +197,7 @@ class CircuitBreakerTests(TestCase):
         result = _fetch_sacredtradition(url)
         self.assertIsNotNone(result)
 
+        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
         # Circuit breaker should be cleared
         self.assertIsNone(cache.get(circuit_key))
 
