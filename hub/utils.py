@@ -67,11 +67,9 @@ def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
             return cached
         return None
     
-    # Try cached result first
+    # Get any cached result to use as stale fallback
     cache_key = f"scrape_result:{url_key}"
     cached = cache.get(cache_key)
-    if cached:
-        return cached
     
     # Fetch with retries
     last_error = None
@@ -83,8 +81,9 @@ def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
                 data = response.read().decode("utf-8")
                 # Cache successful result
                 cache.set(cache_key, data, SCRAPE_CACHE_TIMEOUT)
-                # Reset circuit breaker on success
+                # Reset circuit breaker + failure counter on success
                 cache.delete(circuit_key)
+                cache.delete(circuit_key + ":failures")
                 return data
             else:
                 last_error = f"HTTP {response.status}"
@@ -107,7 +106,9 @@ def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
     # Log the final failure
     if last_error:
         sentry_sdk.capture_exception(Exception(f"Scrape failed for {url} after 3 attempts: {last_error}"))
-    return cached  # Return stale cached data as fallback, or None
+    
+    # Return stale cached data as fallback (or None if never cached)
+    return cached
 
 
 def get_user_profile_safe(user):

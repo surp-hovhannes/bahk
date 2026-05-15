@@ -225,3 +225,35 @@ class CircuitBreakerTests(TestCase):
             # Should return cached data even on failure
             self.assertIsNotNone(result)
             self.assertIn("Cached Feast", result)
+
+
+    @patch('urllib.request.urlopen')
+    def test_failure_counter_resets_on_success(self, mock_urlopen):
+        """Failure counter is cleared when a fetch succeeds (before circuit trips)."""
+        url = "https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL=2&ymd=20251225"
+        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
+        circuit_failures_key = circuit_key + ":failures"
+
+        mock_html = b'<html><div class="dname">Test Feast</div></html>'
+        mock_success = Mock()
+        mock_success.status = 200
+        mock_success.read.return_value = mock_html
+
+        # Set up: cache some data for stale fallback, prime counter at 2
+        cache.set(f"scrape_result:{_stable_url_key(url)}", '<html><div class="dname">Test Feast</div></html>', 21600)
+        cache.set(circuit_failures_key, 2, 900)  # 2 prior failures
+
+        # Success resets the counter (even though circuit isn't open yet)
+        mock_urlopen.return_value = mock_success
+        result = _fetch_sacredtradition(url)
+        self.assertIsNotNone(result)
+        # Counter should be reset by success
+        self.assertIsNone(cache.get(circuit_failures_key))
+        self.assertIsNone(cache.get(circuit_key))
+
+        # Now 2 failures: should land at count 2, not 4 (reset works)
+        mock_urlopen.side_effect = urllib.error.URLError("Connection timeout")
+        for _ in range(2):
+            _fetch_sacredtradition(url)
+        self.assertEqual(cache.get(circuit_failures_key), 2)
+        self.assertIsNone(cache.get(circuit_key))  # not tripped yet
