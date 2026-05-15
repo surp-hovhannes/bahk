@@ -14,7 +14,14 @@ from unittest.mock import patch, MagicMock
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from hub.constants import BOOK_NAME_TO_USFM, APOCRYPHA_USFM_IDS, CATENA_ABBREV_FOR_BOOK
+from hub.constants import (
+    BOOK_NAME_TO_USFM,
+    APOCRYPHA_USFM_IDS,
+    CATENA_ABBREV_FOR_BOOK,
+    CATENA_ABBREV_FOR_BOOK_NORMALIZED,
+    normalize_book_name,
+    CATENA_HOME_PAGE_URL,
+)
 from hub.models import Church, Day, Reading
 from hub.services.bible_api_service import (
     BibleAPIService,
@@ -77,6 +84,78 @@ class BookNameMappingTests(TestCase):
                 usfm_id, APOCRYPHA_USFM_IDS,
                 f"{name} -> {usfm_id} should NOT be in APOCRYPHA_USFM_IDS"
             )
+
+    # ── normalize_book_name tests ────────────────────────────────── #
+
+    def test_normalize_book_name_with_curly_quote(self):
+        """Curly single quote (U+2019) should normalize to straight apostrophe."""
+        curly_hebrews = "St. Paul\u2019s Epistle to the Hebrews"
+        result = normalize_book_name(curly_hebrews)
+        self.assertEqual(result, "St. Paul's Epistle to the Hebrews")
+
+    def test_normalize_book_name_already_straight(self):
+        """Already straight apostrophe should remain unchanged."""
+        straight = "St. Paul's Epistle to the Hebrews"
+        result = normalize_book_name(straight)
+        self.assertEqual(result, straight)
+
+    def test_normalize_book_name_none(self):
+        """None input should return None."""
+        self.assertIsNone(normalize_book_name(None))
+
+    def test_normalize_book_name_empty_string(self):
+        """Empty or whitespace-only string should return None."""
+        self.assertIsNone(normalize_book_name(""))
+        self.assertIsNone(normalize_book_name("   "))
+
+    # ── CATENA_ABBREV_FOR_BOOK_NORMALIZED tests ──────────────────── #
+
+    def test_normalized_dict_matches_curly_quote_book_name(self):
+        """Normalized dict should resolve a curly-quote book name."""
+        curly_hebrews = "St. Paul\u2019s Epistle to the Hebrews"
+        self.assertEqual(
+            CATENA_ABBREV_FOR_BOOK_NORMALIZED.get(normalize_book_name(curly_hebrews)),
+            "heb",
+        )
+
+    def test_normalized_dict_has_same_entries_as_original(self):
+        """All original keys should be present in the normalized dict."""
+        for k, v in CATENA_ABBREV_FOR_BOOK.items():
+            normalized_k = normalize_book_name(k)
+            self.assertIn(normalized_k, CATENA_ABBREV_FOR_BOOK_NORMALIZED)
+            self.assertEqual(
+                CATENA_ABBREV_FOR_BOOK_NORMALIZED[normalized_k], v
+            )
+
+    # ── create_url tests ─────────────────────────────────────────── #
+
+    def test_create_url_with_curly_quote_book_name(self):
+        """Reading.create_url() should handle curly-quote book names."""
+
+        # Create a reading with curly-quote book name
+        reading = Reading(
+            book="St. Paul\u2019s Epistle to the Hebrews",
+
+            start_chapter=1,
+            start_verse=1,
+            end_chapter=1,
+            end_verse=5,
+        )
+        url = reading.create_url()
+        self.assertIn("heb", url)
+        self.assertNotEqual(url, CATENA_HOME_PAGE_URL)
+
+    def test_create_url_with_unknown_book_returns_home(self):
+        """Unknown book should return CATENA_HOME_PAGE_URL."""
+        reading = Reading(
+            book="Completely Made Up Book",
+            start_chapter=1,
+            start_verse=1,
+            end_chapter=1,
+            end_verse=5,
+        )
+        url = reading.create_url()
+        self.assertEqual(url, CATENA_HOME_PAGE_URL)
 
 
 # ------------------------------------------------------------------ #
