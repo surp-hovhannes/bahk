@@ -265,7 +265,9 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
         return end_date < self.current_date
     
     def get_next_fast_date(self, obj):
-        """Use cached current_date, single query instead of count + filter"""
+        """Use annotated value if available, otherwise query"""
+        if hasattr(obj, 'next_fast_date'):
+            return obj.next_fast_date
         next_day = obj.days.filter(date__gte=self.current_date).order_by('date').values_list('date', flat=True).first()
         return next_day
     

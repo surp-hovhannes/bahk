@@ -218,7 +218,8 @@ class FastEndpointTests(APITestCase):
             Event.objects.create(
                 event_type=event_type,
                 user=self.user1,
-                title="Checklist used"
+                title="Checklist used",
+                i18n='{}'
             )
         
         start_time = time.time()
