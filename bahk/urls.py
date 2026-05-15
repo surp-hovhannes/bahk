@@ -16,6 +16,7 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.auth import get_user_model
 from django.urls import include, path
 from django.views.generic import RedirectView
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
@@ -97,6 +98,20 @@ class TrackingTokenObtainPairView(TokenObtainPairView):
 
         return Response(serializer.validated_data, status=200)
 
+
+class SafeTokenRefreshView(TokenRefreshView):
+    """Return 401 when a refresh token references a deleted user."""
+
+    def post(self, request, *args, **kwargs):
+        try:
+            return super().post(request, *args, **kwargs)
+        except get_user_model().DoesNotExist:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', HealthCheckView.as_view(), name='health_check'),
@@ -106,7 +121,7 @@ urlpatterns = [
     # Authentication endpoints
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path('api/token/', TrackingTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/refresh/', SafeTokenRefreshView.as_view(), name='token_refresh'),
 
     path('markdownx/', include('markdownx.urls')),  # Include markdownx URLs
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
