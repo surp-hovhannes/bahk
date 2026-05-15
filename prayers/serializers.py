@@ -1,4 +1,7 @@
 """Serializers for prayers app."""
+import logging
+
+import sentry_sdk
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -467,6 +470,9 @@ class PrayerRequestThanksSerializer(serializers.Serializer):
         return value.strip()
 
 
+logger = logging.getLogger(__name__)
+
+
 class FeastPrayerSerializer(serializers.ModelSerializer):
     """Serializer for FeastPrayer with translation and rendering support."""
 
@@ -493,24 +499,29 @@ class FeastPrayerSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         """Add translation support and template rendering."""
-        # Get language from request
-        lang = self.context.get('lang') or (
-            self.context.get('request').query_params.get('lang')
-            if self.context.get('request') else None
-        ) or 'en'
-        activate(lang)
+        try:
+            # Get language from request
+            lang = self.context.get('lang') or (
+                self.context.get('request').query_params.get('lang')
+                if self.context.get('request') else None
+            ) or 'en'
+            activate(lang)
 
-        data = super().to_representation(instance)
+            data = super().to_representation(instance)
 
-        # Get translated template fields
-        data['title_template'] = getattr(instance, 'title_i18n', instance.title)
-        data['text_template'] = getattr(instance, 'text_i18n', instance.text)
+            # Get translated template fields
+            data['title_template'] = getattr(instance, 'title_i18n', instance.title)
+            data['text_template'] = getattr(instance, 'text_i18n', instance.text)
 
-        # Render with feast if provided in context
-        feast = self.context.get('feast')
-        if feast:
-            rendered = instance.render_for_feast(feast, lang)
-            data['title_rendered'] = rendered['title']
-            data['text_rendered'] = rendered['text']
+            # Render with feast if provided in context
+            feast = self.context.get('feast')
+            if feast:
+                rendered = instance.render_for_feast(feast, lang)
+                data['title_rendered'] = rendered['title']
+                data['text_rendered'] = rendered['text']
 
-        return data
+            return data
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error("Failed to serialize FeastPrayer %s: %s", instance.id, e)
+            return {"id": instance.id, "error": "Failed to render"}
