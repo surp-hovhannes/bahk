@@ -18,7 +18,7 @@ from taggit.managers import TaggableManager
 
 import bahk.settings as settings
 from hub.constants import (
-    CATENA_ABBREV_FOR_BOOK,
+    CATENA_ABBREV_FOR_BOOK_NORMALIZED,
     CATENA_HOME_PAGE_URL,
     DAYS_TO_CACHE_THUMBNAIL,
 )
@@ -649,11 +649,20 @@ class Reading(models.Model):
         ]
 
     def create_url(self):
-        """Creates URL to read the reading."""
-        book_abbrev = CATENA_ABBREV_FOR_BOOK.get(self.book)
+        """Creates URL to read the reading.
+
+        Uses normalized book name lookup to handle curly/smart quote
+        variations returned by scrapers (e.g. ' vs U+2019).
+        """
+        from hub.constants import normalize_book_name
+
+        normalized_book = normalize_book_name(self.book)
+        book_abbrev = CATENA_ABBREV_FOR_BOOK_NORMALIZED.get(normalized_book)
         if book_abbrev is None:
             logging.error(
-                "Missing Catena URL abbreviation for %s. Returning home page", self.book
+                "Missing Catena URL abbreviation for %r (normalized: %r). Returning home page",
+                self.book,
+                normalized_book,
             )
             return CATENA_HOME_PAGE_URL
         verse_ref = (
