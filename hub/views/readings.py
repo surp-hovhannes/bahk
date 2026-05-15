@@ -113,9 +113,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 
-        day = Day.objects.filter(date=date_obj, church=church).first()
-        if day is None:
-            day = Day.objects.create(date=date_obj, church=church)
+        day, _ = Day.objects.get_or_create(date=date_obj, church=church)
 
         # If no readings exist for the requested day/church, scrape and persist them
         if not day.readings.exists():
