@@ -429,7 +429,7 @@ def send_upcoming_fast_push_notification_task():
         if is_weekly_fast(upcoming_fast_to_display):
             users_to_notify = users_to_notify.filter(profile__include_weekly_fasts_in_notifications=True)
 
-        message = UPCOMING_FAST_MESSAGE.format(fast_name=upcoming_fast_to_display.name)
+        message = UPCOMING_FAST_MESSAGE.replace('{fast_name}', str(upcoming_fast_to_display.name), 1)
         data = {
             "fast_id": upcoming_fast_to_display.id,
             "fast_name": upcoming_fast_to_display.name,
@@ -464,16 +464,17 @@ def send_ongoing_fast_push_notification_task():
         
         # Choose message based on whether there's a devotional
         if today_devotional and today_devotional.video and today_devotional.video.title:
-            message = ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE.format(
-                fast_name=ongoing_fast_to_display.name,
-                devotional_title=today_devotional.video.title
+            message = ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE.replace(
+                '{fast_name}', str(ongoing_fast_to_display.name), 1
+            ).replace(
+                '{devotional_title}', str(today_devotional.video.title), 1
             )
             data = {
                 "fast_id": ongoing_fast_to_display.id,
                 "fast_name": ongoing_fast_to_display.name
             }
         else:
-            message = ONGOING_FAST_MESSAGE.format(fast_name=ongoing_fast_to_display.name)
+            message = ONGOING_FAST_MESSAGE.replace('{fast_name}', str(ongoing_fast_to_display.name), 1)
             data = {
                 "fast_id": ongoing_fast_to_display.id,
                 "fast_name": ongoing_fast_to_display.name,
@@ -509,7 +510,7 @@ def send_daily_fast_push_notification_task():
         users_to_notify = users_to_notify.filter(profile__include_weekly_fasts_in_notifications=True)
 
     # send push notification to each user
-    message = DAILY_FAST_MESSAGE.format(fast_name=today_fast.name)
+    message = DAILY_FAST_MESSAGE.replace('{fast_name}', str(today_fast.name), 1)
     data = {
         "fast_id": today_fast.id,
         "fast_name": today_fast.name,
@@ -715,9 +716,10 @@ def send_fast_nonjoin_nudge_task():
         if not user_ids:
             continue
 
-        message = FAST_NONJOIN_NUDGE_MESSAGE.format(
-            count=participant_count,
-            fast_name=fast.name,
+        message = FAST_NONJOIN_NUDGE_MESSAGE.replace(
+            '{count}', str(participant_count), 1,
+        ).replace(
+            '{fast_name}', str(fast.name), 1,
         )
         send_push_notification_to_users_task.delay(
             message=message,
@@ -779,7 +781,7 @@ def send_inactive_fast_member_nudge_task():
             continue
 
         send_push_notification_to_users_task.delay(
-            message=INACTIVE_FAST_MEMBER_MESSAGE.format(fast_name=fast.name),
+            message=INACTIVE_FAST_MEMBER_MESSAGE.replace('{fast_name}', str(fast.name), 1),
             data={'screen': f'fast/{fast.id}'},
             user_ids=eligible_ids,
         )
@@ -900,7 +902,7 @@ def send_prayer_acceptance_nudge_task():
         count = len(requests)
         if count == 1:
             pr = requests[0]
-            message = PRAYER_NUDGE_SINGLE_MESSAGE.format(title=pr.title)
+            message = PRAYER_NUDGE_SINGLE_MESSAGE.replace('{title}', str(pr.title), 1)
             data = {'screen': f'prayer-request/{pr.id}'}
         else:
             message = PRAYER_NUDGE_MULTIPLE_MESSAGE.format(count=count)

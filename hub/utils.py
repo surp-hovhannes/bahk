@@ -3,6 +3,10 @@ from datetime import datetime, timedelta
 import logging
 import re
 import urllib
+import urllib.parse
+import hashlib
+
+import sentry_sdk
 
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
@@ -21,6 +25,90 @@ logger = logging.getLogger(__name__)
 
 PARSER_REGEX = r"^([\w\u0531-\u058A\u0400-\u04FF1-4\'\.\s]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
 SUPPORTED_CHURCHES = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME)
+
+# Circuit breaker state: key = "circuit_breaker:{url_hash}" (store in cache)
+# After 3 consecutive failures in 15 min, block further attempts for 15 min
+SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT = 900  # 15 min
+SCRAPE_CIRCUIT_BREAKER_MAX_FAILURES = 3
+SCRAPE_CACHE_TIMEOUT = 21600  # 6 hours
+
+
+def _stable_url_key(url: str) -> str:
+    """Stable hash for URL cache keys (unlike Python's salted hash())."""
+    return hashlib.md5(url.encode()).hexdigest()[:16]
+
+
+def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
+    """Fetch a sacredtradition.am page with retries, circuit breaker, and caching.
+    
+    Args:
+        url: Full URL to fetch
+        timeout: Request timeout in seconds
+        
+    Returns:
+        Decoded HTML string, or None on failure (with cached data if avail)
+    """
+    # URL validation
+    parsed = urllib.parse.urlparse(url)
+    if not parsed.netloc or parsed.netloc != "sacredtradition.am":
+        logger.error("Invalid URL for sacredtradition.am scrape: %s", url)
+        return None
+    
+    url_key = _stable_url_key(url)
+    
+    # Check circuit breaker
+    circuit_key = f"circuit_breaker:{url_key}"
+    circuit_open = cache.get(circuit_key)
+    if circuit_open:
+        logger.warning("Circuit breaker open for %s, skipping scrape", url)
+        # Try cache fallback anyway
+        cached = cache.get(f"scrape_result:{url_key}")
+        if cached:
+            return cached
+        return None
+    
+    # Get any cached result to use as stale fallback
+    cache_key = f"scrape_result:{url_key}"
+    cached = cache.get(cache_key)
+    
+    # Fetch with retries
+    last_error = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; BahkBot/1.0)'})
+            response = urllib.request.urlopen(req, timeout=timeout)
+            if response.status == 200:
+                data = response.read().decode("utf-8")
+                # Cache successful result
+                cache.set(cache_key, data, SCRAPE_CACHE_TIMEOUT)
+                # Reset circuit breaker + failure counter on success
+                cache.delete(circuit_key)
+                cache.delete(circuit_key + ":failures")
+                return data
+            else:
+                last_error = f"HTTP {response.status}"
+                logger.error("sacredtradition.am returned status %d for %s", response.status, url)
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
+            last_error = str(e)
+            logger.warning("Attempt %d/3 failed for %s: %s", attempt + 1, url, last_error)
+            if attempt < 2:
+                import time
+                time.sleep(1 * (attempt + 1))  # 1s, 2s backoff
+    
+    # All attempts failed — trip circuit breaker
+    failure_count = cache.get(circuit_key + ":failures", 0)
+    failure_count += 1
+    cache.set(circuit_key + ":failures", failure_count, SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT)
+    if failure_count >= SCRAPE_CIRCUIT_BREAKER_MAX_FAILURES:
+        cache.set(circuit_key, True, SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT)
+        sentry_sdk.capture_exception(Exception(f"Circuit breaker tripped for {url}"))
+    
+    # Log the final failure
+    if last_error:
+        sentry_sdk.capture_exception(Exception(f"Scrape failed for {url} after 3 attempts: {last_error}"))
+    
+    # Return stale cached data as fallback (or None if never cached)
+    return cached
 
 
 def get_user_profile_safe(user):
@@ -94,15 +182,8 @@ def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40)
             language_code: 2 for English, 3 for Armenian
         """
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
-        try:
-            response = urllib.request.urlopen(url, timeout=10)
-            if response.status != 200:
-                logging.error("Could not access readings from url %s. Failed with status %r", url, response.status)
-                return []
-            data = response.read()
-            html_content = data.decode("utf-8")
-        except (urllib.error.URLError, OSError):
-            logging.error("Failed to fetch %s", url)
+        html_content = _fetch_sacredtradition(url)
+        if html_content is None:
             return []
 
         book_start = html_content.find("<b>")
@@ -411,18 +492,8 @@ def scrape_feast(date_obj, church, date_format="%Y%m%d"):
             language_code: 2 for English, 3 for Armenian
         """
         url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
-        
-        req = urllib.request.Request(url, headers={'User-agent': 'Mozilla/5.0'})
-        
-        try:
-            response = urllib.request.urlopen(req, timeout=10)
-            if response.status != 200:
-                logging.error("Could not access feast from url %s. Failed with status %r", url, response.status)
-                return None
-            data = response.read()
-            html_content = data.decode("utf-8")
-        except (urllib.error.URLError, OSError):
-            logging.error("Failed to fetch %s", url)
+        html_content = _fetch_sacredtradition(url)
+        if html_content is None:
             return None
 
         # Look for elements with class="dname" or class=dname (with or without quotes)

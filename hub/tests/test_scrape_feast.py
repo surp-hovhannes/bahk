@@ -3,6 +3,7 @@ from datetime import date
 from unittest.mock import Mock, patch
 import urllib.error
 
+from django.core.cache import cache
 from django.test import TestCase
 
 from hub.models import Church
@@ -13,6 +14,7 @@ class ScrapeFeastTests(TestCase):
     """Tests for the scrape_feast utility function."""
 
     def setUp(self):
+        cache.clear()
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
 

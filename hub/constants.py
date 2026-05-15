@@ -1,4 +1,7 @@
 """App constants."""
+import unicodedata
+
+
 DAYS_TO_CACHE_THUMBNAIL = 7
 NUMBER_PARTICIPANTS_TO_SHOW_WEB = 6  # number of participant thumbnails to show on fast card on web version
 DATE_FORMAT_STRING = "%m/%d/%Y"  # format string for dates (month, day, year)
@@ -237,4 +240,32 @@ CATENA_ABBREV_FOR_BOOK = {
     "Jude": "jude",
     "St. Jude's General Epistle": "jude",
     "Revelation": "rv"
+}
+
+
+def normalize_book_name(name: str | None) -> str | None:
+    """Normalize a book name for dictionary lookup.
+
+    Handles curly/smart quotes that scrapers may return:
+    - U+2018/U+2019 curly single quotes → straight apostrophe (U+0027)
+    - U+201C/U+201D curly double quotes → straight double quote (U+0022)
+    - NFKC normalization handles other Unicode variations
+    - Strips leading/trailing whitespace
+
+    Returns None if name is None or empty after stripping.
+    """
+    if not name:
+        return None
+    name = unicodedata.normalize("NFKC", name)
+    name = name.replace("\u2018", "'").replace("\u2019", "'")
+    name = name.replace("\u201c", '"').replace("\u201d", '"')
+    name = name.strip()
+    return name if name else None
+
+
+# Normalized lookup dict — built once at import time
+# Keys are normalized via normalize_book_name so curly-quote variants match
+CATENA_ABBREV_FOR_BOOK_NORMALIZED: dict[str, str] = {
+    normalize_book_name(k): v
+    for k, v in CATENA_ABBREV_FOR_BOOK.items()
 }

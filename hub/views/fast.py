@@ -1,6 +1,6 @@
 from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
-from ..models import Fast, Church, Profile, FastParticipantMap
+from ..models import Fast, Church, Profile, Day, FastParticipantMap
 from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer, FastParticipantMapSerializer
 from .mixins import ChurchContextMixin, TimezoneMixin
 from django.utils import timezone
@@ -16,7 +16,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Count, Min, Max, Sum, Prefetch
+from django.db.models import Q, Count, Min, Max, Sum, Prefetch, Exists, OuterRef, Subquery
 from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache
 from functools import wraps
@@ -130,6 +130,23 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
         if cached_queryset is not None:
             return cached_queryset
 
+        # Use subquery for date filter instead of a JOIN to avoid
+        # a double-join to hub_day (one for annotations, one for filter).
+        # The original .filter(days__date__gte=...) creates an INNER JOIN,
+        # which with the annotations' LEFT JOIN causes a Cartesian explosion.
+        days_in_range = Day.objects.filter(
+            fast=OuterRef('pk'),
+            date__gte=start_date,
+            date__lte=end_date
+        )
+
+        # Pre-compute next_fast_date as a subquery to eliminate N+1
+        # in the serializer's get_next_fast_date()
+        next_day_subq = Day.objects.filter(
+            fast=OuterRef('pk'),
+            date__gte=today
+        ).order_by('date').values('date')[:1]
+
         # If not in cache, generate queryset
         queryset = Fast.objects.annotate(
             participant_count=Count('profiles', distinct=True),
@@ -140,14 +157,14 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
                 'days',
                 filter=Q(days__date__lte=today),
                 distinct=True
-            )
+            ),
+            next_fast_date=Subquery(next_day_subq)
         ).filter(
+            Exists(days_in_range),
             church=church,
-            days__date__gte=start_date,
-            days__date__lte=end_date
         ).select_related(
             'church'
-        ).distinct()
+        )
 
         # Cache the queryset for 10 minutes
         cache.set(cache_key, queryset, timeout=600)  # 10 minutes
