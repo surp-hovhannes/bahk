@@ -386,6 +386,7 @@ class Day(models.Model):
         return f'{self.date.strftime("%Y-%m-%d")} ({f"{self.fast.name}, " if self.fast else ""}{self.church.name})'
 
     class Meta:
+        unique_together = [["date", "church"]]
         indexes = [
             models.Index(fields=["fast", "date"]),
             models.Index(fields=["date"]),
