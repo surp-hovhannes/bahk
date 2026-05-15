@@ -532,6 +532,23 @@ class PrayerRequestAPITests(BaseAPITestCase):
             ).exists()
         )
 
+    def test_expired_prayer_with_curly_braces_in_title_does_not_crash(self):
+        """Prayer requests with { or } in the title should not crash the cron."""
+        requester = self.create_user(email='curly@example.com')
+        prayer_request = self.create_prayer_request(
+            requester, title='Pray for {my} family }'
+        )
+        prayer_request.expiration_date = timezone.now() - timedelta(days=1)
+        prayer_request.save(update_fields=['expiration_date'])
+
+        # Should not raise KeyError
+        result = check_expired_prayer_requests_task()
+        prayer_request.refresh_from_db()
+
+        self.assertEqual(prayer_request.status, 'completed')
+        self.assertEqual(result['completed_count'], 1)
+        self.assertEqual(result['success'], True)
+
     @tag('integration')
     def test_retrieve_auto_completes_expired_request(self):
         """Detail fetch should auto-complete expired approved requests."""

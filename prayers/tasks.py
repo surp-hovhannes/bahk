@@ -37,11 +37,10 @@ def _get_moderation_prompt_and_service(prayer_request):
         llm_prompt = LLMPrompt.objects.get(applies_to='prayer_requests', active=True)
 
         # Format the prompt with prayer request data
-        # The database prompt should use {title} and {description} placeholders
-        prompt_text = llm_prompt.prompt.format(
-            title=prayer_request.title,
-            description=prayer_request.description
-        )
+        # Use .replace() instead of .format() to avoid KeyError when
+        # prayer_request.title or .description contain { or } characters
+        prompt_text = llm_prompt.prompt.replace('{title}', str(prayer_request.title))
+        prompt_text = prompt_text.replace('{description}', str(prayer_request.description))
 
         # Get the role/system message (may be empty)
         system_role = llm_prompt.role if llm_prompt.role else None
@@ -474,13 +473,18 @@ def check_expired_prayer_requests_task():
 
     count = 0
     for prayer_request in expired_requests:
-        _, completed = prayer_request.complete_if_expired_with_side_effects()
-        if completed:
-            count += 1
-            send_push_notification_to_users_task.delay(
-                message=PRAYER_REQUEST_COMPLETED_MESSAGE.format(title=prayer_request.title),
-                data={'screen': f'prayer-request/{prayer_request.id}'},
-                user_ids=[prayer_request.requester_id],
+        try:
+            _, completed = prayer_request.complete_if_expired_with_side_effects()
+            if completed:
+                count += 1
+                send_push_notification_to_users_task.delay(
+                    message=PRAYER_REQUEST_COMPLETED_MESSAGE.replace('{title}', str(prayer_request.title), 1),
+                    data={'screen': f'prayer-request/{prayer_request.id}'},
+                    user_ids=[prayer_request.requester_id],
+                )
+        except Exception:
+            logger.exception(
+                f"Failed to process expired prayer request {prayer_request.id}"
             )
 
     logger.info(f"Marked {count} prayer requests as completed")
