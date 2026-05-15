@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 # Constants for language instruction prefixes
 _LANGUAGE_INSTRUCTION_PREFIX = "CRITICAL: You MUST respond ONLY in"
 _USER_LANGUAGE_PREFIX = "CRITICAL INSTRUCTION: Respond ONLY in"
+_ASCENSION_FEAST_FACT = (
+    "Specific liturgical fact: Ascension of Our Lord Jesus Christ is exactly "
+    "40 days after Easter Sunday, not 30 days after Easter."
+)
 
 # Constants for feast reference data matching
 MIN_FEAST_NAME_SIMILARITY_THRESHOLD = 0.5  # Minimum similarity score to consider a feast match
@@ -648,8 +652,9 @@ class AnthropicService(LLMService):
                 f"\n\nIMPROVEMENT INSTRUCTIONS:\n{improvement_instructions}"
             )
 
+        feast_system_prompt = f"{llm_prompt.prompt}\n\n{_ASCENSION_FEAST_FACT}"
         system_prompt, user_message = _build_language_prompts(
-            base_message, llm_prompt.prompt, language_code
+            base_message, feast_system_prompt, language_code
         )
         user_content = [
             {
@@ -709,6 +714,7 @@ class AnthropicService(LLMService):
         system_prompt = (
             "You are a classification expert for Armenian Orthodox Church feasts. "
             "Determine the appropriate designation category for a feast based solely on its name. "
+            f"{_ASCENSION_FEAST_FACT} "
             "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast/Lent]' "
             "(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent', 'Third day of the Fast') "
             "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration. "
@@ -878,7 +884,7 @@ class OpenAIService(LLMService):
                 f"\n\nIMPROVEMENT INSTRUCTIONS:\n{improvement_instructions}"
             )
 
-        llm_prompt_text = f"{llm_prompt.role}\n\n{llm_prompt.prompt}"
+        llm_prompt_text = f"{llm_prompt.role}\n\n{llm_prompt.prompt}\n\n{_ASCENSION_FEAST_FACT}"
         system_prompt, user_message = _build_language_prompts(
             base_prompt, llm_prompt_text, language_code
         )
@@ -937,6 +943,7 @@ class OpenAIService(LLMService):
         system_prompt = (
             "You are a classification expert for Armenian Orthodox Church feasts. "
             "Determine the appropriate designation category for a feast based solely on its name. "
+            f"{_ASCENSION_FEAST_FACT} "
             "IMPORTANT: Any name that follows the pattern '[ordinal/number] day of [Fast/Lent]' "
             "(e.g. 'Nineteenth day of Great Lent', 'Twenty Ninth day of Great Lent', 'Third day of the Fast') "
             "is always classified as 'Fast' — it is a generic fasting day with no specific commemoration. "
