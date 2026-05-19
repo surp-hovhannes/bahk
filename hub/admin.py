@@ -205,9 +205,11 @@ class DevotionalAdmin(admin.ModelAdmin):
                         # 1. Get or create Day
                         day, _ = Day.objects.get_or_create(
                             date=data['date'],
-                            fast=data['fast'],
-                            defaults={'church': data['fast'].church},
+                            church=data['fast'].church,
                         )
+                        if day.fast_id is None:
+                            day.fast = data['fast']
+                            day.save(update_fields=['fast'])
 
                         # 2. Create video + devotional for each selected language
                         selected_languages = data['languages']
@@ -396,7 +398,7 @@ class FastAdmin(admin.ModelAdmin):
             form = AddDaysToFastAdminForm(request.POST)
             if form.is_valid():
                 days = [
-                    Day.objects.get_or_create(date=date)[0]
+                    Day.objects.get_or_create(date=date, church=fast.church)[0]
                     for date in form.cleaned_data["dates"]
                 ]
                 fast.days.add(*days)
@@ -435,7 +437,14 @@ class FastAdmin(admin.ModelAdmin):
                     for num_days in range(data["length_of_fast"])
                 ]
                 for date in dates:
-                    Day.objects.create(date=date, fast=fast, church=data["church"])
+                    day, created = Day.objects.get_or_create(
+                        date=date,
+                        church=data["church"],
+                        defaults={"fast": fast},
+                    )
+                    if not created and day.fast_id is None:
+                        day.fast = fast
+                        day.save(update_fields=["fast"])
 
                 # go back to fast admin page
                 obj_url = reverse(
@@ -489,7 +498,10 @@ class FastAdmin(admin.ModelAdmin):
                     data["first_day"] + datetime.timedelta(days=num_days)
                     for num_days in range(data["length_of_fast"])
                 ]
-                days = [Day.objects.get_or_create(date=date)[0] for date in dates]
+                days = [
+                    Day.objects.get_or_create(date=date, church=duplicate_fast.church)[0]
+                    for date in dates
+                ]
                 duplicate_fast.days.set(days)
                 duplicate_fast.save()  # run save method to ensure year is set
 
