@@ -101,8 +101,8 @@ class BibleAPIService:
         """Resolve a book name (as stored in Reading.book) to its 3-letter USFM ID.
 
         Args:
-            book_name: Book name as it appears in the database, e.g. "Genesis",
-                       "St. Paul's Epistle to the Romans", "Tobit".
+            book_name: Raw book name (may contain curly/smart quotes from scrapers),
+                       e.g. "Genesis", "St. Paul's Epistle to the Romans", "Tobit".
 
         Returns:
             3-letter USFM code (e.g. "GEN", "ROM", "TOB").
@@ -110,7 +110,9 @@ class BibleAPIService:
         Raises:
             ValueError: If the book name is not found in BOOK_NAME_TO_USFM.
         """
-        usfm_id = BOOK_NAME_TO_USFM.get(book_name)
+        from hub.constants import normalize_book_name
+
+        usfm_id = BOOK_NAME_TO_USFM.get(normalize_book_name(book_name))
         if usfm_id is None:
             raise ValueError(
                 f"Unknown book name: '{book_name}'. "
