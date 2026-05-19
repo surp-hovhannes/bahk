@@ -91,7 +91,7 @@ class TestDataFactory:
             date = datetime.date.today()
         if church is None:
             church = TestDataFactory.create_church()
-        return Day.objects.create(date=date, church=church)
+        return Day.objects.get_or_create(date=date, church=church)[0]
     
     @staticmethod
     def create_complete_fast(church=None, num_days=5, num_participants=2):
