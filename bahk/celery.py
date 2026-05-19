@@ -238,14 +238,25 @@ def sync_beat_schedule_to_db(**kwargs):
         logger.warning("No beat_schedule configured — nothing to sync")
         return
 
+    CODE_MANAGED_MARKER = '[code-managed]'
+
     try:
         synced = 0
+        seen_names = set()
+
         for name, entry in schedule.items():
             task_path = entry.get('task')
             schedule_def = entry.get('schedule')
 
             if not task_path or not schedule_def:
                 logger.warning("Skipping invalid beat entry '%s': missing task or schedule", name)
+                continue
+
+            if not isinstance(schedule_def, crontab):
+                logger.warning(
+                    "Skipping beat entry '%s': schedule is %s, only crontab is supported",
+                    name, type(schedule_def).__name__,
+                )
                 continue
 
             # Build crontab kwargs from the Celery crontab instance.
@@ -263,8 +274,12 @@ def sync_beat_schedule_to_db(**kwargs):
             defaults = {
                 'task': task_path,
                 'crontab': cron_schedule,
+                'interval': None,
+                'solar': None,
+                'clocked': None,
                 'name': name,
                 'kwargs': '{}',
+                'description': CODE_MANAGED_MARKER,
             }
             pt, created = PeriodicTask.objects.update_or_create(
                 name=name,
@@ -274,12 +289,25 @@ def sync_beat_schedule_to_db(**kwargs):
                 pt.enabled = True
                 pt.save(update_fields=['enabled'])
 
+            seen_names.add(name)
             synced += 1
             logger.info(
                 "%s periodic task: %s → %s",
                 'Created' if created else 'Updated',
                 name,
                 task_path,
+            )
+
+        # Disable stale code-managed entries that were removed from beat_schedule.
+        stale = PeriodicTask.objects.filter(
+            description=CODE_MANAGED_MARKER,
+        ).exclude(name__in=seen_names).exclude(enabled=False)
+        stale_count = stale.update(enabled=False)
+        if stale_count:
+            logger.info(
+                "Beat sync: disabled %d stale code-managed periodic task(s) "
+                "no longer in beat_schedule",
+                stale_count,
             )
 
         logger.info("Beat sync complete: %d schedule entries mirrored to DB", synced)
