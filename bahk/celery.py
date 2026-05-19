@@ -204,7 +204,7 @@ def check_redis_connectivity(**kwargs):
     broker_url = app.conf.broker_url
     try:
         import redis
-        r = redis.from_url(broker_url)
+        r = redis.from_url(broker_url, socket_connect_timeout=5)
         r.ping()
         logger.info("✅ Redis connection OK: %s", broker_url)
     except Exception as exc:
@@ -233,10 +233,7 @@ def sync_beat_schedule_to_db(**kwargs):
         logger.warning("django_celery_beat not installed — skipping beat sync")
         return
 
-    schedule = app.conf.beat_schedule
-    if not schedule:
-        logger.warning("No beat_schedule configured — nothing to sync")
-        return
+    schedule = app.conf.beat_schedule or {}
 
     CODE_MANAGED_MARKER = '[code-managed]'
 
@@ -304,6 +301,11 @@ def sync_beat_schedule_to_db(**kwargs):
         ).exclude(name__in=seen_names).exclude(enabled=False)
         stale_count = stale.update(enabled=False)
         if stale_count:
+            # Bulk update bypasses django-celery-beat's change-tracking signal,
+            # so the scheduler's in-memory view would still see the old entries.
+            # Force a change event to refresh the scheduler's schedule cache.
+            from django_celery_beat.models import PeriodicTasks
+            PeriodicTasks.update_changed()
             logger.info(
                 "Beat sync: disabled %d stale code-managed periodic task(s) "
                 "no longer in beat_schedule",
