@@ -7,7 +7,7 @@ from datetime import datetime
 from celery import shared_task
 import sentry_sdk
 
-from hub.models import Church
+from hub.models import Church, Feast
 from hub.utils import get_or_create_feast_for_date
 
 logger = logging.getLogger(__name__)
@@ -85,6 +85,9 @@ def create_feast_date_task():
         
         return status_dict
         
+    except Feast.DoesNotExist:
+        logger.warning(f"Feast not found when creating feast date for {today} — may have been deleted")
+        return {"status": "skipped", "reason": "feast_deleted"}
     except Exception as e:
         logger.error(f"Error creating feast date for {today}: {e}", exc_info=True)
         sentry_sdk.capture_exception(e)
