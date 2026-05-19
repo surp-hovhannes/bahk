@@ -50,7 +50,7 @@ class GetFeastForDate(generics.GenericAPIView):
 
     def get_queryset(self):
         return Feast.objects.select_related('icon', 'day').only(
-            'id', 'name', 'name_en', 'name_hy', 'designation',
+            'id', 'name', 'i18n', 'name_en', 'name_hy', 'designation',
             'icon__id', 'icon__title', 'icon__cached_thumbnail_url',
             'icon__cached_thumbnail_updated', 'day__date', 'day__church'
         )
@@ -96,6 +96,9 @@ class GetFeastForDate(generics.GenericAPIView):
 
             # Use the feast from the utility function, or get it from the day if None
             feast = feast_obj if feast_obj else day.feasts.first()
+            # Re-fetch through optimized queryset to avoid loading large icon binary data
+            if feast is not None:
+                feast = self.get_queryset().filter(pk=feast.pk).first()
             
             if feast is None:
                 # No feast on this day
