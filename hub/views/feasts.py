@@ -211,6 +211,13 @@ class GetFeastForDate(generics.GenericAPIView):
             cache.set(cache_key, response_data, 3600)
             return Response(response_data)
 
+        except Feast.DoesNotExist:
+            # Feast may have been deleted between scheduling and execution — log and degrade gracefully
+            logging.warning("Feast not found for date %s (church %s) — may have been deleted", date_obj, church)
+            return Response(
+                {"date": date_obj.isoformat(), "feast": None},
+                status=status.HTTP_200_OK,
+            )
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logging.error("Failed to get feast for date %s (church %s): %s", date_obj, church, e)
