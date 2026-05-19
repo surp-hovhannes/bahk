@@ -263,7 +263,7 @@ def normalize_book_name(name: str | None) -> str | None:
     return name if name else None
 
 
-# Normalized lookup dict — built once at import time
+# Normalized lookup dict -- built once at import time
 # Keys are normalized via normalize_book_name so curly-quote variants match
 CATENA_ABBREV_FOR_BOOK_NORMALIZED: dict[str, str] = {
     normalize_book_name(k): v

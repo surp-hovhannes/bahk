@@ -21,7 +21,7 @@ WEEKLY_PRAYER_REQUEST_MESSAGE = (
 # values (titles, names, descriptions) contain { or } characters.
 #
 # If you add a new message template with placeholders, always use .replace()
-# to populate them — never str.format().
+# to populate them -- never str.format().
 
 PRAYER_REQUEST_COMPLETED_MESSAGE = (
     'Your prayer request "{title}" has completed. Send a thank you to those who prayed for you!'
