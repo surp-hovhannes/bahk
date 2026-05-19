@@ -204,7 +204,12 @@ def check_redis_connectivity(**kwargs):
     broker_url = app.conf.broker_url
     try:
         import redis
-        r = redis.from_url(broker_url, socket_connect_timeout=5)
+        redis_kwargs = {'socket_connect_timeout': 5}
+        # Match Celery's SSL config so rediss:// isn't misdiagnosed as failure.
+        broker_ssl = app.conf.get('broker_use_ssl')
+        if broker_ssl:
+            redis_kwargs['ssl_cert_reqs'] = None  # mirrors CELERY_BROKER_USE_SSL
+        r = redis.from_url(broker_url, **redis_kwargs)
         r.ping()
         logger.info("✅ Redis connection OK: %s", broker_url)
     except Exception as exc:
@@ -277,14 +282,12 @@ def sync_beat_schedule_to_db(**kwargs):
                 'name': name,
                 'kwargs': '{}',
                 'description': CODE_MANAGED_MARKER,
+                'enabled': True,
             }
             pt, created = PeriodicTask.objects.update_or_create(
                 name=name,
                 defaults=defaults,
             )
-            if created:
-                pt.enabled = True
-                pt.save(update_fields=['enabled'])
 
             seen_names.add(name)
             synced += 1
