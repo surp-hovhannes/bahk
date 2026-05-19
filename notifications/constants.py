@@ -31,6 +31,6 @@ FAST_PARTICIPANT_MILESTONE_MESSAGE = (
 )
 FAST_NONJOIN_NUDGE_MESSAGE = 'Join {count} others participating in the {fast_name}'
 ACTIVITY_FEED_NUDGE_MESSAGE = 'You have {count} updates waiting in your activity feed'
-INACTIVE_FAST_MEMBER_MESSAGE = 'The {fast_name} is ongoing -- come pray with your community'
+INACTIVE_FAST_MEMBER_MESSAGE = 'The {fast_name} is ongoing — come pray with your community'
 PRAYER_NUDGE_SINGLE_MESSAGE = 'Don\'t forget to pray for "{title}" today'
 PRAYER_NUDGE_MULTIPLE_MESSAGE = 'You have {count} prayer requests still waiting for your prayers'
