@@ -1,11 +1,14 @@
 from __future__ import absolute_import, unicode_literals
+import logging
 import os
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import celeryd_init, beat_init
+from celery.signals import celeryd_init, beat_init, worker_ready
 import sentry_sdk
 from sentry_sdk.integrations.celery import CeleryIntegration
 from decouple import config
+
+logger = logging.getLogger('bahk.celery')
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bahk.settings')
 
@@ -192,6 +195,126 @@ app.conf.beat_schedule = {
         }
     },
 }
+
+# ── Startup: Redis connectivity check ─────────────────────────────────────────────
+
+@celeryd_init.connect
+def check_redis_connectivity(**kwargs):
+    """Verify Redis is reachable before the worker starts accepting tasks."""
+    broker_url = app.conf.broker_url
+    try:
+        import redis
+        r = redis.from_url(broker_url)
+        r.ping()
+        logger.info("✅ Redis connection OK: %s", broker_url)
+    except Exception as exc:
+        logger.error("❌ Redis connection FAILED: %s — %s", broker_url, exc)
+        sentry_sdk.capture_exception(exc)
+
+
+# ── Startup: Sync inline beat_schedule → django_celery_beat DB ─────────────────────
+# When the Procfile uses DatabaseScheduler, Celery Beat reads its schedule from the
+# django_celery_beat PeriodicTask model, NOT from app.conf.beat_schedule.
+# If no rows exist in the DB, Beat dispatches nothing — even though 17+ tasks are
+# defined inline.  This handler ensures the DB stays in sync with code.
+
+@beat_init.connect
+def sync_beat_schedule_to_db(**kwargs):
+    """Mirror app.conf.beat_schedule into django_celery_beat PeriodicTask rows.
+
+    Uses update_or_create so it is safe to run on every Beat restart:
+    - Creates any entries missing from the DB (the common case).
+    - Updates task path & crontab if they drifted (e.g. after a code deploy).
+    - Does NOT re-enable entries that were manually disabled in Django admin.
+    """
+    try:
+        from django_celery_beat.models import CrontabSchedule, PeriodicTask
+    except ImportError:
+        logger.warning("django_celery_beat not installed — skipping beat sync")
+        return
+
+    schedule = app.conf.beat_schedule
+    if not schedule:
+        logger.warning("No beat_schedule configured — nothing to sync")
+        return
+
+    try:
+        synced = 0
+        for name, entry in schedule.items():
+            task_path = entry.get('task')
+            schedule_def = entry.get('schedule')
+
+            if not task_path or not schedule_def:
+                logger.warning("Skipping invalid beat entry '%s': missing task or schedule", name)
+                continue
+
+            # Build crontab kwargs from the Celery crontab instance.
+            cron_kwargs = {
+                'minute': _crontab_field(schedule_def, 'minute'),
+                'hour': _crontab_field(schedule_def, 'hour'),
+                'day_of_week': _crontab_field(schedule_def, 'day_of_week'),
+                'day_of_month': _crontab_field(schedule_def, 'day_of_month'),
+                'month_of_year': _crontab_field(schedule_def, 'month_of_year'),
+                'timezone': getattr(schedule_def, 'tz', None) or 'America/Los_Angeles',
+            }
+
+            cron_schedule, _ = CrontabSchedule.objects.get_or_create(**cron_kwargs)
+
+            defaults = {
+                'task': task_path,
+                'crontab': cron_schedule,
+                'name': name,
+                'kwargs': '{}',
+            }
+            pt, created = PeriodicTask.objects.update_or_create(
+                name=name,
+                defaults=defaults,
+            )
+            if created:
+                pt.enabled = True
+                pt.save(update_fields=['enabled'])
+
+            synced += 1
+            logger.info(
+                "%s periodic task: %s → %s",
+                'Created' if created else 'Updated',
+                name,
+                task_path,
+            )
+
+        logger.info("Beat sync complete: %d schedule entries mirrored to DB", synced)
+    except Exception as exc:
+        # Covers missing tables (migrations not applied), DB connection
+        # issues, etc.  The Beat process will continue with whatever was
+        # already in the DB (if anything).
+        logger.warning("Beat sync failed (%s) — beat may use stale or empty schedule", exc)
+        sentry_sdk.capture_exception(exc)
+
+
+def _crontab_field(schedule_def, field):
+    """Return the original crontab expression string, falling back to '*'.
+
+    Celery crontab internally expands expressions into sets, but the original
+    expressions are preserved as private ``_orig_<field>`` attributes.
+    The Django CrontabSchedule model expects the original expression string
+    (e.g. '*/15', 'sunday', '0'), not the expanded set.
+    """
+    orig_attr = f'_orig_{field}'
+    val = getattr(schedule_def, orig_attr, None)
+    if val is None:
+        return '*'
+    return str(val)
+
+
+# ── Startup: worker-ready log ──────────────────────────────────────────────────────
+
+@worker_ready.connect
+def log_worker_ready(**kwargs):
+    """Confirm the worker is ready to process tasks."""
+    logger.info("🚀 Celery worker ready — listening for tasks on %s", app.conf.broker_url)
+
+
+# ── Sentry initialization ──────────────────────────────────────────────────────────
 
 # Initialize Sentry for Celery worker processes
 @celeryd_init.connect
