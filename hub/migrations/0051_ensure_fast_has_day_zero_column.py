@@ -3,6 +3,29 @@
 from django.db import migrations
 
 
+def add_has_day_zero_if_missing(apps, schema_editor):
+    """Add has_day_zero column if it doesn't exist (idempotent across backends)."""
+    connection = schema_editor.connection
+    table_name = "hub_fast"
+    column_name = "has_day_zero"
+
+    with connection.cursor() as cursor:
+        if connection.vendor == "postgresql":
+            cursor.execute(
+                f"ALTER TABLE {table_name} "
+                f"ADD COLUMN IF NOT EXISTS {column_name} boolean NOT NULL DEFAULT false;"
+            )
+        else:
+            # SQLite: check PRAGMA first since it doesn't support IF NOT EXISTS
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = [row[1] for row in cursor.fetchall()]
+            if column_name not in columns:
+                cursor.execute(
+                    f"ALTER TABLE {table_name} "
+                    f"ADD COLUMN {column_name} bool NOT NULL DEFAULT false;"
+                )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,11 +33,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql=(
-                "ALTER TABLE hub_fast "
-                "ADD COLUMN IF NOT EXISTS has_day_zero boolean NOT NULL DEFAULT false;"
-            ),
-            reverse_sql=migrations.RunSQL.noop,
+        migrations.RunPython(
+            add_has_day_zero_if_missing,
+            reverse_code=migrations.RunPython.noop,
         ),
     ]
