@@ -1117,16 +1117,30 @@ class FastIntentionView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Upsert: find existing (active or soft-kept) or create new
-        intention, created = FastIntention.objects.update_or_create(
+        # Look for existing intention (any state) to determine if created or updated
+        existing = FastIntention.objects.filter(
             user=request.user,
             fast=fast,
-            defaults={
-                'text': text,
-                'is_public': is_public,
-                'is_active': True,
-            }
-        )
+        ).first()
+
+        if existing:
+            # Update existing (could be soft-kept or active)
+            existing.text = text
+            existing.is_public = is_public
+            existing.is_active = True
+            existing.save()
+            intention = existing
+            created = False
+        else:
+            # Create new
+            intention = FastIntention.objects.create(
+                user=request.user,
+                fast=fast,
+                text=text,
+                is_public=is_public,
+                is_active=True,
+            )
+            created = True
 
         # Invalidate participant cache since visibility may have changed
         invalidate_fast_participants_cache(fast.id)
