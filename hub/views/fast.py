@@ -1,7 +1,12 @@
 from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
-from ..models import Fast, Church, Profile, Day, FastParticipantMap, FastIntention
-from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer, FastParticipantMapSerializer, FastIntentionSerializer
+from ..models import (
+    Fast, Church, Profile, Day, FastParticipantMap, FastIntention
+)
+from ..serializers import (
+    FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer,
+    FastParticipantMapSerializer, FastIntentionSerializer
+)
 from .mixins import ChurchContextMixin, TimezoneMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -482,9 +487,8 @@ class JoinFastView(generics.UpdateAPIView):
         serializer.save()
         
         # Handle intention
-        validated = serializer.validated_data
-        intention_text = validated.get('intention_text', '') or ''
-        intention_is_public = validated.get('intention_is_public', False)
+        intention_text = self.request.data.get('intention_text', '').strip()
+        intention_is_public = self.request.data.get('intention_is_public', False)
         
         # Check for soft-kept intention and reactivate or create new
         if intention_text or intention_is_public:
@@ -497,7 +501,8 @@ class JoinFastView(generics.UpdateAPIView):
             if soft_kept:
                 soft_kept.is_active = True
                 soft_kept.text = intention_text or soft_kept.text
-                soft_kept.is_public = intention_is_public if 'intention_is_public' in validated else soft_kept.is_public
+                if 'intention_is_public' in self.request.data:
+                    soft_kept.is_public = intention_is_public
                 soft_kept.save()
             else:
                 FastIntention.objects.create(
@@ -579,11 +584,11 @@ class LeaveFastView(generics.UpdateAPIView):
         self._fast = fast
         
         # Call parent update method which will call perform_update
-        response_obj = super().update(request, *args, **kwargs)
-        
+        super().update(request, *args, **kwargs)
+
         # Override the default response with a custom success message
         return response.Response(
-            {"detail": "Successfully left the fast."}, 
+            {"detail": "Successfully left the fast."},
             status=status.HTTP_200_OK
         )
 
@@ -767,12 +772,13 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
             # If not in cache, get from database and cache it
             fast = get_object_or_404(Fast, id=fast_id)
             cache.set(cache_key, fast, CACHE_TTL)
-
-        self._participants_fast = fast
         
         queryset = fast.profiles.select_related(
             'user'  # For email/username
         ).order_by('user__date_joined')  # Consistent ordering
+        
+        # Hydrate intentions to avoid N+1
+        _hydrate_intentions(fast, queryset)
         
         return queryset
     
@@ -794,18 +800,16 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
         if cached_count is not None and hasattr(self.paginator, 'count'):
             # If count is cached, use it directly to avoid COUNT(*) query
             self.paginator.count = cached_count
-            page = super().paginate_queryset(queryset)
-        else:
-            # Get paginated results normally (will perform COUNT(*))
-            page = super().paginate_queryset(queryset)
-            # Cache the count for future requests if it was calculated
-            if hasattr(self.paginator, 'count'):
-                cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
-
-        if page is not None:
-            _hydrate_intentions(self._participants_fast, page)
-
-        return page
+            return super().paginate_queryset(queryset)
+        
+        # Get paginated results normally (will perform COUNT(*))
+        result = super().paginate_queryset(queryset)
+        
+        # Cache the count for future requests if it was calculated
+        if hasattr(self.paginator, 'count'):
+            cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
+            
+        return result
 
 
 class FastStatsView(views.APIView):
@@ -939,7 +943,7 @@ def _parse_date_str(date_str):
     """Parses a date string in the format yyyymmdd into a date object."""
     try:
         date = datetime.datetime.strptime(date_str, "%Y%m%d").date()
-    except ValueError as e:
+    except ValueError:
         logging.error("Date string %s did not follow the expected format yyyymmdd. Returning None.", date_str)
         return None
 
@@ -1020,9 +1024,15 @@ class FastParticipantsMapView(views.APIView):
             # If no map exists, if it's older than a day, or if force_update is requested, generate a new one
             if not map_obj or (timezone.now() - map_obj.last_updated).days >= 1 or force_update:
                 # Add context about map regeneration decision
+                map_age = (timezone.now() - map_obj.last_updated).days if map_obj else None
+                reason = (
+                    "not_exists" if not map_obj
+                    else "outdated" if map_age is not None and map_age >= 1
+                    else "force_update"
+                )
                 sentry_sdk.set_context("map_generation", {
-                    "reason": "not_exists" if not map_obj else "outdated" if (timezone.now() - map_obj.last_updated).days >= 1 else "force_update",
-                    "map_age_days": (timezone.now() - map_obj.last_updated).days if map_obj else None,
+                    "reason": reason,
+                    "map_age_days": map_age,
                     "force_update": force_update
                 })
                 
@@ -1038,12 +1048,13 @@ class FastParticipantsMapView(views.APIView):
                     )
                 elif force_update:
                     # If force_update was requested, inform the user
-                    return response.Response(
-                        {
-                            "detail": "Map update has been triggered. The current map is being returned, but a new one is being generated.",
-                            "map": FastParticipantMapSerializer(map_obj).data
-                        }
-                    )
+                    return response.Response({
+                        "detail": (
+                            "Map update has been triggered. The current map is "
+                            "being returned, but a new one is being generated."
+                        ),
+                        "map": FastParticipantMapSerializer(map_obj).data
+                    })
             
             # Return the map data
             serializer = FastParticipantMapSerializer(map_obj)
@@ -1102,18 +1113,8 @@ class FastIntentionView(views.APIView):
         if membership_error:
             return membership_error
 
-        text_value = request.data.get('text', '')
-        if text_value is None:
-            text_value = ''
-        elif not isinstance(text_value, str):
-            return response.Response(
-                {"detail": "Intention text must be a string."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        text = text_value.strip()
+        text = request.data.get('text', '').strip()
         is_public = request.data.get('is_public', False)
-        if is_public is None:
-            is_public = False
 
         # Validate text length
         if len(text) > 280:
