@@ -373,6 +373,13 @@ class JoinFastSerializer(serializers.ModelSerializer):
         write_only=True,
     )
 
+    def validate_intention_text(self, value):
+        if value and len(value) > 280:
+            raise serializers.ValidationError('Intention text must be 280 characters or fewer.')
+        if value and profanity.contains_profanity(value):
+            raise serializers.ValidationError('The intention text is suspected of profanity.')
+        return value
+
     class Meta:
         model = models.Profile
         fields = ['fast_id', 'intention_text', 'intention_is_public']
@@ -481,7 +488,7 @@ class ParticipantSerializer(serializers.ModelSerializer):
         fast_id = self.context.get('fast_id')
         if not fast_id:
             return None
-        intention = getattr(obj, '_prefetched_intention', None)
+        intention = getattr(obj, '_intention', None)
         if intention is None:
             return None
         if not intention.is_active or not intention.is_public or not intention.text:

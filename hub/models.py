@@ -1050,43 +1050,6 @@ class PatristicQuote(models.Model):
         return f"{Truncator(self.text).chars(50)} - {self.attribution}"
 
 
-class FastIntention(models.Model):
-    """Stores a user's spiritual intention for a specific fast."""
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="fast_intentions",
-    )
-    fast = models.ForeignKey(
-        Fast,
-        on_delete=models.CASCADE,
-        related_name="intentions",
-    )
-    text = models.CharField(max_length=280, blank=True)
-    is_public = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "fast"],
-                condition=models.Q(is_active=True),
-                name="one_active_intention_per_user_fast",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["fast", "is_active", "is_public"]),
-            models.Index(fields=["user", "fast"]),
-        ]
-
-    def __str__(self):
-        visibility = "public" if self.is_public else "private"
-        status = "active" if self.is_active else "inactive"
-        return f"Intention for {self.user.email} on {self.fast} ({visibility}, {status})"
-
 
 class FastIntention(models.Model):
     """Stores a user's spiritual intention for a fast.

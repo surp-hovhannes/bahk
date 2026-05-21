@@ -636,6 +636,32 @@ def vary_on_query_params(*params):
     return decorator
 
 
+def _hydrate_intentions(fast, profiles, current_user):
+    """Attach intentions to profile objects to avoid N+1 queries.
+    
+    Sets `_intention` attribute on each profile object with the active
+    FastIntention for the given fast, or None if no active intention exists.
+    """
+    profile_ids = [p.id for p in profiles]
+    if not profile_ids:
+        return
+    
+    # Fetch all relevant intentions for these profiles in this fast
+    intentions = FastIntention.objects.filter(
+        fast=fast,
+        user__profile__id__in=profile_ids,
+        is_active=True,
+        is_public=True,
+    ).select_related('user')
+    
+    # Build lookup by user_id
+    intention_map = {i.user_id: i for i in intentions}
+    
+    # Attach to each profile
+    for profile in profiles:
+        profile._intention = intention_map.get(profile.user_id)
+
+
 class FastParticipantsView(views.APIView):
     """
     API view to retrieve participants of a specific fast.
@@ -680,12 +706,12 @@ class FastParticipantsView(views.APIView):
         ).order_by('user__date_joined')[:limit]
 
         # Hydrate intentions to avoid N+1
-        self._hydrate_intentions(fast, other_participants, request.user)
+        _hydrate_intentions(fast, other_participants, request.user)
             
         serialized_participants = ParticipantSerializer(
             other_participants, 
             many=True, 
-            context={'request': request}
+            context={'request': request, 'fast_id': fast.id}
         )
         return response.Response(serialized_participants.data)
 
@@ -746,7 +772,7 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
         ).order_by('user__date_joined')  # Consistent ordering
         
         # Hydrate intentions to avoid N+1
-        self._hydrate_intentions(fast, queryset, self.request.user)
+        _hydrate_intentions(fast, queryset, self.request.user)
         
         return queryset
     
@@ -754,27 +780,8 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
         """Add request to serializer context for thumbnail URL generation"""
         context = super().get_serializer_context()
         context['request'] = self.request
+        context['fast_id'] = self.kwargs.get('fast_id')
         return context
-
-    def _hydrate_intentions(self, fast, profiles, current_user):
-        """Attach intentions to profile objects to avoid N+1 queries."""
-        profile_ids = [p.id for p in profiles]
-        if not profile_ids:
-            return
-        
-        # Fetch all relevant intentions for these profiles in this fast
-        intentions = FastIntention.objects.filter(
-            fast=fast,
-            user__profile__id__in=profile_ids,
-            is_active=True
-        ).select_related('user')
-        
-        # Build lookup by user_id
-        intention_map = {i.user_id: i for i in intentions}
-        
-        # Attach to each profile
-        for profile in profiles:
-            profile._intention = intention_map.get(profile.user_id)
     
     def paginate_queryset(self, queryset):
         """Override to add count caching for pagination performance"""

@@ -116,7 +116,7 @@ class ParticipantSerializerIntentionTests(BaseTestCase):
             context={"fast_id": self.fast.id}
         )
         # Attach intention manually to simulate prefetch
-        self.profile._prefetched_intention = intention
+        self.profile._intention = intention
         result = serializer.data
         self.assertEqual(result["intention"], "Public prayer")
 
@@ -128,7 +128,7 @@ class ParticipantSerializerIntentionTests(BaseTestCase):
             is_public=False,
             is_active=True,
         )
-        self.profile._prefetched_intention = intention
+        self.profile._intention = intention
         serializer = ParticipantSerializer(
             self.profile,
             context={"fast_id": self.fast.id}
@@ -144,7 +144,7 @@ class ParticipantSerializerIntentionTests(BaseTestCase):
             is_public=True,
             is_active=False,
         )
-        self.profile._prefetched_intention = intention
+        self.profile._intention = intention
         serializer = ParticipantSerializer(
             self.profile,
             context={"fast_id": self.fast.id}
@@ -168,7 +168,7 @@ class ParticipantSerializerIntentionTests(BaseTestCase):
             is_public=True,
             is_active=True,
         )
-        self.profile._prefetched_intention = intention
+        self.profile._intention = intention
         serializer = ParticipantSerializer(
             self.profile,
             context={"fast_id": self.fast.id}
