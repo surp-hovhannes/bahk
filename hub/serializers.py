@@ -345,12 +345,37 @@ class FastSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             return set()
         return set(request.user.profile.fasts.values_list('id', flat=True))
 
+class FastIntentionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.FastIntention
+        fields = ['id', 'text', 'is_public', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_text(self, value):
+        if value and len(value) > 280:
+            raise serializers.ValidationError('Intention text must be 280 characters or fewer.')
+        if value and profanity.contains_profanity(value):
+            raise serializers.ValidationError('The intention text is suspected of profanity.')
+        return value
+
+
 class JoinFastSerializer(serializers.ModelSerializer):
     fast_id = serializers.IntegerField(write_only=True)
+    intention_text = serializers.CharField(
+        max_length=280,
+        required=False,
+        allow_blank=True,
+        write_only=True,
+    )
+    intention_is_public = serializers.BooleanField(
+        required=False,
+        default=False,
+        write_only=True,
+    )
 
     class Meta:
         model = models.Profile
-        fields = ['fast_id']
+        fields = ['fast_id', 'intention_text', 'intention_is_public']
 
 class FastStatsSerializer(serializers.Serializer):
     joined_fasts = serializers.SerializerMethodField()
@@ -431,6 +456,7 @@ class ParticipantSerializer(serializers.ModelSerializer):
     thumbnail = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     user = serializers.SerializerMethodField()
+    intention = serializers.SerializerMethodField()
 
     def get_user(self, obj):
         # user is returning name while frontend is transitioning to api change.
@@ -451,9 +477,20 @@ class ParticipantSerializer(serializers.ModelSerializer):
             return obj.profile_image_thumbnail.url
         return None
 
+    def get_intention(self, obj):
+        fast_id = self.context.get('fast_id')
+        if not fast_id:
+            return None
+        intention = getattr(obj, '_prefetched_intention', None)
+        if intention is None:
+            return None
+        if not intention.is_active or not intention.is_public or not intention.text:
+            return None
+        return intention.text
+
     class Meta:
         model = models.Profile
-        fields = ['id', 'name', 'profile_image', 'thumbnail', 'location', 'abbreviation', 'user']
+        fields = ['id', 'name', 'profile_image', 'thumbnail', 'location', 'abbreviation', 'user', 'intention']
 
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()

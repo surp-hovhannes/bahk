@@ -1048,3 +1048,98 @@ class PatristicQuote(models.Model):
         # Return first 50 characters of the quote text
         from django.utils.text import Truncator
         return f"{Truncator(self.text).chars(50)} - {self.attribution}"
+
+
+class FastIntention(models.Model):
+    """Stores a user's spiritual intention for a specific fast."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="fast_intentions",
+    )
+    fast = models.ForeignKey(
+        Fast,
+        on_delete=models.CASCADE,
+        related_name="intentions",
+    )
+    text = models.CharField(max_length=280, blank=True)
+    is_public = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "fast"],
+                condition=models.Q(is_active=True),
+                name="one_active_intention_per_user_fast",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["fast", "is_active", "is_public"]),
+            models.Index(fields=["user", "fast"]),
+        ]
+
+    def __str__(self):
+        visibility = "public" if self.is_public else "private"
+        status = "active" if self.is_active else "inactive"
+        return f"Intention for {self.user.email} on {self.fast} ({visibility}, {status})"
+
+
+class FastIntention(models.Model):
+    """Stores a user's spiritual intention for a fast.
+
+    Intentions can be private (only the user sees them) or public
+    (visible to other participants on the participant sheet).
+    Soft-delete via is_active=False on leave so rejoining restores.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='fast_intentions',
+    )
+    fast = models.ForeignKey(
+        Fast,
+        on_delete=models.CASCADE,
+        related_name='intentions',
+    )
+    text = models.CharField(
+        max_length=280,
+        blank=True,
+        default='',
+        help_text='The intention text (max 280 characters)',
+    )
+    is_public = models.BooleanField(
+        default=False,
+        help_text='Whether this intention is visible to other fast participants',
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Soft-delete flag; set to False when user leaves the fast',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'fast'],
+                condition=models.Q(is_active=True),
+                name='one_active_intention_per_user_fast',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['fast', 'is_active', 'is_public']),
+            models.Index(fields=['user', 'fast']),
+        ]
+        ordering = ['-created_at']
+        verbose_name = 'Fast Intention'
+        verbose_name_plural = 'Fast Intentions'
+
+    def __str__(self):
+        visibility = 'public' if self.is_public else 'private'
+        status = 'active' if self.is_active else 'inactive'
+        return f"Intention for {self.fast.name} by {self.user.username} ({visibility}, {status})"

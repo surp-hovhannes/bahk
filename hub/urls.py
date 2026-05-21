@@ -16,6 +16,7 @@ from .views.fast import (
     LeaveFastView, 
     FastStatsView,
     FastParticipantsMapView,
+    FastIntentionView,
 )
 from .views.day import FastDaysListView, UserDaysView
 from .views.devotionals import DevotionalByDateView, DevotionalsByFastView, DevotionalDetailView, DevotionalListView
@@ -69,6 +70,7 @@ urlpatterns = [
     path('fasts/<int:fast_id>/participants/paginated/', PaginatedFastParticipantsView.as_view(), name='fast-participants-paginated'),
     path('fasts/stats/', FastStatsView.as_view(), name='fast-stats'),
     path('fasts/<int:fast_id>/participants/map/', FastParticipantsMapView.as_view(), name='fast-participants-map'),
+    path('fasts/<int:fast_id>/intention/', FastIntentionView.as_view(), name='fast-intention'),
 
 
     # TODO: Remove these legacy endpoints after frontend is updated
