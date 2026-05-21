@@ -224,7 +224,7 @@ class FastIntentionEndpointTests(BaseAPITestCase):
 
     def test_non_participant_get_returns_403(self):
         other_user = self.create_user(username="other")
-        other_profile = self.create_profile(user=other_user, church=self.church)
+        self.create_profile(user=other_user, church=self.church)
         self.client.force_authenticate(user=other_user)
         url = reverse("fast-intention", kwargs={"fast_id": self.fast.id})
         response = self.client.get(url)
@@ -232,7 +232,7 @@ class FastIntentionEndpointTests(BaseAPITestCase):
 
     def test_non_participant_put_returns_403(self):
         other_user = self.create_user(username="other2")
-        other_profile = self.create_profile(user=other_user, church=self.church)
+        self.create_profile(user=other_user, church=self.church)
         self.client.force_authenticate(user=other_user)
         url = reverse("fast-intention", kwargs={"fast_id": self.fast.id})
         response = self.client.put(url, {"text": "Hack"})
@@ -240,7 +240,7 @@ class FastIntentionEndpointTests(BaseAPITestCase):
 
     def test_non_participant_delete_returns_403(self):
         other_user = self.create_user(username="other3")
-        other_profile = self.create_profile(user=other_user, church=self.church)
+        self.create_profile(user=other_user, church=self.church)
         self.client.force_authenticate(user=other_user)
         url = reverse("fast-intention", kwargs={"fast_id": self.fast.id})
         response = self.client.delete(url)

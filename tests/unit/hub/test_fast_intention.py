@@ -1,8 +1,6 @@
 """Unit tests for FastIntention model, serializer, and visibility rules."""
 
-from django.test import TestCase
-from django.contrib.auth.models import User
-from hub.models import Church, Fast, Profile, FastIntention
+from hub.models import FastIntention
 from hub.serializers import FastIntentionSerializer, ParticipantSerializer
 from tests.base import BaseTestCase
 
