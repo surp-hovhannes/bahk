@@ -482,8 +482,9 @@ class JoinFastView(generics.UpdateAPIView):
         serializer.save()
         
         # Handle intention
-        intention_text = self.request.data.get('intention_text', '').strip()
-        intention_is_public = self.request.data.get('intention_is_public', False)
+        validated = serializer.validated_data
+        intention_text = validated.get('intention_text', '') or ''
+        intention_is_public = validated.get('intention_is_public', False)
         
         # Check for soft-kept intention and reactivate or create new
         if intention_text or intention_is_public:
@@ -496,7 +497,7 @@ class JoinFastView(generics.UpdateAPIView):
             if soft_kept:
                 soft_kept.is_active = True
                 soft_kept.text = intention_text or soft_kept.text
-                soft_kept.is_public = intention_is_public if 'intention_is_public' in self.request.data else soft_kept.is_public
+                soft_kept.is_public = intention_is_public if 'intention_is_public' in validated else soft_kept.is_public
                 soft_kept.save()
             else:
                 FastIntention.objects.create(
@@ -766,13 +767,12 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
             # If not in cache, get from database and cache it
             fast = get_object_or_404(Fast, id=fast_id)
             cache.set(cache_key, fast, CACHE_TTL)
+
+        self._participants_fast = fast
         
         queryset = fast.profiles.select_related(
             'user'  # For email/username
         ).order_by('user__date_joined')  # Consistent ordering
-        
-        # Hydrate intentions to avoid N+1
-        _hydrate_intentions(fast, queryset)
         
         return queryset
     
@@ -794,16 +794,18 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
         if cached_count is not None and hasattr(self.paginator, 'count'):
             # If count is cached, use it directly to avoid COUNT(*) query
             self.paginator.count = cached_count
-            return super().paginate_queryset(queryset)
-        
-        # Get paginated results normally (will perform COUNT(*))
-        result = super().paginate_queryset(queryset)
-        
-        # Cache the count for future requests if it was calculated
-        if hasattr(self.paginator, 'count'):
-            cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
-            
-        return result
+            page = super().paginate_queryset(queryset)
+        else:
+            # Get paginated results normally (will perform COUNT(*))
+            page = super().paginate_queryset(queryset)
+            # Cache the count for future requests if it was calculated
+            if hasattr(self.paginator, 'count'):
+                cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
+
+        if page is not None:
+            _hydrate_intentions(self._participants_fast, page)
+
+        return page
 
 
 class FastStatsView(views.APIView):
@@ -1100,8 +1102,18 @@ class FastIntentionView(views.APIView):
         if membership_error:
             return membership_error
 
-        text = request.data.get('text', '').strip()
+        text_value = request.data.get('text', '')
+        if text_value is None:
+            text_value = ''
+        elif not isinstance(text_value, str):
+            return response.Response(
+                {"detail": "Intention text must be a string."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        text = text_value.strip()
         is_public = request.data.get('is_public', False)
+        if is_public is None:
+            is_public = False
 
         # Validate text length
         if len(text) > 280:
