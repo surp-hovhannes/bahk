@@ -67,7 +67,8 @@ class FastIntentionModelTests(BaseTestCase):
             text="Test",
             is_public=False,
         )
-        self.assertIn(self.user.email, str(intention))
+        self.assertIn(self.user.username, str(intention))
+        self.assertIn(self.fast.name, str(intention))
         self.assertIn("private", str(intention))
         self.assertIn("active", str(intention))
 
