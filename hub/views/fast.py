@@ -636,7 +636,7 @@ def vary_on_query_params(*params):
     return decorator
 
 
-def _hydrate_intentions(fast, profiles, current_user):
+def _hydrate_intentions(fast, profiles):
     """Attach intentions to profile objects to avoid N+1 queries.
     
     Sets `_intention` attribute on each profile object with the active
@@ -706,7 +706,7 @@ class FastParticipantsView(views.APIView):
         ).order_by('user__date_joined')[:limit]
 
         # Hydrate intentions to avoid N+1
-        _hydrate_intentions(fast, other_participants, request.user)
+        _hydrate_intentions(fast, other_participants)
             
         serialized_participants = ParticipantSerializer(
             other_participants, 
@@ -772,7 +772,7 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
         ).order_by('user__date_joined')  # Consistent ordering
         
         # Hydrate intentions to avoid N+1
-        _hydrate_intentions(fast, queryset, self.request.user)
+        _hydrate_intentions(fast, queryset)
         
         return queryset
     
