@@ -37,6 +37,7 @@ from hub.models import (
     Profile,
     Reading,
     ReadingContext,
+    FastIntention,
 )
 from hub.services.bible_api_service import BibleAPIService, fetch_text_for_reading
 from hub.tasks import (
@@ -1417,3 +1418,19 @@ class PatristicQuoteAdmin(MarkdownxModelAdmin):
         return ', '.join(tag.name for tag in obj.tags.all())
 
     tag_list.short_description = 'Tags'
+
+
+@admin.register(FastIntention, site=admin.site)
+class FastIntentionAdmin(admin.ModelAdmin):
+    list_display = ('user', 'fast', 'text_preview', 'is_public', 'is_active', 'updated_at')
+    list_filter = ('is_public', 'is_active', 'fast', 'updated_at')
+    search_fields = ('text', 'user__username', 'user__email', 'fast__name')
+    readonly_fields = ('created_at', 'updated_at')
+    raw_id_fields = ('user', 'fast')
+
+    def text_preview(self, obj):
+        if obj.text:
+            return Truncator(obj.text).chars(50)
+        return '(empty)'
+
+    text_preview.short_description = 'Text'

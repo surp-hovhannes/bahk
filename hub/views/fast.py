@@ -1,7 +1,12 @@
 from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
-from ..models import Fast, Church, Profile, Day, FastParticipantMap
-from ..serializers import FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer, FastParticipantMapSerializer
+from ..models import (
+    Fast, Church, Profile, Day, FastParticipantMap, FastIntention
+)
+from ..serializers import (
+    FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer,
+    FastParticipantMapSerializer, FastIntentionSerializer
+)
 from .mixins import ChurchContextMixin, TimezoneMixin
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -21,6 +26,7 @@ from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache
 from functools import wraps
 from hub.tasks import generate_participant_map
+from better_profanity import profanity
 import sentry_sdk
 
 
@@ -480,6 +486,43 @@ class JoinFastView(generics.UpdateAPIView):
         profile.fasts.add(fast)
         serializer.save()
         
+        # Handle intention
+        intention_text = self.request.data.get('intention_text', '').strip()
+        intention_is_public = self.request.data.get('intention_is_public', False)
+        
+        # Check for soft-kept intention and reactivate or create new
+        if intention_text or intention_is_public:
+            # Try to reactivate a soft-kept intention
+            soft_kept = FastIntention.objects.filter(
+                user=self.request.user,
+                fast=fast,
+                is_active=False
+            ).first()
+            if soft_kept:
+                soft_kept.is_active = True
+                soft_kept.text = intention_text or soft_kept.text
+                if 'intention_is_public' in self.request.data:
+                    soft_kept.is_public = intention_is_public
+                soft_kept.save()
+            else:
+                FastIntention.objects.create(
+                    user=self.request.user,
+                    fast=fast,
+                    text=intention_text,
+                    is_public=intention_is_public,
+                    is_active=True,
+                )
+        else:
+            # Reactivate soft-kept intention if exists (no text provided)
+            soft_kept = FastIntention.objects.filter(
+                user=self.request.user,
+                fast=fast,
+                is_active=False
+            ).first()
+            if soft_kept:
+                soft_kept.is_active = True
+                soft_kept.save()
+        
         # Invalidate the participant list cache for this fast
         invalidate_fast_participants_cache(fast.id)
         
@@ -541,11 +584,11 @@ class LeaveFastView(generics.UpdateAPIView):
         self._fast = fast
         
         # Call parent update method which will call perform_update
-        response_obj = super().update(request, *args, **kwargs)
-        
+        super().update(request, *args, **kwargs)
+
         # Override the default response with a custom success message
         return response.Response(
-            {"detail": "Successfully left the fast."}, 
+            {"detail": "Successfully left the fast."},
             status=status.HTTP_200_OK
         )
 
@@ -557,6 +600,13 @@ class LeaveFastView(generics.UpdateAPIView):
         # Remove user from fast
         profile.fasts.remove(fast)
         serializer.save()
+        
+        # Soft-keep intention (mark inactive)
+        FastIntention.objects.filter(
+            user=self.request.user,
+            fast=fast,
+            is_active=True
+        ).update(is_active=False)
         
         # Invalidate the participant list cache for this fast
         invalidate_fast_participants_cache(fast.id)
@@ -590,6 +640,32 @@ def vary_on_query_params(*params):
             return view_func(self, request, *args, **kwargs)
         return _wrapped_view
     return decorator
+
+
+def _hydrate_intentions(fast, profiles):
+    """Attach intentions to profile objects to avoid N+1 queries.
+    
+    Sets `_intention` attribute on each profile object with the active
+    FastIntention for the given fast, or None if no active intention exists.
+    """
+    profile_ids = [p.id for p in profiles]
+    if not profile_ids:
+        return
+    
+    # Fetch all relevant intentions for these profiles in this fast
+    intentions = FastIntention.objects.filter(
+        fast=fast,
+        user__profile__id__in=profile_ids,
+        is_active=True,
+        is_public=True,
+    ).select_related('user')
+    
+    # Build lookup by user_id
+    intention_map = {i.user_id: i for i in intentions}
+    
+    # Attach to each profile
+    for profile in profiles:
+        profile._intention = intention_map.get(profile.user_id)
 
 
 class FastParticipantsView(views.APIView):
@@ -634,11 +710,14 @@ class FastParticipantsView(views.APIView):
         other_participants = fast.profiles.select_related(
             'user'  # For email/username
         ).order_by('user__date_joined')[:limit]
+
+        # Hydrate intentions to avoid N+1
+        _hydrate_intentions(fast, other_participants)
             
         serialized_participants = ParticipantSerializer(
             other_participants, 
             many=True, 
-            context={'request': request}
+            context={'request': request, 'fast_id': fast.id}
         )
         return response.Response(serialized_participants.data)
 
@@ -694,14 +773,20 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
             fast = get_object_or_404(Fast, id=fast_id)
             cache.set(cache_key, fast, CACHE_TTL)
         
-        return fast.profiles.select_related(
+        queryset = fast.profiles.select_related(
             'user'  # For email/username
         ).order_by('user__date_joined')  # Consistent ordering
+        
+        # Hydrate intentions to avoid N+1
+        _hydrate_intentions(fast, queryset)
+        
+        return queryset
     
     def get_serializer_context(self):
         """Add request to serializer context for thumbnail URL generation"""
         context = super().get_serializer_context()
         context['request'] = self.request
+        context['fast_id'] = self.kwargs.get('fast_id')
         return context
     
     def paginate_queryset(self, queryset):
@@ -858,7 +943,7 @@ def _parse_date_str(date_str):
     """Parses a date string in the format yyyymmdd into a date object."""
     try:
         date = datetime.datetime.strptime(date_str, "%Y%m%d").date()
-    except ValueError as e:
+    except ValueError:
         logging.error("Date string %s did not follow the expected format yyyymmdd. Returning None.", date_str)
         return None
 
@@ -939,9 +1024,15 @@ class FastParticipantsMapView(views.APIView):
             # If no map exists, if it's older than a day, or if force_update is requested, generate a new one
             if not map_obj or (timezone.now() - map_obj.last_updated).days >= 1 or force_update:
                 # Add context about map regeneration decision
+                map_age = (timezone.now() - map_obj.last_updated).days if map_obj else None
+                reason = (
+                    "not_exists" if not map_obj
+                    else "outdated" if map_age is not None and map_age >= 1
+                    else "force_update"
+                )
                 sentry_sdk.set_context("map_generation", {
-                    "reason": "not_exists" if not map_obj else "outdated" if (timezone.now() - map_obj.last_updated).days >= 1 else "force_update",
-                    "map_age_days": (timezone.now() - map_obj.last_updated).days if map_obj else None,
+                    "reason": reason,
+                    "map_age_days": map_age,
                     "force_update": force_update
                 })
                 
@@ -957,13 +1048,138 @@ class FastParticipantsMapView(views.APIView):
                     )
                 elif force_update:
                     # If force_update was requested, inform the user
-                    return response.Response(
-                        {
-                            "detail": "Map update has been triggered. The current map is being returned, but a new one is being generated.",
-                            "map": FastParticipantMapSerializer(map_obj).data
-                        }
-                    )
+                    return response.Response({
+                        "detail": (
+                            "Map update has been triggered. The current map is "
+                            "being returned, but a new one is being generated."
+                        ),
+                        "map": FastParticipantMapSerializer(map_obj).data
+                    })
             
             # Return the map data
             serializer = FastParticipantMapSerializer(map_obj)
             return response.Response(serializer.data)
+
+
+class FastIntentionView(views.APIView):
+    """
+    API view to manage a user's intention for a specific fast.
+
+    GET    → returns the user's active intention for the fast, or 404.
+    PUT    → upsert intention. Body: { text, is_public }.
+    DELETE → clear intention text (keeps the row).
+
+    Permissions:
+        - IsAuthenticated
+        - 403 if user is not a participant in the fast
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_fast(self, fast_id):
+        return get_object_or_404(Fast, id=fast_id)
+
+    def _check_membership(self, fast, user):
+        if not fast.profiles.filter(user=user).exists():
+            return response.Response(
+                {"detail": "You are not a participant in this fast."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return None
+
+    def get(self, request, fast_id):
+        fast = self._get_fast(fast_id)
+        membership_error = self._check_membership(fast, request.user)
+        if membership_error:
+            return membership_error
+
+        intention = FastIntention.objects.filter(
+            user=request.user,
+            fast=fast,
+            is_active=True
+        ).first()
+
+        if not intention:
+            return response.Response(
+                {"detail": "No active intention found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = FastIntentionSerializer(intention)
+        return response.Response(serializer.data)
+
+    def put(self, request, fast_id):
+        fast = self._get_fast(fast_id)
+        membership_error = self._check_membership(fast, request.user)
+        if membership_error:
+            return membership_error
+
+        text = request.data.get('text', '').strip()
+        is_public = request.data.get('is_public', False)
+
+        # Validate text length
+        if len(text) > 280:
+            return response.Response(
+                {"detail": "Intention text must be 280 characters or fewer."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check profanity
+        if text and profanity.contains_profanity(text):
+            return response.Response(
+                {"detail": "The intention text contains inappropriate language."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Look for existing intention (any state) to determine if created or updated
+        existing = FastIntention.objects.filter(
+            user=request.user,
+            fast=fast,
+        ).first()
+
+        if existing:
+            # Update existing (could be soft-kept or active)
+            existing.text = text
+            existing.is_public = is_public
+            existing.is_active = True
+            existing.save()
+            intention = existing
+            created = False
+        else:
+            # Create new
+            intention = FastIntention.objects.create(
+                user=request.user,
+                fast=fast,
+                text=text,
+                is_public=is_public,
+                is_active=True,
+            )
+            created = True
+
+        # Invalidate participant cache since visibility may have changed
+        invalidate_fast_participants_cache(fast.id)
+
+        serializer = FastIntentionSerializer(intention)
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return response.Response(serializer.data, status=status_code)
+
+    def delete(self, request, fast_id):
+        fast = self._get_fast(fast_id)
+        membership_error = self._check_membership(fast, request.user)
+        if membership_error:
+            return membership_error
+
+        intention = FastIntention.objects.filter(
+            user=request.user,
+            fast=fast,
+            is_active=True
+        ).first()
+
+        if intention:
+            intention.text = ''
+            intention.save()
+            invalidate_fast_participants_cache(fast.id)
+
+        return response.Response(
+            {"detail": "Intention cleared."},
+            status=status.HTTP_200_OK
+        )
