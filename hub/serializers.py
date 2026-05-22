@@ -369,7 +369,6 @@ class JoinFastSerializer(serializers.ModelSerializer):
     )
     intention_is_public = serializers.BooleanField(
         required=False,
-        default=False,
         write_only=True,
     )
 
