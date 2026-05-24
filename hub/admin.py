@@ -1,6 +1,7 @@
 """Admin forms."""
 
 import datetime
+import re
 
 from django.contrib import admin
 from django.db import models
@@ -265,6 +266,7 @@ class DevotionalSetAdmin(admin.ModelAdmin):
     list_filter = ('fast', 'created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'image_preview', 'number_of_days')
     raw_id_fields = ('fast',)
+    actions = ['duplicate_devotional_sets']
     fieldsets = (
         (None, {
             'fields': ('title', 'description', 'fast')
@@ -306,6 +308,102 @@ class DevotionalSetAdmin(admin.ModelAdmin):
     def number_of_days(self, obj):
         return obj.number_of_days
     number_of_days.short_description = 'Number of Days'
+
+    def duplicate_devotional_sets(self, request, queryset):
+        success_count = 0
+        for devotional_set in queryset:
+            try:
+                self._duplicate_devotional_set(devotional_set)
+                success_count += 1
+            except ValueError as e:
+                self.message_user(
+                    request,
+                    f'Error duplicating "{devotional_set.title}": {e}',
+                    level=messages.ERROR,
+                )
+                return
+        self.message_user(
+            request,
+            f"Successfully duplicated {success_count} devotional set(s).",
+            level=messages.SUCCESS,
+        )
+
+    duplicate_devotional_sets.short_description = (
+        "Duplicate selected devotional sets to current year's fast"
+    )
+
+    def _find_target_fast(self, old_fast):
+        """Auto-detect the target fast for duplication.
+
+        Looks for a fast in the current year for the same church that has the
+        same number of days as the original and no DevotionalSet linked yet.
+        Raises ValueError if zero or multiple candidates are found.
+        """
+        current_year = datetime.date.today().year
+        old_day_count = Day.objects.filter(fast=old_fast).count()
+
+        fasts_with_sets = DevotionalSet.objects.values_list('fast_id', flat=True)
+        candidates = (
+            Fast.objects.filter(church=old_fast.church, year=current_year)
+            .exclude(pk__in=fasts_with_sets)
+            .annotate(day_count=models.Count('days'))
+            .filter(day_count=old_day_count)
+        )
+
+        count = candidates.count()
+        if count == 1:
+            return candidates.first()
+        if count == 0:
+            raise ValueError(
+                f"No eligible {current_year} fast found for {old_fast.church} "
+                f"with {old_day_count} days and no existing DevotionalSet."
+            )
+        raise ValueError(
+            f"Multiple eligible {current_year} fasts found for {old_fast.church}; "
+            "cannot auto-detect target. Ensure only one matches."
+        )
+
+    def _duplicate_devotional_set(self, devotional_set):
+        """Duplicate a DevotionalSet and its Devotionals to the auto-detected target fast."""
+        old_fast = devotional_set.fast
+        target_fast = self._find_target_fast(old_fast)
+
+        current_year = str(datetime.date.today().year)
+        year_re = re.compile(r'\b(19|20)\d{2}\b')
+
+        def _update_year(text):
+            return year_re.sub(current_year, text) if text else text
+
+        with transaction.atomic():
+            DevotionalSet.objects.create(
+                title_en=_update_year(devotional_set.title_en),
+                title_hy=_update_year(devotional_set.title_hy),
+                description_en=devotional_set.description_en,
+                description_hy=devotional_set.description_hy,
+                image=devotional_set.image,
+                fast=target_fast,
+            )
+
+            old_days = list(Day.objects.filter(fast=old_fast).order_by('date'))
+            new_days = list(Day.objects.filter(fast=target_fast).order_by('date'))
+            day_mapping = {old.pk: new for old, new in zip(old_days, new_days)}
+
+            old_devotionals = (
+                Devotional.objects.filter(day__fast=old_fast)
+                .select_related('day', 'video')
+                .order_by('day__date', 'order', 'language_code')
+            )
+            for old_dev in old_devotionals:
+                new_day = day_mapping.get(old_dev.day_id)
+                if new_day:
+                    Devotional.objects.create(
+                        day=new_day,
+                        video=old_dev.video,
+                        order=old_dev.order,
+                        language_code=old_dev.language_code,
+                        description_en=old_dev.description_en,
+                        description_hy=old_dev.description_hy,
+                    )
 
 
 @admin.register(Fast, site=admin.site)
