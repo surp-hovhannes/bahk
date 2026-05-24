@@ -336,11 +336,13 @@ class DevotionalSetAdmin(admin.ModelAdmin):
         """Auto-detect the target fast for duplication.
 
         Looks for a fast in the current year for the same church that has the
-        same number of days as the original and no DevotionalSet linked yet.
+        same base name (year stripped), same day count, and no DevotionalSet.
         Raises ValueError if zero or multiple candidates are found.
         """
         current_year = datetime.date.today().year
         old_day_count = Day.objects.filter(fast=old_fast).count()
+        year_re = re.compile(r'\s*\b(19|20)\d{2}\b\s*')
+        old_name_base = year_re.sub(' ', old_fast.name_en or old_fast.name).strip()
 
         fasts_with_sets = DevotionalSet.objects.values_list('fast_id', flat=True)
         candidates = (
@@ -350,17 +352,23 @@ class DevotionalSetAdmin(admin.ModelAdmin):
             .filter(day_count=old_day_count)
         )
 
-        count = candidates.count()
-        if count == 1:
-            return candidates.first()
-        if count == 0:
+        # Narrow by name: strip years and compare base names
+        name_matches = [
+            f for f in candidates
+            if year_re.sub(' ', f.name_en or f.name).strip() == old_name_base
+        ]
+
+        if len(name_matches) == 1:
+            return name_matches[0]
+        if len(name_matches) == 0:
             raise ValueError(
                 f"No eligible {current_year} fast found for {old_fast.church} "
-                f"with {old_day_count} days and no existing DevotionalSet."
+                f"matching name \"{old_name_base}\" with {old_day_count} days "
+                f"and no existing DevotionalSet."
             )
         raise ValueError(
-            f"Multiple eligible {current_year} fasts found for {old_fast.church}; "
-            "cannot auto-detect target. Ensure only one matches."
+            f"Multiple eligible {current_year} fasts found for {old_fast.church} "
+            f"matching name \"{old_name_base}\"; cannot auto-detect target."
         )
 
     def _duplicate_devotional_set(self, devotional_set):
