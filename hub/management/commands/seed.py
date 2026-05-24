@@ -209,6 +209,10 @@ class Command(BaseCommand):
         # Create Devotional Sets and Devotionals
         devotional_sets = self._create_devotional_sets_and_devotionals(all_days, videos, fasts)
 
+        # Create 2025 Apostles Fast data for duplicate-devotional-set testing
+        apostles_set = self._create_apostles_fast_seed_data(churches[0])
+        devotional_sets.append(apostles_set)
+
         # Create Bookmarks
         users = [up[0] for up in users_and_profiles]
         self._create_bookmarks(users, videos, articles, recipes, devotional_sets)
@@ -423,6 +427,89 @@ class Command(BaseCommand):
             )
 
         return devotional_sets
+
+    def _create_apostles_fast_seed_data(self, church):
+        """Create a 2025 Apostles Fast with a full DevotionalSet, plus a matching
+        2026 fast (no DevotionalSet) so the duplicate-devotional-set admin action
+        can be tested end-to-end."""
+
+        # --- 2025 fast: source for duplication ---
+        fast_2025 = models.Fast.objects.create(
+            name="Fast of the Apostles",
+            church=church,
+            description="Fast honoring the holy apostles before the Feast of Saints Peter and Paul",
+            culmination_feast="Feast of Saints Peter and Paul",
+        )
+        days_2025 = [
+            models.Day.objects.create(date=date(2025, 6, 16 + i), fast=fast_2025, church=church)
+            for i in range(5)
+        ]
+        fast_2025.save(update_fields=["year"])  # auto-sets year=2025
+
+        apostles_videos = [
+            Video.objects.create(title=title, description=desc, category="devotional")
+            for title, desc in [
+                (
+                    "Apostles Fast Day 1: The Call",
+                    "Jesus calls his disciples to leave everything and follow him",
+                ),
+                (
+                    "Apostles Fast Day 2: Peter's Confession",
+                    "Peter declares Jesus as the Christ, the Son of the living God",
+                ),
+                (
+                    "Apostles Fast Day 3: The Transfiguration",
+                    "Jesus is transfigured on the mountain before Peter, James, and John",
+                ),
+                (
+                    "Apostles Fast Day 4: The Great Commission",
+                    "The risen Christ sends the apostles to make disciples of all nations",
+                ),
+                (
+                    "Apostles Fast Day 5: Pentecost",
+                    "The Holy Spirit descends on the apostles and the church is born",
+                ),
+            ]
+        ]
+
+        devotional_set_2025 = models.DevotionalSet.objects.create(
+            title="Fast of the Apostles 2025",
+            description=(
+                "Daily devotionals for the Fast of the Apostles, reflecting on the "
+                "lives and witness of Christ's chosen messengers."
+            ),
+            fast=fast_2025,
+        )
+
+        for i, (day, video) in enumerate(zip(days_2025, apostles_videos)):
+            models.Devotional.objects.create(
+                day=day,
+                video=video,
+                order=1,
+                language_code="en",
+                description=(
+                    f"Day {i + 1}: Reflect on the apostles' calling and witness "
+                    "as we prepare for the feast."
+                ),
+            )
+
+        # --- 2026 counterpart: same church, same 5-day count, no DevotionalSet ---
+        # Auto-detection in the duplicate action will find exactly this fast.
+        fast_2026 = models.Fast.objects.create(
+            name="Fast of the Apostles",
+            church=church,
+            description="Fast honoring the holy apostles before the Feast of Saints Peter and Paul",
+            culmination_feast="Feast of Saints Peter and Paul",
+        )
+        for i in range(5):
+            models.Day.objects.create(date=date(2026, 8, 1 + i), fast=fast_2026, church=church)
+        fast_2026.save(update_fields=["year"])  # auto-sets year=2026
+
+        self.stdout.write(
+            f"Created Apostles Fast seed data: "
+            f"{fast_2025} (with DevotionalSet + 5 devotionals) and {fast_2026} (target for duplication)"
+        )
+        return devotional_set_2025
 
     def _create_readings(self, days):
         """Create Bible readings for days with sample text pre-populated.
