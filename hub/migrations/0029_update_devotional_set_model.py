@@ -7,6 +7,38 @@ import imagekit.processors
 import model_utils.fields
 
 
+def backfill_devotional_set_fast(apps, schema_editor):
+    DevotionalSet = apps.get_model('hub', 'DevotionalSet')
+    Devotional = apps.get_model('hub', 'Devotional')
+    db_alias = schema_editor.connection.alias
+
+    unresolved_set_ids = []
+    ambiguous_sets = []
+
+    for devotional_set in DevotionalSet.objects.using(db_alias).only('id'):
+        fast_ids = list(
+            Devotional.objects.using(db_alias)
+            .filter(devotional_set_id=devotional_set.id)
+            .values_list('day__fast_id', flat=True)
+            .distinct()
+        )
+
+        if len(fast_ids) == 1 and fast_ids[0] is not None:
+            DevotionalSet.objects.using(db_alias).filter(id=devotional_set.id).update(
+                fast_id=fast_ids[0]
+            )
+        elif fast_ids:
+            ambiguous_sets.append((devotional_set.id, fast_ids))
+        else:
+            unresolved_set_ids.append(devotional_set.id)
+
+    if unresolved_set_ids or ambiguous_sets:
+        raise ValueError(
+            'Cannot infer DevotionalSet.fast for unresolved devotional sets '
+            f'{unresolved_set_ids} or ambiguous devotional sets {ambiguous_sets}.'
+        )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -28,8 +60,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='devotionalset',
             name='fast',
-            field=models.ForeignKey(default=1, help_text='The fast this devotional set is associated with', on_delete=django.db.models.deletion.CASCADE, related_name='devotional_sets', to='hub.fast'),
+            field=models.ForeignKey(help_text='The fast this devotional set is associated with', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='devotional_sets', to='hub.fast'),
             preserve_default=False,
+        ),
+        migrations.RunPython(
+            backfill_devotional_set_fast,
+            reverse_code=migrations.RunPython.noop,
+        ),
+        migrations.AlterField(
+            model_name='devotionalset',
+            name='fast',
+            field=models.ForeignKey(help_text='The fast this devotional set is associated with', on_delete=django.db.models.deletion.CASCADE, related_name='devotional_sets', to='hub.fast'),
         ),
         migrations.AddField(
             model_name='devotionalset',

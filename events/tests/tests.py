@@ -326,8 +326,9 @@ class EventAPITest(APITestCase):
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Account for the FAST_CREATED event from signal + 2 manually created events
-        self.assertEqual(len(response.data['results']), 3)
+        self.assertEqual(len(response.data['results']), 2)
+        for event in response.data['results']:
+            self.assertEqual(event['user_username'], self.user.username)
     
     def test_event_detail(self):
         """Test event detail endpoint."""
@@ -339,6 +340,76 @@ class EventAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['id'], self.event1.pk)
         self.assertEqual(response.data['event_type_code'], EventType.USER_LOGGED_IN)
+
+    def test_event_list_does_not_expose_other_users_events(self):
+        """Regular users cannot list another user's events."""
+        other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@example.com'
+        )
+        Profile.objects.create(user=other_user)
+        other_event = Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=other_user
+        )
+
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse('events:event-list')
+        response = self.client.get(url, {'user': other_user.id})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = {event['id'] for event in response.data['results']}
+        self.assertNotIn(other_event.id, result_ids)
+        self.assertEqual(result_ids, set())
+
+    def test_event_detail_does_not_expose_other_users_events(self):
+        """Regular users cannot retrieve another user's event by ID."""
+        other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@example.com'
+        )
+        Profile.objects.create(user=other_user)
+        other_event = Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=other_user
+        )
+
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse('events:event-detail', kwargs={'pk': other_event.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_staff_can_query_and_retrieve_other_users_events(self):
+        """Staff users can still inspect arbitrary user events."""
+        other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@example.com'
+        )
+        Profile.objects.create(user=other_user)
+        other_event = Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=other_user
+        )
+        staff_user = User.objects.create_user(
+            username='staffuser',
+            email='staff@example.com',
+            is_staff=True
+        )
+
+        self.client.force_authenticate(user=staff_user)
+
+        list_url = reverse('events:event-list')
+        list_response = self.client.get(list_url, {'user': other_user.id})
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertIn(other_event.id, {event['id'] for event in list_response.data['results']})
+
+        detail_url = reverse('events:event-detail', kwargs={'pk': other_event.pk})
+        detail_response = self.client.get(detail_url)
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data['id'], other_event.id)
     
     def test_my_events(self):
         """Test my events endpoint."""

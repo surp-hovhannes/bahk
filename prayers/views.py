@@ -325,14 +325,28 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
                 # (skip default when mine filter is active - show all user's requests)
                 queryset = PrayerRequest.objects.get_active_approved().select_related('requester', 'icon')
             
+            if not self.request.user.is_staff and not is_mine_filter:
+                queryset = queryset.filter(
+                    status='approved',
+                    expiration_date__gt=timezone.now(),
+                )
+
             return queryset
         elif self.action == 'accepted':
             # Get user's accepted requests
             return PrayerRequest.objects.filter(
                 acceptances__user=self.request.user
             ).select_related('requester', 'icon').distinct()
+        elif self.action == 'retrieve':
+            queryset = PrayerRequest.objects.select_related('requester', 'icon')
+            if self.request.user.is_staff:
+                return queryset
+            return queryset.filter(
+                Q(requester=self.request.user) |
+                Q(status='approved', expiration_date__gt=timezone.now())
+            )
         else:
-            # For retrieve/update/destroy, include all statuses
+            # For update/destroy and custom detail actions, include all statuses
             # Permissions will be checked separately
             return PrayerRequest.objects.select_related('requester', 'icon')
 
