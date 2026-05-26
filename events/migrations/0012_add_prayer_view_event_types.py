@@ -28,8 +28,8 @@ def forwards(apps, schema_editor):
 
 
 def backwards(apps, schema_editor):
-    EventType = apps.get_model("events", "EventType")
-    EventType.objects.filter(code__in=["prayer_viewed", "prayer_request_viewed"]).delete()
+    # Preserve event history on rollback. Event.event_type cascades on delete.
+    pass
 
 
 class Migration(migrations.Migration):
@@ -40,4 +40,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(forwards, backwards),
     ]
-

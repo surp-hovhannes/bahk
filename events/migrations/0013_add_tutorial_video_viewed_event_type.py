@@ -17,8 +17,8 @@ def forwards(apps, schema_editor):
 
 
 def backwards(apps, schema_editor):
-    EventType = apps.get_model("events", "EventType")
-    EventType.objects.filter(code="tutorial_video_viewed").delete()
+    # Preserve event history on rollback. Event.event_type cascades on delete.
+    pass
 
 
 class Migration(migrations.Migration):

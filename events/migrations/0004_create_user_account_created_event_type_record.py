@@ -32,12 +32,8 @@ def create_user_account_created_event_type(apps, schema_editor):
 
 
 def reverse_create_user_account_created_event_type(apps, schema_editor):
-    """Remove EventType record for user account creation tracking."""
-    EventType = apps.get_model('events', 'EventType')
-    
-    # Remove the event type
-    EventType.objects.filter(code='user_account_created').delete()
-    print("Removed USER_ACCOUNT_CREATED EventType record")
+    """Keep EventType records so rollback does not cascade-delete Event history."""
+    pass
 
 
 class Migration(migrations.Migration):
