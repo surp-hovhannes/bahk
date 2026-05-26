@@ -1,13 +1,16 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from django.utils import timezone
 from hub.models import Day
 from hub.views.fast import FastListView, FastByDateView, FastByFeastDateView
 from django.contrib.auth.models import AnonymousUser
+from rest_framework import status
 from rest_framework.test import APIRequestFactory
 from rest_framework.test import force_authenticate
 from datetime import timedelta
 from django.core.cache import cache
+from events.models import Event, EventType
 from tests.fixtures.test_data import TestDataFactory
 from rest_framework.exceptions import ValidationError
 import pytz
@@ -245,6 +248,88 @@ class FastListViewTest(TestCase):
         # Verify results
         self.assertEqual(queryset.count(), 1)  # Should only see fasts from other church
         self.assertEqual(queryset[0].church, other_church)
+
+
+class FastStatsViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Stats Test Church")
+        self.user = TestDataFactory.create_user(
+            username="faststats@example.com",
+            email="faststats@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+            timezone="UTC",
+        )
+        self.url = reverse("fast-stats")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_fast_stats_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_stats_returns_expected_summary(self):
+        today = timezone.now().date()
+        completed_fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Completed Fast",
+        )
+        ongoing_fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Ongoing Fast",
+        )
+
+        for offset, fast in [(-2, completed_fast), (-1, completed_fast), (0, ongoing_fast), (1, ongoing_fast)]:
+            day = TestDataFactory.create_day(
+                date=today + timedelta(days=offset),
+                church=self.church,
+            )
+            day.fast = fast
+            day.save()
+
+        self.profile.fasts.add(completed_fast, ongoing_fast)
+
+        checklist_used, _ = EventType.objects.get_or_create(
+            code=EventType.CHECKLIST_USED,
+            defaults={
+                "name": "Checklist Used",
+                "category": "analytics",
+                "requires_target": False,
+            },
+        )
+        Event.objects.create(
+            event_type=checklist_used,
+            user=self.user,
+            title="Checklist completed",
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(response.json().keys()),
+            {
+                "joined_fasts",
+                "total_fasts",
+                "total_fast_days",
+                "completed_fasts",
+                "checklist_uses",
+            },
+        )
+        self.assertCountEqual(
+            response.json()["joined_fasts"],
+            [completed_fast.id, ongoing_fast.id],
+        )
+        self.assertEqual(response.json()["total_fasts"], 2)
+        self.assertEqual(response.json()["total_fast_days"], 3)
+        self.assertEqual(response.json()["completed_fasts"], 1)
+        self.assertEqual(response.json()["checklist_uses"], 1)
 
 
 class FastByFeastDateViewTest(TestCase):

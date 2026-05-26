@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -10,6 +10,7 @@ from PIL import Image
 from hub.models import Church, Fast, DevotionalSet, Day, Devotional
 from learning_resources.models import Video, Article, Recipe, Bookmark
 from learning_resources.serializers import DevotionalSetSerializer
+from learning_resources.views import VideoListView
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 
@@ -296,6 +297,19 @@ class DevotionalSetIntegrationTest(TestCase):
         self.assertEqual(data['title'], "Complete Workflow Set")
         self.assertEqual(data['number_of_days'], 3)
         self.assertEqual(data['fast_name'], "Integration Test Fast")
+
+
+class LearningResourcesRouteTest(APITestCase):
+    """Regression tests for the learning resources API mount."""
+
+    def test_api_learning_resources_prefix_resolves_video_list(self):
+        match = resolve('/api/learning-resources/videos/')
+
+        self.assertIs(match.func.view_class, VideoListView)
+
+        response = self.client.get('/api/learning-resources/videos/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class VideoDetailViewTest(APITestCase):
