@@ -145,6 +145,19 @@ class BookNameMappingTests(TestCase):
         self.assertIn("heb", url)
         self.assertNotEqual(url, CATENA_HOME_PAGE_URL)
 
+    def test_create_url_with_straight_apostrophe_book_name(self):
+        """Reading.create_url() should handle standard apostrophe book names."""
+        reading = Reading(
+            book="St. Paul's Epistle to the Hebrews",
+            start_chapter=1,
+            start_verse=1,
+            end_chapter=1,
+            end_verse=5,
+        )
+        url = reading.create_url()
+        self.assertIn("heb", url)
+        self.assertNotEqual(url, CATENA_HOME_PAGE_URL)
+
     def test_create_url_with_unknown_book_returns_home(self):
         """Unknown book should return CATENA_HOME_PAGE_URL."""
         reading = Reading(
