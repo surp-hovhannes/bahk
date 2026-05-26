@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260526T170128-a119ed",
+  "command": "revalidate",
+  "args": [
+    "revalidate",
+    "--finding",
+    "fnd_sig-feat-route-fa96c41587-eb5427_c1dd2aee5a"
+  ],
+  "rootPath": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+  "headSha": "abe45067026e8ad604244c2ea38eb891ef1ddcd9",
+  "startedAt": "2026-05-26T17:01:28.430Z",
+  "finishedAt": "2026-05-26T17:02:08.914Z",
+  "status": "completed",
+  "claimedFeatureIds": [],
+  "findingIds": [
+    "fnd_sig-feat-route-fa96c41587-eb5427_c1dd2aee5a"
+  ],
+  "patchAttemptIds": [],
+  "errors": []
+}

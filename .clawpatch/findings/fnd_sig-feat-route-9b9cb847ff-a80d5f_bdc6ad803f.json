@@ -32,8 +32,10 @@
   "status": "open",
   "history": [],
   "signature": "sig_feat-route-9b9cb847ff_a80d5f7251",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-route-9b9cb847ff-a8_c657a89f7e"
+  ],
   "createdByRunId": "20260526T025102-5f2a3d",
   "createdAt": "2026-05-26T03:04:30.723Z",
-  "updatedAt": "2026-05-26T03:04:30.723Z"
+  "updatedAt": "2026-05-26T17:02:09.481Z"
 }

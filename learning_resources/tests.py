@@ -10,7 +10,7 @@ from PIL import Image
 from hub.models import Church, Fast, DevotionalSet, Day, Devotional
 from learning_resources.models import Video, Article, Recipe, Bookmark
 from learning_resources.serializers import DevotionalSetSerializer
-from learning_resources.views import VideoListView
+from learning_resources.views import VideoDetailView, VideoListView
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 
@@ -310,6 +310,16 @@ class LearningResourcesRouteTest(APITestCase):
         response = self.client.get('/api/learning-resources/videos/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_video_detail_reverse_uses_numeric_pk_path(self):
+        url = reverse('video-detail', kwargs={'pk': 1})
+
+        self.assertEqual(url, '/api/learning-resources/videos/1/')
+
+    def test_api_learning_resources_prefix_resolves_video_detail(self):
+        match = resolve('/api/learning-resources/videos/1/')
+
+        self.assertIs(match.func.view_class, VideoDetailView)
 
 
 class VideoDetailViewTest(APITestCase):
