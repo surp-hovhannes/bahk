@@ -254,42 +254,17 @@ class BookmarkCacheManagerTests(BaseTestCase):
         self.assertIsNotNone(cached_bookmarks)
         self.assertIn(self.video1.id, cached_bookmarks)
     
-    def test_get_bookmarks_for_objects_mixed_types(self):
-        """Test getting bookmarks for mixed content types.
-        
-        Note: This test demonstrates that the cache manager works correctly
-        for mixed types as long as there are no ID collisions. In practice,
-        this function is typically used with homogeneous lists from pagination.
-        """
-        # If IDs collide, test with only non-colliding objects
-        if self.video1.id == self.article1.id:
-            # Test with homogeneous lists instead (the intended usage)
-            video_objects = [self.video1, self.video2]
-            video_status = BookmarkCacheManager.get_bookmarks_for_objects(
-                self.user, video_objects
+    def test_get_bookmarks_for_objects_rejects_mixed_types_with_pk_collision(self):
+        """Mixed content types are rejected even when primary keys collide."""
+        self.assertEqual(self.video1.id, self.article1.id)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "get_bookmarks_for_objects only supports objects of a single content type",
+        ):
+            BookmarkCacheManager.get_bookmarks_for_objects(
+                self.user, [self.video1, self.article1]
             )
-            self.assertEqual(len(video_status), 2)
-            self.assertTrue(video_status[self.video1.id])
-            self.assertFalse(video_status[self.video2.id])
-            
-            article_objects = [self.article1]
-            article_status = BookmarkCacheManager.get_bookmarks_for_objects(
-                self.user, article_objects
-            )
-            self.assertEqual(len(article_status), 1)
-            self.assertTrue(article_status[self.article1.id])
-        else:
-            # Test with mixed types (no ID collision)
-            objects = [self.video1, self.video2, self.article1]
-            
-            bookmark_status = BookmarkCacheManager.get_bookmarks_for_objects(
-                self.user, objects
-            )
-            
-            self.assertEqual(len(bookmark_status), 3)
-            self.assertTrue(bookmark_status[self.video1.id])
-            self.assertFalse(bookmark_status[self.video2.id])
-            self.assertTrue(bookmark_status[self.article1.id])
     
     def test_get_bookmarks_for_objects_empty_list(self):
         """Test getting bookmarks for empty object list."""

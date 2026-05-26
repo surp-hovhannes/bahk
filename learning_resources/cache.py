@@ -296,6 +296,9 @@ class BookmarkCacheManager:
             
         Returns:
             Dictionary mapping object_id -> is_bookmarked
+
+        Raises:
+            ValueError: If objects contain multiple content types.
         """
         if not user.is_authenticated or not objects:
             return {}
@@ -307,6 +310,11 @@ class BookmarkCacheManager:
             if content_type not in objects_by_type:
                 objects_by_type[content_type] = []
             objects_by_type[content_type].append(obj)
+
+        if len(objects_by_type) > 1:
+            raise ValueError(
+                "get_bookmarks_for_objects only supports objects of a single content type"
+            )
         
         result = {}
         
