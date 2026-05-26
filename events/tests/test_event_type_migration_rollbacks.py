@@ -1,6 +1,7 @@
 import importlib
 
 from django.apps import apps
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 
 from events.models import Event, EventType
@@ -37,9 +38,12 @@ class EventTypeMigrationRollbackTests(TestCase):
             code="prayer_viewed",
             defaults={"name": "Prayer Viewed", "category": "analytics"},
         )
+        user_ct = ContentType.objects.get(app_label="auth", model="user")
         event = Event.objects.create(
             event_type=event_type,
             title="Prayer viewed",
+            target_content_type=user_ct,
+            target_object_id=1,
         )
 
         migration_0012.backwards(apps, None)
@@ -52,9 +56,12 @@ class EventTypeMigrationRollbackTests(TestCase):
             code="tutorial_video_viewed",
             defaults={"name": "Tutorial Video Viewed", "category": "analytics"},
         )
+        user_ct = ContentType.objects.get(app_label="auth", model="user")
         event = Event.objects.create(
             event_type=event_type,
             title="Tutorial video viewed",
+            target_content_type=user_ct,
+            target_object_id=1,
         )
 
         migration_0013.backwards(apps, None)
