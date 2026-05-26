@@ -189,3 +189,6 @@ certificates/
 *.p12
 *.key
 test_media/
+
+
+.clawpatch/
