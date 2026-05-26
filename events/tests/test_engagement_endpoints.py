@@ -225,6 +225,62 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 0)
         self.assertEqual(response.data['results'], [])
+
+    def test_my_events_authentication_required(self):
+        """Test that the my events endpoint requires authentication."""
+        self.client.credentials()
+
+        response = self.client.get(reverse('events:my-events'))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_my_events_returns_only_request_users_events_in_newest_first_order(self):
+        """Test my events scoping, ordering, and response shape."""
+        older_event = Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.user,
+            title='Older event',
+        )
+        newer_event = Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.user,
+            title='Newest event',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.other_user,
+            title='Other user event',
+        )
+
+        now = timezone.now()
+        Event.objects.filter(pk=older_event.pk).update(
+            timestamp=now - timedelta(hours=2)
+        )
+        Event.objects.filter(pk=newer_event.pk).update(
+            timestamp=now - timedelta(minutes=5)
+        )
+
+        response = self.client.get(reverse('events:my-events'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+
+        results = response.data['results']
+        self.assertEqual([item['id'] for item in results], [newer_event.id, older_event.id])
+        self.assertEqual(
+            set(results[0].keys()),
+            {
+                'id', 'title', 'timestamp', 'event_type_name', 'event_type_code',
+                'event_type_category', 'user_username', 'target_type', 'target_str',
+                'age_hours',
+            }
+        )
+        self.assertEqual(results[0]['title'], 'Newest event')
+        self.assertEqual(results[0]['user_username'], self.user.username)
+        self.assertEqual(results[0]['event_type_code'], EventType.USER_LOGGED_IN)
+        self.assertIsNone(results[0]['target_type'])
+        self.assertIsNone(results[0]['target_str'])
+        self.assertEqual(results[1]['title'], 'Older event')
     
     def test_track_devotional_viewed_success(self):
         """Test successful devotional viewed tracking."""
