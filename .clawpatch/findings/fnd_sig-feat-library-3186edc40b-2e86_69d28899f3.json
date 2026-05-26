@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-3186edc40b-2e86_69d28899f3",
+  "featureId": "feat_library_3186edc40b",
+  "title": "Multilingual seed leaves the fast year stale after creating days",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/management/commands/seed.py",
+      "startLine": 187,
+      "endLine": 196,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/seed.py",
+      "startLine": 504,
+      "endLine": 506,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/seed_multilingual_data.py",
+      "startLine": 18,
+      "endLine": 24,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/seed_multilingual_data.py",
+      "startLine": 31,
+      "endLine": 33,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The main seed command creates Day rows and then explicitly saves the related Fast so its derived year field is updated. The multilingual seed command creates a Fast before any Day exists, then creates a Day but never saves the Fast again. Based on the owned-file pattern, the resulting multilingual Fast can retain a missing or stale year, breaking behavior that filters or displays fasts by year.",
+  "reproduction": null,
+  "recommendation": "After creating all Day rows for the multilingual fast, call `fast.save(update_fields=[\"year\"])` or use the same helper/path as the main seed data for derived Fast fields.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests are included for either management command, and the existing excerpt only shows manual seed behavior rather than assertions around derived Fast fields.",
+  "suggestedRegressionTest": "Add a management-command test that runs `seed_multilingual_data`, reloads the created Great Lent Fast, and asserts its year matches the created Day date's year.",
+  "minimumFixScope": "Update `hub/management/commands/seed_multilingual_data.py` to refresh derived Fast fields after creating days and add a focused command test.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-3186edc40b_2e86f0da98",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:19:35.969Z",
+  "updatedAt": "2026-05-26T00:19:35.969Z"
+}

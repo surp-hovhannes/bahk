@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-0f58f00394-de36d4_b4040dfa32",
+  "featureId": "feat_route_0f58f00394",
+  "title": "FastByDate route lacks direct regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 67,
+      "endLine": 67,
+      "symbol": "FastByDateView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 5,
+      "endLine": 5,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 248,
+      "symbol": "FastListViewTest",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 250,
+      "endLine": 569,
+      "symbol": "FastByFeastDateViewTest",
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route exposes /fasts/by-date/ through FastByDateView, but the linked fast view tests import and exercise FastListView and FastByFeastDateView only. The analogous by-feast-date endpoint has coverage for authenticated and unauthenticated scoping, missing date, invalid date format, timezone, caching, different church, and annotations, while the by-date route has no comparable evidence in the included tests. That leaves a user-input date route without regression coverage for its API contract and authorization/church filtering behavior.",
+  "reproduction": null,
+  "recommendation": "Add direct tests for FastByDateView covering at least successful authenticated lookup, unauthenticated lookup with church_id, missing date, invalid date format, timezone handling, no matches, and cross-church isolation.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover FastListView and FastByFeastDateView behavior, but no included test imports FastByDateView or sends a request to /fasts/by-date/.",
+  "suggestedRegressionTest": "Add a FastByDateViewTest class in hub/tests/test_fast_views.py mirroring the FastByFeastDateViewTest setup, using /api/fasts/by-date/ and asserting date filtering, validation errors, and church scoping.",
+  "minimumFixScope": "Test-only change in hub/tests/test_fast_views.py for FastByDateView.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-0f58f00394_de36d4f6db",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:54:46.546Z",
+  "updatedAt": "2026-05-26T02:54:46.546Z"
+}

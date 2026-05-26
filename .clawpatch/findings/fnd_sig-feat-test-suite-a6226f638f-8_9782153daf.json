@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-a6226f638f-8_9782153daf",
+  "featureId": "feat_test-suite_a6226f638f",
+  "title": "Wall-clock performance assertions make the suite environment-dependent",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "tests/test_optimized_profile_endpoints.py",
+      "startLine": 180,
+      "endLine": 185,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_optimized_profile_endpoints.py",
+      "startLine": 249,
+      "endLine": 253,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_profile_memory_leaks.py",
+      "startLine": 177,
+      "endLine": 186,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_participant_lists.py",
+      "startLine": 239,
+      "endLine": 259,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_fast_endpoints.py",
+      "startLine": 276,
+      "endLine": 294,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "Several tests assert strict elapsed-time or memory ceilings using `time.time()` and `tracemalloc` while also constructing large datasets in-process. Thresholds such as 0.1s, 0.2s, 0.3s, 0.5s, and fixed memory caps can fail on slower CI workers, debug builds, shared runners, or Docker filesystem/database overhead without any product regression. This turns performance observations into flaky release gates.",
+  "reproduction": "Run the performance-tagged tests on a loaded or slower Docker/CI host; the same endpoint behavior can cross the fixed elapsed-time thresholds and fail nondeterministically.",
+  "recommendation": "Keep correctness assertions in normal CI and move strict benchmarks to a dedicated performance job with controlled hardware and historical baselines. For unit tests, prefer query-count assertions or broad smoke thresholds that only catch pathological regressions.",
+  "whyTestsDoNotAlreadyCoverThis": "These tests are the source of the flakiness; they validate timing directly instead of isolating deterministic performance signals.",
+  "suggestedRegressionTest": "Add a fast CI test that verifies query counts or bounded result sizes, and run wall-clock benchmark thresholds only in an opt-in performance workflow.",
+  "minimumFixScope": "Adjust the performance assertions in the affected test modules or mark them so they are excluded from default CI.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-a6226f638f_889c8be133",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:14:20.334Z",
+  "updatedAt": "2026-05-26T03:14:20.334Z"
+}

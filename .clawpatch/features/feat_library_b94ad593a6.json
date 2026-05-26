@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_b94ad593a6",
+  "title": "Python source hub/migrations#5",
+  "summary": "Python source group hub/migrations#5 with 4 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/migrations#5",
+      "symbol": "hub/migrations#5",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/migrations/0049_alter_llmprompt_model.py",
+      "reason": "source group hub/migrations#5"
+    },
+    {
+      "path": "hub/migrations/0050_add_fast_designation_to_feast.py",
+      "reason": "source group hub/migrations#5"
+    },
+    {
+      "path": "hub/migrations/0051_fast_intention.py",
+      "reason": "source group hub/migrations#5"
+    },
+    {
+      "path": "hub/migrations/__init__.py",
+      "reason": "source group hub/migrations#5"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=10395 bytes; approxTokens=2599; includedFiles=4; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:42:20.911Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:42:20.911Z"
+}

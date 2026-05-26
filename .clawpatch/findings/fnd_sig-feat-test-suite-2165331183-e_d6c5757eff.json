@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-2165331183-e_d6c5757eff",
+  "featureId": "feat_test-suite_2165331183",
+  "title": "Push payload tests assert constants instead of exercising payload generation code",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "startLine": 19,
+      "endLine": 69,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "startLine": 137,
+      "endLine": 149,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "These tests build the expected payloads and route map directly inside the test file, then assert those same literals equal themselves. A production regression in the admin form or JavaScript mapping would not fail these tests because no real generator, form, view, template, or static asset is imported or executed.",
+  "reproduction": null,
+  "recommendation": "Exercise the actual payload-generation surface, such as the admin form/view/template JavaScript source or the Python helper that produces notification payloads, and compare its output to the expected route structures.",
+  "whyTestsDoNotAlreadyCoverThis": "The current assertions are self-referential; they validate the test data, not application behavior.",
+  "suggestedRegressionTest": "Instantiate the real push-notification admin form or call the real payload builder for each content type, then assert outputs such as prayer_request -> prayer-request and video -> learn/video/<id>.",
+  "minimumFixScope": "Replace the literal-only tests in notifications/tests/test_push_payload_generation.py with tests against the actual payload generation implementation.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-2165331183_ebdcd2132d",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:13:01.875Z",
+  "updatedAt": "2026-05-26T03:13:01.875Z"
+}

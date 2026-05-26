@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "projectId": "prj_https-github-com-surp-hovhannes-_7b73d60107",
+  "name": "bahk",
+  "rootPath": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+  "git": {
+    "remoteUrl": "https://github.com/surp-hovhannes/bahk.git",
+    "defaultBranch": "main",
+    "currentBranch": "main",
+    "headSha": "0fcef4d9e9b2c80ebc0b13fee98966ee18548830"
+  },
+  "detected": {
+    "languages": [
+      "javascript",
+      "python"
+    ],
+    "frameworks": [
+      "django",
+      "pytest"
+    ],
+    "packageManagers": [
+      "npm",
+      "pip"
+    ],
+    "commands": {
+      "typecheck": "ruff check .",
+      "lint": "ruff check .",
+      "format": "ruff format --check .",
+      "test": "npm run test"
+    }
+  },
+  "createdAt": "2026-05-26T00:13:29.386Z",
+  "updatedAt": "2026-05-26T00:13:29.386Z"
+}

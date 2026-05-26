@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_2b28d42ddc",
+  "title": "Django route /health/",
+  "summary": "Django route /health/ handled by HealthCheckView.as_view in bahk/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "bahk/urls.py",
+      "symbol": "HealthCheckView.as_view",
+      "route": "/health/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "bahk/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=9465 bytes; approxTokens=2367; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:56:22.666Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:56:22.666Z"
+}

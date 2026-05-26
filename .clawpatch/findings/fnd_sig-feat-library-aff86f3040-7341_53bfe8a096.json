@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-aff86f3040-7341_53bfe8a096",
+  "featureId": "feat_library_aff86f3040",
+  "title": "Push payload tests are tautological and do not exercise the generator",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "startLine": 19,
+      "endLine": 25,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "startLine": 137,
+      "endLine": 149,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The payload tests build hard-coded expected dictionaries inside the test and compare them back to equivalent literals. The route map is also redefined in the test instead of imported from the admin form or production JavaScript. A production regression in payload generation or route mapping would not fail these tests.",
+  "reproduction": null,
+  "recommendation": "Call the actual payload-generation code or parse/import the source of truth for the route map, then assert its output for each supported payload type.",
+  "whyTestsDoNotAlreadyCoverThis": "The tests validate test-local constants rather than production behavior.",
+  "suggestedRegressionTest": "Add tests that instantiate the real push notification form or helper, submit representative payload inputs, and assert the generated JSON payload.",
+  "minimumFixScope": "Replace the self-contained constants in test_push_payload_generation.py with assertions against the production payload generation path.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-aff86f3040_7341467a14",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:42:07.000Z",
+  "updatedAt": "2026-05-26T02:42:07.000Z"
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_ca2d1ea7b0",
+  "title": "Django route /api/icons/match/",
+  "summary": "Django route /api/icons/match/ handled by views.IconMatchView.as_view in icons/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "icons/urls.py",
+      "symbol": "views.IconMatchView.as_view",
+      "route": "/api/icons/match/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "icons/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=4241 bytes; approxTokens=1061; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:08:31.036Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T03:08:31.036Z"
+}

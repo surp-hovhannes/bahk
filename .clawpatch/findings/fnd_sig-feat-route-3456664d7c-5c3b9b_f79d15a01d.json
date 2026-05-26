@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-3456664d7c-5c3b9b_f79d15a01d",
+  "featureId": "feat_route_3456664d7c",
+  "title": "Prayer request view tracking route lacks visible endpoint coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "events/urls.py",
+      "startLine": 32,
+      "endLine": 38,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 98,
+      "endLine": 431,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The route for track-prayer-request-viewed is registered alongside the other engagement tracking endpoints, but the included engagement endpoint tests exercise success, validation, authentication, and method handling for devotional, prayer set, and checklist tracking only. No visible test asserts the prayer request viewed route name resolves, requires authentication, rejects invalid input, or creates the intended event. That leaves the exposed network route vulnerable to regressions in URL wiring or API contract without a focused failing test.",
+  "reproduction": null,
+  "recommendation": "Add endpoint tests for reverse('events:track-prayer-request-viewed') covering authenticated success, unauthenticated access, missing/invalid prayer request id, GET method rejection, and created Event fields/data.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover sibling tracking endpoints but do not include any visible assertions for track-prayer-request-viewed or TrackPrayerRequestViewedView.",
+  "suggestedRegressionTest": "Add tests to events/tests/test_engagement_endpoints.py mirroring the prayer-set/devotional cases for the prayer request viewed endpoint.",
+  "minimumFixScope": "Test-only coverage for the prayer request viewed tracking route and its expected API contract.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-3456664d7c_5c3b9b8a9a",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:56:40.405Z",
+  "updatedAt": "2026-05-26T02:56:40.405Z"
+}

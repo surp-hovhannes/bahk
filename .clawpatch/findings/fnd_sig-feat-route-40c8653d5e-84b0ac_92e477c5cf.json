@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-40c8653d5e-84b0ac_92e477c5cf",
+  "featureId": "feat_route_40c8653d5e",
+  "title": "Registration route has no direct request coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 55,
+      "endLine": 55,
+      "symbol": "RegisterView.as_view",
+      "quote": null
+    }
+  ],
+  "reasoning": "The reviewed feature is the public registration route wired to RegisterView.as_view, but the included linked tests exercise unrelated text fetching, devotionals, fasts, email templates/tasks, and admin icon actions. None of the provided tests asserts that the register URL resolves, accepts the intended payload, rejects invalid input, or preserves expected anonymous/authentication behavior. Because this route crosses user-input and auth boundaries, regressions in URL wiring or registration API behavior could ship without a focused failure.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for the registration endpoint covering URL resolution or POST through the test client, successful registration, validation failures, duplicate user/email handling if applicable, and expected anonymous access.",
+  "whyTestsDoNotAlreadyCoverThis": "The included context tests do not reference the register route, auth_register URL name, RegisterView, or registration request/response behavior.",
+  "suggestedRegressionTest": "Add a test module or extend an auth/user API test to POST to /hub/register/ or reverse('auth_register') with valid and invalid payloads and assert status codes, response shape, user creation, and duplicate handling.",
+  "minimumFixScope": "Registration route/API tests only; no production code change is implied by this finding.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-40c8653d5e_84b0acfcd5",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:57:45.556Z",
+  "updatedAt": "2026-05-26T02:57:45.556Z"
+}

@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_49589ccdcb",
+  "title": "Django route /hub/notifications/unsubscribe/error/",
+  "summary": "Django route /hub/notifications/unsubscribe/error/ handled by views.unsubscribe_error in notifications/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "notifications/urls.py",
+      "symbol": "views.unsubscribe_error",
+      "route": "/hub/notifications/unsubscribe/error/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "notifications/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "notifications/tests/test_batch_processing.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_device_tokens.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_email_templates.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_admin.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_images.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_promo_emails.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_race_conditions.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "notifications/tests/test_batch_processing.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_device_tokens.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_email_templates.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_images.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_promo_emails.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_race_conditions.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-route-49589ccdcb-9b391c_44215c3a23"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=107112 bytes; approxTokens=26777; includedFiles=9; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:58:26.814Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:58:26.814Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-a549ebdf05-b42b_1203402e91",
+  "featureId": "feat_library_a549ebdf05",
+  "title": "Feast uniqueness constraint prevents multiple feasts on the same day",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/migrations/0040_add_feast_models_and_llmprompt_applies_to.py",
+      "startLine": 21,
+      "endLine": 21,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/migrations/0040_add_feast_models_and_llmprompt_applies_to.py",
+      "startLine": 44,
+      "endLine": 47,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The Feast.day relation is exposed with related_name='feasts', implying a day can have multiple Feast rows, but the migration adds a UniqueConstraint on only day. That database constraint rejects any second feast for the same day, which can make legitimate calendar data impossible to store if multiple commemorations or feast entries occur on one day.",
+  "reproduction": null,
+  "recommendation": "Remove the day-only unique constraint or replace it with a uniqueness key that matches the real domain identity, such as day plus name/designation if duplicate names per day should be prevented.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for Feast creation or calendar days with multiple feast entries.",
+  "suggestedRegressionTest": "Add a model or migration test that creates two distinct Feast records for the same Day and verifies the intended behavior, either allowing both or enforcing the correct composite uniqueness rule.",
+  "minimumFixScope": "Adjust migration 0040's Feast uniqueness constraint and the matching model Meta constraint.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-a549ebdf05_b42b5da6e8",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:41:23.806Z",
+  "updatedAt": "2026-05-26T02:41:23.806Z"
+}

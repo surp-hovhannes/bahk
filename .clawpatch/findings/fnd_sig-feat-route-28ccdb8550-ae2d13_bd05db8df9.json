@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-28ccdb8550-ae2d13_bd05db8df9",
+  "featureId": "feat_route_28ccdb8550",
+  "title": "Route alias lacks regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "bahk/urls.py",
+      "startLine": 119,
+      "endLine": 122,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The feature exposes hub URLs under the /api/ prefix, but the review bundle includes no tests for URL resolution or representative requests through this alias. Because this is a public network-facing API route, a future URL ordering change or include removal could silently break clients using /api/ while leaving the existing /hub/ route intact.",
+  "reproduction": null,
+  "recommendation": "Add a focused URL routing test that verifies at least one known hub endpoint resolves and responds through the /api/ prefix, not only through /hub/.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests were provided for this feature, and the excerpt only shows the route declaration.",
+  "suggestedRegressionTest": "Add a Django URL resolver or client test for a representative hub endpoint under /api/, asserting it resolves to the expected hub view and returns the expected status.",
+  "minimumFixScope": "Test-only change covering the /api/ include in bahk/urls.py.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-28ccdb8550_ae2d134ae8",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:56:21.745Z",
+  "updatedAt": "2026-05-26T02:56:21.745Z"
+}

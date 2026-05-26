@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-2510406d0d-d_a6101f354f",
+  "featureId": "feat_test-suite_2510406d0d",
+  "title": "Endpoint variation test is not actually parametrized",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "tests/integration/test_endpoints.py",
+      "startLine": 51,
+      "endLine": 88,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The method name and signature imply it should exercise multiple endpoint variations, but unittest/Django TestCase will invoke it only once using the default arguments. No test calls it with a non-empty query string or a culmination feast name, so those branches and the pluralized countdown path are not covered by the suite despite being embedded in the test body.",
+  "reproduction": null,
+  "recommendation": "Split the branches into separate test methods or convert the file to pytest parametrization with explicit cases for no query params, query params, and culmination-feast countdown behavior.",
+  "whyTestsDoNotAlreadyCoverThis": "Because the optional parameters are never supplied by the test runner, only the default path runs.",
+  "suggestedRegressionTest": "Create explicit tests such as test_fast_on_date_default_countdown and test_fast_on_date_culmination_feast_countdown that assert each expected response independently.",
+  "minimumFixScope": "tests/integration/test_endpoints.py",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-2510406d0d_d0af892753",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:13:13.070Z",
+  "updatedAt": "2026-05-26T03:13:13.070Z"
+}

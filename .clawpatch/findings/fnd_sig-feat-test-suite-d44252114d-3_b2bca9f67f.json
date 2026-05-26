@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-d44252114d-3_b2bca9f67f",
+  "featureId": "feat_test-suite_d44252114d",
+  "title": "Timezone validation is bypassable outside middleware",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/tests/test_timezone_functionality.py",
+      "startLine": 29,
+      "endLine": 35,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_timezone_functionality.py",
+      "startLine": 60,
+      "endLine": 70,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_timezone_functionality.py",
+      "startLine": 122,
+      "endLine": 135,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The middleware test expects invalid `tz` inputs to be rejected and leave the profile unchanged, but the model test explicitly accepts arbitrary invalid timezone strings and the serializer update test only checks a valid update. If profile updates are exposed through `ProfileSerializer`, clients can persist invalid timezone values directly and bypass the middleware's validation path, which can later break timezone-dependent behavior.",
+  "reproduction": null,
+  "recommendation": "Add validation at the serializer or model boundary, and change the tests so invalid timezone updates through `ProfileSerializer` are rejected just like invalid middleware inputs.",
+  "whyTestsDoNotAlreadyCoverThis": "The suite only verifies invalid timezone handling in middleware; it does not test invalid timezone updates through the serializer/API path, and one model test currently normalizes acceptance of invalid values.",
+  "suggestedRegressionTest": "Add a `ProfileSerializer` test with `{'timezone': 'Invalid/Timezone'}` asserting `serializer.is_valid()` is false and the stored profile timezone remains unchanged.",
+  "minimumFixScope": "Add timezone validation to `ProfileSerializer` or the profile model field validation, then update the timezone tests accordingly.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-d44252114d_3fd905588b",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:14:49.276Z",
+  "updatedAt": "2026-05-26T03:14:49.276Z"
+}

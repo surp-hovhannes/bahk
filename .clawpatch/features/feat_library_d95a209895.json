@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_d95a209895",
+  "title": "Python source notifications/migrations",
+  "summary": "Python source group notifications/migrations with 8 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "notifications/migrations",
+      "symbol": "notifications/migrations",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "notifications/migrations/0001_initial.py",
+      "reason": "source group notifications/migrations"
+    },
+    {
+      "path": "notifications/migrations/0002_devicetoken_user_alter_devicetoken_device_type.py",
+      "reason": "source group notifications/migrations"
+    },
+    {
+      "path": "notifications/migrations/0003_promoemail_emailsubscriptionpreference.py",
+      "reason": "source group notifications/migrations"
+    },
+    {
+      "path": "notifications/migrations/0004_promoemail_selected_users.py",
+      "reason": "source group notifications/migrations"
+    },
+    {
+      "path": "notifications/migrations/0005_promoemail_fast.py",
+      "reason": "source group notifications/migrations"
+    },
+    {
+      "path": "notifications/migrations/0005_promoemailimage.py",
+      "reason": "source group notifications/migrations"
+    },
+    {
+      "path": "notifications/migrations/0006_merge_0005_promoemail_fast_0005_promoemailimage.py",
+      "reason": "source group notifications/migrations"
+    },
+    {
+      "path": "notifications/migrations/__init__.py",
+      "reason": "source group notifications/migrations"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-d95a209895-2ba7_9c6b045b42"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=16116 bytes; approxTokens=4029; includedFiles=8; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:52:02.246Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:52:02.246Z"
+}

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "stateDir": ".clawpatch",
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    "target/**",
+    ".build/**",
+    ".git/**",
+    ".clawpatch/**",
+    "__pycache__/**",
+    ".pytest_cache/**",
+    ".ruff_cache/**",
+    "staticfiles/**",
+    "test_media/**",
+    "migrations/**"
+  ],
+  "provider": {
+    "name": "codex",
+    "model": null,
+    "reasoningEffort": null
+  },
+  "commands": {
+    "typecheck": null,
+    "lint": "docker exec bahk_devcontainer-app-1 ruff check .",
+    "format": null,
+    "test": "docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings"
+  },
+  "review": {
+    "maxContextFiles": 24,
+    "maxOwnedFiles": 12,
+    "maxFindingsPerFeature": 10,
+    "minConfidenceToFix": "medium"
+  },
+  "git": {
+    "requireCleanWorktreeForFix": true,
+    "commit": false,
+    "openPr": false
+  }
+}

@@ -18,10 +18,9 @@ migration_0013 = importlib.import_module(
 
 class EventTypeMigrationRollbackTests(TestCase):
     def test_user_account_created_rollback_preserves_events(self):
-        event_type = EventType.objects.create(
+        event_type, _ = EventType.objects.get_or_create(
             code="user_account_created",
-            name="User Account Created",
-            category="user_action",
+            defaults={"name": "User Account Created", "category": "user_action"},
         )
         event = Event.objects.create(
             event_type=event_type,
@@ -34,10 +33,9 @@ class EventTypeMigrationRollbackTests(TestCase):
         self.assertTrue(Event.objects.filter(pk=event.pk).exists())
 
     def test_prayer_view_rollback_preserves_events(self):
-        event_type = EventType.objects.create(
+        event_type, _ = EventType.objects.get_or_create(
             code="prayer_viewed",
-            name="Prayer Viewed",
-            category="analytics",
+            defaults={"name": "Prayer Viewed", "category": "analytics"},
         )
         event = Event.objects.create(
             event_type=event_type,
@@ -50,10 +48,9 @@ class EventTypeMigrationRollbackTests(TestCase):
         self.assertTrue(Event.objects.filter(pk=event.pk).exists())
 
     def test_tutorial_video_rollback_preserves_events(self):
-        event_type = EventType.objects.create(
+        event_type, _ = EventType.objects.get_or_create(
             code="tutorial_video_viewed",
-            name="Tutorial Video Viewed",
-            category="analytics",
+            defaults={"name": "Tutorial Video Viewed", "category": "analytics"},
         )
         event = Event.objects.create(
             event_type=event_type,

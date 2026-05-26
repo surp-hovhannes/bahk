@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_49caef493d",
+  "title": "Python source learning_resources/management",
+  "summary": "Python source group learning_resources/management with 5 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "learning_resources/management",
+      "symbol": "learning_resources/management",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "learning_resources/management/__init__.py",
+      "reason": "source group learning_resources/management"
+    },
+    {
+      "path": "learning_resources/management/commands/__init__.py",
+      "reason": "source group learning_resources/management"
+    },
+    {
+      "path": "learning_resources/management/commands/bookmark_cache.py",
+      "reason": "source group learning_resources/management"
+    },
+    {
+      "path": "learning_resources/management/commands/check_task_status.py",
+      "reason": "source group learning_resources/management"
+    },
+    {
+      "path": "learning_resources/management/commands/cleanup_orphaned_bookmarks.py",
+      "reason": "source group learning_resources/management"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-49caef493d-0cbb_a4b8901108"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T001632-1d7677",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=77352 bytes; approxTokens=19292; includedFiles=7; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T00:20:24.665Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T00:20:24.666Z"
+}

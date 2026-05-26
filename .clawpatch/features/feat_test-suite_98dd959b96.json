@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_98dd959b96",
+  "title": "Python test suite hub/tests#1",
+  "summary": "Python pytest files in hub/tests#1.",
+  "kind": "test-suite",
+  "source": "python-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/tests#1",
+      "symbol": "hub/tests#1",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_combined_devotional_form.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_email_tasks.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_feast_designation.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_feast_icon_matching.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_feast_model.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "hub/tests/test_feast_tasks.py",
+      "reason": "pytest file"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_combined_devotional_form.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_email_tasks.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_feast_designation.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_feast_icon_matching.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_feast_model.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "hub/tests/test_feast_tasks.py",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_combined_devotional_form.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_email_tasks.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_feast_designation.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_feast_icon_matching.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_feast_model.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_feast_tasks.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-test-suite-98dd959b96-a_b99e2cf38a"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=176896 bytes; approxTokens=44137; includedFiles=12; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:14:02.623Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T03:14:02.623Z"
+}

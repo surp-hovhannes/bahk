@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-73f519a3ac-ff61_d97deec9b6",
+  "featureId": "feat_library_73f519a3ac",
+  "title": "Mixed-type bookmark cache test explicitly avoids primary-key collisions",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "startLine": 257,
+      "endLine": 292,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The test claims coverage for mixed content types, but when a Video and Article share the same object id it falls back to separate homogeneous calls instead of asserting correct mixed-list behavior. Because bookmark status is asserted through a dict keyed by object id in this test, a real mixed list containing two content objects with the same primary key could collapse one result into the other without this suite failing. The in-test comment narrows typical usage to homogeneous pagination, so this is a test coverage gap rather than definitive proof of a production bug.",
+  "reproduction": null,
+  "recommendation": "Add an explicit mixed-type collision case that creates two bookmarked/non-bookmarked objects of different content types with the same id and verifies the public contract. If mixed lists are unsupported, codify that contract in the implementation and tests instead of silently falling back to homogeneous assertions.",
+  "whyTestsDoNotAlreadyCoverThis": "Lines 264-280 branch away from the collision scenario and only exercise homogeneous lists when ids collide, so the risky mixed-type case is never validated.",
+  "suggestedRegressionTest": "Create a Video and Article with the same primary key, pass both in one call to BookmarkCacheManager.get_bookmarks_for_objects, and assert the result can distinguish statuses by both content type and object id or raises a documented error.",
+  "minimumFixScope": "tests/unit/learning_resources/test_bookmark_cache.py plus the bookmark cache manager contract if mixed content types should be supported.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-73f519a3ac_ff61323b23",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:40:12.654Z",
+  "updatedAt": "2026-05-26T02:40:12.654Z"
+}

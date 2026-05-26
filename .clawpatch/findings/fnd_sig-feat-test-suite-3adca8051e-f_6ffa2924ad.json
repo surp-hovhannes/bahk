@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-3adca8051e-f_6ffa2924ad",
+  "featureId": "feat_test-suite_3adca8051e",
+  "title": "Concurrent worker failures are not captured with their original exceptions",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "startLine": 260,
+      "endLine": 271,
+      "symbol": "BookmarkCacheLoadTests.test_concurrent_cache_operations.worker",
+      "quote": null
+    },
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "startLine": 291,
+      "endLine": 307,
+      "symbol": "BookmarkCacheLoadTests.test_concurrent_cache_operations",
+      "quote": null
+    }
+  ],
+  "reasoning": "The thread worker only puts successful results into the queue. If BookmarkCacheManager.get_bookmarks_for_objects raises inside a thread, the main test later fails on missing queue entries or even on aggregate calculations, but it does not preserve the original exception and traceback as first-class test data. Depending on pytest warning settings, the actionable failure can be obscured.",
+  "reproduction": null,
+  "recommendation": "Wrap worker logic in try/except, put exceptions and tracebacks into the queue, and have the main thread fail explicitly if any worker reports an error before calculating aggregate timings.",
+  "whyTestsDoNotAlreadyCoverThis": "The concurrent test checks only result counts and timing; it has no assertion path that reports worker exceptions directly.",
+  "suggestedRegressionTest": "Introduce a temporary failing worker or mock BookmarkCacheManager.get_bookmarks_for_objects to raise in one thread and assert the test reports that exception explicitly.",
+  "minimumFixScope": "Modify the worker/result collection logic in test_concurrent_cache_operations to carry either success records or exception records back to the main thread.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-3adca8051e_f7f8af1534",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:13:25.349Z",
+  "updatedAt": "2026-05-26T03:13:25.349Z"
+}

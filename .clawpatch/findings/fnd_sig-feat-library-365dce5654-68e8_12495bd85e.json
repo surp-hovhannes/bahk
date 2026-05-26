@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-365dce5654-68e8_12495bd85e",
+  "featureId": "feat_library_365dce5654",
+  "title": "Event assertions can bind to pre-existing matching events",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "events/tests/tests.py",
+      "startLine": 189,
+      "endLine": 196,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/tests.py",
+      "startLine": 204,
+      "endLine": 223,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The fixture creates a USER_JOINED_FAST event before test_fast_join_signal runs, then the test triggers another USER_JOINED_FAST event and retrieves an arbitrary matching row with .first(). Because multiple rows can match the same event_type/user/target, the assertion may inspect the setup event instead of the newly emitted signal event, making the test order-dependent and weakening its ability to catch signal regressions.",
+  "reproduction": null,
+  "recommendation": "Capture the event IDs present before the action, then assert against Event.objects.exclude(id__in=existing_ids) or order by descending timestamp/id and verify the event count plus the new row explicitly.",
+  "whyTestsDoNotAlreadyCoverThis": "The test checks the count increment, but the detailed assertions are made against an unscoped query that can return an older matching event.",
+  "suggestedRegressionTest": "Modify test_fast_join_signal so it records existing USER_JOINED_FAST IDs before self.profile.fasts.add(self.fast), then asserts exactly one new join event exists and the feed item references that new event.",
+  "minimumFixScope": "Constrain the query in test_fast_join_signal to the event created by the action under test.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-365dce5654_68e808f400",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:19:48.959Z",
+  "updatedAt": "2026-05-26T00:19:48.959Z"
+}

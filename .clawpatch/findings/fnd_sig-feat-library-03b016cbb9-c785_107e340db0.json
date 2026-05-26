@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-03b016cbb9-c785_107e340db0",
+  "featureId": "feat_library_03b016cbb9",
+  "title": "Rollback of seeded event types can cascade-delete event history",
+  "category": "data-loss",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "events/migrations/0001_initial.py",
+      "startLine": 51,
+      "endLine": 52,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/migrations/0004_create_user_account_created_event_type_record.py",
+      "startLine": 34,
+      "endLine": 40,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/migrations/0012_add_prayer_view_event_types.py",
+      "startLine": 30,
+      "endLine": 32,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "Event.event_type uses on_delete=CASCADE, so deleting EventType rows during a reverse migration also deletes every Event row with those types. Both reverse data migrations delete by code without checking whether events exist or whether the row was created by that migration, making rollback of these migrations destructive to audit/analytics history.",
+  "reproduction": null,
+  "recommendation": "Make the reverse migration non-destructive: either use RunPython.noop, mark the event types inactive, or only delete rows when there are no related events and the migration can prove it created the rows. If deletion is required, change the Event foreign key behavior first or explicitly preserve/reassign dependent events.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for migration rollback behavior or cascade preservation of Event rows.",
+  "suggestedRegressionTest": "Add a migration rollback test that creates an Event for one of these event types, rolls back past the data migration, and asserts the Event row is not deleted or that rollback is intentionally blocked.",
+  "minimumFixScope": "Update the reverse functions in 0004 and 0012, and add rollback coverage for EventType rows with dependent Event records.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T060147-8596c7",
+      "kind": "revalidate",
+      "status": "open",
+      "note": null,
+      "reasoning": "The original evidence paths still exist. events/migrations/0001_initial.py:52 still has Event.event_type on_delete=CASCADE. The cited reverse functions in events/migrations/0004_create_user_account_created_event_type_record.py:34-36 and events/migrations/0012_add_prayer_view_event_types.py:30-32 have been changed to non-destructive no-ops, and events/tests/test_event_type_migration_rollbacks.py adds direct regression coverage for those two reverse functions. However, the same issue remains elsewhere: events/migrations/0013_add_tutorial_video_viewed_event_type.py:19-21 reverses by deleting EventType code='tutorial_video_viewed', and current code records that event type via EventType.TUTORIAL_VIDEO_VIEWED in events/views.py:602. Because Event.event_type still cascades, rolling back 0013 can cascade-delete existing tutorial_video_viewed Event history. I attempted to run the targeted rollback tests through Docker, but Docker was not available in this environment, so test execution could not be used as runtime evidence.",
+      "commands": [
+        "nl -ba events/migrations/0001_initial.py | sed -n '40,60p'",
+        "nl -ba events/migrations/0004_create_user_account_created_event_type_record.py | sed -n '1,80p'",
+        "nl -ba events/migrations/0012_add_prayer_view_event_types.py | sed -n '1,80p'",
+        "rg -n \"event_type|EventType|RunPython|delete\\(\" events tests -S",
+        "nl -ba events/tests/test_event_type_migration_rollbacks.py | sed -n '1,120p'",
+        "docker exec bahk_devcontainer-app-1 python manage.py test events.tests.test_event_type_migration_rollbacks --settings=tests.test_settings",
+        "nl -ba events/migrations/0013_add_tutorial_video_viewed_event_type.py | sed -n '1,80p'",
+        "rg -n \"TUTORIAL_VIDEO_VIEWED|tutorial_video_viewed|event_type_code=EventType\\.TUTORIAL\" events tests -S",
+        "rg -n \"EventType\\.objects\\.filter\\(.*code=.*\\)\\.delete|filter\\(code=.*\\)\\.delete|\\.delete\\(\\)\" events/migrations -S"
+      ],
+      "createdAt": "2026-05-26T06:02:39.397Z"
+    },
+    {
+      "runId": "20260526T060338-5cb18e",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence paths still exist. events/migrations/0001_initial.py:52 still defines Event.event_type with on_delete=CASCADE, so deleting an EventType would still cascade-delete Event history. However, the destructive rollback behavior cited in the finding has been removed: events/migrations/0004_create_user_account_created_event_type_record.py:34-36 now makes the reverse function a no-op, and events/migrations/0012_add_prayer_view_event_types.py:30-32 now makes backwards a no-op. The previously open equivalent case in events/migrations/0013_add_tutorial_video_viewed_event_type.py is also fixed: lines 19-21 preserve event history with a no-op rollback. A scan of events/migrations found no remaining EventType delete calls or .delete() calls. Regression coverage exists in events/tests/test_event_type_migration_rollbacks.py for 0004, 0012, and 0013, asserting both EventType and Event rows survive reverse-function execution. I attempted to run the targeted Docker test command, but Docker was unavailable because the daemon/socket was not present, so runtime test execution could not be completed in this environment.",
+      "commands": [
+        "nl -ba events/migrations/0001_initial.py | sed -n '40,65p'",
+        "nl -ba events/migrations/0004_create_user_account_created_event_type_record.py | sed -n '1,90p'",
+        "nl -ba events/migrations/0012_add_prayer_view_event_types.py | sed -n '1,90p'",
+        "rg -n \"RunPython|\\.delete\\(|filter\\(.*code|EventType\\.objects\" events/migrations -S",
+        "rg -n \"event_type|EventType|rollback|migration\" events/tests tests -S",
+        "rg -n \"TUTORIAL_VIDEO_VIEWED|tutorial_video_viewed|prayer_viewed|user_account_created\" events -S",
+        "nl -ba events/migrations/0013_add_tutorial_video_viewed_event_type.py | sed -n '1,80p'",
+        "nl -ba events/tests/test_event_type_migration_rollbacks.py | sed -n '1,110p'",
+        "nl -ba events/views.py | sed -n '580,615p'",
+        "docker exec bahk_devcontainer-app-1 python manage.py test events.tests.test_event_type_migration_rollbacks --settings=tests.test_settings",
+        "rg -n \"EventType\\.objects\\..*delete|\\.delete\\(\\)\" events/migrations -S",
+        "nl -ba events/migrations/0008_make_checklist_used_target_optional.py | sed -n '1,80p'",
+        "nl -ba events/migrations/0010_add_screen_view_source.py | sed -n '1,60p'"
+      ],
+      "createdAt": "2026-05-26T06:04:29.292Z"
+    }
+  ],
+  "signature": "sig_feat-library-03b016cbb9_c78571be13",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-03b016cbb9-_523509f142"
+  ],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:17:12.410Z",
+  "updatedAt": "2026-05-26T06:04:29.292Z"
+}

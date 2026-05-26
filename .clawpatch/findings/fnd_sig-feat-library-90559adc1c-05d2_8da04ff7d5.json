@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-90559adc1c-05d2_8da04ff7d5",
+  "featureId": "feat_library_90559adc1c",
+  "title": "Default signing key and century-long refresh tokens create persistent credential risk",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "bahk/settings.py",
+      "startLine": 104,
+      "endLine": 107,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "bahk/settings.py",
+      "startLine": 304,
+      "endLine": 307,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_settings.py",
+      "startLine": 65,
+      "endLine": 66,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_settings.py",
+      "startLine": 88,
+      "endLine": 101,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "If SECRET_KEY is not configured, the app falls back to a public hardcoded key. The default JWT refresh token lifetime is effectively permanent, so a deployment that misses SECRET_KEY or leaks refresh tokens has very long-lived tokens signed with a known secret. The test settings intentionally shorten JWT lifetime and override SECRET_KEY, so tests do not reflect the production default risk.",
+  "reproduction": null,
+  "recommendation": "Require SECRET_KEY in production instead of providing an insecure fallback, and reduce the default refresh token lifetime to a bounded operational value. If extremely long sessions are required, use rotation, revocation, and explicit environment-gated configuration.",
+  "whyTestsDoNotAlreadyCoverThis": "tests/test_settings.py replaces both SECRET_KEY and SIMPLE_JWT, masking the production defaults under review.",
+  "suggestedRegressionTest": "Add a configuration test asserting production settings fail fast when SECRET_KEY is unset and that refresh token lifetime stays below the chosen maximum unless an explicit production setting opts in.",
+  "minimumFixScope": "Update SECRET_KEY loading and SIMPLE_JWT defaults in bahk/settings.py.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-90559adc1c_05d2a8a528",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:40:52.303Z",
+  "updatedAt": "2026-05-26T02:40:52.303Z"
+}

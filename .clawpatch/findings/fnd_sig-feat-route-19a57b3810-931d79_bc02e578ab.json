@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-19a57b3810-931d79_bc02e578ab",
+  "featureId": "feat_route_19a57b3810",
+  "title": "Quote-of-the-day route has no included regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 94,
+      "endLine": 99,
+      "symbol": "PatristicQuoteOfTheDayView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "startLine": 124,
+      "endLine": 127,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 65,
+      "endLine": 82,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route exposes patristic-quotes/quote-of-the-day/, but the included associated tests exercise other feature areas such as devotionals and fasts rather than asserting that this URL resolves or returns the expected quote-of-the-day response. That leaves the route vulnerable to regressions in URL ordering, naming, or view wiring without any included test failing.",
+  "reproduction": null,
+  "recommendation": "Add a focused URL/API test for /api/patristic-quotes/quote-of-the-day/ that creates the minimum required PatristicQuote data, calls the endpoint, and asserts the status code and response contract.",
+  "whyTestsDoNotAlreadyCoverThis": "The provided context tests cover Armenian text scraping, Bible API behavior, devotionals, email tasks/templates, fast views, and feast admin icon actions, but none exercise the patristic quote-of-the-day endpoint.",
+  "suggestedRegressionTest": "Add a test module or extend an existing patristic quote test to call self.client.get('/api/patristic-quotes/quote-of-the-day/') and assert the selected quote payload, including behavior when no quote is available.",
+  "minimumFixScope": "Test-only change covering the route and expected response contract.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-19a57b3810_931d79d392",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:55:22.164Z",
+  "updatedAt": "2026-05-26T02:55:22.164Z"
+}

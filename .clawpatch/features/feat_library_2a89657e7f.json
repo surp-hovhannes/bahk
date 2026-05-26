@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_2a89657e7f",
+  "title": "Python source hub/management/commands/:import",
+  "summary": "Python source group hub/management/commands/:import with 2 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/management/commands/:import",
+      "symbol": "hub/management/commands/:import",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/management/commands/import_feasts.py",
+      "reason": "source group hub/management/commands/:import"
+    },
+    {
+      "path": "hub/management/commands/import_readings.py",
+      "reason": "source group hub/management/commands/:import"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-2a89657e7f-06a7_c49ac84b48"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T001632-1d7677",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=11339 bytes; approxTokens=2835; includedFiles=2; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T00:18:44.697Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T00:18:44.697Z"
+}

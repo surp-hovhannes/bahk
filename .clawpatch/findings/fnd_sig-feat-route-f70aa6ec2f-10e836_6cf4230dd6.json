@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-f70aa6ec2f-10e836_6cf4230dd6",
+  "featureId": "feat_route_f70aa6ec2f",
+  "title": "User-specific stats route lacks direct authz coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "events/urls.py",
+      "startLine": 21,
+      "endLine": 22,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 170,
+      "endLine": 180,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 421,
+      "endLine": 431,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The URL configuration exposes both the current-user stats endpoint and a user_id-scoped stats endpoint through UserEventStatsView. The included tests demonstrate that other network-facing engagement endpoints explicitly verify authentication failures, but the provided excerpts do not exercise the user-specific stats route or its cross-user authorization behavior. Because this route accepts a user-controlled user_id, regressions could expose another user's event statistics without being caught by the linked tests.",
+  "reproduction": null,
+  "recommendation": "Add direct API tests for events:user-event-stats-specific covering unauthenticated access, a regular user requesting their own stats, a regular user requesting another user's stats, and any intended staff/admin override behavior.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover admin dashboards, middleware/session tracking, engagement tracking endpoints, JWT login tracking, optimizer/cache behavior, and a management command. In the shown excerpts, none call /stats/user/<user_id>/ or reverse the user-event-stats-specific route.",
+  "suggestedRegressionTest": "Create two regular users with distinct Event rows, authenticate as one user, GET reverse('events:user-event-stats-specific', kwargs={'user_id': other_user.id}), and assert the intended denial status or filtered response; also assert unauthenticated requests are rejected.",
+  "minimumFixScope": "Add focused tests for UserEventStatsView through the route declared in events/urls.py; adjust the view only if those tests reveal missing authorization enforcement.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-f70aa6ec2f_10e836b9b6",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:11:43.015Z",
+  "updatedAt": "2026-05-26T03:11:43.015Z"
+}

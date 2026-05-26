@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-cad5f68928-2ceb_d844cef1be",
+  "featureId": "feat_library_cad5f68928",
+  "title": "Authenticated users can read other users' event data",
+  "category": "security",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "events/views.py",
+      "startLine": 23,
+      "endLine": 100,
+      "symbol": "EventListView.get_queryset",
+      "quote": null
+    },
+    {
+      "path": "events/views.py",
+      "startLine": 103,
+      "endLine": 114,
+      "symbol": "EventDetailView",
+      "quote": null
+    },
+    {
+      "path": "events/serializers.py",
+      "startLine": 33,
+      "endLine": 56,
+      "symbol": "EventSerializer",
+      "quote": null
+    }
+  ],
+  "reasoning": "EventListView and EventDetailView require only IsAuthenticated and do not scope non-staff requests to request.user. The list endpoint also accepts an arbitrary user query parameter, and the detail endpoint has no object-level ownership check. Serialized event details include other users' usernames, emails, IP addresses, event data, target IDs, and activity metadata, so any logged-in user can enumerate or fetch other users' event records by ID.",
+  "reproduction": "Authenticate as a regular user, request /events/events/?user=<another_user_id> or /events/events/<event_id>/ for another user's event, and observe the response instead of a 403 or user-scoped result.",
+  "recommendation": "Scope EventListView and EventDetailView to request.user for non-staff users, and only allow staff/admin users to query arbitrary users or retrieve arbitrary event objects. Consider removing user_email and ip_address from non-admin serializers.",
+  "whyTestsDoNotAlreadyCoverThis": "Included tests cover authentication for engagement tracking and admin dashboard permissions, but they do not exercise event list/detail endpoints with two non-staff users or assert object-level access control.",
+  "suggestedRegressionTest": "Add API tests where user A creates an event and user B requests the list, filters by user A's id, and fetches user A's event detail; all should omit or deny user A's data unless user B is staff.",
+  "minimumFixScope": "events/views.py queryset scoping/object permission plus serializer exposure review for non-staff responses.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T054557-2e3b1a",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence paths still exist. In current events/views.py, EventListView.get_queryset still accepts a user query parameter, but lines 100-101 now additionally constrain non-staff users with queryset.filter(user=self.request.user), so filtering by another user's id returns no rows. EventDetailView now defines get_queryset at lines 113-117 and applies the same non-staff user filter, so another user's event id is outside the queryset and returns 404. The serializer at events/serializers.py lines 33-56 still exposes sensitive fields for detail responses, but non-staff users can no longer reach other users' EventDetailView objects through the original vulnerable endpoint. Regression tests now exist at events/tests/tests.py lines 331-370 for non-staff list/detail denial and lines 372-399 for staff access. I attempted to run the focused Django test case, but Docker was unavailable, so this conclusion is based on current code and test presence rather than executed test results.",
+      "commands": [
+        "sed -n '1,180p' events/views.py",
+        "sed -n '1,140p' events/serializers.py",
+        "rg -n \"EventListView|EventDetailView|events/events|EventSerializer|EventViewSet|IsAuthenticated\" .",
+        "nl -ba events/views.py | sed -n '20,125p'",
+        "nl -ba events/serializers.py | sed -n '30,90p'",
+        "rg -n \"event-list|event-detail|/events/events|EventListView|EventDetailView|other user|is_staff|force_authenticate|APIClient\" tests events -g '*test*'",
+        "nl -ba events/tests/tests.py | sed -n '288,405p'",
+        "docker exec bahk_devcontainer-app-1 python manage.py test events.tests.tests.EventViewTestCase --settings=tests.test_settings",
+        "rg -n \"query_params.get\\('user|query_params.get\\(\\\"user|user_id|Event\\.objects|recent_events|EventSerializer|EventListSerializer\" events/views.py",
+        "nl -ba events/views.py | sed -n '140,360p'",
+        "nl -ba events/views.py | sed -n '360,620p'",
+        "nl -ba events/urls.py | sed -n '1,80p'",
+        "nl -ba events/serializers.py | sed -n '88,150p'",
+        "rg -n \"test_.*stats|event-stats|user-event-stats|fast-event-stats|recent_activity|milestone_events\" events/tests tests -g '*test*'",
+        "nl -ba events/tests/tests.py | sed -n '420,470p'",
+        "nl -ba events/tests/tests.py | sed -n '880,925p'"
+      ],
+      "createdAt": "2026-05-26T05:47:06.220Z"
+    }
+  ],
+  "signature": "sig_feat-library-cad5f68928_2cebbd2ebe",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-cad5f68928-_e81be5ada6"
+  ],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:52:20.084Z",
+  "updatedAt": "2026-05-26T05:47:06.220Z"
+}

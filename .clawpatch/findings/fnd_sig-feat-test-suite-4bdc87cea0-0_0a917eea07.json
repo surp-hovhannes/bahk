@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-4bdc87cea0-0_0a917eea07",
+  "featureId": "feat_test-suite_4bdc87cea0",
+  "title": "Mixed-type bookmark status collision is intentionally untested",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "startLine": 257,
+      "endLine": 292,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The mixed-type cache-manager test explicitly avoids the case where objects from different tables share the same primary key, even though that is common in Django because each table has its own sequence. The asserted return shape is keyed only by object id, so a mixed list containing a bookmarked Video(id=1) and an unbookmarked Article(id=1), or vice versa, cannot represent both statuses correctly. By branching to homogeneous lists when ids collide, the suite documents the limitation but does not fail on the behavior that callers of get_bookmarks_for_objects with mixed content types would actually hit.",
+  "reproduction": null,
+  "recommendation": "Add coverage for mixed content types with identical object ids and either change the API to key by (content_type_id, object_id) or formally restrict and enforce homogeneous input.",
+  "whyTestsDoNotAlreadyCoverThis": "The existing test skips the collision scenario by falling back to homogeneous lists when self.video1.id equals self.article1.id, so the ambiguous mixed-type behavior is never asserted.",
+  "suggestedRegressionTest": "Create a Video and Article with the same id, bookmark only one of them, call BookmarkCacheManager.get_bookmarks_for_objects with both objects in one list, and assert each object receives its own independent bookmark status.",
+  "minimumFixScope": "Update BookmarkCacheManager.get_bookmarks_for_objects and its tests, or add an explicit validation/error path for mixed content types.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-4bdc87cea0_0c6a5598e8",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:13:37.435Z",
+  "updatedAt": "2026-05-26T03:13:37.435Z"
+}

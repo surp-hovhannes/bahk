@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-4564e56f45-c2e5_910b1e9dc3",
+  "featureId": "feat_library_4564e56f45",
+  "title": "Unsubscribe view ignores the configured user model",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "notifications/views.py",
+      "startLine": 3,
+      "endLine": 4,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/views.py",
+      "startLine": 107,
+      "endLine": 119,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The notification code elsewhere uses the configured user model, but the unsubscribe view imports django.contrib.auth.models.User directly and looks up the signed user id against that concrete table. In projects with a custom user model, valid unsubscribe links generated for real recipients will fail with User.DoesNotExist and redirect to the error page, leaving users subscribed despite clicking a valid link.",
+  "reproduction": null,
+  "recommendation": "Use django.contrib.auth.get_user_model() in notifications/views.py, or import the same configured user model used by the rest of the app before resolving the signed id.",
+  "whyTestsDoNotAlreadyCoverThis": "The included unsubscribe-related tests generate tokens and inspect email content, but they do not exercise the unsubscribe endpoint with the project's configured user model.",
+  "suggestedRegressionTest": "Add a test that signs an existing recipient id, calls notifications:unsubscribe, and asserts the recipient profile's receive_promotional_emails flag becomes False and the response redirects to unsubscribe_success.",
+  "minimumFixScope": "Update notifications/views.py to resolve users via get_user_model() and keep the existing BadSignature, SignatureExpired, and DoesNotExist handling.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-4564e56f45_c2e539acfa",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:20:17.853Z",
+  "updatedAt": "2026-05-26T00:20:17.853Z"
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_781bb5d6f6",
+  "title": "Python source hub/templatetags",
+  "summary": "Python source group hub/templatetags with 2 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/templatetags",
+      "symbol": "hub/templatetags",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/templatetags/__init__.py",
+      "reason": "source group hub/templatetags"
+    },
+    {
+      "path": "hub/templatetags/capture_tag.py",
+      "reason": "source group hub/templatetags"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=4993 bytes; approxTokens=1249; includedFiles=2; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:40:06.841Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:40:06.842Z"
+}

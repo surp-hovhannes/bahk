@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_cad5f68928",
+  "title": "Python source events",
+  "summary": "Python source group events with 12 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "events",
+      "symbol": "events",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "events/__init__.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/admin.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/analytics_cache.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/analytics_optimizer.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/apps.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/middleware.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/models.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/serializers.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/signals.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/tasks.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/urls.py",
+      "reason": "source group events"
+    },
+    {
+      "path": "events/views.py",
+      "reason": "source group events"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-cad5f68928-2ceb_d844cef1be",
+    "fnd_sig-feat-library-cad5f68928-c3e3_f7e4cef031",
+    "fnd_sig-feat-library-cad5f68928-5dc5_c265c6cd4f"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "3 finding(s); prompt=373051 bytes; approxTokens=93263; includedFiles=20; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:52:20.087Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:52:20.087Z"
+}

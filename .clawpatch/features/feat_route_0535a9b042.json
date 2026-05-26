@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_0535a9b042",
+  "title": "Django route /hub/user/days/",
+  "summary": "Django route /hub/user/days/ handled by UserDaysView.as_view in hub/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "hub/urls.py",
+      "symbol": "UserDaysView.as_view",
+      "route": "/hub/user/days/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_combined_devotional_form.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_email_tasks.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_combined_devotional_form.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_email_tasks.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization",
+    "auth"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-route-0535a9b042-5b84bc_6fb8142ac0"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=110698 bytes; approxTokens=27623; includedFiles=9; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:53:47.573Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:53:47.573Z"
+}

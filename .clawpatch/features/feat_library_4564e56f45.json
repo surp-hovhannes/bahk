@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_4564e56f45",
+  "title": "Python source notifications",
+  "summary": "Python source group notifications with 11 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "notifications",
+      "symbol": "notifications",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "notifications/__init__.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/admin.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/apps.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/constants.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/models.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/serializers.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/tasks.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/urls.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/utils.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/validators.py",
+      "reason": "source group notifications"
+    },
+    {
+      "path": "notifications/views.py",
+      "reason": "source group notifications"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "notifications/tests/test_batch_processing.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_device_tokens.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_email_templates.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_admin.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_images.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_promo_emails.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "notifications/tests/test_race_conditions.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "notifications/tests/test_batch_processing.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_device_tokens.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_email_templates.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_promo_email_images.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_promo_emails.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_push_payload_generation.py",
+      "command": "pytest"
+    },
+    {
+      "path": "notifications/tests/test_race_conditions.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-4564e56f45-c2e5_910b1e9dc3",
+    "fnd_sig-feat-library-4564e56f45-780d_4f77eb29bf"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T001632-1d7677",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=190893 bytes; approxTokens=47721; includedFiles=19; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T00:20:17.855Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T00:20:17.855Z"
+}

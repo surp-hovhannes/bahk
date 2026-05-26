@@ -1,0 +1,77 @@
+provider: hetzner
+target: linux
+profile: bahk-django-hetzner
+class: standard
+lease:
+  idleTimeout: 20m
+  ttl: 60m
+sync:
+  delete: true
+  checksum: false
+  gitSeed: true
+  fingerprint: true
+  baseRef: main
+  timeout: 15m
+  warnFiles: 50000
+  warnBytes: 5368709120
+  failFiles: 150000
+  failBytes: 21474836480
+  exclude:
+    - .cache
+    - .turbo
+    - dist
+    - log
+    - node_modules
+    - storage
+    - tmp
+    - staticfiles
+    - test_media
+    - __pycache__
+    - .pytest_cache
+    - .ruff_cache
+env:
+  allow:
+    - CI
+    - DATABASE_URL
+    - DJANGO_SETTINGS_MODULE
+    - DJANGO_SECRET_KEY
+    - HOST
+    - NODE_OPTIONS
+    - REDIS_URL
+run:
+  preflightTools:
+    - docker
+jobs:
+  pytest:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build app redis;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T -e DJANGO_SETTINGS_MODULE=tests.test_settings -w /app app pytest
+    stop: always
+  ruff:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T -w /app app ruff check .
+    stop: always
+ssh:
+  user: crabbox
+  port: "2222"
+  fallbackPorts:
+    - "22"

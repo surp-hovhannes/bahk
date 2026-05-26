@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-52502e0235-0775d8_cf0e5dae77",
+  "featureId": "feat_route_52502e0235",
+  "title": "No direct test coverage for /hub/feasts/ route wiring or response contract",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 107,
+      "endLine": 109,
+      "symbol": "GetFeastForDate.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "startLine": 80,
+      "endLine": 136,
+      "symbol": "FeastAdminIconActionsTests",
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route registers the feasts collection endpoint, but the included feast-related tests exercise admin icon rematch actions rather than the public GetFeastForDate API route. That leaves regressions in URL resolution, expected query parameters, status codes, serialization shape, and auth/permission behavior for /hub/feasts/ undetected by the linked tests.",
+  "reproduction": null,
+  "recommendation": "Add API-level tests for /hub/feasts/ that call the route through Django/DRF test client and assert successful lookup behavior, missing/invalid input handling, and the response payload contract.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover unrelated Armenian text, readings, devotionals, fasts, email behavior, and Feast admin icon actions; none issue a request to /hub/feasts/ or reverse the feast-for-date URL name.",
+  "suggestedRegressionTest": "Create a test module or extend an existing feast API test to seed Church, Day, and Feast data, then GET /hub/feasts/ with valid and invalid date/church parameters and assert status codes plus serialized fields.",
+  "minimumFixScope": "Tests only unless adding the tests exposes an implementation defect in GetFeastForDate.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-52502e0235_0775d83a54",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:00:15.968Z",
+  "updatedAt": "2026-05-26T03:00:15.968Z"
+}

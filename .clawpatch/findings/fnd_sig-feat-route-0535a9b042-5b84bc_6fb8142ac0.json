@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-0535a9b042-5b84bc_6fb8142ac0",
+  "featureId": "feat_route_0535a9b042",
+  "title": "No focused test covers the /user/days/ route registration or contract",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 80,
+      "endLine": 83,
+      "symbol": "UserDaysView.as_view",
+      "quote": null
+    }
+  ],
+  "reasoning": "The route is registered for a user-specific endpoint, which crosses auth and serialization boundaries, but the included tests exercise unrelated Armenian text, Bible API, devotionals, email, fast views, and feast admin behavior. None of the shown tests request or reverse the `user-days` route, so a regression that removes the URL, changes its name, or accidentally exposes unauthenticated/user-mismatched data would not be caught by the linked test set.",
+  "reproduction": null,
+  "recommendation": "Add a focused API test for `user-days` that verifies the URL resolves, requires the intended authentication state, and returns only days appropriate for the requesting user/profile.",
+  "whyTestsDoNotAlreadyCoverThis": "The linked context tests do not reference `user/days`, `user-days`, or `UserDaysView`; they cover adjacent features rather than this route's availability and user-scoped behavior.",
+  "suggestedRegressionTest": "Add a test that authenticates two users with different profiles/fasts, calls `/hub/user/days/` or reverses `user-days`, and asserts the response status plus that returned day records are scoped to the requesting user.",
+  "minimumFixScope": "Test-only change around the UserDaysView route and its expected response/auth behavior.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-0535a9b042_5b84bcc8ff",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:53:47.571Z",
+  "updatedAt": "2026-05-26T02:53:47.571Z"
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-5f94fa5ad6-ec6cea_53c1da34ae",
+  "featureId": "feat_route_5f94fa5ad6",
+  "title": "No regression test covers the learning resources route include",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "bahk/urls.py",
+      "startLine": 120,
+      "endLine": 123,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The feature adds the public API mount at /api/learning-resources/ by including learning_resources.urls, but no linked tests are provided to verify that the route resolves or that expected child endpoints are reachable under this prefix. A later URL refactor could remove, rename, or shadow this mount without a focused failure.",
+  "reproduction": null,
+  "recommendation": "Add a URL routing regression test that resolves a representative learning_resources endpoint through the /api/learning-resources/ prefix, or at minimum asserts the include is present and dispatches to the expected URLconf.",
+  "whyTestsDoNotAlreadyCoverThis": "The feature metadata lists no tests, and the included excerpt contains only the route declaration, not a test asserting the public URL contract.",
+  "suggestedRegressionTest": "Add a Django URL resolver or API client test for a representative learning_resources.urls endpoint under /api/learning-resources/.",
+  "minimumFixScope": "A focused Django URL routing test for the /api/learning-resources/ include.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-5f94fa5ad6_ec6cea51a3",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:00:06.490Z",
+  "updatedAt": "2026-05-26T03:00:06.490Z"
+}

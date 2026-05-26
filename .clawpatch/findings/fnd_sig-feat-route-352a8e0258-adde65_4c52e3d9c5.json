@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-352a8e0258-adde65_4c52e3d9c5",
+  "featureId": "feat_route_352a8e0258",
+  "title": "Password reset route lacks endpoint-level regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 58,
+      "endLine": 59,
+      "symbol": "PasswordResetView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "startLine": 36,
+      "endLine": 68,
+      "symbol": "EmailTemplateTests.test_password_reset_email_template_renders",
+      "quote": null
+    }
+  ],
+  "reasoning": "The public password reset and confirm routes are wired, but the included tests only validate that the password reset email template renders with a supplied reset_url. They do not exercise POSTing to /api/password/reset/, request validation, unknown-user behavior, email dispatch, generated reset URL shape, or the confirm route contract. Because this endpoint accepts unauthenticated network input and sends account recovery email, route/view regressions could ship while the template test still passes.",
+  "reproduction": null,
+  "recommendation": "Add endpoint-level tests for /api/password/reset/ and /api/password/reset/confirm/ covering valid requests, malformed input, non-existent email behavior, email generation, and successful/invalid token confirmation responses.",
+  "whyTestsDoNotAlreadyCoverThis": "The only password-reset-related included test renders email/password_reset.html directly with a fabricated reset_url; it bypasses URL routing, PasswordResetView, serializers, token generation, and email sending.",
+  "suggestedRegressionTest": "Use DRF/APIClient to POST an existing user's email to /api/password/reset/, assert the response contract and one email containing a usable reset link, then POST valid and invalid payloads to /api/password/reset/confirm/ and assert password change/token rejection behavior.",
+  "minimumFixScope": "Tests for hub password reset API routes and their expected response/email contracts.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-352a8e0258_adde658d5b",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:56:51.055Z",
+  "updatedAt": "2026-05-26T02:56:51.055Z"
+}

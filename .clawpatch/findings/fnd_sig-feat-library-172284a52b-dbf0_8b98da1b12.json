@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-172284a52b-dbf0_8b98da1b12",
+  "featureId": "feat_library_172284a52b",
+  "title": "Configured npm test command always fails",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "package.json",
+      "startLine": 124,
+      "endLine": 125,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The project metadata identifies `npm run test` as the test command for this Node package, but the manifest's `test` script is the default placeholder that prints an error and exits with status 1. Any CI, release, or local verification path that relies on the package test command will fail even when the application is otherwise healthy, and it provides no actual coverage for the package behavior.",
+  "reproduction": null,
+  "recommendation": "Replace the placeholder `test` script with the real test command, or remove/rename the npm test entry if this package is only meant to build static assets and tests are intentionally run through Django/Python tooling.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for this feature, and the only declared npm test command exits before running any tests.",
+  "suggestedRegressionTest": "Add a CI check that runs `npm run test` and expects it to execute the intended test suite successfully.",
+  "minimumFixScope": "Update the `scripts.test` entry in `package.json` to a working command aligned with the project's actual test strategy.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-172284a52b_dbf053ede5",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:17:34.515Z",
+  "updatedAt": "2026-05-26T00:17:34.515Z"
+}
