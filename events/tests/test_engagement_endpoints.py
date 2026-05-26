@@ -9,13 +9,14 @@ This module tests the API endpoints that track user engagement:
 from django.test import override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from events.models import Event, EventType
 from hub.models import Fast, Church, Profile, Day, Devotional, Video
-from prayers.models import Prayer, PrayerSet
+from prayers.models import Prayer, PrayerRequest, PrayerSet
 
 User = get_user_model()
 
@@ -96,6 +97,14 @@ class EngagementTrackingEndpointsTest(APITestCase):
             category='general',
             church=self.church,
             fast=self.fast,
+        )
+
+        self.prayer_request = PrayerRequest.objects.create(
+            title='Test Prayer Request',
+            description='Test prayer request description',
+            requester=self.user,
+            status='approved',
+            expiration_date=timezone.now(),
         )
 
         self.other_church = Church.objects.create(name='Other Church')
@@ -387,6 +396,84 @@ class EngagementTrackingEndpointsTest(APITestCase):
         response = self.client.post(url, {'prayer_id': self.prayer.id}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_prayer_request_viewed_success(self):
+        """Test successful prayer request viewed tracking."""
+        url = reverse('events:track-prayer-request-viewed')
+        data = {'prayer_request_id': self.prayer_request.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
+
+        prayer_request_event = Event.objects.filter(
+            event_type__code=EventType.PRAYER_REQUEST_VIEWED,
+            user=self.user,
+        ).first()
+
+        self.assertIsNotNone(prayer_request_event)
+        self.assertEqual(
+            prayer_request_event.title,
+            f'Prayer request viewed: {self.prayer_request.title}',
+        )
+        self.assertEqual(prayer_request_event.target, self.prayer_request)
+        self.assertEqual(
+            prayer_request_event.data['prayer_request_id'],
+            self.prayer_request.id,
+        )
+        self.assertEqual(
+            prayer_request_event.data['status'],
+            self.prayer_request.status,
+        )
+        self.assertEqual(
+            prayer_request_event.data['title'],
+            self.prayer_request.title,
+        )
+
+    def test_track_prayer_request_viewed_missing_prayer_request_id(self):
+        """Test prayer request tracking with missing prayer_request_id."""
+        url = reverse('events:track-prayer-request-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('prayer_request_id is required', response.data['error'])
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_prayer_request_viewed_invalid_prayer_request_id(self):
+        """Test prayer request tracking with invalid prayer_request_id."""
+        url = reverse('events:track-prayer-request-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(
+            url,
+            {'prayer_request_id': 'invalid'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Invalid prayer_request_id', response.data['error'])
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_prayer_request_viewed_authentication_required(self):
+        """Test that prayer request tracking requires authentication."""
+        self.client.credentials()
+
+        url = reverse('events:track-prayer-request-viewed')
+        response = self.client.post(
+            url,
+            {'prayer_request_id': self.prayer_request.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
     
     def test_track_checklist_used_success(self):
         """Test successful checklist used tracking."""
@@ -578,6 +665,14 @@ class EngagementTrackingEndpointsTest(APITestCase):
     def test_track_prayer_viewed_get_method_not_allowed(self):
         """Test that GET method is not allowed for prayer tracking."""
         url = reverse('events:track-prayer-viewed')
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_track_prayer_request_viewed_get_method_not_allowed(self):
+        """Test that GET method is not allowed for prayer request tracking."""
+        url = reverse('events:track-prayer-request-viewed')
 
         response = self.client.get(url)
 
