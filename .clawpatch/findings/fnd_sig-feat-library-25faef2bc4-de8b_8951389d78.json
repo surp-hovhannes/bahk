@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-25faef2bc4-de8b_8951389d78",
+  "featureId": "feat_library_25faef2bc4",
+  "title": "Memory reporting uses Linux-only ru_maxrss units",
+  "category": "bug",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "memory_debug.py",
+      "startLine": 30,
+      "endLine": 32,
+      "symbol": "get_memory_mb",
+      "quote": null
+    }
+  ],
+  "reasoning": "resource.getrusage(...).ru_maxrss is reported in kilobytes on Linux but bytes on macOS. Dividing unconditionally by 1024 produces MB on Linux, but produces KB on macOS while labeling the result as MB. This makes the profiling output misleading for developers running the root debug script locally outside Linux/Heroku.",
+  "reproduction": null,
+  "recommendation": "Branch on sys.platform, dividing by 1024 on Linux and by 1024*1024 on Darwin, or use a cross-platform memory library such as psutil when available.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for this feature, and the script's platform-specific unit conversion is not covered in the shown files.",
+  "suggestedRegressionTest": "Unit-test get_memory_mb with a monkeypatched resource.getrusage result on linux and darwin platform values to verify the printed unit conversion is MB in both cases.",
+  "minimumFixScope": "Update get_memory_mb to normalize ru_maxrss units per platform.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-25faef2bc4_de8b6a705f",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:18:41.005Z",
+  "updatedAt": "2026-05-26T00:18:41.005Z"
+}

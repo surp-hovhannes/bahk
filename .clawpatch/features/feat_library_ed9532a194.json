@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_ed9532a194",
+  "title": "Python source hub/management/commands",
+  "summary": "Python source group hub/management/commands with 4 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/management/commands",
+      "symbol": "hub/management/commands",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/management/commands/__init__.py",
+      "reason": "source group hub/management/commands"
+    },
+    {
+      "path": "hub/management/commands/create_test_users_for_fast.py",
+      "reason": "source group hub/management/commands"
+    },
+    {
+      "path": "hub/management/commands/geocode_locations.py",
+      "reason": "source group hub/management/commands"
+    },
+    {
+      "path": "hub/management/commands/remove_test_users_for_fast.py",
+      "reason": "source group hub/management/commands"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "fixed",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-ed9532a194-e112_b834c868f6"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=18357 bytes; approxTokens=4590; includedFiles=4; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:52:35.562Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T06:07:27.775Z"
+}

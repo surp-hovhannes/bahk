@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_253ded5d79",
+  "title": "Python source learning_resources/migrations",
+  "summary": "Python source group learning_resources/migrations with 9 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "learning_resources/migrations",
+      "symbol": "learning_resources/migrations",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "learning_resources/migrations/0001_initial.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/0002_article_cached_thumbnail_updated_and_more.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/0003_video_category.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/0004_alter_video_thumbnail_alter_video_video.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/0005_recipe.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/0006_alter_article_image_alter_recipe_image_and_more.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/0007_bookmark.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/0008_article_i18n_recipe_i18n_video_i18n_and_more.py",
+      "reason": "source group learning_resources/migrations"
+    },
+    {
+      "path": "learning_resources/migrations/__init__.py",
+      "reason": "source group learning_resources/migrations"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-253ded5d79-38fe_6656e2d852"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T001632-1d7677",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=21630 bytes; approxTokens=5408; includedFiles=9; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T00:18:23.268Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T00:18:23.268Z"
+}

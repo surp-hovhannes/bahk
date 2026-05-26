@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-fa96c41587-eb5427_c1dd2aee5a",
+  "featureId": "feat_route_fa96c41587",
+  "title": "Video detail route lacks included regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "learning_resources/urls.py",
+      "startLine": 15,
+      "endLine": 15,
+      "symbol": "VideoDetailView.as_view",
+      "quote": null
+    }
+  ],
+  "reasoning": "The feature exposes the video detail endpoint at videos/<int:pk>/, but no linked tests were provided for URL resolution, accepted pk shape, or dispatch to VideoDetailView. This leaves the route vulnerable to accidental rename/removal or converter changes without a targeted failure.",
+  "reproduction": null,
+  "recommendation": "Add a focused URL test that reverses video-detail with a numeric pk, asserts it resolves to VideoDetailView, and optionally verifies a representative GET through the API routing layer if fixtures are available.",
+  "whyTestsDoNotAlreadyCoverThis": "The feature metadata lists no tests, and the included excerpts contain only the route declaration.",
+  "suggestedRegressionTest": "Add a Django URLConf test for reverse('video-detail', kwargs={'pk': 1}) and resolve('/api/learning-resources/videos/1/') targeting VideoDetailView.",
+  "minimumFixScope": "Test-only change covering the video detail route contract.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-fa96c41587_eb54270211",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:12:12.708Z",
+  "updatedAt": "2026-05-26T03:12:12.708Z"
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_d1b2e77719",
+  "title": "Django route /api/learning-resources/bookmarks/:content_type/:object_id/",
+  "summary": "Django route /api/learning-resources/bookmarks/:content_type/:object_id/ handled by bookmark_delete_view in learning_resources/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "learning_resources/urls.py",
+      "symbol": "bookmark_delete_view",
+      "route": "/api/learning-resources/bookmarks/:content_type/:object_id/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "learning_resources/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=5408 bytes; approxTokens=1352; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:08:47.359Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T03:08:47.359Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-bbfb005536-45cd3d_39283f1d6a",
+  "featureId": "feat_route_bbfb005536",
+  "title": "Successful device-token registration is allowed to return 400",
+  "category": "api-contract",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "contract-mismatch",
+  "evidence": [
+    {
+      "path": "notifications/tests/test_device_tokens.py",
+      "startLine": 34,
+      "endLine": 43,
+      "symbol": "DeviceTokenTests.test_create_token",
+      "quote": null
+    },
+    {
+      "path": "notifications/tests/test_device_tokens.py",
+      "startLine": 45,
+      "endLine": 63,
+      "symbol": "DeviceTokenTests.test_update_existing_token",
+      "quote": null
+    }
+  ],
+  "reasoning": "The route is tested by posting valid device-token JSON to `notifications:register-device-token`, but the primary success test explicitly notes that the view returns 400 Bad Request while still creating the token, and then only asserts the database side effect. A client using this API would see a failed registration despite the server mutating state, likely causing retries, duplicate attempts, or local push-registration state to diverge from the backend. The update/multiple-token path similarly ignores response status and only checks persisted rows, so the endpoint's success contract is not protected.",
+  "reproduction": "POST valid JSON such as `{ \"token\": \"ExponentPushToken[test-device-token-123]\", \"device_type\": \"ios\" }` to `reverse('notifications:register-device-token')` as an authenticated user. The included test expectation documents that the token is created even though the HTTP status may be 400.",
+  "recommendation": "Make `DeviceTokenCreateView` return a 2xx status for successful create/update/ownership-transfer cases, and keep 400 only for validation failures. Update the tests to assert the expected success status before asserting persistence.",
+  "whyTestsDoNotAlreadyCoverThis": "The valid create and update tests intentionally avoid asserting success status; the comment in the create test accepts the current 400 response as long as the token exists.",
+  "suggestedRegressionTest": "In `notifications/tests/test_device_tokens.py`, assert `response.status_code` is `201_CREATED` or `200_OK` for valid token creation, new-token registration for the same user, and same-token ownership transfer to another authenticated user.",
+  "minimumFixScope": "Fix the response path in `DeviceTokenCreateView` and strengthen the device-token route tests.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-bbfb005536_45cd3dd8f9",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:07:33.949Z",
+  "updatedAt": "2026-05-26T03:07:33.949Z"
+}

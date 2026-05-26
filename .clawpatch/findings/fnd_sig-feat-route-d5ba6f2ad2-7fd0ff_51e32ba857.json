@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-d5ba6f2ad2-7fd0ff_51e32ba857",
+  "featureId": "feat_route_d5ba6f2ad2",
+  "title": "Fast intention route has no direct regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 73,
+      "endLine": 73,
+      "symbol": "FastIntentionView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 1,
+      "endLine": 5,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 656,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The new route is exposed at fasts/<int:fast_id>/intention/, but the included fast view tests only import and exercise FastListView, FastByFeastDateView, and FastSerializer behavior. None of the linked tests resolve or request the fast-intention URL, so a URL name/path regression or a mismatch between the route kwarg fast_id and the view's expected kwarg could ship without these tests failing.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for the fast-intention endpoint that use the declared route or reverse name, cover a successful request, a nonexistent fast_id, and the expected authentication/authorization behavior for this user-input route.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover adjacent fast listing, feast-date filtering, and serializer day-number behavior, but no test references fast-intention or /api/fasts/<id>/intention/.",
+  "suggestedRegressionTest": "Add tests in hub/tests/test_fast_views.py that call reverse('fast-intention', kwargs={'fast_id': fast.id}) or GET /api/fasts/{fast.id}/intention/ and assert the intended status code and response contract.",
+  "minimumFixScope": "Test-only change covering hub/urls.py route wiring and FastIntentionView endpoint behavior.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-d5ba6f2ad2_7fd0ff3326",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:09:18.521Z",
+  "updatedAt": "2026-05-26T03:09:18.521Z"
+}

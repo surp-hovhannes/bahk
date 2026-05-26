@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-7130f90d2d-f7c238_e58b7944af",
+  "featureId": "feat_route_7130f90d2d",
+  "title": "Trigger milestone admin route has no linked regression coverage",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "events/urls.py",
+      "startLine": 40,
+      "endLine": 41,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "startLine": 446,
+      "endLine": 464,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 170,
+      "endLine": 180,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route exposes an admin utility endpoint with a fast_id path parameter, but the included tests exercise permissions for other admin dashboard routes and authentication for other engagement endpoints, not this trigger-milestone route. Because this endpoint is an admin action behind network/user-input/auth boundaries, regressions in URL wiring, allowed methods, authentication, staff-only authorization, missing/invalid fast_id behavior, or response shape would not be caught by the shown test set.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for reverse('events:trigger-milestone', args=[fast.id]) covering successful staff/admin access, unauthenticated and non-staff denial, unsupported methods if applicable, and nonexistent fast_id handling.",
+  "whyTestsDoNotAlreadyCoverThis": "The shown admin tests assert permissions for Django admin dashboard views, and the engagement endpoint tests assert authentication for tracking routes, but none call or reverse the trigger-milestone route declared in events/urls.py.",
+  "suggestedRegressionTest": "Create tests in an events test module that authenticate as superuser/staff/non-staff/anonymous and request events:trigger-milestone for valid and invalid Fast IDs, asserting the intended status codes and no unintended milestone/event side effects on denied requests.",
+  "minimumFixScope": "Add route-specific tests; if they fail, apply the smallest auth/method/error-handling fix in the trigger_milestone_check view.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-7130f90d2d_f7c238e59d",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:01:22.225Z",
+  "updatedAt": "2026-05-26T03:01:22.225Z"
+}

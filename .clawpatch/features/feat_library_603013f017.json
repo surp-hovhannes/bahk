@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_603013f017",
+  "title": "Python source learning_resources#2",
+  "summary": "Python source file learning_resources/views.py.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "learning_resources#2",
+      "symbol": "learning_resources#2",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "learning_resources/views.py",
+      "reason": "source group learning_resources#2"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-603013f017-c494_1caf791540",
+    "fnd_sig-feat-library-603013f017-8f4d_e3506c0a50"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=31490 bytes; approxTokens=7873; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:39:23.724Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:39:23.724Z"
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-8552b82b12-614c_60cd3df582",
+  "featureId": "feat_library_8552b82b12",
+  "title": "Malformed IPv4 feedback addresses are stored without validation or anonymization fallback",
+  "category": "security",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "icons/views.py",
+      "startLine": 524,
+      "endLine": 542,
+      "symbol": "IconFeedbackCreateView.post",
+      "quote": null
+    },
+    {
+      "path": "icons/models.py",
+      "startLine": 155,
+      "endLine": 157,
+      "symbol": "IconFeedback.ip_address",
+      "quote": null
+    },
+    {
+      "path": "icons/tests.py",
+      "startLine": 279,
+      "endLine": 314,
+      "symbol": "IconFeedbackAPITests",
+      "quote": null
+    }
+  ],
+  "reasoning": "The feedback endpoint treats any REMOTE_ADDR containing a dot as IPv4, splits on dots, zeroes the last segment, and stores the resulting string without using ipaddress validation. Malformed dotted values can therefore be persisted in a GenericIPAddressField-backed column, and mixed proxy-style values such as comma-separated address lists are not reliably anonymized. The tests cover normal IPv4, normal IPv6, and empty input, but not malformed or proxy-formatted values.",
+  "reproduction": "Submit feedback with REMOTE_ADDR='203.0.113.42, 10.0.0.5' or 'not.an.ip'. The code enters the dotted IPv4 branch and stores a derived non-IP string rather than validating and discarding or safely parsing it.",
+  "recommendation": "Use ipaddress.ip_address for both IPv4 and IPv6, catch ValueError, and store None for invalid REMOTE_ADDR values. If proxy headers are supported elsewhere, parse only the trusted client address according to the project's proxy configuration before anonymization.",
+  "whyTestsDoNotAlreadyCoverThis": "The feedback tests assert anonymization for a valid IPv4, valid IPv6, and empty REMOTE_ADDR only. They do not assert behavior for malformed dotted values or proxy-style address strings.",
+  "suggestedRegressionTest": "Add feedback endpoint tests with REMOTE_ADDR='not.an.ip' and a comma-separated value, asserting the stored ip_address is None or a correctly anonymized trusted address according to the chosen policy.",
+  "minimumFixScope": "icons/views.py IP anonymization block in IconFeedbackCreateView.post.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-8552b82b12_614c012380",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:40:57.347Z",
+  "updatedAt": "2026-05-26T02:40:57.347Z"
+}

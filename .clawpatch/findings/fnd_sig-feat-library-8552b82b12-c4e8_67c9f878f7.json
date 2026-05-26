@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-8552b82b12-c4e8_67c9f878f7",
+  "featureId": "feat_library_8552b82b12",
+  "title": "Icon matching accepts unvalidated max_results and can return 500 for valid-looking client input",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "icons/views.py",
+      "startLine": 163,
+      "endLine": 167,
+      "symbol": "IconMatchView.post",
+      "quote": null
+    },
+    {
+      "path": "icons/views.py",
+      "startLine": 396,
+      "endLine": 406,
+      "symbol": "IconMatchView.post",
+      "quote": null
+    },
+    {
+      "path": "icons/views.py",
+      "startLine": 411,
+      "endLine": 423,
+      "symbol": "IconMatchView.post",
+      "quote": null
+    },
+    {
+      "path": "icons/views.py",
+      "startLine": 473,
+      "endLine": 475,
+      "symbol": "IconMatchView._simple_match_icons",
+      "quote": null
+    },
+    {
+      "path": "icons/tests.py",
+      "startLine": 139,
+      "endLine": 148,
+      "symbol": "IconAPITests.test_icon_match_endpoint",
+      "quote": null
+    }
+  ],
+  "reasoning": "max_results is read directly from request.data and used as a slice bound without type or range validation. If a client submits max_results as a string, which is common for form-encoded API input, both the LLM parsing path and the fallback matcher can raise TypeError on list slicing. The outer handler then retries the same bad value in fallback and can return a 500 instead of a 400 validation error. Negative values are also accepted and produce incorrect slicing semantics, returning all but the last N results rather than enforcing a maximum result count.",
+  "reproduction": "POST /api/icons/match/ with a prompt and max_results='2' as form data, or max_results=-1 as JSON. The string case can reach the fallback failure path and return 500; the negative case returns an unintended slice.",
+  "recommendation": "Parse max_results once at the start of post(), reject non-integer values with 400, and enforce a sane inclusive range such as 1..100 before using it in prompts or slices.",
+  "whyTestsDoNotAlreadyCoverThis": "The included test only sends max_results as the integer 1 and checks for a 200 with a matches key. It does not cover string, missing, zero, negative, or oversized values.",
+  "suggestedRegressionTest": "Add IconMatchView tests for max_results='2' form input, max_results=-1, and a non-numeric value, asserting either normalized success for numeric strings or 400 for invalid/out-of-range values.",
+  "minimumFixScope": "icons/views.py IconMatchView.post validation before query construction and matcher invocation.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-8552b82b12_c4e8509c3d",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:40:57.347Z",
+  "updatedAt": "2026-05-26T02:40:57.347Z"
+}

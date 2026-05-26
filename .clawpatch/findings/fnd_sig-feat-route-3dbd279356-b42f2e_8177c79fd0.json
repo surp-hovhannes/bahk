@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-3dbd279356-b42f2e_8177c79fd0",
+  "featureId": "feat_route_3dbd279356",
+  "title": "Fast intention route has no linked route or view coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 73,
+      "endLine": 73,
+      "symbol": "FastIntentionView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 5,
+      "endLine": 8,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 656,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned change exposes /fasts/<int:fast_id>/intention/ through FastIntentionView, but the associated fast view test module only imports and exercises FastListView, FastByFeastDateView, and serializer behavior. There is no visible test that reverses the fast-intention URL, calls the endpoint, verifies the fast_id kwarg is accepted, or checks the expected auth/error behavior for this user-input route. That leaves regressions in URL wiring or endpoint permissions likely to slip through.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for the fast-intention endpoint covering URL resolution and at least the primary success and missing/invalid fast cases, including whatever authentication or permission contract FastIntentionView is supposed to enforce.",
+  "whyTestsDoNotAlreadyCoverThis": "The included fast view tests cover list, feast-date lookup, caching, church scoping, and serializer day numbering, but no visible test references FastIntentionView or the fast-intention route.",
+  "suggestedRegressionTest": "In hub/tests/test_fast_views.py, add tests using reverse('fast-intention', kwargs={'fast_id': fast.pk}) or a client request to /api/fasts/<id>/intention/ that assert the expected status and response for an existing fast, plus a nonexistent fast_id case.",
+  "minimumFixScope": "Test-only change for hub/tests/test_fast_views.py unless the new test reveals a route/view contract bug.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-3dbd279356_b42f2e8c10",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:57:36.419Z",
+  "updatedAt": "2026-05-26T02:57:36.419Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-ba626d612c-21c6_decc74a139",
+  "featureId": "feat_library_ba626d612c",
+  "title": "Reading feedback counters lose votes under concurrent requests",
+  "category": "concurrency",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/views/readings.py",
+      "startLine": 285,
+      "endLine": 299,
+      "symbol": "ReadingContextFeedbackView.post",
+      "quote": null
+    },
+    {
+      "path": "hub/views/feasts.py",
+      "startLine": 281,
+      "endLine": 301,
+      "symbol": "FeastContextFeedbackView.post",
+      "quote": null
+    }
+  ],
+  "reasoning": "Reading feedback increments thumbs_up/thumbs_down by loading the active_context value into Python, adding 1, and saving it. Two concurrent requests that read the same starting value can both save the same incremented value, dropping one vote. The feast feedback view in the same feature uses F() updates for the same operation, showing the intended race-safe pattern.",
+  "reproduction": "Send two concurrent down-vote POSTs for the same reading context when thumbs_down is 0; both can read 0 and save 1, leaving the counter at 1 instead of 2.",
+  "recommendation": "Use an atomic database update with F('thumbs_up') + 1 and F('thumbs_down') + 1, then refresh before checking the regeneration threshold.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests do not cover reading feedback and do not exercise concurrent requests.",
+  "suggestedRegressionTest": "Add a test that issues concurrent feedback updates or directly simulates stale reads, then asserts both votes are reflected in the final counter.",
+  "minimumFixScope": "Update ReadingContextFeedbackView.post to follow the atomic increment pattern used by FeastContextFeedbackView.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-ba626d612c_21c6407f17",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:43:04.409Z",
+  "updatedAt": "2026-05-26T02:43:04.409Z"
+}

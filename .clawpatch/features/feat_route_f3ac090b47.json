@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_f3ac090b47",
+  "title": "Django route /api/learning-resources/articles/:pk/",
+  "summary": "Django route /api/learning-resources/articles/:pk/ handled by ArticleDetailView.as_view in learning_resources/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "learning_resources/urls.py",
+      "symbol": "ArticleDetailView.as_view",
+      "route": "/api/learning-resources/articles/:pk/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "learning_resources/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=5352 bytes; approxTokens=1338; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:11:16.841Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T03:11:16.841Z"
+}

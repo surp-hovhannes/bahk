@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-90720ae5ed-a2b225_660f9a7afb",
+  "featureId": "feat_route_90720ae5ed",
+  "title": "Church detail route has no linked request coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 84,
+      "endLine": 86,
+      "symbol": "ChurchDetailView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 248,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "startLine": 124,
+      "endLine": 209,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route declares `churches/<int:pk>/` for `ChurchDetailView`, but the included linked tests exercise other endpoints and view behavior such as fasts and devotionals. None of the provided tests make a request to `/hub/churches/<pk>/`, reverse `church-detail`, or assert the detail response contract. A future URL rename, converter change, or accidental removal of this route could pass the shown test set.",
+  "reproduction": null,
+  "recommendation": "Add a focused API test that creates a Church, requests the detail endpoint through the configured URL prefix, and asserts status code plus key response fields. Include a not-found case for an unknown integer pk if the view is expected to return 404.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover Armenian text utilities, Bible text tasks, devotional list filtering, email behavior, fast views, and feast admin actions; none target `ChurchDetailView` or the `church-detail` URL pattern.",
+  "suggestedRegressionTest": "Create a `ChurchDetailView` test that calls `self.client.get('/hub/churches/<pk>/')` or the project-level equivalent prefix and verifies the serialized church payload and 404 behavior for a missing pk.",
+  "minimumFixScope": "Add route-level tests for `church-detail`; no production code change is implied by the shown evidence.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T165342-982434",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original route evidence still exists at `hub/urls.py:86` (`churches/<int:pk>/` -> `ChurchDetailView.as_view()`). The original cited test files remain unrelated to this route, but the repository now includes focused request coverage in `hub/tests/test_church_detail_api.py:8-20`. Those tests call `reverse(\"church-detail\", args=[church.pk])`, assert a `200 OK` response with the serialized payload, and assert `404 Not Found` for a missing pk. That directly addresses the reported gap, so the finding is fixed rather than still open elsewhere. I attempted to run the targeted Django test via the project’s Docker command pattern, but the app container `bahk_devcontainer-app-1` is currently not running, so runtime verification was not possible in this session.",
+      "commands": [
+        "pwd",
+        "rg -n \"church-detail|ChurchDetailView|churches/<int:pk>\" hub/urls.py hub/tests",
+        "sed -n '70,95p' hub/urls.py",
+        "rg -n \"churches?/|reverse\\(['\\\"]church-detail|reverse\\(['\\\"][^'\\\"]*church-detail|ChurchDetailView\" hub/tests",
+        "sed -n '1,120p' hub/tests/test_church_detail_api.py",
+        "sed -n '1,80p' hub/tests/test_fast_views.py",
+        "sed -n '120,220p' hub/tests/test_devotional_list_api.py",
+        "docker exec bahk_devcontainer-app-1 python manage.py test hub.tests.test_church_detail_api --settings=tests.test_settings",
+        "rg -n \"class ChurchDetailView|ChurchDetailSerializer|get_object_or_404|RetrieveAPIView\" hub/views hub/serializers",
+        "sed -n '1,120p' hub/views/church.py",
+        "git log --oneline -- hub/tests/test_church_detail_api.py",
+        "nl -ba hub/urls.py | sed -n '82,88p'",
+        "nl -ba hub/tests/test_church_detail_api.py | sed -n '1,40p'",
+        "ls hub/tests"
+      ],
+      "createdAt": "2026-05-26T16:54:23.554Z"
+    }
+  ],
+  "signature": "sig_feat-route-90720ae5ed_a2b225a8db",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-route-90720ae5ed-a2_ecf27fe4fd"
+  ],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:03:10.776Z",
+  "updatedAt": "2026-05-26T16:54:23.554Z"
+}

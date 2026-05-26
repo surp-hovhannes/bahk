@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-6d2c36a6a4-eb40_9e41160ef5",
+  "featureId": "feat_library_6d2c36a6a4",
+  "title": "Reading context migration drops existing generated context data",
+  "category": "data-loss",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/migrations/0028_llmprompt_remove_reading_context_and_more.py",
+      "startLine": 44,
+      "endLine": 59,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/migrations/0028_llmprompt_remove_reading_context_and_more.py",
+      "startLine": 60,
+      "endLine": 121,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The migration removes Reading.context, context_last_generated, context_thumbs_down, and context_thumbs_up, then creates the replacement ReadingContext model without copying the existing per-reading values into that new table. Any environment that has rows populated after migration 0027 will lose that generated text, timestamps, and vote counts when applying 0028.",
+  "reproduction": null,
+  "recommendation": "Add a RunPython data migration before removing the Reading fields that creates ReadingContext rows from non-empty existing Reading context data and carries over thumbs_up, thumbs_down, and context_last_generated where possible. Remove the old fields only after the copy step.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for migration data preservation, and schema-only migration tests would not catch loss of populated field values.",
+  "suggestedRegressionTest": "Add a migration test that migrates to 0027, creates a Reading with context text, timestamp, and vote counts, migrates to 0028, and asserts a related ReadingContext row preserves those values.",
+  "minimumFixScope": "Update migration 0028 to include a reversible or at least forward RunPython data copy before the RemoveField operations.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-6d2c36a6a4_eb405b3163",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:39:53.610Z",
+  "updatedAt": "2026-05-26T02:39:53.610Z"
+}

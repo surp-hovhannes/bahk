@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-abe6c8cfe7-1a5157_4104762308",
+  "featureId": "feat_route_abe6c8cfe7",
+  "title": "Unsubscribe route has no direct coverage for token handling outcomes",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "notifications/urls.py",
+      "startLine": 10,
+      "endLine": 10,
+      "symbol": "views.unsubscribe",
+      "quote": null
+    },
+    {
+      "path": "notifications/tests/test_email_templates.py",
+      "startLine": 38,
+      "endLine": 42,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/tests/test_promo_emails.py",
+      "startLine": 223,
+      "endLine": 238,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route exposes a network endpoint that consumes a user-controlled unsubscribe token, but the included tests only verify that email templates/tasks generate links containing a signed token. None of the linked tests perform a GET against the unsubscribe URL or assert behavior for valid, missing, malformed, expired, or tampered tokens. That leaves the route's API contract and security-sensitive state change unvalidated.",
+  "reproduction": null,
+  "recommendation": "Add focused route tests for views.unsubscribe covering a valid signed token updating the user's promotional email preference, missing token, invalid signature/tampered token, expired token if max_age is intended, nonexistent user id, and redirect/render behavior for success and error paths.",
+  "whyTestsDoNotAlreadyCoverThis": "Existing tests assert link generation and template inclusion only; they do not exercise the route declared in notifications/urls.py or validate database side effects from the unsubscribe request.",
+  "suggestedRegressionTest": "Use Django Client with reverse('notifications:unsubscribe'), generate a TimestampSigner token for a test user, GET the route, assert the related profile is unsubscribed and the response reaches the expected success path; add separate invalid-token cases asserting no profile changes and the expected error path.",
+  "minimumFixScope": "Add tests for notifications:unsubscribe route behavior; update views.unsubscribe only if those tests reveal incorrect token validation or state changes.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-abe6c8cfe7_1a5157ee76",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:05:17.296Z",
+  "updatedAt": "2026-05-26T03:05:17.296Z"
+}

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_ee541bd261",
+  "title": "Django route /markdownx/",
+  "summary": "Django URL include /markdownx/ declared in bahk/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "bahk/urls.py",
+      "symbol": "markdownx.urls",
+      "route": "/markdownx/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "bahk/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-route-ee541bd261-1766f3_50ccb9431a"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=9445 bytes; approxTokens=2362; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:10:50.237Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T03:10:50.237Z"
+}

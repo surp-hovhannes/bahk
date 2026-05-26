@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-config-7528cb5b98-ad414_c5113e349e",
+  "featureId": "feat_config_7528cb5b98",
+  "title": "npm test is a placeholder that always fails",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "package.json",
+      "startLine": 124,
+      "endLine": 127,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The project metadata identifies `npm run test` as the configured test command, but the `test` script is still the default placeholder that prints an error and exits with status 1. Any CI, release gate, or developer workflow that relies on the package test command will fail without executing a real test suite.",
+  "reproduction": "Run `npm run test`; the configured script exits 1 immediately instead of running tests.",
+  "recommendation": "Replace the placeholder `test` script with the real JavaScript test command, or remove/adjust the npm test entry if tests are intentionally run through another tool.",
+  "whyTestsDoNotAlreadyCoverThis": "The only included test-related configuration is the failing placeholder itself; no linked tests are provided for this feature.",
+  "suggestedRegressionTest": "Add a CI check that runs `npm run test` and verifies it executes the intended test runner successfully.",
+  "minimumFixScope": "Update the `scripts.test` entry in `package.json` to call the actual test runner or a valid project test command.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-config-7528cb5b98_ad41415f68",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:16:44.972Z",
+  "updatedAt": "2026-05-26T00:16:44.972Z"
+}

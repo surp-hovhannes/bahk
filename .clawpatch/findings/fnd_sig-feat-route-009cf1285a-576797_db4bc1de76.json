@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-009cf1285a-576797_db4bc1de76",
+  "featureId": "feat_route_009cf1285a",
+  "title": "Leave-fast route has no linked coverage for its API contract",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 63,
+      "endLine": 67,
+      "symbol": "LeaveFastView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 1,
+      "endLine": 14,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 248,
+      "symbol": "FastListViewTest",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 250,
+      "endLine": 569,
+      "symbol": "FastByFeastDateViewTest",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 571,
+      "endLine": 656,
+      "symbol": "FastSerializerDayNumberTest",
+      "quote": null
+    }
+  ],
+  "reasoning": "The route table exposes `fasts/leave/` through `LeaveFastView.as_view`, but the included fast view tests import and exercise list, by-feast-date, and serializer behavior only. For a user-mutating endpoint on a network boundary, the linked tests do not establish expected method handling, authentication requirements, request payload validation, successful removal behavior, idempotency, or error responses when the user is not joined to a fast.",
+  "reproduction": null,
+  "recommendation": "Add endpoint-level tests for `/api/fasts/leave/` that cover authenticated success, unauthenticated access, missing or invalid fast identifiers, and repeated leave attempts. Keep the tests at the API layer so the URL declaration, view dispatch, permissions, serialization, and response contract are exercised together.",
+  "whyTestsDoNotAlreadyCoverThis": "The associated `test_fast_views.py` file only covers `FastListView`, `FastByFeastDateView`, and serializer day-number behavior in the shown excerpt; none of the included tests reference `LeaveFastView` or call `/api/fasts/leave/`.",
+  "suggestedRegressionTest": "Create a test case that joins a profile to a fast, POSTs to `/api/fasts/leave/` with that fast id as an authenticated user, asserts a success status and that the profile is removed, then verifies unauthenticated and invalid-id requests return the documented error statuses.",
+  "minimumFixScope": "Tests only unless they expose a behavioral mismatch in `LeaveFastView`.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-009cf1285a_576797b968",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:52:59.448Z",
+  "updatedAt": "2026-05-26T02:52:59.448Z"
+}

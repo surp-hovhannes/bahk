@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-12677fdbca-1f21_be81fd8342",
+  "featureId": "feat_library_12677fdbca",
+  "title": "Task compatibility module shadows the task package it tries to re-export",
+  "category": "build-release",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/tasks.py",
+      "startLine": 5,
+      "endLine": 12,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "startLine": 13,
+      "endLine": 14,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "startLine": 30,
+      "endLine": 33,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The file is named hub/tasks.py but imports from dotted modules under hub.tasks. In Python, a module file named hub/tasks.py is not a package and cannot contain submodules such as hub.tasks.email_tasks, hub.tasks.armenian_text_tasks, or hub.tasks.bible_api_tasks. Any code importing hub.tasks or one of the task submodules can resolve to this file and fail with a package/module collision, breaking Celery task discovery and the tests that import those submodules.",
+  "reproduction": "Run a Python import for one of the tested task modules, for example `python -c \"import hub.tasks.armenian_text_tasks\"`; with hub/tasks.py present as the resolved hub.tasks module, the dotted import cannot succeed because hub.tasks has no package path.",
+  "recommendation": "Remove the module/package collision. Move these backward-compatible re-exports into hub/tasks/__init__.py, or rename this shim so hub.tasks remains a real package. Keep the same __all__ exports from the package initializer if legacy `from hub.tasks import send_fast_reminder_task` imports must continue to work.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests import task submodules, but they do not include an explicit regression around the compatibility shim itself or verify that legacy `hub.tasks` imports and package submodule imports both work in the same interpreter.",
+  "suggestedRegressionTest": "Add an import smoke test that imports `hub.tasks`, `hub.tasks.email_tasks`, `hub.tasks.armenian_text_tasks`, and `hub.tasks.bible_api_tasks` in one process, then asserts the legacy exported task names are available from `hub.tasks`.",
+  "minimumFixScope": "Replace hub/tasks.py with a real hub/tasks package initializer containing the re-exports, and ensure no file remains at hub/tasks.py.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T061402-5bf80d",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original collision is no longer present in the current worktree: `hub/tasks.py` is deleted (`test -e hub/tasks.py` returned 1, and `git diff` shows it as a deleted file), while `hub/tasks/__init__.py` now exists and contains the compatibility re-exports from real package submodules. The cited test imports still exist at `hub/tests/test_armenian_text.py:13` and `hub/tests/test_bible_api.py:30-33`, and a new smoke test `hub/tests/test_task_imports.py` explicitly imports `hub.tasks` plus `hub.tasks.email_tasks`, `hub.tasks.armenian_text_tasks`, and `hub.tasks.bible_api_tasks` in one process and checks legacy exports. I could not execute the Docker-based import/test commands because Docker was unavailable (`failed to connect to the docker API ... no such file or directory`), and a local `python3` import was blocked by missing local dependency `celery`, but the current filesystem state resolves the module/package shadowing described in the finding.",
+      "commands": [
+        "pwd && rg --files | rg '(^|/)hub/(tasks\\.py|tasks/|tests/test_(armenian_text|bible_api)\\.py)$'",
+        "git status --short",
+        "find hub -maxdepth 3 -path 'hub/tasks*' -o -path 'hub/tests/test_task_imports.py' -o -path 'hub/tests/test_armenian_text.py' -o -path 'hub/tests/test_bible_api.py'",
+        "nl -ba hub/tests/test_task_imports.py",
+        "nl -ba hub/tests/test_armenian_text.py | sed -n '1,40p'",
+        "nl -ba hub/tests/test_bible_api.py | sed -n '1,55p'",
+        "nl -ba hub/tasks/__init__.py",
+        "docker exec bahk_devcontainer-app-1 python -c \"import hub.tasks; import hub.tasks.email_tasks; import hub.tasks.armenian_text_tasks; import hub.tasks.bible_api_tasks; print(hub.tasks.__file__); print(hasattr(hub.tasks, 'send_fast_reminder_task'), hasattr(hub.tasks, 'fetch_armenian_reading_text_task'), hasattr(hub.tasks, 'refresh_all_reading_texts_task'))\"",
+        "docker exec bahk_devcontainer-app-1 python manage.py test hub.tests.test_task_imports --settings=tests.test_settings",
+        "test -e hub/tasks.py; echo $?",
+        "git diff -- hub/tasks.py hub/tasks/__init__.py hub/tests/test_task_imports.py",
+        "python -c \"import hub.tasks; import hub.tasks.email_tasks; import hub.tasks.armenian_text_tasks; import hub.tasks.bible_api_tasks; print(hub.tasks.__file__); print(hasattr(hub.tasks, 'send_fast_reminder_task'), hasattr(hub.tasks, 'fetch_armenian_reading_text_task'), hasattr(hub.tasks, 'refresh_all_reading_texts_task'))\"",
+        "python3 -c \"import hub.tasks; import hub.tasks.email_tasks; import hub.tasks.armenian_text_tasks; import hub.tasks.bible_api_tasks; print(hub.tasks.__file__); print(hasattr(hub.tasks, 'send_fast_reminder_task'), hasattr(hub.tasks, 'fetch_armenian_reading_text_task'), hasattr(hub.tasks, 'refresh_all_reading_texts_task'))\"",
+        "git ls-files hub/tasks.py hub/tasks/__init__.py hub/tasks/armenian_text_tasks.py hub/tasks/bible_api_tasks.py hub/tasks/email_tasks.py hub/tests/test_task_imports.py",
+        "git diff --no-index /dev/null hub/tests/test_task_imports.py"
+      ],
+      "createdAt": "2026-05-26T06:15:08.900Z"
+    }
+  ],
+  "signature": "sig_feat-library-12677fdbca_1f21f57a23",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-12677fdbca-_ffe333e757"
+  ],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:17:17.242Z",
+  "updatedAt": "2026-05-26T06:15:08.900Z"
+}

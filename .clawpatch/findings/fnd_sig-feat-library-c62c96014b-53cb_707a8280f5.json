@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-c62c96014b-53cb_707a8280f5",
+  "featureId": "feat_library_c62c96014b",
+  "title": "Manual task failures are swallowed with a successful command exit",
+  "category": "build-release",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "events/management/commands/trigger_event_tasks.py",
+      "startLine": 106,
+      "endLine": 118,
+      "symbol": "Command.handle",
+      "quote": null
+    },
+    {
+      "path": "events/management/commands/trigger_event_tasks.py",
+      "startLine": 253,
+      "endLine": 256,
+      "symbol": "Command.handle",
+      "quote": null
+    }
+  ],
+  "reasoning": "The command catches any exception from task execution, prints an error, and then returns normally. For a management command likely used in scripts or operational runbooks, that produces a zero exit status even when the requested task failed, so automation cannot reliably detect failure.",
+  "reproduction": null,
+  "recommendation": "Raise `CommandError` after logging the exception, or return a nonzero failure path for validation and task execution errors.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests were included for command exit behavior or failure propagation from the task calls.",
+  "suggestedRegressionTest": "Patch one task to raise an exception, invoke `call_command('trigger_event_tasks', ...)`, and assert the command raises `CommandError` or otherwise signals failure to the caller.",
+  "minimumFixScope": "Replace the broad exception-swallowing branch in `trigger_event_tasks.py` with explicit failure signaling while preserving the user-facing error message.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-c62c96014b_53cb805a7f",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:51:39.236Z",
+  "updatedAt": "2026-05-26T02:51:39.236Z"
+}

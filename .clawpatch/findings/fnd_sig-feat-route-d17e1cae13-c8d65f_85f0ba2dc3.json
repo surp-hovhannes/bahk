@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-d17e1cae13-c8d65f_85f0ba2dc3",
+  "featureId": "feat_route_d17e1cae13",
+  "title": "Password reset confirmation route is not covered by endpoint tests",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 58,
+      "endLine": 59,
+      "symbol": "urlpatterns",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "startLine": 36,
+      "endLine": 67,
+      "symbol": "EmailTemplateTests.test_password_reset_email_template_renders",
+      "quote": null
+    }
+  ],
+  "reasoning": "The URLConf exposes the password reset confirmation endpoint, but the included password-reset-related tests only verify that the email template renders a frontend reset URL and security copy. None of the linked tests exercise the backend confirm route, its accepted payload, invalid token handling, or successful password update behavior. Because this is an unauthenticated credential-change flow, regressions in routing, serializer contract, token validation, or error responses could ship without detection.",
+  "reproduction": null,
+  "recommendation": "Add focused API tests for the password reset confirm route that cover a valid uid/token/password confirmation, invalid or expired token rejection, malformed payload validation, and the route name/path resolving to PasswordResetConfirmView.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover email template rendering and unrelated API/view behavior, but they do not make a request to password_reset_confirm or assert PasswordResetConfirmView behavior.",
+  "suggestedRegressionTest": "Use Django/DRF test client to create a user, generate the same uid/token used by the reset flow, POST to the password reset confirm endpoint, assert the password changes, and assert invalid token and missing-field cases return non-success responses without changing the password.",
+  "minimumFixScope": "Add tests for hub/urls.py route coverage and PasswordResetConfirmView behavior; no production code change is required unless those tests expose a defect.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-d17e1cae13_c8d65fa62b",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:08:53.234Z",
+  "updatedAt": "2026-05-26T03:08:53.234Z"
+}

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_5f94fa5ad6",
+  "title": "Django route /api/learning-resources/",
+  "summary": "Django URL include /api/learning-resources/ declared in bahk/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "bahk/urls.py",
+      "symbol": "learning_resources.urls",
+      "route": "/api/learning-resources/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "bahk/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-route-5f94fa5ad6-ec6cea_53c1da34ae"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=9493 bytes; approxTokens=2374; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:00:06.491Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T03:00:06.491Z"
+}

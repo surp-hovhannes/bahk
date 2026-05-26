@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_4bdc87cea0",
+  "title": "Python test suite tests/unit",
+  "summary": "Python pytest files in tests/unit.",
+  "kind": "test-suite",
+  "source": "python-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/unit",
+      "symbol": "tests/unit",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/unit/hub/test_admin.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/hub/test_fast_intention.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/hub/test_fums.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_models.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_performance.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_signals.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_tasks.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/notifications/test_weekly_prayer_notifications.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/prayers/test_feast_prayers.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/unit/test_models.py",
+      "reason": "pytest file"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/unit/hub/test_admin.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/hub/test_fast_intention.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/hub/test_fums.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_models.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_performance.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_signals.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_tasks.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/notifications/test_weekly_prayer_notifications.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/prayers/test_feast_prayers.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/unit/test_models.py",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/unit/hub/test_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/hub/test_fast_intention.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/hub/test_fums.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_models.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_performance.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_signals.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_tasks.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/notifications/test_weekly_prayer_notifications.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/prayers/test_feast_prayers.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/test_models.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-test-suite-4bdc87cea0-0_0a917eea07"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=145047 bytes; approxTokens=36229; includedFiles=11; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:13:37.436Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T03:13:37.436Z"
+}

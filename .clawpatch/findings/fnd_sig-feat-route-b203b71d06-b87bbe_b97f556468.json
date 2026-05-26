@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-b203b71d06-b87bbe_b97f556468",
+  "featureId": "feat_route_b203b71d06",
+  "title": "Duplicate URL name makes the legacy fast route ambiguous",
+  "category": "api-contract",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "contract-mismatch",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 76,
+      "endLine": 78,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "Both legacy endpoints are registered with the same URL name, fast_on_date, while pointing to different route patterns and different views. Any code that reverses this name cannot express whether it wants /user/fasts/ or /fast/, so generated links can silently target the wrong legacy endpoint depending on Django's URL resolver behavior and declaration order. This is an API contract risk for the reviewed /api/user/fasts/ route because its named route is not unique.",
+  "reproduction": null,
+  "recommendation": "Give the two routes distinct names, for example fast_on_date and fast_on_date_without_user, and update any reverse() or frontend references accordingly.",
+  "whyTestsDoNotAlreadyCoverThis": "The included fast tests exercise FastListView, FastByFeastDateView, and serializer day-number behavior, but they do not reverse or resolve the legacy fast_on_date route name.",
+  "suggestedRegressionTest": "Add a URL test that reverse('fast_on_date') resolves to the intended /api/user/fasts/ endpoint and that the /api/fast/ route has a separate name.",
+  "minimumFixScope": "Change the duplicate name on one of the two legacy path declarations and adjust references that use the old ambiguous name.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-b203b71d06_b87bbed9e4",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:06:29.588Z",
+  "updatedAt": "2026-05-26T03:06:29.588Z"
+}

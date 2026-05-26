@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_71509af936",
+  "title": "Python source notifications/management",
+  "summary": "Python source group notifications/management with 4 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "notifications/management",
+      "symbol": "notifications/management",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "notifications/management/__init__.py",
+      "reason": "source group notifications/management"
+    },
+    {
+      "path": "notifications/management/commands/__init__.py",
+      "reason": "source group notifications/management"
+    },
+    {
+      "path": "notifications/management/commands/check_email_status.py",
+      "reason": "source group notifications/management"
+    },
+    {
+      "path": "notifications/management/commands/retry_failed_emails.py",
+      "reason": "source group notifications/management"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-71509af936-3b04_4417d00bc7",
+    "fnd_sig-feat-library-71509af936-f0a0_9ff7599c46"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=13017 bytes; approxTokens=3246; includedFiles=4; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:39:48.653Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:39:48.653Z"
+}

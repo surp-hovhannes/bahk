@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-603013f017-8f4d_e3506c0a50",
+  "featureId": "feat_library_603013f017",
+  "title": "Cache failure can turn successful bookmark creation into a 500",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "learning_resources/views.py",
+      "startLine": 570,
+      "endLine": 584,
+      "symbol": "BookmarkCreateView.create",
+      "quote": null
+    },
+    {
+      "path": "learning_resources/views.py",
+      "startLine": 645,
+      "endLine": 658,
+      "symbol": "bookmark_delete_view",
+      "quote": null
+    }
+  ],
+  "reasoning": "`BookmarkCreateView.create` saves the bookmark before updating the Redis-backed bookmark cache, but it does not catch cache exceptions. If the cache update raises after `serializer.save()`, the database write has already happened and the client receives a server error instead of the documented 201 response, making retries likely to hit duplicate-bookmark behavior. The delete path in the same module treats cache failures as non-fatal, which indicates cache unavailability should not fail the user operation.",
+  "reproduction": null,
+  "recommendation": "Wrap `BookmarkCacheManager.bookmark_created(...)` in the same kind of non-fatal logging used by deletion, or move cache invalidation into a transaction/on-commit hook with graceful error handling.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests were included for cache failure behavior during bookmark creation.",
+  "suggestedRegressionTest": "Mock `BookmarkCacheManager.bookmark_created` to raise, post a valid bookmark, and assert the endpoint still returns 201 with the created bookmark while logging the cache failure.",
+  "minimumFixScope": "Add graceful cache-error handling around the create-path cache update.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-603013f017_8f4d82c426",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:39:23.722Z",
+  "updatedAt": "2026-05-26T02:39:23.722Z"
+}

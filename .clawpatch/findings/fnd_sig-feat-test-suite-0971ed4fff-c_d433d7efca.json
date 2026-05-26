@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-0971ed4fff-c_d433d7efca",
+  "featureId": "feat_test-suite_0971ed4fff",
+  "title": "Request metadata tests do not assert the metadata",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 549,
+      "endLine": 572,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "startLine": 209,
+      "endLine": 234,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "Both tests set user-agent and remote address headers and are named/described as verifying request metadata capture, but they only assert that the event exists. A regression that drops IP/user-agent capture would still pass, so the intended behavior is not protected.",
+  "reproduction": null,
+  "recommendation": "Assert the exact metadata fields populated by Event.create_event, or rename/remove these tests if metadata capture is intentionally outside this suite's contract.",
+  "whyTestsDoNotAlreadyCoverThis": "The current assertions stop before checking any metadata values; the comments explicitly defer to implementation details instead of validating behavior.",
+  "suggestedRegressionTest": "Post with HTTP_USER_AGENT and REMOTE_ADDR, fetch the created event, and assert the expected stored user-agent/IP fields match the request.",
+  "minimumFixScope": "Update the two request metadata tests to validate the concrete Event metadata contract.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-0971ed4fff_cb59e0aa14",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:12:48.446Z",
+  "updatedAt": "2026-05-26T03:12:48.446Z"
+}

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-90559adc1c-0db5_e37d40b510",
+  "featureId": "feat_library_90559adc1c",
+  "title": "Test settings still import required production secrets before overriding them",
+  "category": "build-release",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "tests/test_settings.py",
+      "startLine": 1,
+      "endLine": 2,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "bahk/settings.py",
+      "startLine": 409,
+      "endLine": 434,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_settings.py",
+      "startLine": 72,
+      "endLine": 77,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "tests/test_settings.py imports every value from bahk.settings before applying test overrides. bahk.settings reads several required environment variables without defaults, including MAILGUN_DOMAIN, MAILGUN_API_KEY, OPENAI_API_KEY, and ANTHROPIC_API_KEY. In a clean test or CI environment, importing tests.test_settings can fail before the test-specific dummy values are assigned, so the advertised pytest settings are not self-contained.",
+  "reproduction": "Run pytest with DJANGO_SETTINGS_MODULE=tests.test_settings in an environment that does not define MAILGUN_DOMAIN, MAILGUN_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY; settings import raises before tests/test_settings.py reaches its overrides.",
+  "recommendation": "Give non-production/test-safe defaults in bahk.settings when CI or test mode is active, or set harmless defaults before importing bahk.settings in tests/test_settings.py. Prefer centralizing external-service config so imports never require unrelated production credentials during tests.",
+  "whyTestsDoNotAlreadyCoverThis": "The included test settings file is itself the failing import path, and it assumes the base settings import succeeds before test overrides are applied.",
+  "suggestedRegressionTest": "Add a settings import smoke test or CI job that unsets external-service environment variables and imports tests.test_settings successfully.",
+  "minimumFixScope": "Adjust bahk/settings.py external-service config defaults or restructure tests/test_settings.py so required secrets are not evaluated before test overrides.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": null,
+      "kind": "triage",
+      "status": "fixed",
+      "note": "PR #395 seeds harmless test defaults before importing bahk.settings; clawpatch revalidate returned zero findings for this stale record.",
+      "reasoning": null,
+      "commands": [],
+      "createdAt": "2026-05-26T06:18:19.441Z"
+    }
+  ],
+  "signature": "sig_feat-library-90559adc1c_0db59642dc",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-90559adc1c-_aadf4a7728"
+  ],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:40:52.303Z",
+  "updatedAt": "2026-05-26T06:18:19.440Z"
+}

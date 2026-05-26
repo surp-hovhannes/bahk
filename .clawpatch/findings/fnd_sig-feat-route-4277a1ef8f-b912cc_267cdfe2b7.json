@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-4277a1ef8f-b912cc_267cdfe2b7",
+  "featureId": "feat_route_4277a1ef8f",
+  "title": "Profile image upload route has no linked request-level coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 55,
+      "endLine": 58,
+      "symbol": "ProfileImageUploadView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "startLine": 1,
+      "endLine": 5,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "startLine": 1,
+      "endLine": 9,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "startLine": 124,
+      "endLine": 127,
+      "symbol": "DevotionalListAPITests._get_list",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 65,
+      "endLine": 82,
+      "symbol": "FastListViewTest._create_request",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "startLine": 111,
+      "endLine": 123,
+      "symbol": "FeastAdminIconActionsTests.test_rematch_icon_force_view_clears_and_enqueues",
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned feature is the public route wiring for `profile/image-upload/`, but the included tests exercise Armenian/Bible helpers, devotional APIs, fast views, email behavior, and feast admin icon endpoints. None of the provided tests makes a request to `/hub/profile/image-upload/`, reverses `profile-image-upload`, or verifies expected authentication/upload behavior, so route regressions such as accidental removal, wrong URL name, or incompatible request handling would not be caught by the linked suite.",
+  "reproduction": null,
+  "recommendation": "Add focused request-level tests for the `profile-image-upload` URL that cover URL reversing, unauthenticated access, authenticated upload success, and invalid/missing file responses according to the view contract.",
+  "whyTestsDoNotAlreadyCoverThis": "The linked tests are associated with other hub features and do not reference the `profile-image-upload` route or `ProfileImageUploadView`.",
+  "suggestedRegressionTest": "Use DRF/Django test client to `reverse('profile-image-upload')`, assert the resolved path is `/hub/profile/image-upload/` under the project include prefix, then exercise authenticated multipart upload and key failure cases.",
+  "minimumFixScope": "Add tests for the profile image upload route and view behavior; no production code change is implied by the provided evidence.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-4277a1ef8f_b912cc0e5f",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:57:59.796Z",
+  "updatedAt": "2026-05-26T02:57:59.796Z"
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-a9f583a359-2a272e_8c7121dd00",
+  "featureId": "feat_route_a9f583a359",
+  "title": "Reading feedback route has no direct route or endpoint coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 103,
+      "endLine": 105,
+      "symbol": "ReadingContextFeedbackView.as_view",
+      "quote": null
+    }
+  ],
+  "reasoning": "The feature adds the user-facing feedback route for readings, but the included tests exercise Armenian text scraping, Bible text fetching, devotionals, emails, fast views, and feast admin actions without asserting that this URL resolves or that the feedback endpoint accepts/rejects expected requests. A future URL typo, name change, or accidental removal of the route could ship without any of the linked tests failing.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for the `reading-context-feedback` route that reverse or request `/hub/readings/<pk>/feedback/` through the configured URL stack and assert the expected status codes for valid and invalid input.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests do not reference `reading-context-feedback`, `ReadingContextFeedbackView`, or `/readings/<pk>/feedback/`; their assertions are concentrated on unrelated service, task, list, email, fast, and admin behavior.",
+  "suggestedRegressionTest": "Create a test that builds a `Reading`, posts representative feedback to `reverse('reading-context-feedback', args=[reading.pk])`, and asserts the expected response plus a missing-reading/invalid-payload case.",
+  "minimumFixScope": "Add route-level or endpoint-level tests for `ReadingContextFeedbackView`; no production code change is implied by this finding.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-a9f583a359_2a272ed9b6",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:05:16.472Z",
+  "updatedAt": "2026-05-26T03:05:16.472Z"
+}

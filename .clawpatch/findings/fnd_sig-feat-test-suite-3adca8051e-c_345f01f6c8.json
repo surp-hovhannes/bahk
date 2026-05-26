@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-3adca8051e-c_345f01f6c8",
+  "featureId": "feat_test-suite_3adca8051e",
+  "title": "Hard-coded wall-clock performance thresholds make this test suite flaky",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "startLine": 64,
+      "endLine": 69,
+      "symbol": "BookmarkCachePerformanceTests.test_database_vs_cache_performance",
+      "quote": null
+    },
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "startLine": 93,
+      "endLine": 95,
+      "symbol": "BookmarkCachePerformanceTests.test_batch_cache_performance",
+      "quote": null
+    },
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "startLine": 116,
+      "endLine": 117,
+      "symbol": "BookmarkCachePerformanceTests.test_cache_warmup_performance",
+      "quote": null
+    },
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "startLine": 215,
+      "endLine": 217,
+      "symbol": "BookmarkCacheLoadTests.test_multiple_users_cache_performance",
+      "quote": null
+    },
+    {
+      "path": "tests/performance/test_bookmark_cache.py",
+      "startLine": 302,
+      "endLine": 307,
+      "symbol": "BookmarkCacheLoadTests.test_concurrent_cache_operations",
+      "quote": null
+    }
+  ],
+  "reasoning": "The tests assert absolute elapsed-time limits and speedup ratios using very small sample sizes. In Docker, CI, or loaded developer machines, scheduler pauses, cold database/cache state, or slower storage can easily push these timings over fixed limits even when the cache behavior is correct. This creates release/build failures unrelated to functional regressions.",
+  "reproduction": null,
+  "recommendation": "Keep correctness assertions in the normal suite and move timing checks behind an opt-in benchmark/performance job, or use pytest-benchmark with calibrated baselines and tolerances. If these tests must remain, avoid strict sub-second thresholds in default test runs.",
+  "whyTestsDoNotAlreadyCoverThis": "These are the tests themselves; they encode the flaky timing behavior rather than guarding against it.",
+  "suggestedRegressionTest": null,
+  "minimumFixScope": "Update tests/performance/test_bookmark_cache.py to remove or isolate strict wall-clock assertions from default CI execution.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-3adca8051e_c0acbf2de0",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:13:25.349Z",
+  "updatedAt": "2026-05-26T03:13:25.349Z"
+}

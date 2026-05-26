@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_26cfbb959d",
+  "title": "Django route /accounts/",
+  "summary": "Django URL include /accounts/ declared in bahk/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "bahk/urls.py",
+      "symbol": "django.contrib.auth.urls",
+      "route": "/accounts/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "bahk/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=9452 bytes; approxTokens=2363; includedFiles=1; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:56:09.681Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:56:09.681Z"
+}

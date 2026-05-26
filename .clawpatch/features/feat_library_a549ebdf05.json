@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_a549ebdf05",
+  "title": "Python source hub/migrations#4",
+  "summary": "Python source group hub/migrations#4 with 12 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/migrations#4",
+      "symbol": "hub/migrations#4",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/migrations/0037_patristicquote.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0038_add_translation_fields_to_reading_and_context.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0039_alter_llmprompt_model.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0040_add_feast_models_and_llmprompt_applies_to.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0041_add_designation_to_feast.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0042_feast_icon_alter_llmprompt_model.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0043_alter_llmprompt_applies_to.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0044_add_weekly_prayer_request_notifications.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0045_reading_text_fields.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0046_add_fums_token_to_reading.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0047_reading_text_hy_copyright_reading_text_hy_fetched_at_and_more.py",
+      "reason": "source group hub/migrations#4"
+    },
+    {
+      "path": "hub/migrations/0048_add_start_day_number_to_fast.py",
+      "reason": "source group hub/migrations#4"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-a549ebdf05-abea_a1673fc3bb",
+    "fnd_sig-feat-library-a549ebdf05-b42b_1203402e91"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=26389 bytes; approxTokens=6595; includedFiles=12; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:41:23.808Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:41:23.808Z"
+}

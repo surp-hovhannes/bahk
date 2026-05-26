@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-84ae84a25a-6_b51d32b80e",
+  "featureId": "feat_test-suite_84ae84a25a",
+  "title": "`npm test` is still the placeholder script and always fails",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "package.json",
+      "startLine": 124,
+      "endLine": 126,
+      "symbol": "scripts.test",
+      "quote": null
+    }
+  ],
+  "reasoning": "The project metadata advertises `npm run test` as the test command, but the package script only prints the default placeholder error and exits with status 1. Any CI, release process, or developer workflow that relies on the package test command will fail even when the actual Django or frontend tests are healthy.",
+  "reproduction": "Run `npm run test`; it executes the placeholder command and exits 1.",
+  "recommendation": "Replace the placeholder with the real test command for this project, or remove/rename it if Node does not own tests. For this Django project, the likely fix is to delegate to the existing Django test command used by the project, such as `python manage.py test --settings=tests.test_settings`, adjusted for the containerized workflow if this script is intended to run outside Docker.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included, and the only owned evidence is the package script itself; a placeholder test script cannot validate its own intended behavior.",
+  "suggestedRegressionTest": "Add a CI check that runs `npm run test` and requires it to execute the real test suite successfully.",
+  "minimumFixScope": "Update `package.json` `scripts.test` to a real, non-placeholder test command.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-84ae84a25a_63c7f20367",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:13:35.735Z",
+  "updatedAt": "2026-05-26T03:13:35.735Z"
+}

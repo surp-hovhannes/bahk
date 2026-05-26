@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-90cc5317f5-55ffdf_bedfbc4130",
+  "featureId": "feat_route_90cc5317f5",
+  "title": "`/api/fasts/by-date/` is routed but not covered by the included fast view tests",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 67,
+      "endLine": 67,
+      "symbol": "FastByDateView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 5,
+      "endLine": 5,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 250,
+      "endLine": 569,
+      "symbol": "FastByFeastDateViewTest",
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route maps `fasts/by-date/` to `FastByDateView.as_view`, but the included fast view tests import and exercise `FastListView` and `FastByFeastDateView` only. The nearby by-feast-date endpoint has coverage for authenticated and unauthenticated lookup, missing/invalid date parameters, church scoping, timezone handling, caching, and annotations, but there is no analogous evidence for `FastByDateView`. That leaves this route's expected query parameters, validation behavior, authentication/church scoping, and response shape unguarded.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for `/api/fasts/by-date/` or `FastByDateView.get_queryset()` covering successful lookup, missing and invalid `date`, authenticated profile church scoping, unauthenticated `church_id` scoping, and no-match behavior.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover `FastListView` and `FastByFeastDateView`; none instantiate `FastByDateView`, import it, or call `/api/fasts/by-date/`.",
+  "suggestedRegressionTest": "Add a `FastByDateViewTest` class in `hub/tests/test_fast_views.py` mirroring the by-feast-date tests but using `/api/fasts/by-date/` and days whose `date` matches or does not match the query parameter.",
+  "minimumFixScope": "Tests only, unless adding those tests exposes an implementation bug in `FastByDateView`.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-90cc5317f5_55ffdf818f",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:03:31.776Z",
+  "updatedAt": "2026-05-26T03:03:31.776Z"
+}

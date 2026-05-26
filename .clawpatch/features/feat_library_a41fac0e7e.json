@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_a41fac0e7e",
+  "title": "Python source hub/tasks",
+  "summary": "Python source group hub/tasks with 9 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/tasks",
+      "symbol": "hub/tasks",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/tasks/__init__.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/armenian_text_tasks.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/bible_api_tasks.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/email_tasks.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/feast_tasks.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/geocoding_tasks.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/icon_tasks.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/llm_tasks.py",
+      "reason": "source group hub/tasks"
+    },
+    {
+      "path": "hub/tasks/mapping_tasks.py",
+      "reason": "source group hub/tasks"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/tasks/test_llm_tasks.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/tasks/test_llm_tasks.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-a41fac0e7e-6872_0dabaf6a05",
+    "fnd_sig-feat-library-a41fac0e7e-fd9a_46f7e47df1"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=109903 bytes; approxTokens=27473; includedFiles=10; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:41:38.502Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:41:38.502Z"
+}

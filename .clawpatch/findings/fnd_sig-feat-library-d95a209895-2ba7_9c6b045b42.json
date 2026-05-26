@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-d95a209895-2ba7_9c6b045b42",
+  "featureId": "feat_library_d95a209895",
+  "title": "EmailSubscriptionPreference migration appears to create no table",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "notifications/migrations/0003_promoemail_emailsubscriptionpreference.py",
+      "startLine": 16,
+      "endLine": 35,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The migration is named for both PromoEmail and EmailSubscriptionPreference, imports the swappable user model dependency, and depends on the hub migration that added promotional-email preference data, but its operations only create PromoEmail. If the EmailSubscriptionPreference model exists in the app state, a fresh database will not get its table from this migration chain, leading to runtime failures when that model is queried or saved. Confidence is medium because the model definition is outside the provided excerpts, but the included migration body is enough to show the missing schema operation within this source group.",
+  "reproduction": null,
+  "recommendation": "Regenerate or amend the migration so it includes the CreateModel operation for EmailSubscriptionPreference, or rename/remove the unused dependency if that model was intentionally dropped before merging.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests or migration-state checks were included for this feature.",
+  "suggestedRegressionTest": "Add a migration test that applies notifications through 0003 on an empty test database and asserts the expected EmailSubscriptionPreference table/model state exists.",
+  "minimumFixScope": "Update notifications/migrations/0003_promoemail_emailsubscriptionpreference.py or add a follow-up migration that creates the missing preference table.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-d95a209895_2ba784662a",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:52:02.245Z",
+  "updatedAt": "2026-05-26T02:52:02.245Z"
+}

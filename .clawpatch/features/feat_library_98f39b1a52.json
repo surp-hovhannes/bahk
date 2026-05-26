@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_98f39b1a52",
+  "title": "Python source tests/tasks",
+  "summary": "Python source file tests/tasks/__init__.py.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/tasks",
+      "symbol": "tests/tasks",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/tasks/__init__.py",
+      "reason": "source group tests/tasks"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/tasks/test_add.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/tasks/test_llm_tasks.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/tasks/test_add.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/tasks/test_llm_tasks.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=24834 bytes; approxTokens=6209; includedFiles=3; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:40:58.424Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T02:40:58.424Z"
+}

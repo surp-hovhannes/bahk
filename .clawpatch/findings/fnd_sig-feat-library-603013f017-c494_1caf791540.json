@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-603013f017-c494_1caf791540",
+  "featureId": "feat_library_603013f017",
+  "title": "Bookmark list filtering rejects prayer bookmark types that delete supports",
+  "category": "api-contract",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "contract-mismatch",
+  "evidence": [
+    {
+      "path": "learning_resources/views.py",
+      "startLine": 505,
+      "endLine": 519,
+      "symbol": "BookmarkListView.get_queryset",
+      "quote": null
+    },
+    {
+      "path": "learning_resources/views.py",
+      "startLine": 621,
+      "endLine": 630,
+      "symbol": "bookmark_delete_view",
+      "quote": null
+    }
+  ],
+  "reasoning": "The delete endpoint explicitly treats `prayer` and `prayerset` as valid bookmark content types in the `prayers` app, but the list endpoint's `content_type` filter only special-cases hub models and otherwise looks in the `learning_resources` app. A user with prayer bookmarks can delete `/bookmarks/prayer/<id>/`, but `GET /bookmarks/?content_type=prayer` will resolve the wrong app label, catch `ContentType.DoesNotExist`, and return an empty result set. That makes the bookmark filtering API inconsistent for a content type the same module otherwise supports.",
+  "reproduction": null,
+  "recommendation": "Share the content-type resolution logic between bookmark list/delete/create paths, or add the missing `prayer` and `prayerset` mapping to `BookmarkListView.get_queryset`.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests were included for bookmark content-type filtering, and the inconsistency is visible only by comparing the two endpoints in this file.",
+  "suggestedRegressionTest": "Create a prayer bookmark for an authenticated user, then assert `GET /api/learning-resources/bookmarks/?content_type=prayer` returns it instead of an empty page.",
+  "minimumFixScope": "Update bookmark content-type resolution in `BookmarkListView.get_queryset` and cover the supported cross-app bookmark types.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-603013f017_c494664c98",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:39:23.722Z",
+  "updatedAt": "2026-05-26T02:39:23.722Z"
+}
