@@ -4,15 +4,16 @@ from django.db import migrations
 
 
 def save_fast_fk(apps, schema):
-    Fast = apps.get_model('hub', 'Fast')
     Day = apps.get_model('hub', 'Day')
     for day in Day.objects.all():
-        day._fast = day.fasts.all().first()
+        fast = day.fasts.all().first()
+        day._fast = fast
+        if fast:
+            day.church_id = fast.church_id
         day.save()
 
 
 def save_fast_m2m(apps, schema):
-    Fast = apps.get_model('hub', 'Fast')
     Day = apps.get_model('hub', 'Day')
     for day in Day.objects.all():
         if day._fast:
