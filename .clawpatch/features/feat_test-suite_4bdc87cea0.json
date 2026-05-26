@@ -28,6 +28,10 @@
       "reason": "pytest file"
     },
     {
+      "path": "tests/unit/hub/test_remove_test_users_command.py",
+      "reason": "pytest file"
+    },
+    {
       "path": "tests/unit/learning_resources/test_bookmark_cache.py",
       "reason": "pytest file"
     },
@@ -74,6 +78,10 @@
       "reason": "nearby test"
     },
     {
+      "path": "tests/unit/hub/test_remove_test_users_command.py",
+      "reason": "nearby test"
+    },
+    {
       "path": "tests/unit/learning_resources/test_bookmark_cache.py",
       "reason": "nearby test"
     },
@@ -117,6 +125,10 @@
     },
     {
       "path": "tests/unit/hub/test_fums.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/hub/test_remove_test_users_command.py",
       "command": "pytest"
     },
     {
@@ -175,5 +187,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T03:13:37.436Z"
+  "updatedAt": "2026-05-26T16:56:11.026Z"
 }

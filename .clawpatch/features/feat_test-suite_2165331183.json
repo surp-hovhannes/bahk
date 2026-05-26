@@ -48,6 +48,10 @@
       "reason": "pytest file"
     },
     {
+      "path": "notifications/tests/test_retry_failed_emails_command.py",
+      "reason": "pytest file"
+    },
+    {
       "path": "notifications/tests/test_settings.py",
       "reason": "pytest file"
     },
@@ -87,6 +91,10 @@
     },
     {
       "path": "notifications/tests/test_race_conditions.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "notifications/tests/test_retry_failed_emails_command.py",
       "reason": "nearby test"
     },
     {
@@ -132,6 +140,10 @@
       "command": "pytest"
     },
     {
+      "path": "notifications/tests/test_retry_failed_emails_command.py",
+      "command": "pytest"
+    },
+    {
       "path": "notifications/tests/test_settings.py",
       "command": "pytest"
     },
@@ -166,5 +178,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T03:13:01.878Z"
+  "updatedAt": "2026-05-26T16:56:11.026Z"
 }

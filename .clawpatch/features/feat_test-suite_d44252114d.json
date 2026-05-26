@@ -16,6 +16,10 @@
   ],
   "ownedFiles": [
     {
+      "path": "hub/tests/test_feast_tasks.py",
+      "reason": "pytest file"
+    },
+    {
       "path": "hub/tests/test_feast_views.py",
       "reason": "pytest file"
     },
@@ -56,12 +60,16 @@
       "reason": "pytest file"
     },
     {
-      "path": "hub/tests/test_timezone_functionality.py",
+      "path": "hub/tests/test_task_imports.py",
       "reason": "pytest file"
     }
   ],
   "contextFiles": [
     {
+      "path": "hub/tests/test_feast_tasks.py",
+      "reason": "nearby test"
+    },
+    {
       "path": "hub/tests/test_feast_views.py",
       "reason": "nearby test"
     },
@@ -102,12 +110,16 @@
       "reason": "nearby test"
     },
     {
-      "path": "hub/tests/test_timezone_functionality.py",
+      "path": "hub/tests/test_task_imports.py",
       "reason": "nearby test"
     }
   ],
   "tests": [
     {
+      "path": "hub/tests/test_feast_tasks.py",
+      "command": "pytest"
+    },
+    {
       "path": "hub/tests/test_feast_views.py",
       "command": "pytest"
     },
@@ -148,7 +160,7 @@
       "command": "pytest"
     },
     {
-      "path": "hub/tests/test_timezone_functionality.py",
+      "path": "hub/tests/test_task_imports.py",
       "command": "pytest"
     }
   ],
@@ -176,5 +188,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T03:14:49.278Z"
+  "updatedAt": "2026-05-26T16:56:11.026Z"
 }

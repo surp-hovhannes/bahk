@@ -1,9 +1,10 @@
 from django.test.utils import tag
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from hub.models import Day
+from hub.views.fast import FastListView
 from tests.fixtures.test_data import TestDataFactory
 from datetime import datetime, timedelta
 import time
@@ -81,6 +82,17 @@ class FastEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsInstance(response.json(), list)  # Returns a list, not dict
         print(f"Fast list endpoint response time: {response_time:.3f}s")
+
+    def test_api_alias_resolves_and_serves_fast_list(self):
+        """Test that the /api/ alias still exposes hub endpoints."""
+        match = resolve("/api/fasts/")
+
+        self.assertIs(match.func.view_class, FastListView)
+
+        response = self.client.get(f"/api/fasts/?church_id={self.church.id}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.json(), list)
     
     @tag('performance')
     def test_fast_detail_returns_correct_data(self):

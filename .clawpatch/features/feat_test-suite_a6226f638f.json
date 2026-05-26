@@ -56,6 +56,10 @@
       "reason": "pytest file"
     },
     {
+      "path": "tests/test_settings_import.py",
+      "reason": "pytest file"
+    },
+    {
       "path": "tests/test_utils.py",
       "reason": "pytest file"
     }
@@ -99,6 +103,10 @@
     },
     {
       "path": "tests/test_settings.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/test_settings_import.py",
       "reason": "nearby test"
     },
     {
@@ -148,6 +156,10 @@
       "command": "pytest"
     },
     {
+      "path": "tests/test_settings_import.py",
+      "command": "pytest"
+    },
+    {
       "path": "tests/test_utils.py",
       "command": "pytest"
     }
@@ -176,5 +188,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T03:14:20.335Z"
+  "updatedAt": "2026-05-26T16:56:11.026Z"
 }

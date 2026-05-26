@@ -25,10 +25,10 @@
     "reasoningEffort": null
   },
   "commands": {
-    "typecheck": null,
-    "lint": "docker exec bahk_devcontainer-app-1 ruff check .",
-    "format": null,
-    "test": "docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings"
+    "typecheck": "ruff check .",
+    "lint": "ruff check .",
+    "format": "ruff format --check .",
+    "test": "npm run test"
   },
   "review": {
     "maxContextFiles": 24,

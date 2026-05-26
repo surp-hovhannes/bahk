@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "featureId": "feat_library_12677fdbca",
   "title": "Python source hub#2",
-  "summary": "Python source group hub#2 with 3 files.",
+  "summary": "Python source group hub#2 with 2 files.",
   "kind": "library",
   "source": "python-source-group",
   "confidence": "medium",
@@ -15,10 +15,6 @@
     }
   ],
   "ownedFiles": [
-    {
-      "path": "hub/tasks.py",
-      "reason": "source group hub#2"
-    },
     {
       "path": "hub/urls.py",
       "reason": "source group hub#2"
@@ -38,6 +34,10 @@
       "reason": "associated test"
     },
     {
+      "path": "hub/tests/test_church_detail_api.py",
+      "reason": "associated test"
+    },
+    {
       "path": "hub/tests/test_combined_devotional_form.py",
       "reason": "associated test"
     },
@@ -55,10 +55,6 @@
     },
     {
       "path": "hub/tests/test_fast_views.py",
-      "reason": "associated test"
-    },
-    {
-      "path": "hub/tests/test_feast_admin_icon_actions.py",
       "reason": "associated test"
     }
   ],
@@ -72,6 +68,10 @@
       "command": "pytest"
     },
     {
+      "path": "hub/tests/test_church_detail_api.py",
+      "command": "pytest"
+    },
+    {
       "path": "hub/tests/test_combined_devotional_form.py",
       "command": "pytest"
     },
@@ -90,10 +90,6 @@
     {
       "path": "hub/tests/test_fast_views.py",
       "command": "pytest"
-    },
-    {
-      "path": "hub/tests/test_feast_admin_icon_actions.py",
-      "command": "pytest"
     }
   ],
   "tags": [
@@ -101,7 +97,7 @@
     "source-group"
   ],
   "trustBoundaries": [],
-  "status": "fixed",
+  "status": "pending",
   "lock": null,
   "findingIds": [
     "fnd_sig-feat-library-12677fdbca-1f21_be81fd8342"
@@ -119,5 +115,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T06:15:08.962Z"
+  "updatedAt": "2026-05-26T16:56:11.026Z"
 }

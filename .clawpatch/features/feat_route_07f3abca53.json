@@ -30,6 +30,10 @@
       "reason": "associated test"
     },
     {
+      "path": "hub/tests/test_church_detail_api.py",
+      "reason": "associated test"
+    },
+    {
       "path": "hub/tests/test_combined_devotional_form.py",
       "reason": "associated test"
     },
@@ -47,10 +51,6 @@
     },
     {
       "path": "hub/tests/test_fast_views.py",
-      "reason": "associated test"
-    },
-    {
-      "path": "hub/tests/test_feast_admin_icon_actions.py",
       "reason": "associated test"
     }
   ],
@@ -64,6 +64,10 @@
       "command": "pytest"
     },
     {
+      "path": "hub/tests/test_church_detail_api.py",
+      "command": "pytest"
+    },
+    {
       "path": "hub/tests/test_combined_devotional_form.py",
       "command": "pytest"
     },
@@ -81,10 +85,6 @@
     },
     {
       "path": "hub/tests/test_fast_views.py",
-      "command": "pytest"
-    },
-    {
-      "path": "hub/tests/test_feast_admin_icon_actions.py",
       "command": "pytest"
     }
   ],
@@ -116,5 +116,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T02:54:10.993Z"
+  "updatedAt": "2026-05-26T16:56:11.026Z"
 }

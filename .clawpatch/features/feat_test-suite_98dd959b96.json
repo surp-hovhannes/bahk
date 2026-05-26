@@ -24,6 +24,10 @@
       "reason": "pytest file"
     },
     {
+      "path": "hub/tests/test_church_detail_api.py",
+      "reason": "pytest file"
+    },
+    {
       "path": "hub/tests/test_combined_devotional_form.py",
       "reason": "pytest file"
     },
@@ -57,10 +61,6 @@
     },
     {
       "path": "hub/tests/test_feast_model.py",
-      "reason": "pytest file"
-    },
-    {
-      "path": "hub/tests/test_feast_tasks.py",
       "reason": "pytest file"
     }
   ],
@@ -74,6 +74,10 @@
       "reason": "nearby test"
     },
     {
+      "path": "hub/tests/test_church_detail_api.py",
+      "reason": "nearby test"
+    },
+    {
       "path": "hub/tests/test_combined_devotional_form.py",
       "reason": "nearby test"
     },
@@ -107,10 +111,6 @@
     },
     {
       "path": "hub/tests/test_feast_model.py",
-      "reason": "nearby test"
-    },
-    {
-      "path": "hub/tests/test_feast_tasks.py",
       "reason": "nearby test"
     }
   ],
@@ -124,6 +124,10 @@
       "command": "pytest"
     },
     {
+      "path": "hub/tests/test_church_detail_api.py",
+      "command": "pytest"
+    },
+    {
       "path": "hub/tests/test_combined_devotional_form.py",
       "command": "pytest"
     },
@@ -157,10 +161,6 @@
     },
     {
       "path": "hub/tests/test_feast_model.py",
-      "command": "pytest"
-    },
-    {
-      "path": "hub/tests/test_feast_tasks.py",
       "command": "pytest"
     }
   ],
@@ -187,5 +187,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T03:14:02.623Z"
+  "updatedAt": "2026-05-26T16:56:11.026Z"
 }

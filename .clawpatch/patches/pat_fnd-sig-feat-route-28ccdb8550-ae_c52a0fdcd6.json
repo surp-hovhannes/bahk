@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "patchAttemptId": "pat_fnd-sig-feat-route-28ccdb8550-ae_c52a0fdcd6",
+  "findingIds": [
+    "fnd_sig-feat-route-28ccdb8550-ae2d13_bd05db8df9"
+  ],
+  "featureIds": [
+    "feat_route_28ccdb8550"
+  ],
+  "status": "failed",
+  "plan": "Added focused regression coverage for the `/api/` hub route alias by asserting `/api/fasts/` resolves to `FastListView` and responds successfully.",
+  "filesChanged": [
+    "tests/test_fast_endpoints.py"
+  ],
+  "commandsRun": [
+    {
+      "command": "docker exec bahk_devcontainer-app-1 ruff check .",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 55,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    },
+    {
+      "command": "docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 52,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    }
+  ],
+  "testResults": [
+    {
+      "command": "docker exec bahk_devcontainer-app-1 ruff check .",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 55,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    },
+    {
+      "command": "docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 52,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    }
+  ],
+  "provider": {
+    "name": "codex",
+    "model": null,
+    "reasoningEffort": null,
+    "requestId": null,
+    "startedAt": "2026-05-26T16:55:44.765Z",
+    "finishedAt": "2026-05-26T16:56:30.777Z"
+  },
+  "git": {
+    "baseSha": "b44597f17225380b73a681476272e59dbb4fcd19",
+    "commitSha": null,
+    "branchName": "test-hardening-misc",
+    "prUrl": null
+  },
+  "createdAt": "2026-05-26T16:55:44.737Z",
+  "updatedAt": "2026-05-26T16:56:30.777Z"
+}

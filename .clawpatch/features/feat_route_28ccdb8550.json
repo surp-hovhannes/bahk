@@ -32,7 +32,7 @@
     "user-input",
     "serialization"
   ],
-  "status": "needs-fix",
+  "status": "fixed",
   "lock": null,
   "findingIds": [
     "fnd_sig-feat-route-28ccdb8550-ae2d13_bd05db8df9"
@@ -50,5 +50,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T02:56:21.746Z"
+  "updatedAt": "2026-05-26T16:57:16.957Z"
 }
