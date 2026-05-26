@@ -56,7 +56,7 @@ class JoinFastViewTest(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
 
     def test_join_fast_requires_valid_fast_id(self):
