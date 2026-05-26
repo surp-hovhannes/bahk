@@ -76,6 +76,68 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertEqual(results[0]['title'], active.title)
 
     @tag('integration')
+    def test_retrieve_hides_other_users_non_public_requests(self):
+        """Users should not retrieve another user's non-public prayer requests by ID."""
+        requester = self.create_user(email='private-requester@example.com')
+        viewer = self.create_user(email='private-viewer@example.com')
+        self.authenticate(viewer)
+
+        for private_status in ('pending_moderation', 'rejected', 'deleted'):
+            prayer_request = self.create_prayer_request(
+                requester,
+                title=f'Private {private_status}',
+                status=private_status,
+                reviewed=private_status != 'pending_moderation',
+            )
+
+            response = self.client.get(f'/api/prayer-requests/{prayer_request.id}/')
+
+            self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @tag('integration')
+    def test_list_status_filter_does_not_expose_other_users_non_public_requests(self):
+        """Status filters should not expose another user's non-public requests."""
+        requester = self.create_user(email='private-list-requester@example.com')
+        viewer = self.create_user(email='private-list-viewer@example.com')
+        private_request = self.create_prayer_request(
+            requester,
+            title='Private pending from another user',
+            status='pending_moderation',
+            reviewed=False,
+        )
+
+        self.authenticate(viewer)
+        response = self.client.get(
+            '/api/prayer-requests/',
+            {'status': 'pending_moderation'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = {item['id'] for item in response.data['results']}
+        self.assertNotIn(private_request.id, result_ids)
+
+    @tag('integration')
+    def test_retrieve_allows_owner_and_active_approved_requests(self):
+        """Owners can see their requests, and active approved requests remain public."""
+        owner = self.create_user(email='owner-visible@example.com')
+        viewer = self.create_user(email='viewer-visible@example.com')
+        own_pending = self.create_prayer_request(
+            owner,
+            title='Own pending',
+            status='pending_moderation',
+            reviewed=False,
+        )
+        approved = self.create_prayer_request(owner, title='Approved public')
+
+        self.authenticate(owner)
+        response = self.client.get(f'/api/prayer-requests/{own_pending.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.authenticate(viewer)
+        response = self.client.get(f'/api/prayer-requests/{approved.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @tag('integration')
     def test_accept_excludes_self_acceptances_from_milestones(self):
         """Self-acceptances should not block milestone progress for other requests."""
         intercessor = self.create_user(email='pray@example.com')

@@ -1,8 +1,14 @@
 """Test-specific settings to override production settings."""
-from bahk.settings import *  # Import all default settings
 from datetime import timedelta
 import os
 import tempfile
+
+os.environ.setdefault('MAILGUN_DOMAIN', 'example.test')
+os.environ.setdefault('MAILGUN_API_KEY', 'test-mailgun-api-key')
+os.environ.setdefault('ANTHROPIC_API_KEY', 'test-anthropic-api-key')
+os.environ.setdefault('OPENAI_API_KEY', 'test-openai-api-key')
+
+from bahk.settings import *  # Import all default settings
 
 # Override cache to use local memory instead of Redis for tests
 CACHES = {
@@ -80,6 +86,7 @@ OPENAI_API_KEY = ''
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 10,

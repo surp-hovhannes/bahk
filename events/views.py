@@ -96,6 +96,9 @@ class EventListView(generics.ListAPIView):
                 queryset = queryset.filter(timestamp__lte=parsed)
             except ValueError:
                 pass
+
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(user=self.request.user)
         
         return queryset
 
@@ -104,9 +107,14 @@ class EventDetailView(generics.RetrieveAPIView):
     """
     Retrieve a specific event.
     """
-    queryset = Event.objects.select_related('event_type', 'user', 'content_type')
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Event.objects.select_related('event_type', 'user', 'content_type')
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(user=self.request.user)
+        return queryset
     
     def get(self, request, *args, **kwargs):
         lang = request.query_params.get('lang') or get_language_from_request(request) or 'en'
