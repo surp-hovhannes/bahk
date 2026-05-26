@@ -6,6 +6,9 @@ from django.db import transaction
 from django.contrib.auth.models import User
 from hub.models import Fast, Profile
 
+GENERATED_TEST_USER_USERNAME_REGEX = r"^testuser_[0-9a-f]{8}_[0-9]+_[0-9]+@example\.com$"
+
+
 class Command(BaseCommand):
     help = "Removes test users that were created for a specific fast"
 
@@ -26,7 +29,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--all_test_users',
             action='store_true',
-            help='Remove all users with "testuser" in their username, regardless of fast association'
+            help='Remove all generated test users, regardless of fast association'
         )
 
     @transaction.atomic
@@ -45,15 +48,17 @@ class Command(BaseCommand):
         
         # Find test users
         if all_test_users:
-            # Find all users with "testuser" in their username
-            test_users = User.objects.filter(username__contains="testuser")
+            # Find all users created by create_test_users_for_fast.
+            test_users = User.objects.filter(
+                username__regex=GENERATED_TEST_USER_USERNAME_REGEX
+            )
             fast_name = "all fasts"
         else:
             # Find users associated with the specific fast through their profiles
             profiles = Profile.objects.filter(fasts__id=fast_id)
             test_users = User.objects.filter(
                 profile__in=profiles,
-                username__contains="testuser"
+                username__regex=GENERATED_TEST_USER_USERNAME_REGEX
             )
             fast_name = fast.name
         

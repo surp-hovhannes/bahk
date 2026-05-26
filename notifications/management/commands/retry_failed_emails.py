@@ -24,6 +24,14 @@ class Command(BaseCommand):
             # Retry specific email
             try:
                 promo = PromoEmail.objects.get(id=options['promo_id'])
+                if promo.status != PromoEmail.FAILED:
+                    self.stdout.write(
+                        self.style.ERROR(
+                            f"PromoEmail {promo.id} has status {promo.status}; only failed emails can be retried"
+                        )
+                    )
+                    return
+
                 if options['dry_run']:
                     self.stdout.write(f"Would retry PromoEmail {promo.id}: {promo.title}")
                     self.stdout.write(f"Current status: {promo.status}")

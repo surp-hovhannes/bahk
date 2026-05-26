@@ -1,18 +1,94 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from django.utils import timezone
 from hub.models import Day
-from hub.views.fast import FastListView, FastByFeastDateView
+from hub.views.fast import FastListView, FastByDateView, FastByFeastDateView
 from django.contrib.auth.models import AnonymousUser
+from rest_framework import status
 from rest_framework.test import APIRequestFactory
 from rest_framework.test import force_authenticate
 from datetime import timedelta
 from django.core.cache import cache
+from events.models import Event, EventType
 from tests.fixtures.test_data import TestDataFactory
 from rest_framework.exceptions import ValidationError
 import pytz
 
 User = get_user_model()
+
+class JoinFastViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Join Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="joinfast@example.com",
+            email="joinfast@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Joinable Fast",
+            description="Fast for join route tests",
+        )
+        self.url = reverse("fast-join")
+
+    def test_join_fast_adds_membership(self):
+        self.client.force_login(self.user)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(self.profile.fasts.filter(id=self.fast.id).exists())
+        self.assertEqual(self.profile.fasts.filter(id=self.fast.id).count(), 1)
+
+    def test_join_fast_requires_authentication(self):
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_join_fast_requires_valid_fast_id(self):
+        self.client.force_login(self.user)
+
+        missing_fast_id_response = self.client.put(
+            self.url,
+            data={},
+            content_type="application/json",
+        )
+        invalid_fast_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id + 999},
+            content_type="application/json",
+        )
+
+        self.assertEqual(missing_fast_id_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(invalid_fast_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_join_fast_rejects_duplicate_membership(self):
+        self.client.force_login(self.user)
+        self.profile.fasts.add(self.fast)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.profile.fasts.filter(id=self.fast.id).count(), 1)
 
 class FastListViewTest(TestCase):
     def setUp(self):
@@ -245,6 +321,88 @@ class FastListViewTest(TestCase):
         # Verify results
         self.assertEqual(queryset.count(), 1)  # Should only see fasts from other church
         self.assertEqual(queryset[0].church, other_church)
+
+
+class FastStatsViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Stats Test Church")
+        self.user = TestDataFactory.create_user(
+            username="faststats@example.com",
+            email="faststats@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+            timezone="UTC",
+        )
+        self.url = reverse("fast-stats")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_fast_stats_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_stats_returns_expected_summary(self):
+        today = timezone.now().date()
+        completed_fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Completed Fast",
+        )
+        ongoing_fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Ongoing Fast",
+        )
+
+        for offset, fast in [(-2, completed_fast), (-1, completed_fast), (0, ongoing_fast), (1, ongoing_fast)]:
+            day = TestDataFactory.create_day(
+                date=today + timedelta(days=offset),
+                church=self.church,
+            )
+            day.fast = fast
+            day.save()
+
+        self.profile.fasts.add(completed_fast, ongoing_fast)
+
+        checklist_used, _ = EventType.objects.get_or_create(
+            code=EventType.CHECKLIST_USED,
+            defaults={
+                "name": "Checklist Used",
+                "category": "analytics",
+                "requires_target": False,
+            },
+        )
+        Event.objects.create(
+            event_type=checklist_used,
+            user=self.user,
+            title="Checklist completed",
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(response.json().keys()),
+            {
+                "joined_fasts",
+                "total_fasts",
+                "total_fast_days",
+                "completed_fasts",
+                "checklist_uses",
+            },
+        )
+        self.assertCountEqual(
+            response.json()["joined_fasts"],
+            [completed_fast.id, ongoing_fast.id],
+        )
+        self.assertEqual(response.json()["total_fasts"], 2)
+        self.assertEqual(response.json()["total_fast_days"], 3)
+        self.assertEqual(response.json()["completed_fasts"], 1)
+        self.assertEqual(response.json()["checklist_uses"], 1)
 
 
 class FastByFeastDateViewTest(TestCase):
@@ -566,6 +724,189 @@ class FastByFeastDateViewTest(TestCase):
         self.assertTrue(hasattr(first_fast, 'start_date'))
         self.assertTrue(hasattr(first_fast, 'end_date'))
         self.assertTrue(hasattr(first_fast, 'current_day_count'))
+
+
+class FastByDateViewTest(TestCase):
+    """Tests for the FastByDateView endpoint."""
+
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Test Church")
+        self.user = TestDataFactory.create_user(
+            username='fastbydate@example.com',
+            email='fastbydate@example.com',
+            password='testpass123'
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+            timezone='America/New_York'
+        )
+        self.factory = APIRequestFactory()
+
+        self.match_date = timezone.now().date() + timedelta(days=3)
+        self.fast_on_date = TestDataFactory.create_fast(
+            church=self.church,
+            name="Fast On Date",
+            description="Matches target date"
+        )
+        self.fast_other_date = TestDataFactory.create_fast(
+            church=self.church,
+            name="Fast Other Date",
+            description="Does not match target date"
+        )
+
+        matching_day = TestDataFactory.create_day(
+            date=self.match_date,
+            church=self.church
+        )
+        matching_day.fast = self.fast_on_date
+        matching_day.save()
+
+        other_day = TestDataFactory.create_day(
+            date=self.match_date + timedelta(days=1),
+            church=self.church
+        )
+        other_day.fast = self.fast_other_date
+        other_day.save()
+
+        self.profile.fasts.add(self.fast_on_date)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _create_request(self, user=None, query_params=None):
+        request = self.factory.get('/api/fasts/by-date/')
+        if user:
+            force_authenticate(request, user=user)
+        request.user = user or AnonymousUser()
+        request.query_params = query_params or {}
+        if 'tz' not in request.query_params:
+            request.query_params['tz'] = 'UTC'
+        return request
+
+    def test_find_fasts_by_date_authenticated(self):
+        request = self._create_request(
+            user=self.user,
+            query_params={'date': self.match_date.isoformat()}
+        )
+
+        view = FastByDateView()
+        view.request = request
+
+        queryset = view.get_queryset()
+
+        self.assertEqual(queryset.count(), 1)
+        self.assertEqual(queryset[0].name, "Fast On Date")
+        self.assertEqual(queryset[0].participant_count, 1)
+
+    def test_find_fasts_by_date_unauthenticated(self):
+        request = self._create_request(
+            query_params={
+                'date': self.match_date.isoformat(),
+                'church_id': self.church.id
+            }
+        )
+
+        view = FastByDateView()
+        view.request = request
+
+        queryset = view.get_queryset()
+
+        self.assertEqual(queryset.count(), 1)
+        self.assertEqual(queryset[0].church, self.church)
+
+    def test_invalid_date_format_raises_validation_error(self):
+        request = self._create_request(
+            user=self.user,
+            query_params={'date': 'invalid-date'}
+        )
+
+        view = FastByDateView()
+        view.request = request
+
+        with self.assertRaises(ValidationError) as context:
+            view.get_queryset()
+
+        self.assertIn("Invalid date format", str(context.exception))
+
+    def test_missing_date_defaults_to_local_today(self):
+        local_today = timezone.now().astimezone(
+            pytz.timezone('America/New_York')
+        ).date()
+        today_fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Today Fast",
+            description="Matches local today"
+        )
+        today_day = TestDataFactory.create_day(
+            date=local_today,
+            church=self.church
+        )
+        today_day.fast = today_fast
+        today_day.save()
+
+        request = self._create_request(
+            user=self.user,
+            query_params={'tz': 'America/New_York'}
+        )
+
+        view = FastByDateView()
+        view.request = request
+
+        queryset = view.get_queryset()
+
+        self.assertEqual(queryset.count(), 1)
+        self.assertEqual(queryset[0].name, "Today Fast")
+
+    def test_date_with_different_church_is_scoped_to_authenticated_user(self):
+        other_church = TestDataFactory.create_church(name="Other Church")
+        other_user = TestDataFactory.create_user(
+            username='otherfastbydate@example.com',
+            email='otherfastbydate@example.com',
+            password='testpass123'
+        )
+        TestDataFactory.create_profile(
+            user=other_user,
+            church=other_church
+        )
+        other_fast = TestDataFactory.create_fast(
+            church=other_church,
+            name="Other Church Fast",
+            description="Other church match"
+        )
+        other_day = TestDataFactory.create_day(
+            date=self.match_date,
+            church=other_church
+        )
+        other_day.fast = other_fast
+        other_day.save()
+
+        request = self._create_request(
+            user=other_user,
+            query_params={'date': self.match_date.isoformat()}
+        )
+
+        view = FastByDateView()
+        view.request = request
+
+        queryset = view.get_queryset()
+
+        self.assertEqual(queryset.count(), 1)
+        self.assertEqual(queryset[0].church, other_church)
+        self.assertEqual(queryset[0].name, "Other Church Fast")
+
+    def test_no_fasts_found_for_date(self):
+        request = self._create_request(
+            user=self.user,
+            query_params={'date': (self.match_date + timedelta(days=30)).isoformat()}
+        )
+
+        view = FastByDateView()
+        view.request = request
+
+        queryset = view.get_queryset()
+
+        self.assertEqual(queryset.count(), 0)
 
 
 class FastSerializerDayNumberTest(TestCase):
