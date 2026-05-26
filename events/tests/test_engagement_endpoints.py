@@ -89,6 +89,28 @@ class EngagementTrackingEndpointsTest(APITestCase):
             title='Test Prayer Set',
             church=self.church
         )
+
+        self.other_church = Church.objects.create(name='Other Church')
+        self.other_fast = Fast.objects.create(
+            name='Other Fast',
+            church=self.other_church,
+            year=2024
+        )
+        self.other_day = Day.objects.create(
+            fast=self.other_fast,
+            date='2024-03-02',
+            church=self.other_church
+        )
+        self.other_devotional = Devotional.objects.create(
+            day=self.other_day,
+            video=self.video,
+            description='Other devotional',
+            order=1
+        )
+        self.other_prayer_set = PrayerSet.objects.create(
+            title='Other Prayer Set',
+            church=self.other_church
+        )
         
         # Set up authentication
         self.client = APIClient()
@@ -178,6 +200,19 @@ class EngagementTrackingEndpointsTest(APITestCase):
         response = self.client.post(url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_devotional_viewed_rejects_out_of_scope_devotional(self):
+        """Test devotional tracking rejects a devotional from another church."""
+        url = reverse('events:track-devotional-viewed')
+        data = {'devotional_id': self.other_devotional.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
     
     def test_track_devotional_viewed_with_day_data(self):
         """Test tracking devotional and verify day data is included."""
@@ -271,6 +306,19 @@ class EngagementTrackingEndpointsTest(APITestCase):
         response = self.client.post(url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_prayer_set_viewed_rejects_out_of_scope_prayer_set(self):
+        """Test prayer set tracking rejects a prayer set from another church."""
+        url = reverse('events:track-prayer-set-viewed')
+        data = {'prayer_set_id': self.other_prayer_set.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
     
     def test_track_checklist_used_success(self):
         """Test successful checklist used tracking."""
@@ -429,6 +477,19 @@ class EngagementTrackingEndpointsTest(APITestCase):
         response = self.client.post(url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_checklist_used_rejects_out_of_scope_fast(self):
+        """Test checklist tracking rejects a fast from another church."""
+        url = reverse('events:track-checklist-used')
+        data = {'fast_id': self.other_fast.id, 'action': 'daily_review'}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
     
     def test_track_devotional_viewed_get_method_not_allowed(self):
         """Test that GET method is not allowed for devotional tracking."""

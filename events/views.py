@@ -4,6 +4,7 @@ Provides endpoints for retrieving events, analytics, and statistics.
 """
 
 from django.db.models import Count
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import generics, permissions, status
@@ -18,6 +19,19 @@ from .serializers import (
     EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer,
     UserActivityFeedSerializer
 )
+
+
+def _user_can_access_church_resource(user, church_id):
+    """Return True when the authenticated user belongs to the resource's church."""
+    if not church_id:
+        return False
+
+    try:
+        profile = user.profile
+    except ObjectDoesNotExist:
+        return False
+
+    return profile.church_id == church_id
 
 
 class EventListView(generics.ListAPIView):
@@ -396,9 +410,13 @@ class TrackDevotionalViewedView(APIView):
             return Response({"error": "devotional_id is required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             from hub.models import Devotional
-            devotional = Devotional.objects.get(id=int(devotional_id))
+            devotional = Devotional.objects.select_related('day__fast').get(id=int(devotional_id))
         except (ValueError, Devotional.DoesNotExist):
             return Response({"error": "Invalid devotional_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        church_id = devotional.day.fast.church_id if devotional.day and devotional.day.fast else None
+        if not _user_can_access_church_resource(request.user, church_id):
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             Event.create_event(
@@ -434,6 +452,9 @@ class TrackPrayerSetViewedView(APIView):
             prayer_set = PrayerSet.objects.get(id=int(prayer_set_id))
         except (ValueError, PrayerSet.DoesNotExist):
             return Response({"error": "Invalid prayer_set_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not _user_can_access_church_resource(request.user, prayer_set.church_id):
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             Event.create_event(
@@ -480,6 +501,9 @@ class TrackChecklistUsedView(APIView):
                 target = fast
             except (ValueError, Fast.DoesNotExist):
                 return Response({"error": "Invalid fast_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not _user_can_access_church_resource(request.user, fast.church_id):
+                return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             Event.create_event(
