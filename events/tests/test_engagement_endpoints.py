@@ -1188,8 +1188,8 @@ class EngagementTrackingEndpointsTest(APITestCase):
         ).first()
         
         self.assertIsNotNone(devotional_event)
-        # Note: IP and user agent are captured by Event.create_event() method
-        # The exact implementation depends on how the Event model handles request metadata
+        self.assertEqual(devotional_event.ip_address, '192.168.1.100')
+        self.assertEqual(devotional_event.user_agent, 'TestApp/1.0')
     
     def test_event_target_relationships(self):
         """Test that events have correct target relationships."""
