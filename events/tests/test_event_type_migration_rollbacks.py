@@ -42,8 +42,8 @@ class EventTypeMigrationRollbackTests(TestCase):
         event = Event.objects.create(
             event_type=event_type,
             title="Prayer viewed",
-            target_content_type=user_ct,
-            target_object_id=1,
+            content_type=user_ct,
+            object_id=1,
         )
 
         migration_0012.backwards(apps, None)
@@ -60,8 +60,8 @@ class EventTypeMigrationRollbackTests(TestCase):
         event = Event.objects.create(
             event_type=event_type,
             title="Tutorial video viewed",
-            target_content_type=user_ct,
-            target_object_id=1,
+            content_type=user_ct,
+            object_id=1,
         )
 
         migration_0013.backwards(apps, None)
