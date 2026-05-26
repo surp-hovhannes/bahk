@@ -502,22 +502,13 @@ class AnalyticsPerformanceTest(TestCase):
         """Test that cache service handles errors gracefully."""
         start_date = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         
-        # Mock cache to raise an exception - need to wrap in try/catch since the method doesn't handle errors yet
         with patch.object(cache, 'get', side_effect=Exception('Cache Error')):
-            try:
-                result = AnalyticsCacheService.get_daily_aggregates(start_date, 7)
-                # If we get here without exception, that's good
-            except Exception:
-                # The method doesn't handle errors gracefully yet, so this is expected
-                pass
+            result = AnalyticsCacheService.get_daily_aggregates(start_date, 7)
+
+        self.assertIsNone(result)
         
         with patch.object(cache, 'set', side_effect=Exception('Cache Error')):
-            try:
-                AnalyticsCacheService.set_daily_aggregates(start_date, 7, {'test': 'data'})
-                # If we get here without exception, that's good
-            except Exception:
-                # The method doesn't handle errors gracefully yet, so this is expected
-                pass
+            AnalyticsCacheService.set_daily_aggregates(start_date, 7, {'test': 'data'})
     
     def test_query_optimizer_date_handling(self):
         """Test that query optimizer correctly handles different date formats."""
