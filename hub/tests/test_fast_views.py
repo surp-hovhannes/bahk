@@ -17,6 +17,79 @@ import pytz
 
 User = get_user_model()
 
+class JoinFastViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Join Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="joinfast@example.com",
+            email="joinfast@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Joinable Fast",
+            description="Fast for join route tests",
+        )
+        self.url = reverse("fast-join")
+
+    def test_join_fast_adds_membership(self):
+        self.client.force_login(self.user)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(self.profile.fasts.filter(id=self.fast.id).exists())
+        self.assertEqual(self.profile.fasts.filter(id=self.fast.id).count(), 1)
+
+    def test_join_fast_requires_authentication(self):
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_join_fast_requires_valid_fast_id(self):
+        self.client.force_login(self.user)
+
+        missing_fast_id_response = self.client.put(
+            self.url,
+            data={},
+            content_type="application/json",
+        )
+        invalid_fast_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id + 999},
+            content_type="application/json",
+        )
+
+        self.assertEqual(missing_fast_id_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(invalid_fast_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_join_fast_rejects_duplicate_membership(self):
+        self.client.force_login(self.user)
+        self.profile.fasts.add(self.fast)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.profile.fasts.filter(id=self.fast.id).count(), 1)
+
 class FastListViewTest(TestCase):
     def setUp(self):
         # Create a church using TestDataFactory

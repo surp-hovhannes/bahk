@@ -16,6 +16,10 @@
   ],
   "ownedFiles": [
     {
+      "path": "hub/tests/test_admin_compare_reading_prompts.py",
+      "reason": "pytest file"
+    },
+    {
       "path": "hub/tests/test_armenian_text.py",
       "reason": "pytest file"
     },
@@ -57,15 +61,15 @@
     },
     {
       "path": "hub/tests/test_feast_icon_matching.py",
-      "reason": "pytest file"
-    },
-    {
-      "path": "hub/tests/test_feast_model.py",
       "reason": "pytest file"
     }
   ],
   "contextFiles": [
     {
+      "path": "hub/tests/test_admin_compare_reading_prompts.py",
+      "reason": "nearby test"
+    },
+    {
       "path": "hub/tests/test_armenian_text.py",
       "reason": "nearby test"
     },
@@ -107,15 +111,15 @@
     },
     {
       "path": "hub/tests/test_feast_icon_matching.py",
-      "reason": "nearby test"
-    },
-    {
-      "path": "hub/tests/test_feast_model.py",
       "reason": "nearby test"
     }
   ],
   "tests": [
     {
+      "path": "hub/tests/test_admin_compare_reading_prompts.py",
+      "command": "pytest"
+    },
+    {
       "path": "hub/tests/test_armenian_text.py",
       "command": "pytest"
     },
@@ -157,10 +161,6 @@
     },
     {
       "path": "hub/tests/test_feast_icon_matching.py",
-      "command": "pytest"
-    },
-    {
-      "path": "hub/tests/test_feast_model.py",
       "command": "pytest"
     }
   ],
@@ -187,5 +187,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T17:01:08.507Z"
+  "updatedAt": "2026-05-26T17:03:39.481Z"
 }

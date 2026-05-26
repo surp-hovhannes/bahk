@@ -23,10 +23,37 @@
   "suggestedRegressionTest": "Create explicit tests such as test_fast_on_date_default_countdown and test_fast_on_date_culmination_feast_countdown that assert each expected response independently.",
   "minimumFixScope": "tests/integration/test_endpoints.py",
   "status": "open",
-  "history": [],
+  "history": [
+    {
+      "runId": "20260526T170322-2ba5b4",
+      "kind": "revalidate",
+      "status": "open",
+      "note": null,
+      "reasoning": "The original evidence still exists at `tests/integration/test_endpoints.py:51-88`. The test is still defined as `def test_fast_on_date_endpoint_variations(self, query_params='', culmination_feast_name=None):`, so Django/unittest will execute it once with the default arguments and never supply the non-default `query_params` or `culmination_feast_name` values. A repository-wide search found no other tests that call this method or independently assert the `?date=20240325` path or the culmination-feast countdown branch. Those branches remain behaviorally distinct in current code: `hub/serializers.py:217-235` has separate countdown logic for `culmination_feast` vs. normal fast end dates. I attempted to run the targeted Django test via the project’s documented Docker command, but the app container was not running, so there is no passing test evidence to contradict the finding.",
+      "commands": [
+        "pwd && rg -n \"test_.*endpoint|fast_on_date|culation|culmination|countdown|parametr\" tests/integration/test_endpoints.py tests -S",
+        "sed -n '1,180p' tests/integration/test_endpoints.py",
+        "docker exec bahk_devcontainer-app-1 python manage.py test tests.integration.test_endpoints.FastOnDateEndpointTests --settings=tests.test_settings",
+        "nl -ba tests/integration/test_endpoints.py | sed -n '40,110p'",
+        "ls -l tests/integration/test_endpoints.py && shasum tests/integration/test_endpoints.py && rg -n \"def test_fast_on_date_endpoint_variations|def _assert_fast_on_date_countdown|APIRequestFactory|test_fast_on_date_default_countdown|test_fast_on_date_with_query_params_countdown|test_fast_on_date_culmination_feast_countdown\" tests/integration/test_endpoints.py -n",
+        "git status --short tests/integration/test_endpoints.py && git diff -- tests/integration/test_endpoints.py",
+        "sed -n '1,140p' tests/integration/test_endpoints.py",
+        "rg -n \"fast_on_date.*countdown|countdown.*Complete Fast|countdown.*Pascha|culmination_feast_name|date=20240325|test_fast_on_date_endpoint_variations\\(\" tests -S",
+        "rg -n \"reverse\\('fast_on_date'\\)|name=['\\\"]fast_on_date['\\\"]|def .*fast_on_date|class .*FastOnDate\" . -S",
+        "nl -ba hub/views/fast.py | sed -n '919,990p'",
+        "sed -n '919,990p' hub/views/fast.py",
+        "rg -n \"days_to_finish|countdown\" . -S",
+        "rg -n \"culmination_feast_date|until the end of|until .*Complete Fast|until .*Pascha\" . -S",
+        "nl -ba hub/serializers.py | sed -n '210,236p'"
+      ],
+      "createdAt": "2026-05-26T17:04:22.755Z"
+    }
+  ],
   "signature": "sig_feat-test-suite-2510406d0d_d0af892753",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-test-suite-2510406d_9432c862ee"
+  ],
   "createdByRunId": "20260526T025102-5f2a3d",
   "createdAt": "2026-05-26T03:13:13.070Z",
-  "updatedAt": "2026-05-26T03:13:13.070Z"
+  "updatedAt": "2026-05-26T17:04:22.755Z"
 }

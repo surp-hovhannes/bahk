@@ -22,6 +22,10 @@
   ],
   "contextFiles": [
     {
+      "path": "hub/tests/test_admin_compare_reading_prompts.py",
+      "reason": "associated test"
+    },
+    {
       "path": "hub/tests/test_armenian_text.py",
       "reason": "associated test"
     },
@@ -47,15 +51,15 @@
     },
     {
       "path": "hub/tests/test_email_templates.py",
-      "reason": "associated test"
-    },
-    {
-      "path": "hub/tests/test_fast_views.py",
       "reason": "associated test"
     }
   ],
   "tests": [
     {
+      "path": "hub/tests/test_admin_compare_reading_prompts.py",
+      "command": "pytest"
+    },
+    {
       "path": "hub/tests/test_armenian_text.py",
       "command": "pytest"
     },
@@ -81,10 +85,6 @@
     },
     {
       "path": "hub/tests/test_email_templates.py",
-      "command": "pytest"
-    },
-    {
-      "path": "hub/tests/test_fast_views.py",
       "command": "pytest"
     }
   ],
@@ -115,5 +115,5 @@
     }
   ],
   "createdAt": "2026-05-26T00:13:37.492Z",
-  "updatedAt": "2026-05-26T17:01:08.507Z"
+  "updatedAt": "2026-05-26T17:03:39.481Z"
 }

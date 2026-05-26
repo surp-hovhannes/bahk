@@ -16,17 +16,29 @@
   ],
   "ownedFiles": [
     {
+      "path": "hub/tests/test_task_imports.py",
+      "reason": "pytest file"
+    },
+    {
       "path": "hub/tests/test_timezone_functionality.py",
       "reason": "pytest file"
     }
   ],
   "contextFiles": [
     {
+      "path": "hub/tests/test_task_imports.py",
+      "reason": "nearby test"
+    },
+    {
       "path": "hub/tests/test_timezone_functionality.py",
       "reason": "nearby test"
     }
   ],
   "tests": [
+    {
+      "path": "hub/tests/test_task_imports.py",
+      "command": "pytest"
+    },
     {
       "path": "hub/tests/test_timezone_functionality.py",
       "command": "pytest"
@@ -43,5 +55,5 @@
   "patchAttemptIds": [],
   "analysisHistory": [],
   "createdAt": "2026-05-26T16:56:11.026Z",
-  "updatedAt": "2026-05-26T17:01:08.507Z"
+  "updatedAt": "2026-05-26T17:03:39.481Z"
 }
