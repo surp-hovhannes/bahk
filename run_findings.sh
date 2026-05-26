@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 cd /Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk
 
 findings=(
@@ -35,46 +34,41 @@ for i in "${!findings[@]}"; do
     echo "[$num/19] $id"
     echo "========================================"
 
-    # Step 1: Reset and clean to pristine state
+    # Reset branch and clean to pristine state
     git checkout test-hardening-hub-pt2 --force >/dev/null 2>&1
     git reset HEAD >/dev/null 2>&1
     git checkout -- . >/dev/null 2>&1
     git clean -fd >/dev/null 2>&1
 
-    # Step 2: Reinit clawpatch fresh
+    # Fresh .clawpatch for each iteration
+    rm -rf .clawpatch
     clawpatch init --force >/dev/null 2>&1
     clawpatch map --quiet >/dev/null 2>&1
 
-    # Step 3: Stash the fresh .clawpatch state before running fix
-    # (fix may modify .clawpatch; we want to restore it before next iteration)
-    STASH_NAME="clawpatch-state-$num"
-    rm -rf ".clawpatch.bak"
-    cp -r .clawpatch ".clawpatch.bak"
-
-    # Step 4: Run fix
+    # Try fix (may fail - that's OK)
     echo "--- FIX ---"
     fix_out=$(clawpatch fix --finding "$id" 2>&1) || true
-    if echo "$fix_out" | grep -qo "error: dirty worktree"; then
+    fix_exit=${PIPESTATUS[0]}
+    if echo "$fix_out" | grep -qo "dirty worktree"; then
         echo "FIX: SKIPPED (dirty worktree)"
         fix_exit=3
-    elif echo "$fix_out" | grep -qo "error:"; then
+    elif echo "$fix_out" | grep -q "error:"; then
         echo "FIX: ERROR"
-        echo "$fix_out" | head -10
         fix_exit=1
-    elif echo "$fix_out" | grep -qo "validation failed"; then
-        echo "FIX: VALIDATION_FAILED"
+    elif echo "$fix_out" | grep -q "validation failed"; then
+        echo "FIX: VALIDATION_FAILED (exit 6)"
         fix_exit=6
     else
-        echo "FIX: APPLIED"
+        echo "FIX: APPLIED (exit 0)"
         fix_exit=0
     fi
 
-    # Step 5: Run revalidate on the finding
+    # Always run revalidate
     echo "--- REVALIDATE ---"
     rev_out=$(clawpatch revalidate --finding "$id" 2>&1) || true
-    if echo "$rev_out" | grep -qo "outcome=fixed"; then
+    if echo "$rev_out" | grep -qo "outcome=fixed\|fixed=1"; then
         outcome="fixed"
-    elif echo "$rev_out" | grep -qo "outcome=open"; then
+    elif echo "$rev_out" | grep -qo "outcome=open\|open=1"; then
         outcome="open"
     elif echo "$rev_out" | grep -qo "outcome=falsePositive"; then
         outcome="falsePositive"
@@ -84,16 +78,18 @@ for i in "${!findings[@]}"; do
         outcome="unknown"
     fi
     echo "OUTCOME: $outcome"
-    echo "Result: $id | fix=$fix_exit | outcome=$outcome"
 
+    echo "$num|$id|fix=$fix_exit|outcome=$outcome"
     results+=("$num|$id|fix=$fix_exit|outcome=$outcome")
 
-    # Step 6: Restore fresh .clawpatch for next iteration
-    rm -rf .clawpatch
-    cp -r ".clawpatch.bak" .clawpatch
-    rm -rf ".clawpatch.bak"
+    # Clean up for next iteration
+    git reset HEAD >/dev/null 2>&1
+    git checkout -- . >/dev/null 2>&1
+    git clean -fd >/dev/null 2>&1
 
-    # Step 7: Small pause
+    # Verify .clawpatch.bak for next iteration is gone
+    rm -rf ".clawpatch.bak" ".clawpatch.bak2"
+
     sleep 1
 done
 
