@@ -6,6 +6,8 @@ This module tests the API endpoints that track user engagement:
 - TrackChecklistUsedView
 """
 
+from datetime import timedelta
+
 from django.test import override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -14,7 +16,7 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from events.models import Event, EventType
+from events.models import Event, EventType, UserActivityFeed
 from hub.models import Fast, Church, Profile, Day, Devotional, Video
 from prayers.models import Prayer, PrayerRequest, PrayerSet
 
@@ -108,6 +110,15 @@ class EngagementTrackingEndpointsTest(APITestCase):
         )
 
         self.other_church = Church.objects.create(name='Other Church')
+        self.other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@example.com',
+            password='testpass123'
+        )
+        self.other_profile = Profile.objects.create(
+            user=self.other_user,
+            church=self.other_church
+        )
         self.other_fast = Fast.objects.create(
             name='Other Fast',
             church=self.other_church,
@@ -133,6 +144,87 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.client = APIClient()
         refresh = RefreshToken.for_user(self.user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def test_activity_feed_authentication_required(self):
+        """Test that the activity feed requires authentication."""
+        self.client.credentials()
+
+        response = self.client.get(reverse('events:activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_activity_feed_returns_only_request_users_items_in_newest_first_order(self):
+        """Test activity feed scoping, ordering, and response shape."""
+        older_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Older activity',
+            description='First activity for the requesting user',
+            data={'kind': 'older'},
+        )
+        newer_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='milestone',
+            title='Newest activity',
+            description='Most recent activity for the requesting user',
+            is_read=True,
+            data={'kind': 'newer'},
+        )
+        UserActivityFeed.objects.create(
+            user=self.other_user,
+            activity_type='announcement',
+            title='Other user activity',
+            description='Should not appear in the response',
+        )
+
+        now = timezone.now()
+        UserActivityFeed.objects.filter(pk=older_item.pk).update(
+            created_at=now - timedelta(hours=2)
+        )
+        UserActivityFeed.objects.filter(pk=newer_item.pk).update(
+            created_at=now - timedelta(minutes=5),
+            read_at=now - timedelta(minutes=1),
+        )
+
+        response = self.client.get(reverse('events:activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+
+        results = response.data['results']
+        self.assertEqual([item['id'] for item in results], [newer_item.id, older_item.id])
+        self.assertEqual(
+            set(results[0].keys()),
+            {
+                'id', 'activity_type', 'activity_type_display', 'title', 'description',
+                'is_read', 'read_at', 'created_at', 'age_display', 'data',
+                'target_type', 'target_id', 'target_thumbnail',
+            }
+        )
+        self.assertEqual(results[0]['activity_type'], 'milestone')
+        self.assertEqual(results[0]['title'], 'Newest activity')
+        self.assertTrue(results[0]['is_read'])
+        self.assertEqual(results[0]['data'], {'kind': 'newer'})
+        self.assertIsNone(results[0]['target_type'])
+        self.assertIsNone(results[0]['target_id'])
+        self.assertIsNone(results[0]['target_thumbnail'])
+        self.assertEqual(results[1]['activity_type'], 'fast_join')
+
+    def test_activity_feed_returns_empty_results_when_user_has_no_items(self):
+        """Test empty activity feed responses for authenticated users."""
+        empty_user = User.objects.create_user(
+            username='emptyuser',
+            email='empty@example.com',
+            password='testpass123'
+        )
+        refresh = RefreshToken.for_user(empty_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(reverse('events:activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+        self.assertEqual(response.data['results'], [])
     
     def test_track_devotional_viewed_success(self):
         """Test successful devotional viewed tracking."""
