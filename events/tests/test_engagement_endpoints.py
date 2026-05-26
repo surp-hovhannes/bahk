@@ -7,6 +7,7 @@ This module tests the API endpoints that track user engagement:
 """
 
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import override_settings
 from django.contrib.auth import get_user_model
@@ -115,9 +116,19 @@ class EngagementTrackingEndpointsTest(APITestCase):
             email='other@example.com',
             password='testpass123'
         )
+        self.staff_user = User.objects.create_user(
+            username='staffuser',
+            email='staff@example.com',
+            password='testpass123',
+            is_staff=True,
+        )
         self.other_profile = Profile.objects.create(
             user=self.other_user,
             church=self.other_church
+        )
+        self.staff_profile = Profile.objects.create(
+            user=self.staff_user,
+            church=self.church
         )
         self.other_fast = Fast.objects.create(
             name='Other Fast',
@@ -152,6 +163,69 @@ class EngagementTrackingEndpointsTest(APITestCase):
         response = self.client.get(reverse('events:activity-feed'))
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_allows_staff_post(self, mock_check):
+        """Test staff users can trigger milestone checks for a valid fast."""
+        mock_check.return_value = 2
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            {
+                'message': f'Milestone check completed for {self.fast.name}',
+                'milestones_created': 2,
+            },
+        )
+        mock_check.assert_called_once_with(self.fast)
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_requires_authentication(self, mock_check):
+        """Test milestone trigger rejects unauthenticated requests."""
+        self.client.credentials()
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        mock_check.assert_not_called()
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_requires_staff_user(self, mock_check):
+        """Test milestone trigger rejects authenticated non-staff users."""
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        mock_check.assert_not_called()
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_returns_not_found_for_missing_fast(self, mock_check):
+        """Test milestone trigger returns 404 for nonexistent fast IDs."""
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[99999]))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data, {'error': 'Fast not found'})
+        mock_check.assert_not_called()
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_rejects_get(self, mock_check):
+        """Test milestone trigger only allows POST requests."""
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        mock_check.assert_not_called()
 
     def test_activity_feed_returns_only_request_users_items_in_newest_first_order(self):
         """Test activity feed scoping, ordering, and response shape."""
