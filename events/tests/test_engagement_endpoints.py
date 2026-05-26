@@ -164,6 +164,94 @@ class EngagementTrackingEndpointsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_generate_activity_feed_requires_admin_authentication(self):
+        """Test generate activity feed rejects unauthenticated and non-admin users."""
+        url = reverse('events:generate-activity-feed')
+
+        self.client.credentials()
+        unauthenticated_response = self.client.post(
+            url,
+            {'user_id': self.user.id},
+            format='json',
+        )
+        self.assertEqual(unauthenticated_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        non_admin_response = self.client.post(
+            url,
+            {'user_id': self.user.id},
+            format='json',
+        )
+        self.assertEqual(non_admin_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_generate_activity_feed_rejects_get(self):
+        """Test generate activity feed only allows POST requests."""
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(reverse('events:generate-activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_generate_activity_feed_creates_items_for_requested_user(self):
+        """Test generate activity feed creates feed items for the requested user only."""
+        tracked_event = Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.user,
+            target=self.fast,
+            title='User joined fast',
+            description='Joined the fast',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.user,
+            title='Ignored event type',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.other_user,
+            target=self.other_fast,
+            title='Other user joined fast',
+            description='Should not be included',
+        )
+
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        url = reverse('events:generate-activity-feed')
+        response = self.client.post(
+            url,
+            {'user_id': self.user.id, 'days_back': 'not-a-number'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['created_count'], 1)
+        self.assertEqual(
+            response.data['message'],
+            f'Generated 1 activity feed items for user {self.user.username}',
+        )
+        self.assertEqual(set(response.data['date_range'].keys()), {'start', 'end'})
+
+        self.assertEqual(UserActivityFeed.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(UserActivityFeed.objects.filter(user=self.other_user).count(), 0)
+
+        feed_item = UserActivityFeed.objects.get(user=self.user)
+        self.assertEqual(feed_item.event_id, tracked_event.id)
+        self.assertEqual(feed_item.activity_type, 'fast_join')
+        self.assertEqual(feed_item.target, self.fast)
+
+        second_response = self.client.post(
+            url,
+            {'user_id': self.user.id, 'days_back': 30},
+            format='json',
+        )
+
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.data['created_count'], 1)
+        self.assertEqual(UserActivityFeed.objects.filter(user=self.user, event=tracked_event).count(), 2)
+
     @patch('events.signals.check_and_track_participation_milestones')
     def test_trigger_milestone_check_allows_staff_post(self, mock_check):
         """Test staff users can trigger milestone checks for a valid fast."""
