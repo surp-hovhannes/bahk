@@ -88,6 +88,7 @@ class FastEndpointTests(APITestCase):
         match = resolve("/api/fasts/")
 
         self.assertIs(match.func.view_class, FastListView)
+        self.assertEqual(match.url_name, "fast-list")
 
         response = self.client.get(f"/api/fasts/?church_id={self.church.id}")
 

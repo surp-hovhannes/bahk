@@ -46,13 +46,32 @@
         "nl -ba tests/test_fast_endpoints.py | sed -n '80,100p'"
       ],
       "createdAt": "2026-05-26T16:57:16.892Z"
+    },
+    {
+      "runId": "20260526T172027-5a5914",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence still exists, but slightly moved: `bahk/urls.py` now contains the `/api/` hub alias at line 121 (`path(\"api/\", include(\"hub.urls\"))`), within the same alias block the finding referenced. The reported gap is no longer present because the repository now has a focused regression test in `tests/test_fast_endpoints.py:86-96`: `test_api_alias_resolves_and_serves_fast_list` resolves `/api/fasts/` and asserts it maps to `FastListView`, then performs a representative GET to `/api/fasts/?church_id=...` and asserts `200 OK` with a list response. That directly covers the recommendation to test both URL resolution and a representative request through the `/api/` alias. I could not execute the Django test in this environment because Docker access is denied (`permission denied while trying to connect to the docker API`) and the local Python environment lacks Django (`ModuleNotFoundError: No module named 'django'`), so the validation is based on current code and test coverage rather than a successful live test run.",
+      "commands": [
+        "rg -n \"path\\(\\s*\\\"api/\\\"|path\\(\\s*'api/'|include\\(\\s*\\\"hub.urls\\\"|include\\(\\s*'hub.urls'\" bahk/urls.py hub tests",
+        "nl -ba bahk/urls.py | sed -n '110,128p'",
+        "rg -n \"resolve\\(.*?/api/|client\\.(get|post|put|patch|delete)\\(.*?/api/|/api/fasts/|/api/\" tests hub",
+        "nl -ba tests/test_fast_endpoints.py | sed -n '80,100p'",
+        "nl -ba hub/urls.py | sed -n '1,120p'",
+        "docker ps -a --format '{{.Names}}\\t{{.Status}}' | rg '^bahk_devcontainer-app-1'",
+        "python3 --version",
+        "python3 manage.py test tests.test_fast_endpoints.FastEndpointTests.test_api_alias_resolves_and_serves_fast_list --settings=tests.test_settings"
+      ],
+      "createdAt": "2026-05-26T17:21:07.849Z"
     }
   ],
   "signature": "sig_feat-route-28ccdb8550_ae2d134ae8",
   "linkedPatchAttemptIds": [
-    "pat_fnd-sig-feat-route-28ccdb8550-ae_c52a0fdcd6"
+    "pat_fnd-sig-feat-route-28ccdb8550-ae_c52a0fdcd6",
+    "pat_fnd-sig-feat-route-28ccdb8550-ae_039868a0b9"
   ],
   "createdByRunId": "20260526T025102-5f2a3d",
   "createdAt": "2026-05-26T02:56:21.745Z",
-  "updatedAt": "2026-05-26T16:57:16.892Z"
+  "updatedAt": "2026-05-26T17:21:07.849Z"
 }
