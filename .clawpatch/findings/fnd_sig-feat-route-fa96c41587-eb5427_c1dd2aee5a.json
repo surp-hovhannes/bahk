@@ -42,13 +42,31 @@
         "sed -n '1,160p' bahk/urls.py"
       ],
       "createdAt": "2026-05-26T17:02:08.806Z"
+    },
+    {
+      "runId": "20260526T172328-c4caaa",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence still exists at `learning_resources/urls.py:15` as `path('videos/<int:pk>/', VideoDetailView.as_view(), name='video-detail')`, and the route is still mounted under `/api/learning-resources/` from `bahk/urls.py:122`. However, the reported test gap is no longer present. Current tests in `learning_resources/tests.py` include `LearningResourcesRouteTest.test_video_detail_reverse_uses_numeric_pk_path` and `test_api_learning_resources_prefix_resolves_video_detail` (around lines 315-322), which directly verify `reverse('video-detail', kwargs={'pk': 1}) == '/api/learning-resources/videos/1/'` and that `/api/learning-resources/videos/1/` resolves to `VideoDetailView`. `VideoDetailViewTest` (starting around line 325) also exercises representative GET behavior and 404 handling. I attempted to run the targeted Django tests, but Docker execution was unavailable in this environment: `docker exec` reported the named container is not running, and `docker ps` was blocked by Docker socket permissions. Based on the current repository contents, the finding is fixed rather than merely stale.",
+      "commands": [
+        "rg -n \"VideoDetailView|video-detail|videos/<int:pk>|LearningResourcesRouteTest|VideoDetailViewTest|api/learning-resources\" learning_resources bahk tests -S",
+        "sed -n '1,80p' learning_resources/urls.py",
+        "sed -n '280,460p' learning_resources/tests.py",
+        "sed -n '1,180p' bahk/urls.py",
+        "docker exec bahk_devcontainer-app-1 python manage.py test --settings=tests.test_settings learning_resources.tests.LearningResourcesRouteTest learning_resources.tests.VideoDetailViewTest",
+        "docker ps -a --format '{{.Names}}\\t{{.Status}}' | rg '^bahk_devcontainer-app-1\\b'",
+        "sed -n '1,40p' learning_resources/tests.py"
+      ],
+      "createdAt": "2026-05-26T17:23:57.555Z"
     }
   ],
   "signature": "sig_feat-route-fa96c41587_eb54270211",
   "linkedPatchAttemptIds": [
-    "pat_fnd-sig-feat-route-fa96c41587-eb_e3010a1dd7"
+    "pat_fnd-sig-feat-route-fa96c41587-eb_e3010a1dd7",
+    "pat_fnd-sig-feat-route-fa96c41587-eb_900314a376"
   ],
   "createdByRunId": "20260526T025102-5f2a3d",
   "createdAt": "2026-05-26T03:12:12.708Z",
-  "updatedAt": "2026-05-26T17:02:08.806Z"
+  "updatedAt": "2026-05-26T17:23:57.555Z"
 }
