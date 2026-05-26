@@ -50,6 +50,9 @@ class FastOnDateEndpointTests(TestCase):
 
     def _assert_fast_on_date_countdown(self, query_params="", culmination_feast_name=None):
         """Assert the countdown returned by the endpoint for a given variation."""
+        from django.utils import timezone
+        today = timezone.now().date()
+
         # Create a fast using TestDataFactory
         fast = TestDataFactory.create_fast(
             name="Complete Fast",
@@ -58,14 +61,16 @@ class FastOnDateEndpointTests(TestCase):
         )
         
         # Set additional attributes that TestDataFactory doesn't handle
+        feast_date = today + datetime.timedelta(days=2)
+        day_date = today
         if culmination_feast_name:
             fast.culmination_feast = culmination_feast_name
-            fast.culmination_feast_date = datetime.date(2024, 3, 27)
+            fast.culmination_feast_date = feast_date
             fast.save()
         
         # Create a day for the fast using TestDataFactory
         day = TestDataFactory.create_day(
-            date=datetime.date(2024, 3, 25),
+            date=day_date,
             church=self.church
         )
         day.fast = fast
@@ -93,11 +98,17 @@ class FastOnDateEndpointTests(TestCase):
 
     def test_fast_on_date_with_query_params_countdown(self):
         """Tests endpoint retrieving fast on a date with explicit date query parameters."""
-        self._assert_fast_on_date_countdown(query_params="?date=20240325")
+        from django.utils import timezone
+        today = timezone.now().date()
+        date_str = today.strftime("%Y%m%d")
+        self._assert_fast_on_date_countdown(query_params=f"?date={date_str}")
 
     def test_fast_on_date_culmination_feast_countdown(self):
         """Tests endpoint retrieving fast on a date with a culmination feast countdown."""
+        from django.utils import timezone
+        today = timezone.now().date()
+        date_str = today.strftime("%Y%m%d")
         self._assert_fast_on_date_countdown(
-            query_params="?date=20240325",
+            query_params=f"?date={date_str}",
             culmination_feast_name="Pascha",
         )

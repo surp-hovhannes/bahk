@@ -232,7 +232,7 @@ class FastEndpointTests(APITestCase):
                 event_type=event_type,
                 user=self.user1,
                 title="Checklist used",
-                i18n='{}'
+                i18n={}
             )
         
         start_time = time.time()
