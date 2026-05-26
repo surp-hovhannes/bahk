@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-c4b9b91603-d25544_97fed2c330",
+  "featureId": "feat_route_c4b9b91603",
+  "title": "Device-token ownership logging records the full push token",
+  "category": "security",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "notifications/tests/test_device_tokens.py",
+      "startLine": 133,
+      "endLine": 155,
+      "symbol": "DeviceTokenTests.test_token_ownership_change_logging",
+      "quote": null
+    }
+  ],
+  "reasoning": "The ownership-change test requires the logger call to include the full device token in structured log extras. Push tokens identify a specific device and can be used by backend push infrastructure to target that device, so storing them verbatim in application logs increases exposure if logs are broadly accessible or retained longer than application data.",
+  "reproduction": null,
+  "recommendation": "Avoid logging the raw token. Log a stable hash, a short redacted suffix/prefix, and the old/new user ids instead.",
+  "whyTestsDoNotAlreadyCoverThis": "The current test asserts the insecure behavior by expecting the full token in the logger extra payload.",
+  "suggestedRegressionTest": "Change test_token_ownership_change_logging to assert that the logged extra contains a redacted token identifier or token hash and does not contain the original token string.",
+  "minimumFixScope": "DeviceTokenCreateView ownership-change logging and the corresponding assertion in notifications/tests/test_device_tokens.py.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-c4b9b91603_d255447ca8",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:08:22.476Z",
+  "updatedAt": "2026-05-26T03:08:22.476Z"
+}

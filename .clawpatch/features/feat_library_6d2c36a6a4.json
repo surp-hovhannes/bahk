@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_6d2c36a6a4",
+  "title": "Python source hub/migrations#3",
+  "summary": "Python source group hub/migrations#3 with 12 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/migrations#3",
+      "symbol": "hub/migrations#3",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/migrations/0025_day_hub_day_fast_id_c4047f_idx_and_more.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0026_profile_receive_promotional_emails.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0027_reading_context_reading_context_last_generated_and_more.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0028_llmprompt_remove_reading_context_and_more.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0029_update_devotional_set_model.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0030_add_timezone_to_profile.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0031_alter_devotionalset_image.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0032_profile_utm_fields.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0033_alter_devotional_unique_together_devotional_i18n_and_more.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0034_add_culmination_feast_date_index.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0035_add_culmination_feast_message_fields.py",
+      "reason": "source group hub/migrations#3"
+    },
+    {
+      "path": "hub/migrations/0036_update_fast_i18n_fields.py",
+      "reason": "source group hub/migrations#3"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-26T17:06:54.878Z",
+  "updatedAt": "2026-05-26T17:06:54.878Z"
+}

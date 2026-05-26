@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "patchAttemptId": "pat_fnd-sig-feat-route-90720ae5ed-a2_ecf27fe4fd",
+  "findingIds": [
+    "fnd_sig-feat-route-90720ae5ed-a2b225_660f9a7afb"
+  ],
+  "featureIds": [
+    "feat_route_90720ae5ed"
+  ],
+  "status": "failed",
+  "plan": "Added focused request coverage for `church-detail`, asserting the serialized church payload and a 404 for a missing church.",
+  "filesChanged": [
+    "hub/tests/test_church_detail_api.py"
+  ],
+  "commandsRun": [
+    {
+      "command": "pytest",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 127,
+      "durationMs": 7,
+      "stdout": "",
+      "stderr": "/bin/sh: pytest: command not found\n"
+    },
+    {
+      "command": "docker exec bahk_devcontainer-app-1 ruff check .",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 54,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    },
+    {
+      "command": "docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 54,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    }
+  ],
+  "testResults": [
+    {
+      "command": "pytest",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 127,
+      "durationMs": 7,
+      "stdout": "",
+      "stderr": "/bin/sh: pytest: command not found\n"
+    },
+    {
+      "command": "docker exec bahk_devcontainer-app-1 ruff check .",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 54,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    },
+    {
+      "command": "docker exec bahk_devcontainer-app-1 python manage.py test --parallel --keepdb --exclude-tag=performance --settings=tests.test_settings",
+      "cwd": "/Users/oshii/clawd/fast-and-pray-pm-agent/code/bahk",
+      "exitCode": 1,
+      "durationMs": 54,
+      "stdout": "",
+      "stderr": "Error response from daemon: container 522285f9f12b8b1eb6b3afee16696b18f138c2d4c7d9a29bc88f0144d1d2e307 is not running\n"
+    }
+  ],
+  "provider": {
+    "name": "codex",
+    "model": null,
+    "reasoningEffort": null,
+    "requestId": null,
+    "startedAt": "2026-05-26T16:52:55.713Z",
+    "finishedAt": "2026-05-26T16:53:39.566Z"
+  },
+  "git": {
+    "baseSha": "2a3f3797706b0e73fc17fe8f1a787d38d5064572",
+    "commitSha": null,
+    "branchName": "test-hardening-hub-pt2",
+    "prUrl": null
+  },
+  "createdAt": "2026-05-26T16:52:55.708Z",
+  "updatedAt": "2026-05-26T16:53:39.567Z"
+}

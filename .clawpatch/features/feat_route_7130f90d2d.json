@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_7130f90d2d",
+  "title": "Django route /api/events/admin/trigger-milestone/:fast_id/",
+  "summary": "Django route /api/events/admin/trigger-milestone/:fast_id/ handled by views.trigger_milestone_check in events/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "events/urls.py",
+      "symbol": "views.trigger_milestone_check",
+      "route": "/api/events/admin/trigger-milestone/:fast_id/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "events/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization",
+    "auth"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-route-7130f90d2d-f7c238_e58b7944af"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=179553 bytes; approxTokens=44889; includedFiles=9; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:01:22.226Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

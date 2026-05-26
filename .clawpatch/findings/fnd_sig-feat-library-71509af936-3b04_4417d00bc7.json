@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-71509af936-3b04_4417d00bc7",
+  "featureId": "feat_library_71509af936",
+  "title": "Specific retry can resend non-failed promotional emails",
+  "category": "bug",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "notifications/management/commands/retry_failed_emails.py",
+      "startLine": 23,
+      "endLine": 35,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "When --promo-id is provided, the command fetches any PromoEmail by id, unconditionally changes it to DRAFT, and enqueues send_promo_email_task. That bypasses the command's failed-email contract and can requeue already sent, scheduled, draft, or currently sending emails, causing duplicate sends or corrupting a user's intended state.",
+  "reproduction": "Run python manage.py retry_failed_emails --promo-id <id-of-sent-or-scheduled-promo>. The command will set that promo to DRAFT and queue the send task even though it was not failed.",
+  "recommendation": "Require promo.status == PromoEmail.FAILED before mutating or queuing a specific promo, and return a clear error or warning for other statuses unless an explicit force option is added.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for retry_failed_emails, and the dry-run branch displays the current status without asserting that non-failed statuses are rejected.",
+  "suggestedRegressionTest": "Create PromoEmail records in SENT, SCHEDULED, SENDING, and DRAFT states, invoke retry_failed_emails --promo-id for each, and assert status is unchanged and send_promo_email_task.delay is not called.",
+  "minimumFixScope": "Guard the --promo-id path in retry_failed_emails.py before line 31 so only FAILED promos can be retried.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T061115-73802e",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence path still exists at notifications/management/commands/retry_failed_emails.py. The specific --promo-id branch now checks promo.status != PromoEmail.FAILED at lines 27-33 and returns before any mutation or send_promo_email_task.delay call. Only FAILED promos reach the DRAFT mutation and queueing at lines 40-43. A regression test now exists in notifications/tests/test_retry_failed_emails_command.py:20-38 covering SENT, SCHEDULED, SENDING, and DRAFT promos, asserting status is unchanged and delay is not called; lines 40-50 verify FAILED promos are still queued. I attempted to run the focused Django test via the project Docker command, but Docker was unavailable in this environment, so execution could not be completed. Current code and test coverage indicate the reported issue is fixed.",
+      "commands": [
+        "sed -n '1,200p' notifications/management/commands/retry_failed_emails.py",
+        "rg -n \"retry_failed_emails|RetryFailed|promo-id|send_promo_email_task|PromoEmail\\.FAILED|status == PromoEmail\" .",
+        "git status --short",
+        "sed -n '1,220p' notifications/tests/test_retry_failed_emails_command.py",
+        "nl -ba notifications/management/commands/retry_failed_emails.py | sed -n '1,90p'",
+        "nl -ba notifications/tests/test_retry_failed_emails_command.py | sed -n '1,140p'",
+        "docker exec bahk_devcontainer-app-1 python manage.py test notifications.tests.test_retry_failed_emails_command --settings=tests.test_settings"
+      ],
+      "createdAt": "2026-05-26T06:11:57.054Z"
+    }
+  ],
+  "signature": "sig_feat-library-71509af936_3b04b2c8d5",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-71509af936-_d866d873e9"
+  ],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:39:48.651Z",
+  "updatedAt": "2026-05-26T06:11:57.054Z"
+}

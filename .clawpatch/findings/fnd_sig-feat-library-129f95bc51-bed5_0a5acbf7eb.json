@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-129f95bc51-bed5_0a5acbf7eb",
+  "featureId": "feat_library_129f95bc51",
+  "title": "Reading.create_url references an undefined lookup constant",
+  "category": "bug",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/models.py",
+      "startLine": 651,
+      "endLine": 660,
+      "symbol": "Reading.create_url",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "startLine": 132,
+      "endLine": 145,
+      "symbol": "BookNameMappingTests.test_create_url_with_curly_quote_book_name",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "startLine": 148,
+      "endLine": 158,
+      "symbol": "BookNameMappingTests.test_create_url_with_unknown_book_returns_home",
+      "quote": null
+    }
+  ],
+  "reasoning": "Reading.create_url imports normalize_book_name and then assigns from CATENA_ABBREV_FOR_BOOK_NORMALIZE, but the imported constant in this module is CATENA_ABBREV_FOR_BOOK_NORMALIZED. Calling create_url will raise NameError before it can return either a Catena URL or the home-page fallback. The included tests explicitly exercise create_url for both known and unknown books, so this is a direct correctness regression.",
+  "reproduction": null,
+  "recommendation": "Change the lookup in Reading.create_url to use CATENA_ABBREV_FOR_BOOK_NORMALIZED and preserve the existing unknown-book fallback behavior.",
+  "whyTestsDoNotAlreadyCoverThis": "The linked tests appear intended to cover this, but the excerpt shows the implementation still has the misspelled symbol, so the tests would fail if run against this code path.",
+  "suggestedRegressionTest": "Keep the existing create_url tests and add a standard straight-apostrophe known-book case to ensure the normalized lookup is used for both ordinary and curly-quote names.",
+  "minimumFixScope": "hub/models.py Reading.create_url constant reference.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": null,
+      "kind": "triage",
+      "status": "fixed",
+      "note": "Code already uses CATENA_ABBREV_FOR_BOOK_NORMALIZED on main; PR #392 adds regression coverage for straight-apostrophe book names.",
+      "reasoning": null,
+      "commands": [],
+      "createdAt": "2026-05-26T06:18:19.012Z"
+    }
+  ],
+  "signature": "sig_feat-library-129f95bc51_bed57bb75a",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-129f95bc51-_e44f1f65d4"
+  ],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:17:48.018Z",
+  "updatedAt": "2026-05-26T06:18:19.011Z"
+}

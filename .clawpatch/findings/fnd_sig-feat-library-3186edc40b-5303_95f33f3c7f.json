@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-3186edc40b-5303_95f33f3c7f",
+  "featureId": "feat_library_3186edc40b",
+  "title": "Multilingual seed command is not rerunnable",
+  "category": "data-loss",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/management/commands/seed_multilingual_data.py",
+      "startLine": 15,
+      "endLine": 24,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/seed_multilingual_data.py",
+      "startLine": 31,
+      "endLine": 43,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/seed_multilingual_data.py",
+      "startLine": 45,
+      "endLine": 85,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/seed_multilingual_data.py",
+      "startLine": 87,
+      "endLine": 121,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The command uses `get_or_create` only for Church, then unconditionally creates the Fast, Day, DevotionalSet, videos, devotionals, article, recipe, and announcement on every run. Running a seed command repeatedly is a common development workflow; this implementation either duplicates all sample content or may fail if any model has uniqueness constraints around these fields. That can corrupt local/dev fixture state and make tests or demos inconsistent after repeated seeding.",
+  "reproduction": null,
+  "recommendation": "Make the command idempotent by deleting/replacing its own known fixture records, using stable natural keys with `update_or_create`, or documenting and enforcing a clear-before-seed workflow.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests exercise running the command twice or assert stable object counts after seeding.",
+  "suggestedRegressionTest": "Add a test that invokes `seed_multilingual_data` twice and asserts there is still one Great Lent fast, one target day/devotional set, one English and one Armenian devotional, and one of each learning resource/announcement fixture.",
+  "minimumFixScope": "Change `seed_multilingual_data.py` object creation to an idempotent create/update strategy for all records it owns.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-3186edc40b_5303e788da",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:19:35.969Z",
+  "updatedAt": "2026-05-26T00:19:35.969Z"
+}

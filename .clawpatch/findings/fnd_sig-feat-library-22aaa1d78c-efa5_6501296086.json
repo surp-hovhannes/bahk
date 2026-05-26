@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-22aaa1d78c-efa5_6501296086",
+  "featureId": "feat_library_22aaa1d78c",
+  "title": "Profile notification migration alters a different field than the one it just added",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/migrations/0018_profile_include_weekly_fasts_in_notifications_and_more.py",
+      "startLine": 18,
+      "endLine": 31,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/migrations/0019_alter_profile_include_weekly_fasts_in_notifications_and_more.py",
+      "startLine": 18,
+      "endLine": 27,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "Migration 0018 adds receive_upcoming_fast_push_notifications with default=True, but migration 0019 changes receive_upcoming_fast_reminders to default=False instead. If receive_upcoming_fast_reminders does not already exist before these excerpts, applying migrations on a clean database will fail with a missing-field error. Even if that older field exists, the newly added receive_upcoming_fast_push_notifications remains at default=True while the surrounding notification defaults are changed to false, which is likely not the intended schema state.",
+  "reproduction": null,
+  "recommendation": "Verify the intended Profile field name and update 0019 to alter receive_upcoming_fast_push_notifications if that is the new push notification field. If receive_upcoming_fast_reminders is intentional, add a separate AlterField for receive_upcoming_fast_push_notifications or document why it remains default=True.",
+  "whyTestsDoNotAlreadyCoverThis": "No migration tests or model-state checks are included for this feature, so the typo/mismatch would only surface during a full migration run or schema assertion.",
+  "suggestedRegressionTest": "Add a migration test that applies through 0019 from an empty database and asserts the expected Profile notification fields exist with the intended defaults.",
+  "minimumFixScope": "Correct the field name in migration 0019 or add the missing AlterField for the newly introduced push notification field.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-22aaa1d78c_efa5dc4400",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:18:17.771Z",
+  "updatedAt": "2026-05-26T00:18:17.771Z"
+}

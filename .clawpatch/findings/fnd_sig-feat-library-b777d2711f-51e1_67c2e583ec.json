@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-b777d2711f-51e1_67c2e583ec",
+  "featureId": "feat_library_b777d2711f",
+  "title": "Command mutates the runtime environment by installing Python packages",
+  "category": "build-release",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/management/commands/update_user_timezones.py",
+      "startLine": 35,
+      "endLine": 40,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/update_user_timezones.py",
+      "startLine": 52,
+      "endLine": 56,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The management command includes an option that runs pip install from inside the application process. That makes behavior depend on network availability, package index state, container permissions, and the mutable latest package resolution at command runtime. In Docker or production deployments this can fail unexpectedly or leave the environment different from the built artifact.",
+  "reproduction": null,
+  "recommendation": "Declare timezonefinder as an application dependency and remove runtime installation from the command. If a friendlier error is desired, keep the CommandError telling operators which dependency is missing.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included, and normal command tests would usually run with dependencies already installed rather than exercising immutable or offline deployment behavior.",
+  "suggestedRegressionTest": "Add a command test that simulates ImportError and asserts the command fails with a clear dependency message without invoking subprocess/pip.",
+  "minimumFixScope": "Remove the --install-timezonefinder path and subprocess pip invocation from update_user_timezones.py, and add timezonefinder to the project dependency manifest.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-b777d2711f_51e1ef8166",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:42:31.839Z",
+  "updatedAt": "2026-05-26T02:42:31.839Z"
+}

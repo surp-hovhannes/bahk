@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-195bd27532-073844_d265018801",
+  "featureId": "feat_route_195bd27532",
+  "title": "No API coverage for /api/feasts/ route",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 107,
+      "endLine": 109,
+      "symbol": "GetFeastForDate.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "startLine": 1,
+      "endLine": 19,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned URL file exposes the feasts API route, but the included feast-specific test file covers admin icon rematch behavior rather than the /api/feasts/ endpoint. None of the provided linked tests exercise routing, status codes, query handling, or response serialization for GetFeastForDate, so a regression that breaks the endpoint could pass the current linked test set.",
+  "reproduction": null,
+  "recommendation": "Add focused API tests for GET /api/feasts/ that validate the expected date/church query behavior, response schema, empty result behavior, and any authentication or anonymous-access contract intended for the route.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover Bible/readings helpers, devotionals, fast views, email behavior, Armenian text scraping, and feast admin icon actions, but not the feasts API route declared in hub/urls.py.",
+  "suggestedRegressionTest": "Create a test module or add a case that seeds Church/Day/Feast records, calls self.client.get('/api/feasts/', expected query params), and asserts the response status and serialized feast payload for both matching and missing dates.",
+  "minimumFixScope": "Tests only, unless writing the test reveals an endpoint behavior bug.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-195bd27532_073844f1f2",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:55:19.591Z",
+  "updatedAt": "2026-05-26T02:55:19.591Z"
+}

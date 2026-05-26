@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-0971ed4fff-2_2b40734f0e",
+  "featureId": "feat_test-suite_0971ed4fff",
+  "title": "Cache error handling test passes even when errors are not handled",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "startLine": 501,
+      "endLine": 520,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The test claims the cache service handles errors gracefully, but it catches exceptions from both cache.get and cache.set and treats them as expected. This means the test passes whether the cache layer swallows errors or propagates them, leaving the intended resilience behavior unverified.",
+  "reproduction": null,
+  "recommendation": "Make the expected behavior explicit: assert get_daily_aggregates returns None without raising when cache.get fails, and assert set_daily_aggregates does not raise when cache.set fails, or change the test name if propagation is acceptable.",
+  "whyTestsDoNotAlreadyCoverThis": "The try/except blocks absorb the failure path, so no assertion distinguishes graceful handling from unhandled cache exceptions.",
+  "suggestedRegressionTest": "Mock cache.get and cache.set to raise and call the service methods without a broad except; assert the fallback return/no-raise behavior directly.",
+  "minimumFixScope": "Rewrite test_cache_service_error_handling to remove the broad exception swallowing and assert the desired fallback behavior.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-0971ed4fff_29d768669f",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:12:48.446Z",
+  "updatedAt": "2026-05-26T03:12:48.446Z"
+}

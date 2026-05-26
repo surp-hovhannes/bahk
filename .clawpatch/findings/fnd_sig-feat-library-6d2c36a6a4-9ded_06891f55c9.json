@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-6d2c36a6a4-9ded_06891f55c9",
+  "featureId": "feat_library_6d2c36a6a4",
+  "title": "Devotional set migration can corrupt or fail existing devotional relationships",
+  "category": "data-loss",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/migrations/0029_update_devotional_set_model.py",
+      "startLine": 28,
+      "endLine": 33,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/migrations/0029_update_devotional_set_model.py",
+      "startLine": 59,
+      "endLine": 63,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The migration adds DevotionalSet.fast as a non-null foreign key using a one-time default of id=1 for all existing DevotionalSet rows, then removes Devotional.devotional_set. If Fast id=1 does not exist, the migration fails. If existing devotional sets belong to different fasts through their devotional membership, all sets are reassigned to the same fast and the original devotional-to-set grouping is discarded.",
+  "reproduction": null,
+  "recommendation": "Replace the static default with a data migration that derives each DevotionalSet.fast from its related devotionals before removing Devotional.devotional_set. Handle ambiguous or empty sets explicitly, either by allowing a temporary null and backfilling later or by defining a deterministic business rule.",
+  "whyTestsDoNotAlreadyCoverThis": "No migration tests are included that apply 0029 to pre-existing DevotionalSet and Devotional rows with realistic relationships or without Fast id=1.",
+  "suggestedRegressionTest": "Add a migration test that migrates to 0028, creates multiple fasts, devotional sets, and devotionals linked to different sets, migrates to 0029, and asserts each DevotionalSet.fast is derived correctly and the migration does not depend on Fast id=1.",
+  "minimumFixScope": "Revise migration 0029 to add the fast field nullable first, RunPython backfill from existing relationships, validate unresolved rows, then alter to non-null and remove devotional_set.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T055541-6fc476",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence file still exists, but the cited behavior has been replaced. Current hub/migrations/0029_update_devotional_set_model.py adds DevotionalSet.fast as nullable at lines 60-64, runs backfill_devotional_set_fast at lines 66-68, derives each set's fast from related Devotional.day.fast_id at lines 18-29, rejects unresolved or ambiguous sets with an explicit ValueError at lines 30-39, and only then makes fast non-null at lines 70-74 before removing Devotional.devotional_set at lines 100-103. The static default=1 shown in git diff as the old line is gone, so the migration no longer depends on Fast id=1 or blindly reassigns all existing sets to one fast. I found no migration regression test for this path. Runtime verification was limited because Docker was unavailable and local Python lacks Django.",
+      "commands": [
+        "pwd && rg -n \"DevotionalSet|devotional_set|fast.*ForeignKey|0029_update_devotional_set_model\" hub tests -S",
+        "sed -n '1,180p' hub/migrations/0029_update_devotional_set_model.py",
+        "git status --short && rg --files | rg '(^|/)0029_update_devotional_set_model.py$|migration.*test|test.*migration|hub/models'",
+        "nl -ba hub/migrations/0029_update_devotional_set_model.py | sed -n '1,125p'",
+        "git diff -- hub/migrations/0029_update_devotional_set_model.py",
+        "docker exec bahk_devcontainer-app-1 python manage.py test tests.unit.hub.test_admin --settings=tests.test_settings",
+        "sed -n '1,220p' hub/migrations/0022_devotionalset_devotional.py",
+        "rg -n \"class Devotional\\(|name='day'|devotional_set|unique_together\" hub/migrations/00*.py hub/models.py -S",
+        "python manage.py check --settings=tests.test_settings",
+        "python3 manage.py check --settings=tests.test_settings",
+        "rg -n \"MigrationExecutor|migrate_to|0028|0029|backfill_devotional_set_fast|Cannot infer DevotionalSet.fast\" tests hub -S"
+      ],
+      "createdAt": "2026-05-26T05:56:41.576Z"
+    }
+  ],
+  "signature": "sig_feat-library-6d2c36a6a4_9ded6fa782",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-6d2c36a6a4-_08db838a06"
+  ],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:39:53.610Z",
+  "updatedAt": "2026-05-26T05:56:41.576Z"
+}

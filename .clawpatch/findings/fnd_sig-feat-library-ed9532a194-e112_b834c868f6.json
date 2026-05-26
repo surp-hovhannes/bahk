@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-ed9532a194-e112_b834c868f6",
+  "featureId": "feat_library_ed9532a194",
+  "title": "Test-user cleanup can delete unrelated real accounts",
+  "category": "data-loss",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/management/commands/create_test_users_for_fast.py",
+      "startLine": 79,
+      "endLine": 89,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/remove_test_users_for_fast.py",
+      "startLine": 46,
+      "endLine": 57,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/remove_test_users_for_fast.py",
+      "startLine": 75,
+      "endLine": 85,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The create command generates users with a specific prefix-shaped username, but the removal command selects any username containing the substring \"testuser\". With --all_test_users it deletes every matching account in the database, and in the fast-scoped path it deletes every matching account associated with the fast. A legitimate account such as \"contestuser@example.com\" or \"mytestuser@example.com\" would match and be deleted, even though it was not created by this command.",
+  "reproduction": null,
+  "recommendation": "Constrain deletion to the exact generated namespace, for example username starts with \"testuser_\" and ends with \"@example.com\", or better persist a dedicated marker/group/flag for generated accounts and only delete users carrying that marker. Keep dry-run behavior but make the destructive query use the stricter predicate.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for these management commands, and there is no evidence of a test that creates a non-generated user with \"testuser\" embedded in the username and verifies it survives cleanup.",
+  "suggestedRegressionTest": "Create one generated-looking account and one normal account whose username merely contains \"testuser\", run the remove command with both fast-scoped and --all_test_users modes, and assert only the generated account is deleted.",
+  "minimumFixScope": "Update remove_test_users_for_fast.py query predicates and add focused management-command tests for the deletion filters.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T060654-0f31f5",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence paths still exist, but the vulnerable substring predicates are no longer present. create_test_users_for_fast.py still creates usernames shaped like `testuser_{8-hex}_{fast_id}_{index}@example.com` at lines 79-88. remove_test_users_for_fast.py now defines `GENERATED_TEST_USER_USERNAME_REGEX = r\"^testuser_[0-9a-f]{8}_[0-9]+_[0-9]+@example\\.com$\"` at line 9 and uses `username__regex=GENERATED_TEST_USER_USERNAME_REGEX` for both `--all_test_users` and fast-scoped deletion at lines 50-62, so accounts like `contestuser@example.com` or `mytestuser@example.com` no longer match. Focused regression tests now exist in tests/unit/hub/test_remove_test_users_command.py and cover both deletion modes preserving non-generated usernames. I attempted to run the test module through the documented Docker command, but Docker was unavailable in this environment (`docker.sock` missing), so the conclusion is based on current code plus the checked-in regression tests rather than a successful test run.",
+      "commands": [
+        "sed -n '1,140p' hub/management/commands/create_test_users_for_fast.py",
+        "sed -n '1,140p' hub/management/commands/remove_test_users_for_fast.py",
+        "rg -n \"remove_test_users_for_fast|create_test_users_for_fast|testuser_|testuser\" .",
+        "sed -n '1,180p' tests/unit/hub/test_remove_test_users_command.py",
+        "nl -ba hub/management/commands/remove_test_users_for_fast.py | sed -n '1,120p'",
+        "nl -ba hub/management/commands/create_test_users_for_fast.py | sed -n '70,100p'",
+        "docker exec bahk_devcontainer-app-1 python manage.py test tests.unit.hub.test_remove_test_users_command --settings=tests.test_settings"
+      ],
+      "createdAt": "2026-05-26T06:07:27.707Z"
+    }
+  ],
+  "signature": "sig_feat-library-ed9532a194_e112e195e8",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-ed9532a194-_3a72f5b758"
+  ],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:52:35.560Z",
+  "updatedAt": "2026-05-26T06:07:27.707Z"
+}

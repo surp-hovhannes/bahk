@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_2510406d0d",
+  "title": "Python test suite tests/integration",
+  "summary": "Python pytest files in tests/integration.",
+  "kind": "test-suite",
+  "source": "python-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/integration",
+      "symbol": "tests/integration",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/integration/test_auth.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/integration/test_aws_location.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/integration/test_bookmark_api.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/integration/test_endpoints.py",
+      "reason": "pytest file"
+    },
+    {
+      "path": "tests/integration/test_intention_endpoints.py",
+      "reason": "pytest file"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/integration/test_auth.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/integration/test_aws_location.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/integration/test_bookmark_api.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/integration/test_endpoints.py",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/integration/test_intention_endpoints.py",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/integration/test_auth.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/integration/test_aws_location.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/integration/test_bookmark_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/integration/test_endpoints.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/integration/test_intention_endpoints.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-26T17:06:54.878Z",
+  "updatedAt": "2026-05-26T17:06:54.878Z"
+}

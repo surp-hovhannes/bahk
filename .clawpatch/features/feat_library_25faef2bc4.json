@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_25faef2bc4",
+  "title": "Python source root",
+  "summary": "Python source group root with 3 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "root",
+      "symbol": "root",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "cleanup_test_media.py",
+      "reason": "source group root"
+    },
+    {
+      "path": "manage.py",
+      "reason": "source group root"
+    },
+    {
+      "path": "memory_debug.py",
+      "reason": "source group root"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-25faef2bc4-de75_5fef922bc3",
+    "fnd_sig-feat-library-25faef2bc4-de8b_8951389d78"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T001632-1d7677",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=14136 bytes; approxTokens=3531; includedFiles=3; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T00:18:41.007Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

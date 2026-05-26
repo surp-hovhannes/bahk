@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-b777d2711f-9309_ffb6c1871c",
+  "featureId": "feat_library_b777d2711f",
+  "title": "Offset pagination skips eligible profiles after each bulk update",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/management/commands/update_user_timezones.py",
+      "startLine": 88,
+      "endLine": 96,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/update_user_timezones.py",
+      "startLine": 114,
+      "endLine": 115,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/management/commands/update_user_timezones.py",
+      "startLine": 166,
+      "endLine": 168,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The command stores an initial count, then processes a mutable queryset using offset slices. In the default path, each successful bulk_update changes timezone away from UTC/empty, so those rows no longer match the queryset filter. The next slice is then applied to the smaller remaining result set, skipping the next batch of still-eligible profiles. For example, with 250 matching profiles and batch size 100, after saving the first 100, slice [100:200] is evaluated against the 150 remaining matches and skips the original profiles 101-200.",
+  "reproduction": null,
+  "recommendation": "Materialize stable primary keys before updating, or iterate with keyset pagination over IDs and fetch each batch by that fixed ID list. Avoid offset slicing on a queryset whose membership is changed by the command.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for this command, and the bug requires more than one batch of eligible profiles to expose the skipped middle batch.",
+  "suggestedRegressionTest": "Create more than 100 profiles matching the default UTC/empty timezone filter, mock TimezoneFinder to return a timezone for all of them, run the command, and assert every initially eligible profile was updated.",
+  "minimumFixScope": "Change update_user_timezones.py batching to use a stable list/query of profile IDs before mutating timezone values.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-b777d2711f_93092aeb76",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:42:31.839Z",
+  "updatedAt": "2026-05-26T02:42:31.839Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-aff86f3040-bef5_93e4b0fca1",
+  "featureId": "feat_library_aff86f3040",
+  "title": "Non-staff admin access test never authenticates the intended user",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "notifications/tests/test_promo_email_admin.py",
+      "startLine": 43,
+      "endLine": 48,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/tests/test_promo_email_admin.py",
+      "startLine": 126,
+      "endLine": 132,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The regular user is created with username regular@example.com, but the test logs in with username regular. The expected redirect can therefore be caused by a failed login rather than by an authenticated non-staff user being denied admin access. This leaves the actual permission boundary under-tested.",
+  "reproduction": null,
+  "recommendation": "Log in using the created user's real username and assert login succeeds before requesting the admin changelist.",
+  "whyTestsDoNotAlreadyCoverThis": "The test checks only the final redirect and does not verify that the regular user was authenticated.",
+  "suggestedRegressionTest": "Change the login to username='regular@example.com', assert it returns True, then assert the admin page is denied for the authenticated non-staff user.",
+  "minimumFixScope": "Correct the credentials and add an authentication assertion in test_admin_list_view_requires_staff.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-aff86f3040_bef5243859",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:42:07.000Z",
+  "updatedAt": "2026-05-26T02:42:07.000Z"
+}

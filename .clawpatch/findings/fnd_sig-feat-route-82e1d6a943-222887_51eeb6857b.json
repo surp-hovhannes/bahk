@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-82e1d6a943-222887_51eeb6857b",
+  "featureId": "feat_route_82e1d6a943",
+  "title": "Fast participants route has no direct coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 69,
+      "endLine": 69,
+      "symbol": "FastParticipantsView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 656,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route exposes /fasts/<int:fast_id>/participants/ through FastParticipantsView, but the included fast view tests exercise FastListView, FastByFeastDateView, and FastSerializer day numbering only. There is no included test that resolves or calls the participants endpoint, so regressions in URL wiring, fast_id parameter handling, response shape, authentication behavior, or permissions for this route would not be caught by the linked tests.",
+  "reproduction": null,
+  "recommendation": "Add focused API tests for the fast participants endpoint covering successful lookup by fast_id, missing/nonexistent fast behavior, expected serialized response fields, and the intended authentication/permission behavior.",
+  "whyTestsDoNotAlreadyCoverThis": "The only included route-adjacent tests in hub/tests/test_fast_views.py instantiate other views or serializers and never request or reverse the fast-participants URL.",
+  "suggestedRegressionTest": "Add tests in hub/tests/test_fast_views.py using the Django/DRF test client against reverse('fast-participants', kwargs={'fast_id': fast.id}) or /api/fasts/<id>/participants/ and assert status code plus response payload for a fast with multiple profiles.",
+  "minimumFixScope": "Test-only change for FastParticipantsView route coverage.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-82e1d6a943_222887bd2c",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:02:14.494Z",
+  "updatedAt": "2026-05-26T03:02:14.494Z"
+}

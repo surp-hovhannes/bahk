@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-69cf466180-e8c762_d2f0869783",
+  "featureId": "feat_route_69cf466180",
+  "title": "Participants map route has no direct coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 72,
+      "endLine": 72,
+      "symbol": "FastParticipantsMapView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 1,
+      "endLine": 14,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 656,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The new route is wired in urls.py, but the associated fast view tests only import and exercise FastListView, FastByFeastDateView, and serializer behavior; they do not reverse or request the fast-participants-map endpoint, nor do they import FastParticipantsMapView. That leaves URL wiring, allowed methods, auth/permission behavior, and response shape for this route unverified.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for the fast-participants-map endpoint that hit the URL by name or path and assert expected status codes, permissions, and serialized map payload for at least an authorized happy path and a non-existent or unauthorized fast.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover other fast endpoints and serializer day-number behavior, but none mention the fast-participants-map route or view.",
+  "suggestedRegressionTest": "In hub/tests/test_fast_views.py, create a fast with participant profiles and location/map-relevant fields, request reverse('fast-participants-map', kwargs={'fast_id': fast.id}), and assert the response status and payload shape; add negative cases for missing fast and unauthorized access if the view requires authentication.",
+  "minimumFixScope": "Test-only addition for the route and its view behavior.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-69cf466180_e8c76245be",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:00:48.338Z",
+  "updatedAt": "2026-05-26T03:00:48.338Z"
+}

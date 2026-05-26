@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-03b1ed3712-ce80c3_bc78a45906",
+  "featureId": "feat_route_03b1ed3712",
+  "title": "No route-level test covers /fasts/stats/",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 71,
+      "endLine": 71,
+      "symbol": "FastStatsView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 17,
+      "symbol": "FastListViewTest",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 250,
+      "endLine": 250,
+      "symbol": "FastByFeastDateViewTest",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 571,
+      "endLine": 571,
+      "symbol": "FastSerializerDayNumberTest",
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned URL configuration exposes the FastStatsView route, but the associated fast view tests shown cover FastListView, FastByFeastDateView, and serializer day-number behavior only. There is no included test that resolves or exercises the stats endpoint, so regressions such as route removal, URL name changes, or the route being wired to the wrong view would not be caught by these tests.",
+  "reproduction": null,
+  "recommendation": "Add a focused URL/view test for the fast-stats route that asserts the endpoint resolves to FastStatsView and returns the expected status and response shape for the intended authenticated or unauthenticated contract.",
+  "whyTestsDoNotAlreadyCoverThis": "The included fast tests instantiate or exercise other fast views and serializer behavior, but none reference the fast-stats route name, path, or FastStatsView.",
+  "suggestedRegressionTest": "Add a test in hub/tests/test_fast_views.py using reverse('fast-stats') or GET /api/fasts/stats/ to assert the route is reachable and the response matches the expected stats payload contract.",
+  "minimumFixScope": "Add route-level coverage for FastStatsView; no production code change is implied by this finding.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-03b1ed3712_ce80c3c2ab",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:53:48.437Z",
+  "updatedAt": "2026-05-26T02:53:48.437Z"
+}

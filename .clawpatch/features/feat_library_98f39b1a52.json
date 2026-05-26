@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_98f39b1a52",
+  "title": "Python source tests/tasks",
+  "summary": "Python source file tests/tasks/__init__.py.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/tasks",
+      "symbol": "tests/tasks",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/tasks/__init__.py",
+      "reason": "source group tests/tasks"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/tasks/test_add.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/tasks/test_llm_tasks.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/tasks/test_add.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/tasks/test_llm_tasks.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-26T17:06:54.878Z",
+  "updatedAt": "2026-05-26T17:06:54.878Z"
+}

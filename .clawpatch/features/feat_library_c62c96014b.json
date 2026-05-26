@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_c62c96014b",
+  "title": "Python source events/management",
+  "summary": "Python source group events/management with 9 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "events/management",
+      "symbol": "events/management",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "events/management/__init__.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/__init__.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/award_retroactive_milestones.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/cleanup_activity_feeds.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/engagement_report.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/init_event_types.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/populate_activity_feeds.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/trigger_event_tasks.py",
+      "reason": "source group events/management"
+    },
+    {
+      "path": "events/management/commands/warm_analytics_cache.py",
+      "reason": "source group events/management"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-c62c96014b-5e88_5679aa066d",
+    "fnd_sig-feat-library-c62c96014b-5445_30dea44775",
+    "fnd_sig-feat-library-c62c96014b-53cb_707a8280f5"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "3 finding(s); prompt=73757 bytes; approxTokens=18436; includedFiles=9; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:51:39.241Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

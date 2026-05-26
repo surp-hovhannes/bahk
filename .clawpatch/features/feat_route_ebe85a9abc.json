@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_ebe85a9abc",
+  "title": "Django route /api/profile/image-upload/",
+  "summary": "Django route /api/profile/image-upload/ handled by ProfileImageUploadView.as_view in hub/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "hub/urls.py",
+      "symbol": "ProfileImageUploadView.as_view",
+      "route": "/api/profile/image-upload/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "hub/tests/test_admin_compare_reading_prompts.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_church_detail_api.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_combined_devotional_form.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_email_tasks.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "hub/tests/test_admin_compare_reading_prompts.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_armenian_text.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_bible_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_church_detail_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_combined_devotional_form.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_devotional_list_api.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_email_tasks.py",
+      "command": "pytest"
+    },
+    {
+      "path": "hub/tests/test_email_templates.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=110739 bytes; approxTokens=27634; includedFiles=9; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T03:10:23.313Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

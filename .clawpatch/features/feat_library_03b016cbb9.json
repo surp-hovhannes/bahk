@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_03b016cbb9",
+  "title": "Python source events/migrations#1",
+  "summary": "Python source group events/migrations#1 with 12 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "events/migrations#1",
+      "symbol": "events/migrations#1",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "events/migrations/0001_initial.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0002_useractivityfeed.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0003_add_user_account_created_event_type.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0004_create_user_account_created_event_type_record.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0005_add_analytics_indexes.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0006_usermilestone_usermilestone_unique_user_milestone.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0007_alter_useractivityfeed_activity_type_announcement.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0008_make_checklist_used_target_optional.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0009_announcement_i18n_event_i18n_useractivityfeed_i18n.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0010_add_screen_view_source.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0011_alter_usermilestone_milestone_type.py",
+      "reason": "source group events/migrations#1"
+    },
+    {
+      "path": "events/migrations/0012_add_prayer_view_event_types.py",
+      "reason": "source group events/migrations#1"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-03b016cbb9-c785_107e340db0",
+    "fnd_sig-feat-library-03b016cbb9-1a4f_0e7d83a531"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T001632-1d7677",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=35020 bytes; approxTokens=8753; includedFiles=12; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T00:17:12.412Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_35db4be09c",
+  "title": "Django route /api/events/events/",
+  "summary": "Django route /api/events/events/ handled by views.EventListView.as_view in events/urls.py.",
+  "kind": "route",
+  "source": "python-django-route",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "events/urls.py",
+      "symbol": "views.EventListView.as_view",
+      "route": "/api/events/events/",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "events/urls.py",
+      "reason": "Django URL route declaration"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "django",
+    "route"
+  ],
+  "trustBoundaries": [
+    "network",
+    "user-input",
+    "serialization"
+  ],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "0 finding(s); prompt=179459 bytes; approxTokens=44865; includedFiles=9; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:56:50.583Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-30e45a26eb-a041_dcccb6648c",
+  "featureId": "feat_library_30e45a26eb",
+  "title": "Armenian text assignment is not included in the saved fields",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/services/reading_text_service.py",
+      "startLine": 154,
+      "endLine": 157,
+      "symbol": "fetch_armenian_text",
+      "quote": null
+    }
+  ],
+  "reasoning": "The fetcher assigns the scraped text to reading.text_hy, but the subsequent save(update_fields=...) does not include text_hy. If text_hy is a normal model field, Django will persist only i18n, text_hy_version, and text_hy_fetched_at, leaving the fetched Armenian text unsaved while returning True. The confidence is medium because the excerpt does not show the Reading model; if text_hy is a property that writes through i18n, this may be intentional, but the field map later treats text_hy as the response field.",
+  "reproduction": null,
+  "recommendation": "Include the actual stored Armenian text field in update_fields, or if text_hy intentionally writes through i18n, make that contract explicit and ensure the assigned value is persisted by the named field.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests were included for this feature, and there is no evidence of a regression test that reloads a Reading from the database after fetch_armenian_text returns True.",
+  "suggestedRegressionTest": "Create a Reading with a matching Armenian scraped entry, call fetch_armenian_text, reload the Reading from the database, and assert that text_hy contains the scraped text along with the version and fetched timestamp.",
+  "minimumFixScope": "hub/services/reading_text_service.py fetch_armenian_text persistence fields",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-30e45a26eb_a04139a652",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:19:15.812Z",
+  "updatedAt": "2026-05-26T00:19:15.812Z"
+}

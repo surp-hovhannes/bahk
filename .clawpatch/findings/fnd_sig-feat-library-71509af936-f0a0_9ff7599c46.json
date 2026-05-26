@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-71509af936-f0a0_9ff7599c46",
+  "featureId": "feat_library_71509af936",
+  "title": "Concurrent retries can queue duplicate send tasks",
+  "category": "concurrency",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "notifications/management/commands/retry_failed_emails.py",
+      "startLine": 42,
+      "endLine": 56,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/management/commands/retry_failed_emails.py",
+      "startLine": 26,
+      "endLine": 35,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The command reads failed promos, then later changes each row to DRAFT and queues a task without an atomic conditional transition. Two overlapping invocations can both observe the same FAILED row before either save completes and both enqueue send_promo_email_task for the same promo. The same race exists for the --promo-id path because it fetches and saves without checking the status at update time.",
+  "reproduction": "Start two retry_failed_emails commands at the same time against the same FAILED PromoEmail. Both can load the row while it is FAILED and both can call send_promo_email_task.delay for the same id.",
+  "recommendation": "Use a transaction with select_for_update, or perform a conditional update such as filtering by id and status=FAILED and only enqueue when exactly one row was transitioned. For batch retries, claim rows atomically before queueing tasks.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests exercise overlapping command invocations or verify that a failed promo is only queued once under concurrent retry attempts.",
+  "suggestedRegressionTest": "Simulate two concurrent retry attempts for the same FAILED PromoEmail and assert only one transition succeeds and only one task is enqueued.",
+  "minimumFixScope": "Change retry_failed_emails.py so both single-id and batch retry paths atomically claim FAILED rows before enqueueing Celery tasks.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-71509af936_f0a06ded73",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:39:48.651Z",
+  "updatedAt": "2026-05-26T02:39:48.651Z"
+}

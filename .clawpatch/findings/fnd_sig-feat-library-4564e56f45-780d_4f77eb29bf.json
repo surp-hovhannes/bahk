@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-4564e56f45-780d_4f77eb29bf",
+  "featureId": "feat_library_4564e56f45",
+  "title": "Selected device-token admin action sends to every device for each selected user",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "notifications/admin.py",
+      "startLine": 146,
+      "endLine": 180,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/tasks.py",
+      "startLine": 80,
+      "endLine": 105,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "notifications/utils.py",
+      "startLine": 49,
+      "endLine": 59,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The DeviceToken admin action loads the selected DeviceToken rows, but then reduces them to distinct user ids and calls send_push_notification with users. send_push_notification re-queries all active tokens for those users, so choosing one token for a user can notify that user's other devices too. The large-batch path has the same behavior through send_push_notification_to_users_task, which passes user ids into the same user-based filter.",
+  "reproduction": null,
+  "recommendation": "Preserve selected token ids or token strings through the admin view and background task, and have the send helper support an explicit token queryset/list so only the selected devices are targeted.",
+  "whyTestsDoNotAlreadyCoverThis": "The device token tests cover registration and the test-push endpoint, but there is no admin-action test for users with multiple tokens where only one token is selected.",
+  "suggestedRegressionTest": "Create a user with two active DeviceToken rows, invoke the admin send-push flow selecting only one token, mock PushClient.publish, and assert only the selected token is published.",
+  "minimumFixScope": "Change the admin send-push flow and chunked task to target selected DeviceToken ids/tokens directly instead of converting selections to user ids.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-4564e56f45_780d62309c",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:20:17.853Z",
+  "updatedAt": "2026-05-26T00:20:17.853Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-49caef493d-0cbb_a4b8901108",
+  "featureId": "feat_library_49caef493d",
+  "title": "Global clear action deletes unrelated cache entries",
+  "category": "data-loss",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "learning_resources/management/commands/bookmark_cache.py",
+      "startLine": 102,
+      "endLine": 128,
+      "symbol": "Command.clear_cache",
+      "quote": null
+    },
+    {
+      "path": "tests/unit/learning_resources/test_bookmark_cache.py",
+      "startLine": 425,
+      "endLine": 453,
+      "symbol": "BookmarkCacheConsistencyTests.test_cache_survives_unrelated_operations",
+      "quote": null
+    }
+  ],
+  "reasoning": "The management command is documented and named as a bookmark cache operation, but running `bookmark_cache clear` without `--user-id` calls `cache.clear()`, which flushes the entire configured Django cache. That can evict unrelated application cache data, including data the cache tests treat as independent of bookmark operations. In Redis-backed deployments this may also clear keys shared by other features if the same cache alias is used.",
+  "reproduction": "Run `python manage.py bookmark_cache clear` on an environment where the default Django cache contains non-bookmark keys; all default-cache entries are removed, not just bookmark keys.",
+  "recommendation": "Delete only bookmark cache keys. Prefer a Redis SCAN/prefix deletion path scoped to `bookmarks:user:*:ct:*`, or maintain an index of bookmark cache keys and invalidate that index. If the backend cannot support scoped deletion, require an explicit dangerous flag for whole-cache clearing and make the output/command name reflect that behavior.",
+  "whyTestsDoNotAlreadyCoverThis": "The included cache tests exercise service-level bookmark cache behavior and unrelated bookmark operations, but they do not invoke the `bookmark_cache clear` management command or seed unrelated cache keys before clearing.",
+  "suggestedRegressionTest": "Add a management command test that writes both a bookmark cache key and an unrelated cache key, runs `call_command('bookmark_cache', 'clear')`, then asserts the bookmark key is removed while the unrelated key remains.",
+  "minimumFixScope": "Change `learning_resources/management/commands/bookmark_cache.py` clear-all behavior to use bookmark-scoped deletion and add command-level regression coverage.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-49caef493d_0cbb834471",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:20:24.665Z",
+  "updatedAt": "2026-05-26T00:20:24.665Z"
+}

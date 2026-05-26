@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_365dce5654",
+  "title": "Python source events/tests",
+  "summary": "Python source group events/tests with 2 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "events/tests",
+      "symbol": "events/tests",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "events/tests/__init__.py",
+      "reason": "source group events/tests"
+    },
+    {
+      "path": "events/tests/tests.py",
+      "reason": "source group events/tests"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "events/tests/test_admin_dashboards.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_integration.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_analytics_performance.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_engagement_report_command.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_eventtype_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_jwt_login_tracking.py",
+      "command": "pytest"
+    },
+    {
+      "path": "events/tests/test_middleware.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-365dce5654-29aa_f7b9194b71",
+    "fnd_sig-feat-library-365dce5654-68e8_12495bd85e",
+    "fnd_sig-feat-library-365dce5654-841a_66198a6186"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T001632-1d7677",
+      "kind": "review",
+      "summary": "3 finding(s); prompt=205250 bytes; approxTokens=51313; includedFiles=10; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T00:19:48.962Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

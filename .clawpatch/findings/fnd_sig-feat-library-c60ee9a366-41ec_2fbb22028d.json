@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-c60ee9a366-41ec_2fbb22028d",
+  "featureId": "feat_library_c60ee9a366",
+  "title": "LLM moderation failures are returned as requiring manual review but do not set the review flag",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "prayers/tasks.py",
+      "startLine": 369,
+      "endLine": 387,
+      "symbol": "moderate_prayer_request_task",
+      "quote": null
+    },
+    {
+      "path": "prayers/admin.py",
+      "startLine": 121,
+      "endLine": 132,
+      "symbol": "PrayerRequestAdmin",
+      "quote": null
+    }
+  ],
+  "reasoning": "When LLM moderation raises, the task returns requires_manual_review=True and sends the manual-review email, but it only writes moderation_result before saving. It does not set requires_human_review=True, moderated_at, or any severity/status marker. The admin is explicitly built around requires_human_review filters and list display, so failed moderation requests can be omitted from the primary manual-review queue despite the task reporting that manual review is required.",
+  "reproduction": "Cause Anthropic JSON parsing or API access to fail for a pending request. After the task returns {'requires_manual_review': True}, inspect the PrayerRequest: requires_human_review remains its default False, so filtering the admin by Requires human review misses it.",
+  "recommendation": "In the LLM error branch, set requires_human_review=True, keep status as pending_moderation, set moderated_at if appropriate, and consider a moderation_severity value or explicit error marker that makes the admin queue visible and sortable.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests do not exercise moderation task failure paths or assert admin/manual-review visibility after an LLM exception.",
+  "suggestedRegressionTest": "Mock Anthropic to raise or return invalid JSON, run moderate_prayer_request_task, and assert the request remains pending_moderation with requires_human_review=True and the saved moderation_result contains the error.",
+  "minimumFixScope": "LLM exception branch in prayers/tasks.py plus a focused task test.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-c60ee9a366_41ecc98faa",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:51:40.230Z",
+  "updatedAt": "2026-05-26T02:51:40.230Z"
+}

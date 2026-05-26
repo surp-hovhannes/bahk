@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-a549ebdf05-abea_a1673fc3bb",
+  "featureId": "feat_library_a549ebdf05",
+  "title": "Weekly prayer notifications default existing profiles into opt-in state",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/migrations/0044_add_weekly_prayer_request_notifications.py",
+      "startLine": 13,
+      "endLine": 17,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The migration adds a notification preference field to every Profile with default=True. For existing users, applying the migration records them as opted in even though they never chose this new notification category. If sending code treats this field as authorization to send weekly prayer request push notifications, this can cause unsolicited notifications and violate user consent expectations.",
+  "reproduction": null,
+  "recommendation": "Add the field with default=False for existing rows, or use a two-step migration that backfills only explicitly eligible/consented profiles before setting any desired application-level default for new users.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for notification preference defaults or migration behavior for pre-existing Profile rows.",
+  "suggestedRegressionTest": "Add a migration test that creates a Profile before this migration, applies it, and asserts receive_weekly_prayer_request_push_notifications is false unless explicit consent/backfill criteria apply.",
+  "minimumFixScope": "Change migration 0044 and corresponding model default/backfill behavior for the new Profile notification preference.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-a549ebdf05_abea6d06d3",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:41:23.806Z",
+  "updatedAt": "2026-05-26T02:41:23.806Z"
+}

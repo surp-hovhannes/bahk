@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-d44252114d-f_1abc310ab4",
+  "featureId": "feat_test-suite_d44252114d",
+  "title": "Cache isolation test never exercises church isolation",
+  "category": "test-gap",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/tests/test_feast_views.py",
+      "startLine": 96,
+      "endLine": 123,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The test name and docstring claim that different dates and churches use different cache keys, but the body only sends requests for two dates using the default church. It never creates or requests a second church, so an implementation that omits church identity from the cache key would still pass while serving one church's feast data to another church.",
+  "reproduction": null,
+  "recommendation": "Extend this test to create a second church and make two requests for the same date with different church selectors, asserting both that the scraper is called separately and that the cached responses do not bleed across churches.",
+  "whyTestsDoNotAlreadyCoverThis": "The existing assertions only prove date separation and same-date cache reuse for one church.",
+  "suggestedRegressionTest": "Add a same-date/different-church case to `test_cache_key_isolation`, using distinct mocked feast names per church and asserting the third request for the first church still returns its own cached response.",
+  "minimumFixScope": "Update the feast view cache tests to cover church-specific cache keys.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-d44252114d_f13d8d43be",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:14:49.276Z",
+  "updatedAt": "2026-05-26T03:14:49.276Z"
+}

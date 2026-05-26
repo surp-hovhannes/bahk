@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-ba626d612c-0a17_14f0e5e22e",
+  "featureId": "feat_library_ba626d612c",
+  "title": "Password reset endpoint leaks registered email addresses",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/views/user.py",
+      "startLine": 38,
+      "endLine": 82,
+      "symbol": "PasswordResetView.post",
+      "quote": null
+    }
+  ],
+  "reasoning": "The password reset flow returns a 200 response when a user exists and a distinct 400 response with \"Email address not found\" when it does not. Because the endpoint is AllowAny, unauthenticated callers can enumerate which email addresses are registered by comparing status codes and response bodies.",
+  "reproduction": "POST to the password reset endpoint with one known registered email and one unregistered email; the registered email receives HTTP 200 while the unregistered email receives HTTP 400.",
+  "recommendation": "Return the same status code and generic message regardless of whether the email exists, and only send mail when a matching user is found.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover admin devotional duplication only and do not exercise password reset responses.",
+  "suggestedRegressionTest": "Add API tests asserting PasswordResetView returns the same response body and status for existing and non-existing email addresses.",
+  "minimumFixScope": "Change PasswordResetView.post's User.DoesNotExist branch to return the same generic success response as the existing-user path, without sending email.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-ba626d612c_0a17503f73",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:43:04.409Z",
+  "updatedAt": "2026-05-26T02:43:04.409Z"
+}

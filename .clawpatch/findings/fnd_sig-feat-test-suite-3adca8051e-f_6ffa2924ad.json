@@ -30,31 +30,10 @@
   "suggestedRegressionTest": "Introduce a temporary failing worker or mock BookmarkCacheManager.get_bookmarks_for_objects to raise in one thread and assert the test reports that exception explicitly.",
   "minimumFixScope": "Modify the worker/result collection logic in test_concurrent_cache_operations to carry either success records or exception records back to the main thread.",
   "status": "open",
-  "history": [
-    {
-      "runId": "20260526T170534-e06c4a",
-      "kind": "revalidate",
-      "status": "open",
-      "note": null,
-      "reasoning": "The original evidence still exists at `tests/performance/test_bookmark_cache.py:260-271` and `:291-307`. The worker still calls `BookmarkCacheManager.get_bookmarks_for_objects(...)` without `try/except` and only enqueues success records, while the main thread still only drains the queue, asserts result count, and computes aggregate timings. That means a thread exception would still be reported indirectly via missing queue entries or downstream aggregate failures rather than being surfaced explicitly with the original exception/traceback. I found no replacement test path elsewhere that captures worker exceptions directly. I could not execute the Django test in this environment because Docker access is unavailable and the named app container is not running, so runtime verification was not possible; the current code inspection still supports the finding as open.",
-      "commands": [
-        "rg -n \"test_concurrent_cache_operations|get_bookmarks_for_objects|Queue|thread\" tests/performance/test_bookmark_cache.py",
-        "sed -n '240,330p' tests/performance/test_bookmark_cache.py",
-        "git status --short",
-        "nl -ba tests/performance/test_bookmark_cache.py | sed -n '252,310p'",
-        "docker exec bahk_devcontainer-app-1 python manage.py test tests.performance.test_bookmark_cache.BookmarkCacheLoadTests.test_concurrent_cache_operations --settings=tests.test_settings",
-        "rg -n \"results_queue\\.put|threading\\.Thread\\(target=worker|exception|traceback|Concurrent operations\" tests/performance/test_bookmark_cache.py tests -g '!**/.venv/**'",
-        "rg -n \"test_concurrent_cache_operations|concurrent cache operations|worker function for concurrent\" tests",
-        "docker ps -a --format '{{.Names}}\\t{{.Status}}' | rg '^bahk_devcontainer-app-1'"
-      ],
-      "createdAt": "2026-05-26T17:06:05.900Z"
-    }
-  ],
+  "history": [],
   "signature": "sig_feat-test-suite-3adca8051e_f7f8af1534",
-  "linkedPatchAttemptIds": [
-    "pat_fnd-sig-feat-test-suite-3adca805_47f6edd192"
-  ],
+  "linkedPatchAttemptIds": [],
   "createdByRunId": "20260526T025102-5f2a3d",
   "createdAt": "2026-05-26T03:13:25.349Z",
-  "updatedAt": "2026-05-26T17:06:05.900Z"
+  "updatedAt": "2026-05-26T03:13:25.349Z"
 }

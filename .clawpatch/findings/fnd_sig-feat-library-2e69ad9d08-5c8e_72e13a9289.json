@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-2e69ad9d08-5c8e_72e13a9289",
+  "featureId": "feat_library_2e69ad9d08",
+  "title": "Unpinned runtime dependencies make deployments non-reproducible",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "requirements.txt",
+      "startLine": 6,
+      "endLine": 20,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "requirements.txt",
+      "startLine": 25,
+      "endLine": 31,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "requirements.txt",
+      "startLine": 45,
+      "endLine": 50,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "README.md",
+      "startLine": 47,
+      "endLine": 50,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The install path uses requirements.txt directly, but many runtime and tooling dependencies are unconstrained. Fresh installs can silently pull newer major or minor releases of Django integrations, cloud SDKs, API clients, Celery/Redis packages, and Ruff, changing behavior or breaking builds without any repository change. This is especially risky for deployment and onboarding because the README instructs users to install directly from this file.",
+  "reproduction": null,
+  "recommendation": "Pin every direct dependency to a reviewed version, or split human-maintained lower/upper bounds from a generated lock or constraints file used by CI and deployments.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests are listed for this feature, and tests would not prevent pip from resolving different versions unless the dependency set is locked in the tested environment.",
+  "suggestedRegressionTest": "Add a CI job that installs from the pinned requirements or constraints file in a clean environment and runs the project test command.",
+  "minimumFixScope": "Update requirements.txt or add a constraints/lock file used by documented install, CI, and deployment commands.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-2e69ad9d08_5c8ebe7b70",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T001632-1d7677",
+  "createdAt": "2026-05-26T00:19:05.460Z",
+  "updatedAt": "2026-05-26T00:19:05.460Z"
+}

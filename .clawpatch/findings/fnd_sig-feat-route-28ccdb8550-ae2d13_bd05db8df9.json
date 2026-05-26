@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-28ccdb8550-ae2d13_bd05db8df9",
+  "featureId": "feat_route_28ccdb8550",
+  "title": "Route alias lacks regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "bahk/urls.py",
+      "startLine": 119,
+      "endLine": 122,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The feature exposes hub URLs under the /api/ prefix, but the review bundle includes no tests for URL resolution or representative requests through this alias. Because this is a public network-facing API route, a future URL ordering change or include removal could silently break clients using /api/ while leaving the existing /hub/ route intact.",
+  "reproduction": null,
+  "recommendation": "Add a focused URL routing test that verifies at least one known hub endpoint resolves and responds through the /api/ prefix, not only through /hub/.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests were provided for this feature, and the excerpt only shows the route declaration.",
+  "suggestedRegressionTest": "Add a Django URL resolver or client test for a representative hub endpoint under /api/, asserting it resolves to the expected hub view and returns the expected status.",
+  "minimumFixScope": "Test-only change covering the /api/ include in bahk/urls.py.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T165635-7b09e1",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence still exists in the current repo at bahk/urls.py:119-124, including `path(\"api/\", include(\"hub.urls\"))`, so the alias itself remains present. The reported gap is now covered by a focused regression test in tests/test_fast_endpoints.py:86-95: `test_api_alias_resolves_and_serves_fast_list` explicitly resolves `/api/fasts/` to `FastListView` and performs a representative GET request to `/api/fasts/?church_id=...`, asserting a 200 response and list payload. That directly addresses the finding's recommendation for URL resolution plus representative request coverage through the `/api/` alias. I could not execute the Django tests in this environment because Docker access is blocked here and the app container was reported as not running, so the validation is based on current source and test code rather than a live test run.",
+      "commands": [
+        "rg -n \"api/|hub/\" bahk/urls.py tests . -g '!node_modules'",
+        "rg --files tests bahk | sed -n '1,200p'",
+        "sed -n '110,130p' bahk/urls.py",
+        "sed -n '1,140p' tests/test_fast_endpoints.py",
+        "sed -n '1,120p' hub/urls.py",
+        "docker exec bahk_devcontainer-app-1 python manage.py test tests.test_fast_endpoints.FastEndpointTests.test_api_alias_resolves_and_serves_fast_list --settings=tests.test_settings",
+        "docker exec bahk_devcontainer-app-1 python manage.py test tests.integration.test_endpoints --settings=tests.test_settings",
+        "docker ps -a --format '{{.Names}}\\t{{.Status}}' | rg '^bahk_devcontainer-app-1'",
+        "python --version",
+        "sed -n '1,220p' tests/integration/test_endpoints.py",
+        "rg -n \"resolve\\(\\\"/api/|client\\.get\\(\\\"/api/fasts/|/api/fasts/\" tests hub/tests",
+        "nl -ba bahk/urls.py | sed -n '116,124p'",
+        "nl -ba tests/test_fast_endpoints.py | sed -n '80,100p'"
+      ],
+      "createdAt": "2026-05-26T16:57:16.892Z"
+    }
+  ],
+  "signature": "sig_feat-route-28ccdb8550_ae2d134ae8",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-route-28ccdb8550-ae_c52a0fdcd6"
+  ],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:56:21.745Z",
+  "updatedAt": "2026-05-26T16:57:16.892Z"
+}

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-9b9cb847ff-a80d5f_bdc6ad803f",
+  "featureId": "feat_route_9b9cb847ff",
+  "title": "No regression coverage for the compare-prompts route",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 116,
+      "endLine": 121,
+      "symbol": "compare_reading_prompts",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "startLine": 111,
+      "endLine": 136,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The route is exposed as an admin-oriented endpoint in the app URL configuration, but the included tests cover other admin endpoints and do not exercise this URL, its name, its expected status codes, or its permission behavior. Because this route crosses network and user-input trust boundaries and delegates directly to a function view, regressions such as accidental unauthenticated access, wrong URL wiring, or a broken response contract would not be caught by the shown suite.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for reversing and calling `hub_reading_compare_prompts`, including authorized admin access, unauthorized/non-staff rejection, nonexistent `reading_id`, and the expected success response shape.",
+  "whyTestsDoNotAlreadyCoverThis": "The included context tests cover Armenian text scraping, Bible API helpers, devotionals, email behavior, fast views, and feast admin icon rematch endpoints, but none call or reverse `hub_reading_compare_prompts` or the `/hub/reading/<reading_id>/compare-prompts/` route.",
+  "suggestedRegressionTest": "Create a test module or extend an admin/views test to login a staff/superuser, create a Reading, call `reverse(\"hub_reading_compare_prompts\", args=[reading.pk])`, assert the expected success response, then assert anonymous/non-staff users are rejected and missing readings return the intended error status.",
+  "minimumFixScope": "Tests only unless the new coverage reveals missing permission or error handling in `compare_reading_prompts`.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-9b9cb847ff_a80d5f7251",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-route-9b9cb847ff-a8_c657a89f7e"
+  ],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:04:30.723Z",
+  "updatedAt": "2026-05-26T17:02:09.481Z"
+}

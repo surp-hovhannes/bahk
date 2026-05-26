@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-test-suite-a6226f638f-7_952ff73f14",
+  "featureId": "feat_test-suite_a6226f638f",
+  "title": "Ruff check will fail on committed test files",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "tests/test_optimized_profile_endpoints.py",
+      "startLine": 20,
+      "endLine": 25,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_profile_memory_leaks.py",
+      "startLine": 20,
+      "endLine": 25,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_settings.py",
+      "startLine": 2,
+      "endLine": 5,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_settings.py",
+      "startLine": 28,
+      "endLine": 28,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "tests/test_settings.py",
+      "startLine": 112,
+      "endLine": 116,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The project declares `ruff check .` as both typecheck and lint. These files contain clear Pyflakes violations: `override_settings` is imported twice in each profile performance test module, `tempfile` is imported but unused, and `tests/test_settings.py` uses `from bahk.settings import *` followed by names supplied only through the star import, which Ruff reports as F403/F405. This makes the test-suite feature fail the repository's own validation command even if the runtime tests pass.",
+  "reproduction": "Run `ruff check .` or `ruff check tests/test_optimized_profile_endpoints.py tests/test_profile_memory_leaks.py tests/test_settings.py`.",
+  "recommendation": "Remove the duplicate `override_settings` imports, delete the unused `tempfile` import, and replace the star import in `tests/test_settings.py` with an explicit settings import pattern that Ruff can analyze, or configure a narrow per-file ignore if this settings module intentionally uses star imports.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests exercise Django behavior, but no evidence shows the lint/typecheck command is run as part of the Python test suite.",
+  "suggestedRegressionTest": "Add the repository lint command (`ruff check .`) to CI for this feature path, or add a CI job that runs it before the Django/Python tests.",
+  "minimumFixScope": "Import cleanup in `tests/test_optimized_profile_endpoints.py`, `tests/test_profile_memory_leaks.py`, and `tests/test_settings.py`.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-test-suite-a6226f638f_720c7e37e7",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:14:20.334Z",
+  "updatedAt": "2026-05-26T03:14:20.334Z"
+}

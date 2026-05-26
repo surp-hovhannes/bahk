@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-4befded42c-7342c7_c4fa228012",
+  "featureId": "feat_route_4befded42c",
+  "title": "No linked test exercises the my-events route",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "events/urls.py",
+      "startLine": 14,
+      "endLine": 14,
+      "symbol": "views.MyEventsView.as_view",
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 98,
+      "endLine": 100,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 206,
+      "endLine": 208,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "events/tests/test_engagement_endpoints.py",
+      "startLine": 275,
+      "endLine": 277,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route wires events/my/ to MyEventsView, but the linked tests shown exercise admin dashboards, analytics, middleware, JWT login tracking, and engagement tracking endpoints such as track-devotional-viewed, track-prayer-set-viewed, and track-checklist-used. None of the included tests demonstrate that events:my-events resolves, requires authentication, returns only the requesting user's events, or preserves its response shape. For a user-scoped API route, that leaves authorization and filtering regressions unguarded.",
+  "reproduction": null,
+  "recommendation": "Add focused API tests for reverse('events:my-events') covering unauthenticated access, authenticated success, exclusion of other users' events, and expected serialization fields/order.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests target adjacent events functionality and named tracking/admin routes, but they do not call reverse('events:my-events') or request the events/my/ endpoint.",
+  "suggestedRegressionTest": "Create events for two users, authenticate as one user, GET reverse('events:my-events'), assert 200, assert only that user's events are returned, and assert unauthenticated requests receive the expected 401/403 response.",
+  "minimumFixScope": "Add tests for events:my-events; no route code change is implied by the shown evidence.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-4befded42c_7342c7dad2",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:59:05.286Z",
+  "updatedAt": "2026-05-26T02:59:05.286Z"
+}

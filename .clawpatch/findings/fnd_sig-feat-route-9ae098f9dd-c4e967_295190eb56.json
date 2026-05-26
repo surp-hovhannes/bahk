@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-9ae098f9dd-c4e967_295190eb56",
+  "featureId": "feat_route_9ae098f9dd",
+  "title": "No coverage exercises the /fasts/stats/ route or FastStatsView",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 71,
+      "endLine": 71,
+      "symbol": "FastStatsView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 5,
+      "endLine": 5,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 17,
+      "endLine": 17,
+      "symbol": "FastListViewTest",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 250,
+      "endLine": 251,
+      "symbol": "FastByFeastDateViewTest",
+      "quote": null
+    }
+  ],
+  "reasoning": "The route is registered, but the included fast view tests only import and exercise FastListView and FastByFeastDateView, plus serializer behavior. None of the shown tests import FastStatsView, reverse the fast-stats URL, or request /api/fasts/stats/. That leaves route wiring, authentication/permission expectations, response shape, and serialization behavior for this network-facing endpoint unverified.",
+  "reproduction": null,
+  "recommendation": "Add focused tests for the fast-stats endpoint that request the route through Django/DRF test client, assert the expected status code for anonymous and authenticated callers as applicable, and validate the response schema for representative fast participation data.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests cover neighboring fast endpoints and serializer fields, but they do not reference FastStatsView or the fast-stats route.",
+  "suggestedRegressionTest": "In hub/tests/test_fast_views.py, add a FastStatsViewTest that creates fasts/profiles, calls self.client.get('/api/fasts/stats/') or reverse('fast-stats') under the API prefix used by the project, and asserts the expected counts/fields and permission behavior.",
+  "minimumFixScope": "Add endpoint-level tests for FastStatsView route wiring and response contract.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-9ae098f9dd_c4e967c501",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-route-9ae098f9dd-c4_d1f1410b85"
+  ],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T03:03:56.870Z",
+  "updatedAt": "2026-05-26T17:00:07.216Z"
+}

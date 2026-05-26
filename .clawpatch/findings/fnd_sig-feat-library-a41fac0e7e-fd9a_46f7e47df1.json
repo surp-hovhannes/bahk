@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-a41fac0e7e-fd9a_46f7e47df1",
+  "featureId": "feat_library_a41fac0e7e",
+  "title": "LLM icon matching can assign an icon from another church",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/tasks/icon_tasks.py",
+      "startLine": 108,
+      "endLine": 116,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tasks/icon_tasks.py",
+      "startLine": 220,
+      "endLine": 251,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/tasks/icon_tasks.py",
+      "startLine": 330,
+      "endLine": 334,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The prompt sends an allowed ID list to the model, but the parsed response is returned without enforcing that the IDs are in that list. match_icon_to_feast_task then fetches Icon.objects.get(pk=icon_id) globally and assigns it to the feast. A malformed or hallucinated LLM response can therefore attach an icon belonging to a different church, even though the candidate list was scoped to the feast's church.",
+  "reproduction": null,
+  "recommendation": "Filter parsed and regex-extracted IDs against the allowed_ids set before returning matches, and in match_icon_to_feast_task fetch the icon with both pk and church constraints.",
+  "whyTestsDoNotAlreadyCoverThis": "There are no included tests for icon_tasks or for rejecting out-of-scope LLM icon IDs.",
+  "suggestedRegressionTest": "Mock _match_icons_with_llm or the LLM response to return an icon ID from a different church and assert match_icon_to_feast_task does not assign it.",
+  "minimumFixScope": "Add ID validation in _match_icons_with_llm and church-scoped lookup in match_icon_to_feast_task.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-a41fac0e7e_fd9ae0383c",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:41:38.501Z",
+  "updatedAt": "2026-05-26T02:41:38.501Z"
+}

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_b94ad593a6",
+  "title": "Python source hub/migrations#5",
+  "summary": "Python source group hub/migrations#5 with 4 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/migrations#5",
+      "symbol": "hub/migrations#5",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/migrations/0049_alter_llmprompt_model.py",
+      "reason": "source group hub/migrations#5"
+    },
+    {
+      "path": "hub/migrations/0050_add_fast_designation_to_feast.py",
+      "reason": "source group hub/migrations#5"
+    },
+    {
+      "path": "hub/migrations/0051_fast_intention.py",
+      "reason": "source group hub/migrations#5"
+    },
+    {
+      "path": "hub/migrations/__init__.py",
+      "reason": "source group hub/migrations#5"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-26T17:06:54.878Z",
+  "updatedAt": "2026-05-26T17:06:54.878Z"
+}

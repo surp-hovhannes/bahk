@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-512e0a68e4-0a3cfc_b23215b3e7",
+  "featureId": "feat_route_512e0a68e4",
+  "title": "Feast feedback route has no included regression coverage",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 107,
+      "endLine": 109,
+      "symbol": "FeastContextFeedbackView.as_view",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_feast_admin_icon_actions.py",
+      "startLine": 1,
+      "endLine": 19,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "The owned route exposes a network endpoint that accepts a feast primary key and is likely intended to process user feedback, but none of the included tests exercise /api/feasts/<pk>/feedback/ or FeastContextFeedbackView. The only included feast-specific test file covers admin icon rematch behavior, not the public feedback API. This leaves URL wiring, allowed methods, request validation, response shape, and permission behavior unguarded for this feature.",
+  "reproduction": null,
+  "recommendation": "Add focused API tests for the feast feedback endpoint that cover the expected success path, invalid or missing payloads, nonexistent feast ids, and authentication or permission behavior if the view is not meant to be public.",
+  "whyTestsDoNotAlreadyCoverThis": "The included context tests cover Armenian text scraping, Bible API text fetching, devotionals, email behavior, fast views, and feast admin icon actions, but they do not call the feast feedback route or assert behavior from FeastContextFeedbackView.",
+  "suggestedRegressionTest": "Create tests that POST to /api/feasts/<feast_id>/feedback/ with valid and invalid payloads, assert the documented status codes and serialized response body, and assert 404 for an unknown feast id.",
+  "minimumFixScope": "Add route-level/API tests for FeastContextFeedbackView without changing unrelated URL declarations.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-512e0a68e4_0a3cfcbdfc",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:59:33.352Z",
+  "updatedAt": "2026-05-26T02:59:33.352Z"
+}

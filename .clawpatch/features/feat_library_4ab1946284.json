@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_4ab1946284",
+  "title": "Python source hub/management/commands/:regenerate",
+  "summary": "Python source group hub/management/commands/:regenerate with 2 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/management/commands/:regenerate",
+      "symbol": "hub/management/commands/:regenerate",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/management/commands/regenerate_feast_contexts.py",
+      "reason": "source group hub/management/commands/:regenerate"
+    },
+    {
+      "path": "hub/management/commands/regenerate_map.py",
+      "reason": "source group hub/management/commands/:regenerate"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-4ab1946284-5b08_479c8e809f",
+    "fnd_sig-feat-library-4ab1946284-ffad_646bce3b51"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "2 finding(s); prompt=9491 bytes; approxTokens=2372; includedFiles=2; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:39:11.617Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

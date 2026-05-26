@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-acc0efd1cf-49e2_20924ab2cb",
+  "featureId": "feat_library_acc0efd1cf",
+  "title": "Existing Day rows get assigned to an arbitrary default church instead of their fast's church",
+  "category": "data-loss",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "hub/migrations/0001_initial_models.py",
+      "startLine": 29,
+      "endLine": 29,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/migrations/0001_initial_models.py",
+      "startLine": 41,
+      "endLine": 47,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/migrations/0011_add_day__fast_day_church_fk_day_date_not_unique.py",
+      "startLine": 20,
+      "endLine": 24,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "hub/migrations/0012_fast_m2m_to_fk_mapping.py",
+      "startLine": 9,
+      "endLine": 11,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "Before this migration sequence, Day rows only relate to Church through their many-to-many Fast records, and Fast has the church foreign key. Migration 0011 adds a non-null Day.church using Church.get_default_pk for all existing rows, while migration 0012 only copies the first related fast into Day._fast and never updates Day.church from that fast. Any existing Day associated with a fast from a non-default church will be permanently stored with the wrong church, which can corrupt filtering, uniqueness assumptions, and cascade behavior that rely on Day.church.",
+  "reproduction": null,
+  "recommendation": "Add a data migration after populating _fast that derives each Day.church from the selected related Fast.church before relying on the new field. For rows without any related fast, use an explicit fallback policy and make that case visible rather than silently assigning the global default church.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests are included for migration behavior or for preserving Day-to-Church relationships during the M2M-to-FK transition.",
+  "suggestedRegressionTest": "Create pre-migration test data with two churches, a fast under the non-default church, and a day linked to that fast through the old M2M field. Run migrations through 0012 and assert that the resulting Day.church equals the fast's church.",
+  "minimumFixScope": "Update the migration sequence around 0011/0012 to backfill Day.church from the migrated fast relationship.",
+  "status": "fixed",
+  "history": [
+    {
+      "runId": "20260526T055849-cbc6e7",
+      "kind": "revalidate",
+      "status": "fixed",
+      "note": null,
+      "reasoning": "The original evidence paths still exist. 0001 still shows Fast.church and Day.fasts as the pre-migration relationship, and 0011 still adds Day.church with default=Church.get_default_pk at lines 20-23. However, the current 0012 migration no longer only copies the first related fast into Day._fast: hub/migrations/0012_fast_m2m_to_fk_mapping.py lines 9-13 now select day.fasts.all().first(), assign day._fast, and when a fast exists set day.church_id = fast.church_id before saving. That directly implements the recommended backfill and prevents existing Day rows with a related fast from remaining on the arbitrary default church. A focused regression test also exists at tests/unit/hub/test_day_migration.py lines 52-60 asserting save_fast_fk copies church_id from the selected fast. I attempted to run the migration test through the required Docker container, but Docker was unavailable in this environment, so the conclusion is based on current code and test evidence rather than a passing test run.",
+      "commands": [
+        "sed -n '1,140p' hub/migrations/0001_initial_models.py",
+        "sed -n '1,160p' hub/migrations/0011_add_day__fast_day_church_fk_day_date_not_unique.py",
+        "sed -n '1,180p' hub/migrations/0012_fast_m2m_to_fk_mapping.py",
+        "rg -n \"Day\\.church|church.*fast|_fast|fasts|RunPython|day.*church|church_id\" hub/migrations hub tests -g '*.py'",
+        "nl -ba hub/migrations/0012_fast_m2m_to_fk_mapping.py | sed -n '1,60p'",
+        "nl -ba hub/migrations/0011_add_day__fast_day_church_fk_day_date_not_unique.py | sed -n '1,70p'",
+        "rg -n \"MigrationExecutor|migrate_from|migrate_to|0012_fast_m2m_to_fk_mapping|save_fast_fk|fast_m2m\" tests hub -g '*.py'",
+        "docker exec bahk_devcontainer-app-1 python manage.py test --settings=tests.test_settings hub.tests.test_fast_views.TestFastListView.test_list_fasts_with_different_church",
+        "nl -ba tests/unit/hub/test_day_migration.py | sed -n '1,120p'",
+        "docker exec bahk_devcontainer-app-1 python manage.py test --settings=tests.test_settings tests.unit.hub.test_day_migration"
+      ],
+      "createdAt": "2026-05-26T05:59:36.468Z"
+    }
+  ],
+  "signature": "sig_feat-library-acc0efd1cf_49e2b06d7f",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-library-acc0efd1cf-_d7d641f65a"
+  ],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:42:12.088Z",
+  "updatedAt": "2026-05-26T05:59:36.468Z"
+}

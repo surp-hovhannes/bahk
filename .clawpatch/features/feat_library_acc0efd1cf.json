@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_acc0efd1cf",
+  "title": "Python source hub/migrations#1",
+  "summary": "Python source group hub/migrations#1 with 12 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "hub/migrations#1",
+      "symbol": "hub/migrations#1",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "hub/migrations/0001_initial_models.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0002_fast_description.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0003_fast_add_culmination_feast_date_image.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0004_unique_date_unique_name_church_for_fast.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0005_fast_url.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0006_unique_culmination_feast_date_per_church.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0007_unique_church_name.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0008_profile_location_profile_profile_image.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0009_alter_fast_culmination_feast_date.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0010_profile_receive_upcoming_fast_reminders_and_more.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0011_add_day__fast_day_church_fk_day_date_not_unique.py",
+      "reason": "source group hub/migrations#1"
+    },
+    {
+      "path": "hub/migrations/0012_fast_m2m_to_fk_mapping.py",
+      "reason": "source group hub/migrations#1"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-acc0efd1cf-49e2_20924ab2cb",
+    "fnd_sig-feat-library-acc0efd1cf-8d20_3dd77a5dc3",
+    "fnd_sig-feat-library-acc0efd1cf-1aa8_927bd16247"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T023849-2a3a2c",
+      "kind": "review",
+      "summary": "3 finding(s); prompt=20352 bytes; approxTokens=5088; includedFiles=12; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:42:12.090Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

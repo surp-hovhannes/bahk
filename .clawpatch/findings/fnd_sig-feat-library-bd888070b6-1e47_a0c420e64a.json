@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-bd888070b6-1e47_a0c420e64a",
+  "featureId": "feat_library_bd888070b6",
+  "title": "Async orphan cleanup can skip records while deleting paged querysets",
+  "category": "data-loss",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "learning_resources/tasks.py",
+      "startLine": 63,
+      "endLine": 89,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "learning_resources/tasks.py",
+      "startLine": 121,
+      "endLine": 133,
+      "symbol": null,
+      "quote": null
+    },
+    {
+      "path": "learning_resources/tasks.py",
+      "startLine": 151,
+      "endLine": 151,
+      "symbol": null,
+      "quote": null
+    }
+  ],
+  "reasoning": "cleanup_orphaned_bookmarks_async captures the initial queryset count, pages through the live queryset by offset, and deletes orphaned bookmarks inside each batch. Deleting rows shrinks the queryset, so the next offset is applied to the remaining rows and can jump over records. For example, with 2,000 orphaned bookmarks and batch_size=1,000, the first batch deletes rows 0-999, then batch_start becomes 1,000 against a queryset that now only has the former rows 1000-1999, causing the loop to fetch an empty second batch and leave 1,000 orphaned bookmarks behind.",
+  "reproduction": null,
+  "recommendation": "Iterate over stable primary-key windows or materialize the IDs to process before deleting. Alternatively, repeatedly process the first batch until no matching bookmarks remain, avoiding offset pagination on a mutating queryset.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests exercise bookmark flags in detail views and general model behavior, but they do not cover the Celery orphan cleanup task with more than one batch or verify that all orphaned bookmarks are removed after batch deletion.",
+  "suggestedRegressionTest": "Create more orphaned Bookmark rows than the batch_size, run cleanup_orphaned_bookmarks_async with dry_run=False and a small batch_size, then assert every orphaned bookmark has been deleted and deleted_count matches the initial orphan count.",
+  "minimumFixScope": "Update cleanup_orphaned_bookmarks_async batching logic in learning_resources/tasks.py and add a focused task test for multi-batch deletion.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-bd888070b6_1e47cf2687",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:42:56.124Z",
+  "updatedAt": "2026-05-26T02:42:56.124Z"
+}

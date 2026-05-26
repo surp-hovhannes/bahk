@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-route-02003dd546-66cfc3_d0d9ccdc97",
+  "featureId": "feat_route_02003dd546",
+  "title": "Route is not covered by a URL-level test",
+  "category": "test-gap",
+  "severity": "low",
+  "confidence": "medium",
+  "triage": "test-gap",
+  "evidence": [
+    {
+      "path": "hub/urls.py",
+      "startLine": 68,
+      "endLine": 68,
+      "symbol": "urlpatterns",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 323,
+      "endLine": 340,
+      "symbol": "FastByFeastDateViewTest._create_request",
+      "quote": null
+    },
+    {
+      "path": "hub/tests/test_fast_views.py",
+      "startLine": 342,
+      "endLine": 355,
+      "symbol": "FastByFeastDateViewTest.test_find_fasts_by_feast_date_authenticated",
+      "quote": null
+    }
+  ],
+  "reasoning": "The included tests exercise FastByFeastDateView by manually building an APIRequestFactory request and assigning it to a view instance before calling get_queryset(). That validates much of the view behavior, but it does not prove that the declared Django URL /hub/fasts/by-feast-date/ actually resolves to FastByFeastDateView.as_view or that the route remains reachable through the configured URLconf. A route-only regression in hub/urls.py could therefore pass these tests.",
+  "reproduction": null,
+  "recommendation": "Add a URL-level test that uses Django's resolver or the test client against the actual mounted path and asserts it reaches the fast-by-feast-date endpoint.",
+  "whyTestsDoNotAlreadyCoverThis": "The current tests bypass Django URL resolution and use a request path of /api/fasts/by-feast-date/ while the reviewed route declaration is fasts/by-feast-date/ under the hub URL namespace/prefix.",
+  "suggestedRegressionTest": "Add a test that resolves /hub/fasts/by-feast-date/ and asserts the view class is FastByFeastDateView, or issue a client GET to the actual route with date and church_id and assert the expected 200 response.",
+  "minimumFixScope": "Add route-level coverage in hub/tests/test_fast_views.py or a dedicated URL test file.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-route-02003dd546_66cfc32506",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T025102-5f2a3d",
+  "createdAt": "2026-05-26T02:53:15.918Z",
+  "updatedAt": "2026-05-26T02:53:15.918Z"
+}

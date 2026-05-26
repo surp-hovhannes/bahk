@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_ffcf793ec1",
+  "title": "Python source app_management",
+  "summary": "Python source group app_management with 8 files.",
+  "kind": "library",
+  "source": "python-source-group",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app_management",
+      "symbol": "app_management",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app_management/__init__.py",
+      "reason": "source group app_management"
+    },
+    {
+      "path": "app_management/admin.py",
+      "reason": "source group app_management"
+    },
+    {
+      "path": "app_management/apps.py",
+      "reason": "source group app_management"
+    },
+    {
+      "path": "app_management/migrations/0001_initial.py",
+      "reason": "source group app_management"
+    },
+    {
+      "path": "app_management/migrations/__init__.py",
+      "reason": "source group app_management"
+    },
+    {
+      "path": "app_management/models.py",
+      "reason": "source group app_management"
+    },
+    {
+      "path": "app_management/tests.py",
+      "reason": "source group app_management"
+    },
+    {
+      "path": "app_management/views.py",
+      "reason": "source group app_management"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/unit/hub/test_admin.py",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/unit/test_models.py",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/unit/hub/test_admin.py",
+      "command": "pytest"
+    },
+    {
+      "path": "tests/unit/test_models.py",
+      "command": "pytest"
+    }
+  ],
+  "tags": [
+    "python",
+    "source-group"
+  ],
+  "trustBoundaries": [],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-library-ffcf793ec1-0e70_107ad9ce33"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260526T025102-5f2a3d",
+      "kind": "review",
+      "summary": "1 finding(s); prompt=29573 bytes; approxTokens=7393; includedFiles=10; omittedFiles=0",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-26T02:52:52.650Z"
+    }
+  ],
+  "createdAt": "2026-05-26T00:13:37.492Z",
+  "updatedAt": "2026-05-26T17:03:39.481Z"
+}

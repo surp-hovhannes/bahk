@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-library-ba626d612c-b87f_e163473933",
+  "featureId": "feat_library_ba626d612c",
+  "title": "Fast list participant counts remain stale after join or leave",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "hub/views/fast.py",
+      "startLine": 70,
+      "endLine": 96,
+      "symbol": "FastListView.get_cache_key",
+      "quote": null
+    },
+    {
+      "path": "hub/views/fast.py",
+      "startLine": 175,
+      "endLine": 194,
+      "symbol": "FastListView.invalidate_cache",
+      "quote": null
+    },
+    {
+      "path": "hub/views/fast.py",
+      "startLine": 526,
+      "endLine": 530,
+      "symbol": "JoinFastView.perform_update",
+      "quote": null
+    },
+    {
+      "path": "hub/views/fast.py",
+      "startLine": 611,
+      "endLine": 615,
+      "symbol": "LeaveFastView.perform_update",
+      "quote": null
+    }
+  ],
+  "reasoning": "FastListView caches a church-wide participant count and uses it as part of the queryset cache key. It provides an invalidate_cache method that deletes the church participant count and list caches, but join and leave only invalidate participant-list and user-stats caches. After a user joins or leaves, FastListView can continue using the stale participant count and cached queryset until timeout, causing list responses to show stale participant counts.",
+  "reproduction": "Fetch the fast list for a church, join or leave a fast, then fetch the same list again before the 10-minute cache timeout; the cached participant-count key and queryset cache can preserve the old participant count.",
+  "recommendation": "Call the FastListView cache invalidation path, or move it to a shared utility and invoke it from both JoinFastView.perform_update and LeaveFastView.perform_update for the affected church.",
+  "whyTestsDoNotAlreadyCoverThis": "The included tests do not cover fast join/leave cache invalidation or fast list response freshness.",
+  "suggestedRegressionTest": "Add a test that populates the fast list cache, performs a join and a leave, then asserts the next list response reflects the updated participant count.",
+  "minimumFixScope": "Invalidate the church participant count and fast list queryset caches whenever membership changes.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-library-ba626d612c_b87fa70e37",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260526T023849-2a3a2c",
+  "createdAt": "2026-05-26T02:43:04.409Z",
+  "updatedAt": "2026-05-26T02:43:04.409Z"
+}
