@@ -443,6 +443,84 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertIsNone(results[0]['target_type'])
         self.assertIsNone(results[0]['target_str'])
         self.assertEqual(results[1]['title'], 'Older event')
+
+    def test_user_event_stats_specific_requires_authentication(self):
+        """Test that user-specific stats require authentication."""
+        self.client.credentials()
+
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_user_event_stats_specific_allows_self_access(self):
+        """Test that users can fetch their own user-scoped stats."""
+        Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.user,
+            target=self.fast,
+            title='Joined fast',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LEFT_FAST,
+            user=self.user,
+            target=self.fast,
+            title='Left fast',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.other_user,
+            title='Other user event',
+        )
+
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user_id'], self.user.id)
+        self.assertEqual(response.data['username'], self.user.username)
+        self.assertEqual(response.data['total_events'], 2)
+        self.assertEqual(response.data['fasts_joined'], 1)
+        self.assertEqual(response.data['fasts_left'], 1)
+        self.assertEqual(response.data['net_fast_joins'], 0)
+        self.assertEqual(len(response.data['recent_events']), 2)
+        self.assertEqual(
+            response.data['event_types_breakdown'],
+            {'User Joined Fast': 1, 'User Left Fast': 1},
+        )
+
+    def test_user_event_stats_specific_rejects_cross_user_access_for_non_staff(self):
+        """Test that non-staff users cannot fetch another user's stats."""
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.other_user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data, {'error': 'Permission denied'})
+
+    def test_user_event_stats_specific_allows_staff_override(self):
+        """Test that staff users can fetch another user's stats."""
+        Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.other_user,
+            target=self.other_fast,
+            title='Other user joined fast',
+        )
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.other_user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user_id'], self.other_user.id)
+        self.assertEqual(response.data['username'], self.other_user.username)
+        self.assertEqual(response.data['total_events'], 1)
+        self.assertEqual(response.data['fasts_joined'], 1)
+        self.assertEqual(response.data['fasts_left'], 0)
     
     def test_track_devotional_viewed_success(self):
         """Test successful devotional viewed tracking."""
