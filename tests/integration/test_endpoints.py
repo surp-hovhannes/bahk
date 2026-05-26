@@ -47,9 +47,9 @@ class FastOnDateEndpointTests(TestCase):
         
         # Create API request factory
         self.factory = APIRequestFactory()
-    
-    def test_fast_on_date_endpoint_variations(self, query_params='', culmination_feast_name=None):
-        """Tests endpoint retrieving fast on a date with various parameters."""
+
+    def _assert_fast_on_date_countdown(self, query_params="", culmination_feast_name=None):
+        """Assert the countdown returned by the endpoint for a given variation."""
         # Create a fast using TestDataFactory
         fast = TestDataFactory.create_fast(
             name="Complete Fast",
@@ -86,3 +86,18 @@ class FastOnDateEndpointTests(TestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["countdown"], countdown)
+
+    def test_fast_on_date_default_countdown(self):
+        """Tests endpoint retrieving fast on a date without extra query parameters."""
+        self._assert_fast_on_date_countdown()
+
+    def test_fast_on_date_with_query_params_countdown(self):
+        """Tests endpoint retrieving fast on a date with explicit date query parameters."""
+        self._assert_fast_on_date_countdown(query_params="?date=20240325")
+
+    def test_fast_on_date_culmination_feast_countdown(self):
+        """Tests endpoint retrieving fast on a date with a culmination feast countdown."""
+        self._assert_fast_on_date_countdown(
+            query_params="?date=20240325",
+            culmination_feast_name="Pascha",
+        )

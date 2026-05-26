@@ -179,6 +179,9 @@ dump.rdb
 # claude rules
 .claude/
 
+# clawpatch
+.clawpatch/
+
 # push notifications
 certificate.pem
 certificates/
