@@ -2,13 +2,14 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import resolve, reverse
 from django.utils import timezone
-from hub.models import Day, FastIntention
+from hub.models import Day, FastIntention, FastParticipantMap
 from hub.views.fast import (
     FastListView,
     FastByDateView,
     FastByFeastDateView,
     JoinFastView,
     FastIntentionView,
+    FastParticipantsMapView,
     FastStatsView,
 )
 from django.contrib.auth.models import AnonymousUser
@@ -590,6 +591,72 @@ class FastStatsViewTest(TestCase):
         self.assertEqual(response.json()["total_fast_days"], 3)
         self.assertEqual(response.json()["completed_fasts"], 1)
         self.assertEqual(response.json()["checklist_uses"], 1)
+
+
+class FastParticipantsMapViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Map Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="fastmap@example.com",
+            email="fastmap@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+            location="Los Angeles, CA",
+            latitude=34.0522,
+            longitude=-118.2437,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Map Fast",
+            description="Fast for map route tests",
+        )
+        self.profile.fasts.add(self.fast)
+        self.url = reverse("fast-participants-map", kwargs={"fast_id": self.fast.id})
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_mounted_url_resolves_to_fast_participants_map_view(self):
+        match = resolve(f"/hub/fasts/{self.fast.id}/participants/map/")
+
+        self.assertEqual(match.func.view_class, FastParticipantsMapView)
+        self.assertEqual(match.url_name, "fast-participants-map")
+        self.assertEqual(match.kwargs["fast_id"], self.fast.id)
+
+    def test_fast_participants_map_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_participants_map_returns_existing_map_metadata(self):
+        FastParticipantMap.objects.create(
+            fast=self.fast,
+            map_file="fast_maps/map-fast.svg",
+            participant_count=1,
+            format="svg",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["map_url"], "/media/fast_maps/map-fast.svg")
+        self.assertEqual(response.json()["participant_count"], 1)
+        self.assertEqual(response.json()["format"], "svg")
+        self.assertIn("last_updated", response.json())
+        self.assertIn("age_hours", response.json())
+
+    def test_fast_participants_map_returns_not_found_for_missing_fast(self):
+        self.client.force_login(self.user)
+        url = reverse("fast-participants-map", kwargs={"fast_id": self.fast.id + 999})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.json()["detail"], "Fast not found.")
 
 
 class FastByFeastDateViewTest(TestCase):
