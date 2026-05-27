@@ -377,11 +377,7 @@ def get_target_users(promo):
         # If specific users are selected, use them as the audience before opt-out filtering.
         users = promo.selected_users.all()
         if promo.exclude_unsubscribed:
-            subscribed_user_ids = Profile.objects.filter(
-                user__in=users,
-                receive_promotional_emails=True
-            ).values_list('user_id', flat=True)
-            users = users.filter(pk__in=subscribed_user_ids)
+            users = users.exclude(profile__receive_promotional_emails=False)
 
         logger.info(f"PromoEmail {promo.id}: Sending to {users.count()} specifically selected users.")
         return users
