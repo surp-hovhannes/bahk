@@ -1,9 +1,11 @@
+import time
+from unittest.mock import patch
+
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.core.signing import TimestampSigner
 
-from hub.models import User
 from tests.fixtures.test_data import TestDataFactory
 
 User = get_user_model()
@@ -76,6 +78,21 @@ class UnsubscribeTests(TestCase):
         self.profile.refresh_from_db()
         self.assertTrue(self.profile.receive_promotional_emails)
 
+    def test_unsubscribe_with_expired_token(self):
+        """Test unsubscribing with an expired token."""
+        eight_days_later = time.time() + (60 * 60 * 24 * 8)
+
+        with patch('django.core.signing.time.time', return_value=eight_days_later):
+            response = self.client.get(
+                reverse('notifications:unsubscribe'),
+                {'token': self.valid_token}
+            )
+
+        self.assertRedirects(response, reverse('notifications:unsubscribe_error'))
+
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.receive_promotional_emails)
+
     def test_unsubscribe_with_nonexistent_user(self):
         """Test unsubscribing with a token for a nonexistent user."""
         # Create token for nonexistent user ID
@@ -93,9 +110,13 @@ class UnsubscribeTests(TestCase):
 
     def test_unsubscribe_success_page(self):
         """Test the unsubscribe success page."""
-        response = self.client.get(reverse('notifications:unsubscribe_success'))
+        url = reverse('notifications:unsubscribe_success')
+        self.assertEqual(url, '/hub/notifications/unsubscribe/success/')
+
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'notifications/unsubscribe_success.html')
+        self.assertContains(response, "Successfully Unsubscribed")
 
     def test_unsubscribe_error_page(self):
         """Test the unsubscribe error page."""
@@ -123,3 +144,16 @@ class UnsubscribeTests(TestCase):
         # Check that user is resubscribed
         self.profile.refresh_from_db()
         self.assertTrue(self.profile.receive_promotional_emails) 
+
+    def test_unsubscribe_with_valid_token_is_idempotent(self):
+        """Test repeated unsubscribe requests leave the user unsubscribed."""
+        url = reverse('notifications:unsubscribe')
+
+        first_response = self.client.get(url, {'token': self.valid_token})
+        second_response = self.client.get(url, {'token': self.valid_token})
+
+        self.assertRedirects(first_response, reverse('notifications:unsubscribe_success'))
+        self.assertRedirects(second_response, reverse('notifications:unsubscribe_success'))
+
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.receive_promotional_emails)
