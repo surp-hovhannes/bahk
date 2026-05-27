@@ -90,6 +90,98 @@ class JoinFastViewTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(self.profile.fasts.filter(id=self.fast.id).count(), 1)
 
+
+class LeaveFastViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Leave Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="leavefast@example.com",
+            email="leavefast@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Joined Fast",
+            description="Fast for leave route tests",
+        )
+        self.url = reverse("leave-fast")
+
+    def test_leave_fast_removes_membership(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["detail"], "Successfully left the fast.")
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_leave_fast_requires_authentication(self):
+        self.profile.fasts.add(self.fast)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_leave_fast_requires_valid_fast_id(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        missing_fast_id_response = self.client.put(
+            self.url,
+            data={},
+            content_type="application/json",
+        )
+        invalid_fast_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id + 999},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            missing_fast_id_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(invalid_fast_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_leave_fast_rejects_repeated_leave_attempt(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        first_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+        second_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            second_response.json()["detail"],
+            "You are not part of this fast.",
+        )
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+
 class FastListViewTest(TestCase):
     def setUp(self):
         # Create a church using TestDataFactory
