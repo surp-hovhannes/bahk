@@ -285,7 +285,11 @@ class Profile(models.Model):
         Note: This is now a simple wrapper that schedules an asynchronous task
         to avoid blocking the user interface during geocoding.
         """
+        from django.conf import settings
         from hub.tasks import geocode_profile_location
+
+        if not getattr(settings, "GEOCODING_ENABLED", True):
+            return
 
         if not self.location:
             self.latitude = None
