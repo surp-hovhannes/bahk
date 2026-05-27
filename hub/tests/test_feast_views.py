@@ -5,10 +5,13 @@ import urllib.error
 
 from django.core.cache import cache
 from django.test import TestCase
+from django.urls import resolve, reverse
+from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
-from hub.models import Church, Day, Feast
+from hub.models import Church, Day, Feast, FeastContext
 from hub.utils import _fetch_sacredtradition, _stable_url_key
+from hub.views.feasts import FeastContextFeedbackView
 
 
 class FeastViewDegradedResponseTests(TestCase):
@@ -191,6 +194,95 @@ class FeastAPIRouteTests(TestCase):
                 "feast": None,
             },
         )
+
+
+class FeastContextFeedbackAPITests(TestCase):
+    """Tests for the mounted /api/feasts/<pk>/feedback/ route."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2025, 12, 25), church=self.church)
+        with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
+            "hub.signals.determine_feast_designation_task.delay"
+        ):
+            self.feast = Feast.objects.create(day=self.day, name="Christmas")
+        self.context = FeastContext.objects.create(
+            feast=self.feast,
+            text="Existing feast context",
+            short_text="Existing short context",
+        )
+        self.url = reverse("feast-context-feedback", args=[self.feast.id])
+
+    def test_mounted_url_resolves_to_feast_feedback_view(self):
+        match = resolve(f"/hub/feasts/{self.feast.id}/feedback/")
+
+        self.assertEqual(match.func.view_class, FeastContextFeedbackView)
+        self.assertEqual(match.url_name, "feast-context-feedback")
+
+    def test_feedback_up_accepts_anonymous_request_and_increments_context(self):
+        response = self.client.post(
+            self.url,
+            data={"feedback_type": "up"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"status": "success", "regenerate": False})
+        self.context.refresh_from_db()
+        self.assertEqual(self.context.thumbs_up, 1)
+        self.assertEqual(self.context.thumbs_down, 0)
+
+    def test_feedback_down_returns_regeneration_flag_at_threshold(self):
+        self.context.thumbs_down = 1
+        self.context.save()
+
+        with self.settings(FEAST_CONTEXT_REGENERATION_THRESHOLD=2), patch(
+            "hub.views.feasts.generate_feast_context_task.delay"
+        ) as mock_delay:
+            response = self.client.post(
+                self.url,
+                data={"feedback_type": "down"},
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"status": "success", "regenerate": True})
+        self.context.refresh_from_db()
+        self.assertEqual(self.context.thumbs_down, 2)
+        mock_delay.assert_called_once_with(self.feast.id, force_regeneration=True)
+
+    def test_feedback_rejects_missing_or_invalid_payload(self):
+        missing_response = self.client.post(
+            self.url,
+            data={},
+            content_type="application/json",
+        )
+        invalid_response = self.client.post(
+            self.url,
+            data={"feedback_type": "sideways"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(missing_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            invalid_response.json(),
+            {"status": "error", "message": "Invalid feedback type"},
+        )
+        self.context.refresh_from_db()
+        self.assertEqual(self.context.thumbs_up, 0)
+        self.assertEqual(self.context.thumbs_down, 0)
+
+    def test_feedback_returns_not_found_for_unknown_feast(self):
+        url = reverse("feast-context-feedback", args=[self.feast.id + 999])
+
+        response = self.client.post(
+            url,
+            data={"feedback_type": "up"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class CircuitBreakerTests(TestCase):
