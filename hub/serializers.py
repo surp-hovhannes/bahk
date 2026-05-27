@@ -66,6 +66,8 @@ class ProfileRegistrationSerializer(serializers.ModelSerializer):
 
 
 class ProfileImageSerializer(serializers.ModelSerializer):
+    profile_image = serializers.ImageField(required=True)
+
     class Meta:
         model = models.Profile
         fields = ['profile_image']
