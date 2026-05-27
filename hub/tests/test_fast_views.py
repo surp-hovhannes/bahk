@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
 from hub.models import Day
 from hub.views.fast import FastListView, FastByDateView, FastByFeastDateView
@@ -569,6 +569,13 @@ class FastByFeastDateViewTest(TestCase):
     def tearDown(self):
         """Clean up after each test."""
         cache.clear()
+
+    def test_mounted_url_resolves_to_fast_by_feast_date_view(self):
+        """The public hub URL should remain wired to this view."""
+        match = resolve("/hub/fasts/by-feast-date/")
+
+        self.assertEqual(match.func.view_class, FastByFeastDateView)
+        self.assertEqual(match.url_name, "fast-by-feast-date")
         
     def _create_request(self, user=None, query_params=None):
         """Helper method to create a properly configured request."""
