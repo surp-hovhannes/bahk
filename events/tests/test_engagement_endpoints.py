@@ -215,6 +215,7 @@ class EngagementTrackingEndpointsTest(APITestCase):
             title='Other user joined fast',
             description='Should not be included',
         )
+        UserActivityFeed.objects.all().delete()
 
         refresh = RefreshToken.for_user(self.staff_user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
@@ -434,10 +435,11 @@ class EngagementTrackingEndpointsTest(APITestCase):
             {
                 'id', 'title', 'timestamp', 'event_type_name', 'event_type_code',
                 'event_type_category', 'user_username', 'target_type', 'target_str',
-                'age_hours',
+                'age_hours', 'description',
             }
         )
         self.assertEqual(results[0]['title'], 'Newest event')
+        self.assertEqual(results[0]['description'], '')
         self.assertEqual(results[0]['user_username'], self.user.username)
         self.assertEqual(results[0]['event_type_code'], EventType.USER_LOGGED_IN)
         self.assertIsNone(results[0]['target_type'])
