@@ -580,11 +580,8 @@ class LeaveFastView(generics.UpdateAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Store fast for use in perform_update
         self._fast = fast
-        
-        # Call parent update method which will call perform_update
-        super().update(request, *args, **kwargs)
+        self.perform_update(None)
 
         # Override the default response with a custom success message
         return response.Response(
@@ -599,7 +596,8 @@ class LeaveFastView(generics.UpdateAPIView):
         
         # Remove user from fast
         profile.fasts.remove(fast)
-        serializer.save()
+        if serializer is not None:
+            serializer.save()
         
         # Soft-keep intention (mark inactive)
         FastIntention.objects.filter(
@@ -846,18 +844,12 @@ class FastStatsView(views.APIView):
         if cached_data is not None:
             return response.Response(cached_data)
         
-        # Optimized: Prefetch related data to avoid N+1 queries
-        # This ensures that when the serializer calls obj.fasts.aggregate(),
-        # it has efficient access to the related data
         user_profile = request.user.profile
         
         # Get user's timezone for accurate date calculations
         user_tz = pytz.timezone(user_profile.timezone) if user_profile.timezone else pytz.UTC
         
-        # Prefetch the fasts and their days to optimize the serializer queries
-        optimized_profile = Profile.objects.select_related('user', 'church').prefetch_related(
-            Prefetch('fasts', queryset=Fast.objects.prefetch_related('days'))
-        ).get(id=user_profile.id)
+        optimized_profile = Profile.objects.select_related('user', 'church').get(id=user_profile.id)
         
         # Pass timezone in context for date filtering
         serialized_stats = FastStatsSerializer(optimized_profile, context={'tz': user_tz})
