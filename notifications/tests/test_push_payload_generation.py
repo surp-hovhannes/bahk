@@ -7,6 +7,7 @@ correct payload structures for different content types.
 import ast
 import json
 import re
+import subprocess
 from pathlib import Path
 
 from django.test import SimpleTestCase
@@ -27,51 +28,110 @@ def load_route_map_from_template():
     return ast.literal_eval(match.group("route_map"))
 
 
-def parse_query_params(input_value):
-    params = {}
-    if not input_value.strip():
-        return params
-
-    for part in input_value.split("&"):
-        trimmed = part.strip()
-        if not trimmed:
-            continue
-        key, _, value = trimmed.partition("=")
-        if key:
-            params[key.strip()] = value.strip()
-    return params
-
-
-def build_deep_link_payload(
-    route_map,
+def build_admin_template_payload(
     payload_type,
     content_id="",
     query_params="",
     activity_type="",
     activity_target="",
+    link_type="deeplink",
+    external_url="",
 ):
-    """Mirror the template generator while using the production route map."""
-    params = parse_query_params(query_params)
+    """Run the production admin template JavaScript payload generator."""
+    template = SEND_PUSH_TEMPLATE.read_text()
+    match = re.search(r"<script>\s*(?P<script>\(function\(\).*?)</script>", template, re.S)
+    if not match:
+        raise AssertionError("Could not find payload script in send_push.html")
 
-    if payload_type == "activity":
-        activity_params = dict(params)
-        if activity_type.strip():
-            activity_params["activity_type"] = activity_type.strip()
-        if activity_target.strip():
-            activity_params["target_id"] = activity_target.strip()
+    script = match.group("script").replace(
+        "    buildPayload();\n})();",
+        "    window.__testBuildPayload = buildPayload;\n    buildPayload();\n})();",
+    )
 
-        payload = {"screen": "activity"}
-        if activity_params:
-            payload["params"] = activity_params
-        return payload
+    values = {
+        "payloadType": payload_type,
+        "contentId": content_id,
+        "queryParams": query_params,
+        "activityType": activity_type,
+        "activityTarget": activity_target,
+        "externalUrl": external_url,
+        "linkType": link_type,
+    }
 
-    route = route_map[payload_type]
-    use_id = payload_type != "prayer_requests"
-    screen_path = f"{route}/{content_id.strip()}" if use_id and content_id.strip() else route
-    payload = {"screen": screen_path}
-    if params:
-        payload["params"] = params
-    return payload
+    node_script = f"""
+const values = {json.dumps(values)};
+const elements = {{}};
+
+function makeElement(id) {{
+  return {{
+    id,
+    value: '',
+    checked: false,
+    disabled: false,
+    textContent: '',
+    style: {{}},
+    classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }},
+    setAttribute() {{}},
+    removeAttribute() {{}},
+    addEventListener() {{}},
+    dispatchEvent() {{}},
+    focus() {{}},
+    submit() {{}},
+    querySelector() {{ return null; }},
+  }};
+}}
+
+const radios = ['deeplink', 'external'].map(value => ({{
+  value,
+  checked: value === values.linkType,
+  addEventListener() {{}},
+}}));
+
+global.window = {{}};
+global.alert = () => {{}};
+global.fetch = async () => ({{ ok: true, json: async () => ({{}}) }});
+global.FormData = class {{ constructor() {{}} get() {{ return null; }} }};
+global.document = {{
+  getElementById(id) {{
+    elements[id] = elements[id] || makeElement(id);
+    return elements[id];
+  }},
+  querySelector(selector) {{
+    if (selector === 'input[name="link_type"]:checked') {{
+      return radios.find(radio => radio.checked);
+    }}
+    const valueMatch = selector.match(/input\\[name="link_type"\\]\\[value="([^"]+)"\\]/);
+    if (valueMatch) {{
+      return radios.find(radio => radio.value === valueMatch[1]);
+    }}
+    return null;
+  }},
+  querySelectorAll(selector) {{
+    return selector === 'input[name="link_type"]' ? radios : [];
+  }},
+  addEventListener() {{}},
+}};
+
+{script}
+
+elements.payloadType.value = values.payloadType;
+elements.contentId.value = values.contentId;
+elements.queryParams.value = values.queryParams;
+elements.activityType.value = values.activityType;
+elements.activityTarget.value = values.activityTarget;
+elements.externalUrl.value = values.externalUrl;
+radios.forEach(radio => radio.checked = radio.value === values.linkType);
+window.__testBuildPayload();
+process.stdout.write(elements.data.value || 'null');
+"""
+    result = subprocess.run(
+        ["node"],
+        input=node_script,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(result.stdout)
 
 
 class PushNotificationPayloadTests(SimpleTestCase):
@@ -81,11 +141,6 @@ class PushNotificationPayloadTests(SimpleTestCase):
     These tests validate the expected payload structures based on the
     frontend app's routing requirements.
     """
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.route_map = load_route_map_from_template()
-
     def test_detail_payloads_use_admin_route_map(self):
         """Test detail screen payloads generated from the admin route map."""
         cases = [
@@ -102,29 +157,28 @@ class PushNotificationPayloadTests(SimpleTestCase):
         for payload_type, content_id, expected in cases:
             with self.subTest(payload_type=payload_type):
                 self.assertEqual(
-                    build_deep_link_payload(self.route_map, payload_type, content_id),
+                    build_admin_template_payload(payload_type, content_id),
                     expected,
                 )
 
     def test_prayer_requests_list_payload_ignores_content_id(self):
         """Test prayer requests list screen payload does not include an ID."""
         self.assertEqual(
-            build_deep_link_payload(self.route_map, "prayer_requests", "123"),
+            build_admin_template_payload("prayer_requests", "123"),
             {"screen": "prayer-requests"},
         )
 
     def test_activity_feed_basic(self):
         """Test basic activity feed payload."""
         self.assertEqual(
-            build_deep_link_payload(self.route_map, "activity"),
+            build_admin_template_payload("activity"),
             {"screen": "activity"},
         )
 
     def test_activity_feed_with_params(self):
         """Test activity feed payload with parameters."""
         self.assertEqual(
-            build_deep_link_payload(
-                self.route_map,
+            build_admin_template_payload(
                 "activity",
                 activity_type="announcement",
                 activity_target="987",
@@ -141,8 +195,7 @@ class PushNotificationPayloadTests(SimpleTestCase):
     def test_payload_with_query_params(self):
         """Test payload with additional query parameters."""
         self.assertEqual(
-            build_deep_link_payload(
-                self.route_map,
+            build_admin_template_payload(
                 "fast",
                 "48",
                 "source=push&ref=notification",
@@ -158,7 +211,11 @@ class PushNotificationPayloadTests(SimpleTestCase):
 
     def test_external_url_payload(self):
         """Test external URL payload structure."""
-        expected = {"url": "https://example.com/announcement"}
+        expected = build_admin_template_payload(
+            "",
+            link_type="external",
+            external_url="https://example.com/announcement",
+        )
         # External URLs should have 'url' key, not 'screen'
         self.assertIn("url", expected)
         self.assertNotIn("screen", expected)
@@ -167,13 +224,17 @@ class PushNotificationPayloadTests(SimpleTestCase):
     def test_json_serialization(self):
         """Test that all payloads can be serialized to JSON."""
         test_payloads = [
-            {"screen": "fast/48"},
-            {"screen": "learn/video/902"},
-            {"screen": "prayer-set/44"},
-            {"screen": "prayer-request/123"},
-            {"screen": "prayer-requests"},
-            {"screen": "activity", "params": {"activity_type": "announcement"}},
-            {"url": "https://example.com"},
+            build_admin_template_payload("fast", "48"),
+            build_admin_template_payload("video", "902"),
+            build_admin_template_payload("prayer_set", "44"),
+            build_admin_template_payload("prayer_request", "123"),
+            build_admin_template_payload("prayer_requests"),
+            build_admin_template_payload("activity", activity_type="announcement"),
+            build_admin_template_payload(
+                "",
+                link_type="external",
+                external_url="https://example.com",
+            ),
         ]
 
         for payload in test_payloads:
@@ -264,13 +325,11 @@ class AnnouncementExternalLinkTests(SimpleTestCase):
 
     def test_announcement_activity_feed_payload(self):
         """Test activity feed payload for announcement with URL."""
-        payload = {
-            "screen": "activity",
-            "params": {
-                "activity_type": "announcement",
-                "target_id": "987"
-            }
-        }
+        payload = build_admin_template_payload(
+            "activity",
+            activity_type="announcement",
+            activity_target="987",
+        )
 
         # This opens activity feed and finds announcement #987
         # The app then reads data.announcement_url from the feed item
@@ -279,7 +338,11 @@ class AnnouncementExternalLinkTests(SimpleTestCase):
 
     def test_direct_external_url_skips_activity(self):
         """Test direct external URL bypasses activity feed."""
-        payload = {"url": "https://example.com/direct"}
+        payload = build_admin_template_payload(
+            "",
+            link_type="external",
+            external_url="https://example.com/direct",
+        )
 
         # URL contains :// so notification handler treats it as external
         # Opens directly without going to Activity screen
