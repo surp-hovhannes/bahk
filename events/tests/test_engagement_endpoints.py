@@ -6,16 +6,20 @@ This module tests the API endpoints that track user engagement:
 - TrackChecklistUsedView
 """
 
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.test import override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from events.models import Event, EventType
+from events.models import Event, EventType, UserActivityFeed
 from hub.models import Fast, Church, Profile, Day, Devotional, Video
-from prayers.models import PrayerSet
+from prayers.models import Prayer, PrayerRequest, PrayerSet
 
 User = get_user_model()
 
@@ -89,11 +93,436 @@ class EngagementTrackingEndpointsTest(APITestCase):
             title='Test Prayer Set',
             church=self.church
         )
+
+        self.prayer = Prayer.objects.create(
+            title='Test Prayer',
+            text='Test prayer text',
+            category='general',
+            church=self.church,
+            fast=self.fast,
+        )
+
+        self.prayer_request = PrayerRequest.objects.create(
+            title='Test Prayer Request',
+            description='Test prayer request description',
+            requester=self.user,
+            status='approved',
+            expiration_date=timezone.now(),
+        )
+
+        self.other_church = Church.objects.create(name='Other Church')
+        self.other_user = User.objects.create_user(
+            username='otheruser',
+            email='other@example.com',
+            password='testpass123'
+        )
+        self.staff_user = User.objects.create_user(
+            username='staffuser',
+            email='staff@example.com',
+            password='testpass123',
+            is_staff=True,
+        )
+        self.other_profile = Profile.objects.create(
+            user=self.other_user,
+            church=self.other_church
+        )
+        self.staff_profile = Profile.objects.create(
+            user=self.staff_user,
+            church=self.church
+        )
+        self.other_fast = Fast.objects.create(
+            name='Other Fast',
+            church=self.other_church,
+            year=2024
+        )
+        self.other_day = Day.objects.create(
+            fast=self.other_fast,
+            date='2024-03-02',
+            church=self.other_church
+        )
+        self.other_devotional = Devotional.objects.create(
+            day=self.other_day,
+            video=self.video,
+            description='Other devotional',
+            order=1
+        )
+        self.other_prayer_set = PrayerSet.objects.create(
+            title='Other Prayer Set',
+            church=self.other_church
+        )
         
         # Set up authentication
         self.client = APIClient()
         refresh = RefreshToken.for_user(self.user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def test_activity_feed_authentication_required(self):
+        """Test that the activity feed requires authentication."""
+        self.client.credentials()
+
+        response = self.client.get(reverse('events:activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_generate_activity_feed_requires_admin_authentication(self):
+        """Test generate activity feed rejects unauthenticated and non-admin users."""
+        url = reverse('events:generate-activity-feed')
+
+        self.client.credentials()
+        unauthenticated_response = self.client.post(
+            url,
+            {'user_id': self.user.id},
+            format='json',
+        )
+        self.assertEqual(unauthenticated_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        non_admin_response = self.client.post(
+            url,
+            {'user_id': self.user.id},
+            format='json',
+        )
+        self.assertEqual(non_admin_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_generate_activity_feed_rejects_get(self):
+        """Test generate activity feed only allows POST requests."""
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(reverse('events:generate-activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_generate_activity_feed_creates_items_for_requested_user(self):
+        """Test generate activity feed creates feed items for the requested user only."""
+        tracked_event = Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.user,
+            target=self.fast,
+            title='User joined fast',
+            description='Joined the fast',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.user,
+            title='Ignored event type',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.other_user,
+            target=self.other_fast,
+            title='Other user joined fast',
+            description='Should not be included',
+        )
+        UserActivityFeed.objects.all().delete()
+
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        url = reverse('events:generate-activity-feed')
+        response = self.client.post(
+            url,
+            {'user_id': self.user.id, 'days_back': 'not-a-number'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['created_count'], 1)
+        self.assertEqual(
+            response.data['message'],
+            f'Generated 1 activity feed items for user {self.user.username}',
+        )
+        self.assertEqual(set(response.data['date_range'].keys()), {'start', 'end'})
+
+        self.assertEqual(UserActivityFeed.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(UserActivityFeed.objects.filter(user=self.other_user).count(), 0)
+
+        feed_item = UserActivityFeed.objects.get(user=self.user)
+        self.assertEqual(feed_item.event_id, tracked_event.id)
+        self.assertEqual(feed_item.activity_type, 'fast_join')
+        self.assertEqual(feed_item.target, self.fast)
+
+        second_response = self.client.post(
+            url,
+            {'user_id': self.user.id, 'days_back': 30},
+            format='json',
+        )
+
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.data['created_count'], 1)
+        self.assertEqual(UserActivityFeed.objects.filter(user=self.user, event=tracked_event).count(), 2)
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_allows_staff_post(self, mock_check):
+        """Test staff users can trigger milestone checks for a valid fast."""
+        mock_check.return_value = 2
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            {
+                'message': f'Milestone check completed for {self.fast.name}',
+                'milestones_created': 2,
+            },
+        )
+        mock_check.assert_called_once_with(self.fast)
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_requires_authentication(self, mock_check):
+        """Test milestone trigger rejects unauthenticated requests."""
+        self.client.credentials()
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        mock_check.assert_not_called()
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_requires_staff_user(self, mock_check):
+        """Test milestone trigger rejects authenticated non-staff users."""
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        mock_check.assert_not_called()
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_returns_not_found_for_missing_fast(self, mock_check):
+        """Test milestone trigger returns 404 for nonexistent fast IDs."""
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.post(reverse('events:trigger-milestone', args=[99999]))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data, {'error': 'Fast not found'})
+        mock_check.assert_not_called()
+
+    @patch('events.signals.check_and_track_participation_milestones')
+    def test_trigger_milestone_check_rejects_get(self, mock_check):
+        """Test milestone trigger only allows POST requests."""
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(reverse('events:trigger-milestone', args=[self.fast.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        mock_check.assert_not_called()
+
+    def test_activity_feed_returns_only_request_users_items_in_newest_first_order(self):
+        """Test activity feed scoping, ordering, and response shape."""
+        older_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Older activity',
+            description='First activity for the requesting user',
+            data={'kind': 'older'},
+        )
+        newer_item = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='milestone',
+            title='Newest activity',
+            description='Most recent activity for the requesting user',
+            is_read=True,
+            data={'kind': 'newer'},
+        )
+        UserActivityFeed.objects.create(
+            user=self.other_user,
+            activity_type='announcement',
+            title='Other user activity',
+            description='Should not appear in the response',
+        )
+
+        now = timezone.now()
+        UserActivityFeed.objects.filter(pk=older_item.pk).update(
+            created_at=now - timedelta(hours=2)
+        )
+        UserActivityFeed.objects.filter(pk=newer_item.pk).update(
+            created_at=now - timedelta(minutes=5),
+            read_at=now - timedelta(minutes=1),
+        )
+
+        response = self.client.get(reverse('events:activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+
+        results = response.data['results']
+        self.assertEqual([item['id'] for item in results], [newer_item.id, older_item.id])
+        self.assertEqual(
+            set(results[0].keys()),
+            {
+                'id', 'activity_type', 'activity_type_display', 'title', 'description',
+                'is_read', 'read_at', 'created_at', 'age_display', 'data',
+                'target_type', 'target_id', 'target_thumbnail',
+            }
+        )
+        self.assertEqual(results[0]['activity_type'], 'milestone')
+        self.assertEqual(results[0]['title'], 'Newest activity')
+        self.assertTrue(results[0]['is_read'])
+        self.assertEqual(results[0]['data'], {'kind': 'newer'})
+        self.assertIsNone(results[0]['target_type'])
+        self.assertIsNone(results[0]['target_id'])
+        self.assertIsNone(results[0]['target_thumbnail'])
+        self.assertEqual(results[1]['activity_type'], 'fast_join')
+
+    def test_activity_feed_returns_empty_results_when_user_has_no_items(self):
+        """Test empty activity feed responses for authenticated users."""
+        empty_user = User.objects.create_user(
+            username='emptyuser',
+            email='empty@example.com',
+            password='testpass123'
+        )
+        refresh = RefreshToken.for_user(empty_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(reverse('events:activity-feed'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+        self.assertEqual(response.data['results'], [])
+
+    def test_my_events_authentication_required(self):
+        """Test that the my events endpoint requires authentication."""
+        self.client.credentials()
+
+        response = self.client.get(reverse('events:my-events'))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_my_events_returns_only_request_users_events_in_newest_first_order(self):
+        """Test my events scoping, ordering, and response shape."""
+        older_event = Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.user,
+            title='Older event',
+        )
+        newer_event = Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.user,
+            title='Newest event',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.other_user,
+            title='Other user event',
+        )
+
+        now = timezone.now()
+        Event.objects.filter(pk=older_event.pk).update(
+            timestamp=now - timedelta(hours=2)
+        )
+        Event.objects.filter(pk=newer_event.pk).update(
+            timestamp=now - timedelta(minutes=5)
+        )
+
+        response = self.client.get(reverse('events:my-events'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+
+        results = response.data['results']
+        self.assertEqual([item['id'] for item in results], [newer_event.id, older_event.id])
+        self.assertEqual(
+            set(results[0].keys()),
+            {
+                'id', 'title', 'timestamp', 'event_type_name', 'event_type_code',
+                'event_type_category', 'user_username', 'target_type', 'target_str',
+                'age_hours', 'description',
+            }
+        )
+        self.assertEqual(results[0]['title'], 'Newest event')
+        self.assertEqual(results[0]['description'], '')
+        self.assertEqual(results[0]['user_username'], self.user.username)
+        self.assertEqual(results[0]['event_type_code'], EventType.USER_LOGGED_IN)
+        self.assertIsNone(results[0]['target_type'])
+        self.assertIsNone(results[0]['target_str'])
+        self.assertEqual(results[1]['title'], 'Older event')
+
+    def test_user_event_stats_specific_requires_authentication(self):
+        """Test that user-specific stats require authentication."""
+        self.client.credentials()
+
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_user_event_stats_specific_allows_self_access(self):
+        """Test that users can fetch their own user-scoped stats."""
+        Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.user,
+            target=self.fast,
+            title='Joined fast',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LEFT_FAST,
+            user=self.user,
+            target=self.fast,
+            title='Left fast',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LOGGED_IN,
+            user=self.other_user,
+            title='Other user event',
+        )
+
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user_id'], self.user.id)
+        self.assertEqual(response.data['username'], self.user.username)
+        self.assertEqual(response.data['total_events'], 2)
+        self.assertEqual(response.data['fasts_joined'], 1)
+        self.assertEqual(response.data['fasts_left'], 1)
+        self.assertEqual(response.data['net_fast_joins'], 0)
+        self.assertEqual(len(response.data['recent_events']), 2)
+        self.assertEqual(
+            response.data['event_types_breakdown'],
+            {'User Joined Fast': 1, 'User Left Fast': 1},
+        )
+
+    def test_user_event_stats_specific_rejects_cross_user_access_for_non_staff(self):
+        """Test that non-staff users cannot fetch another user's stats."""
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.other_user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data, {'error': 'Permission denied'})
+
+    def test_user_event_stats_specific_allows_staff_override(self):
+        """Test that staff users can fetch another user's stats."""
+        Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.other_user,
+            target=self.other_fast,
+            title='Other user joined fast',
+        )
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(
+            reverse('events:user-event-stats-specific', kwargs={'user_id': self.other_user.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user_id'], self.other_user.id)
+        self.assertEqual(response.data['username'], self.other_user.username)
+        self.assertEqual(response.data['total_events'], 1)
+        self.assertEqual(response.data['fasts_joined'], 1)
+        self.assertEqual(response.data['fasts_left'], 0)
     
     def test_track_devotional_viewed_success(self):
         """Test successful devotional viewed tracking."""
@@ -178,6 +607,42 @@ class EngagementTrackingEndpointsTest(APITestCase):
         response = self.client.post(url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_devotional_viewed_rejects_out_of_scope_devotional(self):
+        """Test devotional tracking rejects a devotional from another church."""
+        url = reverse('events:track-devotional-viewed')
+        data = {'devotional_id': self.other_devotional.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_devotional_viewed_allows_in_scope_day_without_fast(self):
+        """Test devotional tracking uses the day church when no fast is linked."""
+        day_without_fast = Day.objects.create(
+            date='2024-03-03',
+            church=self.church,
+        )
+        devotional = Devotional.objects.create(
+            day=day_without_fast,
+            video=self.video,
+            description='Devotional without fast',
+            order=1,
+        )
+        url = reverse('events:track-devotional-viewed')
+        data = {'devotional_id': devotional.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
     
     def test_track_devotional_viewed_with_day_data(self):
         """Test tracking devotional and verify day data is included."""
@@ -270,6 +735,157 @@ class EngagementTrackingEndpointsTest(APITestCase):
         
         response = self.client.post(url, data, format='json')
         
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_prayer_set_viewed_rejects_out_of_scope_prayer_set(self):
+        """Test prayer set tracking rejects a prayer set from another church."""
+        url = reverse('events:track-prayer-set-viewed')
+        data = {'prayer_set_id': self.other_prayer_set.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_prayer_viewed_success(self):
+        """Test successful prayer viewed tracking."""
+        url = reverse('events:track-prayer-viewed')
+        data = {'prayer_id': self.prayer.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
+
+        prayer_event = Event.objects.filter(
+            event_type__code=EventType.PRAYER_VIEWED,
+            user=self.user,
+        ).first()
+
+        self.assertIsNotNone(prayer_event)
+        self.assertEqual(prayer_event.title, 'Prayer viewed')
+        self.assertEqual(prayer_event.target, self.prayer)
+        self.assertEqual(prayer_event.data['prayer_id'], self.prayer.id)
+        self.assertEqual(prayer_event.data['church_id'], self.church.id)
+        self.assertEqual(prayer_event.data['fast_id'], self.fast.id)
+        self.assertEqual(prayer_event.data['category'], self.prayer.category)
+        self.assertEqual(prayer_event.data['title'], self.prayer.title)
+
+    def test_track_prayer_viewed_missing_prayer_id(self):
+        """Test prayer tracking with missing prayer_id."""
+        url = reverse('events:track-prayer-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('prayer_id is required', response.data['error'])
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_prayer_viewed_invalid_prayer_id(self):
+        """Test prayer tracking with invalid prayer_id."""
+        url = reverse('events:track-prayer-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, {'prayer_id': 'invalid'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Invalid prayer_id', response.data['error'])
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_prayer_viewed_authentication_required(self):
+        """Test that prayer tracking requires authentication."""
+        self.client.credentials()
+
+        url = reverse('events:track-prayer-viewed')
+        response = self.client.post(url, {'prayer_id': self.prayer.id}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_prayer_request_viewed_success(self):
+        """Test successful prayer request viewed tracking."""
+        url = reverse('events:track-prayer-request-viewed')
+        data = {'prayer_request_id': self.prayer_request.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
+
+        prayer_request_event = Event.objects.filter(
+            event_type__code=EventType.PRAYER_REQUEST_VIEWED,
+            user=self.user,
+        ).first()
+
+        self.assertIsNotNone(prayer_request_event)
+        self.assertEqual(
+            prayer_request_event.title,
+            f'Prayer request viewed: {self.prayer_request.title}',
+        )
+        self.assertEqual(prayer_request_event.target, self.prayer_request)
+        self.assertEqual(
+            prayer_request_event.data['prayer_request_id'],
+            self.prayer_request.id,
+        )
+        self.assertEqual(
+            prayer_request_event.data['status'],
+            self.prayer_request.status,
+        )
+        self.assertEqual(
+            prayer_request_event.data['title'],
+            self.prayer_request.title,
+        )
+
+    def test_track_prayer_request_viewed_missing_prayer_request_id(self):
+        """Test prayer request tracking with missing prayer_request_id."""
+        url = reverse('events:track-prayer-request-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('prayer_request_id is required', response.data['error'])
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_prayer_request_viewed_invalid_prayer_request_id(self):
+        """Test prayer request tracking with invalid prayer_request_id."""
+        url = reverse('events:track-prayer-request-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(
+            url,
+            {'prayer_request_id': 'invalid'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Invalid prayer_request_id', response.data['error'])
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_prayer_request_viewed_authentication_required(self):
+        """Test that prayer request tracking requires authentication."""
+        self.client.credentials()
+
+        url = reverse('events:track-prayer-request-viewed')
+        response = self.client.post(
+            url,
+            {'prayer_request_id': self.prayer_request.id},
+            format='json',
+        )
+
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
     
     def test_track_checklist_used_success(self):
@@ -429,6 +1045,19 @@ class EngagementTrackingEndpointsTest(APITestCase):
         response = self.client.post(url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_checklist_used_rejects_out_of_scope_fast(self):
+        """Test checklist tracking rejects a fast from another church."""
+        url = reverse('events:track-checklist-used')
+        data = {'fast_id': self.other_fast.id, 'action': 'daily_review'}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
     
     def test_track_devotional_viewed_get_method_not_allowed(self):
         """Test that GET method is not allowed for devotional tracking."""
@@ -444,6 +1073,22 @@ class EngagementTrackingEndpointsTest(APITestCase):
         
         response = self.client.get(url)
         
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_track_prayer_viewed_get_method_not_allowed(self):
+        """Test that GET method is not allowed for prayer tracking."""
+        url = reverse('events:track-prayer-viewed')
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_track_prayer_request_viewed_get_method_not_allowed(self):
+        """Test that GET method is not allowed for prayer request tracking."""
+        url = reverse('events:track-prayer-request-viewed')
+
+        response = self.client.get(url)
+
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
     
     def test_multiple_devotional_views_create_multiple_events(self):
@@ -568,8 +1213,8 @@ class EngagementTrackingEndpointsTest(APITestCase):
         ).first()
         
         self.assertIsNotNone(devotional_event)
-        # Note: IP and user agent are captured by Event.create_event() method
-        # The exact implementation depends on how the Event model handles request metadata
+        self.assertEqual(devotional_event.ip_address, '192.168.1.100')
+        self.assertEqual(devotional_event.user_agent, 'TestApp/1.0')
     
     def test_event_target_relationships(self):
         """Test that events have correct target relationships."""

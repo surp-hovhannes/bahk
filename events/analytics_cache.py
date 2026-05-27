@@ -76,7 +76,12 @@ class AnalyticsCacheService:
             num_days=num_days
         )
         
-        cached_data = cache.get(cache_key)
+        try:
+            cached_data = cache.get(cache_key)
+        except Exception as e:
+            logger.warning(f"Failed to read cached daily aggregates: {e}")
+            return None
+
         if cached_data:
             logger.debug(f"Cache HIT for daily aggregates: {cache_key}")
             return cached_data

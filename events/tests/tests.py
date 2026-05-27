@@ -200,6 +200,14 @@ class EventSignalsTest(TestCase):
         # Should start with 2 events (FAST_CREATED from signal + manual test event)
         initial_count = Event.objects.count()
         self.assertEqual(initial_count, 2)
+        existing_join_event_ids = set(
+            Event.objects.filter(
+                event_type__code=EventType.USER_JOINED_FAST,
+                user=self.user,
+                content_type__model='fast',
+                object_id=self.fast.id,
+            ).values_list('id', flat=True)
+        )
         
         # Join the fast
         self.profile.fasts.add(self.fast)
@@ -207,17 +215,22 @@ class EventSignalsTest(TestCase):
         # Should have created a join event
         self.assertEqual(Event.objects.count(), initial_count + 1)
         
-        join_event = Event.objects.filter(
-            event_type__code=EventType.USER_JOINED_FAST
-        ).first()
-        self.assertIsNotNone(join_event)
+        new_join_events = Event.objects.filter(
+            event_type__code=EventType.USER_JOINED_FAST,
+            user=self.user,
+            content_type__model='fast',
+            object_id=self.fast.id,
+        ).exclude(id__in=existing_join_event_ids)
+        self.assertEqual(new_join_events.count(), 1)
+        join_event = new_join_events.get()
         self.assertEqual(join_event.user, self.user)
         self.assertEqual(join_event.target, self.fast)
         
         # Should also have created a feed item
         feed_item = UserActivityFeed.objects.filter(
             user=self.user,
-            activity_type='fast_join'
+            activity_type='fast_join',
+            event=join_event,
         ).first()
         self.assertIsNotNone(feed_item)
         self.assertEqual(feed_item.event, join_event)

@@ -6,13 +6,13 @@ This project runs commands through Docker containers.
 - Preferred command pattern:
 
 ```bash
-docker exec bahk_devcontainer-app-1 python manage.py <command>
+docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py <command>
 ```
 
 Examples:
 
 ```bash
-docker exec bahk_devcontainer-app-1 python manage.py migrate
-docker exec bahk_devcontainer-app-1 python manage.py test --settings=tests.test_settings
-docker exec bahk_devcontainer-app-1 python manage.py createsuperuser
+docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py migrate
+docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py test --settings=tests.test_settings
+docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py createsuperuser
 ```

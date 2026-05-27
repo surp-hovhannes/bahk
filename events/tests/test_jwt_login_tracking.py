@@ -230,8 +230,8 @@ class JWTLoginTrackingTest(APITestCase):
         ).first()
         
         self.assertIsNotNone(login_event)
-        # Note: IP and user agent are captured by Event.create_event() method
-        # The exact implementation depends on how the Event model handles request metadata
+        self.assertEqual(login_event.ip_address, '192.168.1.100')
+        self.assertEqual(login_event.user_agent, 'TestApp/1.0')
     
     def test_jwt_login_graceful_error_handling(self):
         """Test that errors in event creation don't break JWT login."""

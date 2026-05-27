@@ -60,14 +60,14 @@ This project runs in a **Docker development container**. All Python/Django comma
 
 All `python manage.py` commands and Python scripts must be prefixed with:
 ```bash
-docker exec bahk_devcontainer-app-1 <command>
+docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 <command>
 ```
 
 **Example:**
 ```bash
 # Instead of: python manage.py migrate
 # Use:
-docker exec bahk_devcontainer-app-1 python manage.py migrate
+docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py migrate
 ```
 
 ## Development Commands
