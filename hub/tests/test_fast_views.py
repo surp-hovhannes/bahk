@@ -7,6 +7,7 @@ from hub.views.fast import (
     FastListView,
     FastByDateView,
     FastByFeastDateView,
+    JoinFastView,
     FastIntentionView,
     FastStatsView,
 )
@@ -40,7 +41,13 @@ class JoinFastViewTest(TestCase):
             name="Joinable Fast",
             description="Fast for join route tests",
         )
-        self.url = reverse("fast-join")
+        self.url = "/api/fasts/join/"
+
+    def test_mounted_api_url_resolves_to_join_fast_view(self):
+        match = resolve(self.url)
+
+        self.assertEqual(match.func.view_class, JoinFastView)
+        self.assertEqual(match.url_name, "fast-join")
 
     def test_join_fast_adds_membership(self):
         self.client.force_login(self.user)
