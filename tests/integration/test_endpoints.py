@@ -51,7 +51,7 @@ class FastOnDateEndpointTests(TestCase):
     def _assert_fast_on_date_countdown(self, query_params="", culmination_feast_name=None):
         """Assert the countdown returned by the endpoint for a given variation."""
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
 
         # Create a fast using TestDataFactory
         fast = TestDataFactory.create_fast(
@@ -99,14 +99,14 @@ class FastOnDateEndpointTests(TestCase):
     def test_fast_on_date_with_query_params_countdown(self):
         """Tests endpoint retrieving fast on a date with explicit date query parameters."""
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         date_str = today.strftime("%Y%m%d")
         self._assert_fast_on_date_countdown(query_params=f"?date={date_str}")
 
     def test_fast_on_date_culmination_feast_countdown(self):
         """Tests endpoint retrieving fast on a date with a culmination feast countdown."""
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         date_str = today.strftime("%Y%m%d")
         self._assert_fast_on_date_countdown(
             query_params=f"?date={date_str}",

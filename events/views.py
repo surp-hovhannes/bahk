@@ -418,11 +418,16 @@ class TrackDevotionalViewedView(APIView):
             return Response({"error": "devotional_id is required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             from hub.models import Devotional
-            devotional = Devotional.objects.select_related('day__fast').get(id=int(devotional_id))
+            devotional = Devotional.objects.select_related('day__fast', 'day__church').get(id=int(devotional_id))
         except (ValueError, Devotional.DoesNotExist):
             return Response({"error": "Invalid devotional_id"}, status=status.HTTP_400_BAD_REQUEST)
 
-        church_id = devotional.day.fast.church_id if devotional.day and devotional.day.fast else None
+        if devotional.day and devotional.day.fast:
+            church_id = devotional.day.fast.church_id
+        elif devotional.day:
+            church_id = devotional.day.church_id
+        else:
+            church_id = None
         if not _user_can_access_church_resource(request.user, church_id):
             return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
 

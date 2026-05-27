@@ -620,6 +620,29 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data['error'], 'Permission denied')
         self.assertEqual(Event.objects.count(), initial_event_count)
+
+    def test_track_devotional_viewed_allows_in_scope_day_without_fast(self):
+        """Test devotional tracking uses the day church when no fast is linked."""
+        day_without_fast = Day.objects.create(
+            date='2024-03-03',
+            church=self.church,
+        )
+        devotional = Devotional.objects.create(
+            day=day_without_fast,
+            video=self.video,
+            description='Devotional without fast',
+            order=1,
+        )
+        url = reverse('events:track-devotional-viewed')
+        data = {'devotional_id': devotional.id}
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
     
     def test_track_devotional_viewed_with_day_data(self):
         """Test tracking devotional and verify day data is included."""
