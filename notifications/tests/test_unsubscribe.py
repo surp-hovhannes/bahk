@@ -67,6 +67,16 @@ class UnsubscribeTests(TestCase):
         self.profile.refresh_from_db()
         self.assertTrue(self.profile.receive_promotional_emails)
 
+    def test_unsubscribe_with_tampered_token(self):
+        """Test unsubscribing with a token whose signed value was changed."""
+        tampered_token = self.valid_token.replace(str(self.user.id), str(self.user.id + 1), 1)
+        response = self.client.get(reverse('notifications:unsubscribe'), {'token': tampered_token})
+
+        self.assertRedirects(response, reverse('notifications:unsubscribe_error'))
+
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.receive_promotional_emails)
+
     def test_unsubscribe_with_missing_token(self):
         """Test unsubscribing with a missing token."""
         response = self.client.get(reverse('notifications:unsubscribe'))
