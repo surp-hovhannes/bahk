@@ -2,8 +2,14 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import resolve, reverse
 from django.utils import timezone
-from hub.models import Day
-from hub.views.fast import FastListView, FastByDateView, FastByFeastDateView, FastStatsView
+from hub.models import Day, FastIntention
+from hub.views.fast import (
+    FastListView,
+    FastByDateView,
+    FastByFeastDateView,
+    FastIntentionView,
+    FastStatsView,
+)
 from django.contrib.auth.models import AnonymousUser
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -180,6 +186,82 @@ class LeaveFastViewTest(TestCase):
             "You are not part of this fast.",
         )
         self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+
+class FastIntentionViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Intention Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="intention@example.com",
+            email="intention@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Intention Fast",
+            description="Fast for intention route tests",
+        )
+        self.url = reverse("fast-intention", kwargs={"fast_id": self.fast.id})
+
+    def test_mounted_url_resolves_to_fast_intention_view(self):
+        match = resolve(f"/hub/fasts/{self.fast.id}/intention/")
+
+        self.assertEqual(match.func.view_class, FastIntentionView)
+        self.assertEqual(match.url_name, "fast-intention")
+        self.assertEqual(match.kwargs["fast_id"], self.fast.id)
+
+    def test_put_creates_intention_for_participant(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        response = self.client.put(
+            self.url,
+            data={"text": "Pray for peace", "is_public": True},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["text"], "Pray for peace")
+        self.assertTrue(response.json()["is_public"])
+        self.assertTrue(
+            FastIntention.objects.filter(
+                user=self.user,
+                fast=self.fast,
+                text="Pray for peace",
+                is_public=True,
+                is_active=True,
+            ).exists()
+        )
+
+    def test_fast_intention_requires_authentication(self):
+        self.profile.fasts.add(self.fast)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_intention_requires_fast_membership(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.json()["detail"],
+            "You are not a participant in this fast.",
+        )
+
+    def test_fast_intention_returns_not_found_for_missing_fast(self):
+        self.client.force_login(self.user)
+        url = reverse("fast-intention", kwargs={"fast_id": self.fast.id + 999})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class FastListViewTest(TestCase):
