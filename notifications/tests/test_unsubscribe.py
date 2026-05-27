@@ -99,9 +99,13 @@ class UnsubscribeTests(TestCase):
 
     def test_unsubscribe_error_page(self):
         """Test the unsubscribe error page."""
-        response = self.client.get(reverse('notifications:unsubscribe_error'))
+        url = reverse('notifications:unsubscribe_error')
+        self.assertEqual(url, '/hub/notifications/unsubscribe/error/')
+
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'notifications/unsubscribe_error.html')
+        self.assertContains(response, "Unsubscribe Error")
 
     def test_resubscribe_functionality(self):
         """Test that a user can resubscribe after unsubscribing."""
