@@ -122,6 +122,77 @@ class FeastViewCacheTests(TestCase):
         self.assertEqual(response3.data['feast']['name'], response1.data['feast']['name'])
 
 
+class FeastAPIRouteTests(TestCase):
+    """Tests for the mounted /api/feasts/ route."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.test_date = date(2025, 12, 25)
+        self.date_str = self.test_date.strftime("%Y-%m-%d")
+        cache.clear()
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    @patch("hub.signals.match_icon_to_feast_task.delay")
+    @patch("hub.signals.determine_feast_designation_task.delay")
+    def test_api_route_returns_serialized_feast_for_anonymous_request(
+        self,
+        mock_determine_designation,
+        mock_match_icon,
+        mock_generate_context,
+        mock_get_or_create,
+    ):
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        feast = Feast.objects.create(
+            day=day,
+            name="Christmas",
+            designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
+        )
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["date"], self.date_str)
+        self.assertEqual(data["feast"]["id"], feast.id)
+        self.assertEqual(data["feast"]["name"], "Christmas")
+        self.assertEqual(
+            data["feast"]["designation"],
+            Feast.Designation.NATIVITY_MOTHER_OF_GOD,
+        )
+        self.assertIsNone(data["feast"]["icon"])
+        self.assertIsNone(data["feast"]["prayer"])
+        self.assertEqual(data["feast"]["text"], "")
+        self.assertEqual(data["feast"]["short_text"], "")
+        self.assertEqual(data["feast"]["context_thumbs_up"], 0)
+        self.assertEqual(data["feast"]["context_thumbs_down"], 0)
+        mock_get_or_create.assert_called_once_with(
+            self.test_date,
+            self.church,
+            check_fast=False,
+        )
+
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    def test_api_route_returns_null_feast_for_date_without_feast(
+        self,
+        mock_get_or_create,
+    ):
+        Day.objects.create(date=self.test_date, church=self.church)
+        mock_get_or_create.return_value = (None, False, {"status": "not_found"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "date": self.date_str,
+                "feast": None,
+            },
+        )
+
+
 class CircuitBreakerTests(TestCase):
     """Tests for the circuit breaker in _fetch_sacredtradition."""
 
