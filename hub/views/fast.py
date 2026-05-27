@@ -21,7 +21,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Count, Min, Max, Sum, Prefetch, Exists, OuterRef, Subquery
+from django.db.models import Q, Count, Min, Max, Sum, Exists, OuterRef, Subquery
 from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache
 from functools import wraps
