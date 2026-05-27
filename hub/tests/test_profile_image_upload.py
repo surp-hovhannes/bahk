@@ -53,9 +53,9 @@ class ProfileImageUploadRouteTests(TestCase):
         )
 
     def test_mounted_url_resolves_to_profile_image_upload_view(self):
-        match = resolve("/hub/profile/image-upload/")
+        match = resolve("/api/profile/image-upload/")
 
-        self.assertEqual(self.url, "/hub/profile/image-upload/")
+        self.assertEqual(self.url, "/api/profile/image-upload/")
         self.assertEqual(match.func.view_class, ProfileImageUploadView)
         self.assertEqual(match.url_name, "profile-image-upload")
 

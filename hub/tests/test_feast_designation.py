@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 from django.test import TestCase, override_settings
 from django.test.utils import tag
 from django.db.models.signals import post_save
+from django.core.cache import cache
 
 from hub.models import Church, Day, Feast, LLMPrompt
 from hub.tasks.llm_tasks import determine_feast_designation_task
@@ -410,6 +411,7 @@ class FeastDesignationAPITests(TestCase):
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
+        cache.clear()
         # Disconnect signal so feast creation doesn't eagerly call the real LLM
         post_save.disconnect(handle_feast_save, sender=Feast)
 

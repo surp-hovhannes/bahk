@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.test import TestCase, override_settings
 from django.test.utils import tag
 from django.db.models.signals import post_save
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from hub.models import Church, Day, Feast
@@ -23,6 +24,7 @@ class FeastIconMatchingTaskTests(TestCase):
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
+        cache.clear()
 
     def test_match_icon_task_skips_if_icon_exists(self):
         """Test that task skips if icon is already set."""
@@ -409,6 +411,7 @@ class FeastIconAPITests(TestCase):
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
+        cache.clear()
 
     def test_feast_api_includes_icon_when_present(self):
         """Test that API response includes icon when icon is set."""
@@ -463,4 +466,3 @@ class FeastIconAPITests(TestCase):
         self.assertIn('feast', response.data)
         self.assertIn('icon', response.data['feast'])
         self.assertIsNone(response.data['feast']['icon'])
-

@@ -24,11 +24,11 @@ class UserDaysViewTests(TestCase):
         self.url = reverse("user-days")
 
     def test_mounted_url_resolves_to_user_days_view(self):
-        match = resolve("/hub/user/days/")
+        match = resolve("/api/user/days/")
 
         self.assertEqual(match.func.view_class, UserDaysView)
         self.assertEqual(match.url_name, "user-days")
-        self.assertEqual(self.url, "/hub/user/days/")
+        self.assertEqual(self.url, "/api/user/days/")
 
     def test_user_days_requires_authentication(self):
         response = self.client.get(self.url)
