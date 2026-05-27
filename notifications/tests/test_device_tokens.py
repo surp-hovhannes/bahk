@@ -36,8 +36,7 @@ class DeviceTokenTests(APITestCase):
         url = reverse('notifications:register-device-token')
         response = self.client.post(url, self.valid_token_data, format='json')
         
-        # The view is returning 400 Bad Request, but we're testing the token creation
-        # So we'll check if the token was created despite the status code
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(DeviceToken.objects.count(), 1)
         self.assertEqual(DeviceToken.objects.get().token, self.valid_token_data['token'])
         self.assertEqual(DeviceToken.objects.get().user, self.user)
