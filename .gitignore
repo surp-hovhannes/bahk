@@ -190,5 +190,6 @@ certificates/
 *.key
 test_media/
 
-
+.agents/
+.crabbox.yaml
 .clawpatch/
