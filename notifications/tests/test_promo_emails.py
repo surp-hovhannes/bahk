@@ -328,9 +328,19 @@ class PromoEmailTaskTests(TestCase):
     @override_settings(EMAIL_RATE_LIMIT=2, EMAIL_API_DELAY_SECONDS=0.01)  # Speed up test
     def test_send_promo_email_rate_limited(self):
         """Tests that sending more promo emails than allowed rate properly batches emails."""
-        # Create 4 users to test batching with rate limit of 2
+        # Create enough eligible users to test batching with rate limit of 2.
         user4 = TestDataFactory.create_user(email="user4@example.com")
         user5 = TestDataFactory.create_user(email="user5@example.com")
+        TestDataFactory.create_profile(
+            user=user4,
+            church=self.church,
+            receive_promotional_emails=True
+        )
+        TestDataFactory.create_profile(
+            user=user5,
+            church=self.church,
+            receive_promotional_emails=True
+        )
         
         self.promo.selected_users.add(self.user1, self.user2, self.user3, user4, user5)
         self.promo.save()
