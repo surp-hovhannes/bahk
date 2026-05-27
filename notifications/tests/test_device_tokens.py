@@ -218,3 +218,16 @@ class TestPushNotificationTests(APITestCase):
             message='Test notification',
             user_ids=[self.user.id],
         )
+
+    @patch('notifications.views.send_push_notification_task')
+    def test_push_notification_rejects_anonymous_user(self, mock_send_push):
+        """Test anonymous users cannot trigger push notification tasks"""
+        unauthenticated_client = APIClient()
+        url = reverse('notifications:test-push-notification')
+        response = unauthenticated_client.post(url, self.notification_data, format='json')
+
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+        mock_send_push.delay.assert_not_called()
