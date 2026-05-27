@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.urls import resolve, reverse
 from django.utils import timezone
 from hub.models import Day
-from hub.views.fast import FastListView, FastByDateView, FastByFeastDateView
+from hub.views.fast import FastListView, FastByDateView, FastByFeastDateView, FastStatsView
 from django.contrib.auth.models import AnonymousUser
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -432,6 +432,12 @@ class FastStatsViewTest(TestCase):
 
     def tearDown(self):
         cache.clear()
+
+    def test_mounted_url_resolves_to_fast_stats_view(self):
+        match = resolve("/hub/fasts/stats/")
+
+        self.assertEqual(match.func.view_class, FastStatsView)
+        self.assertEqual(match.url_name, "fast-stats")
 
     def test_fast_stats_requires_authentication(self):
         response = self.client.get(self.url)
