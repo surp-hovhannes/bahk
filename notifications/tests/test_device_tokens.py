@@ -36,8 +36,7 @@ class DeviceTokenTests(APITestCase):
         url = reverse('notifications:register-device-token')
         response = self.client.post(url, self.valid_token_data, format='json')
         
-        # The view is returning 400 Bad Request, but we're testing the token creation
-        # So we'll check if the token was created despite the status code
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(DeviceToken.objects.count(), 1)
         self.assertEqual(DeviceToken.objects.get().token, self.valid_token_data['token'])
         self.assertEqual(DeviceToken.objects.get().user, self.user)
@@ -56,6 +55,8 @@ class DeviceTokenTests(APITestCase):
         response2 = self.client.post(url, new_token_data, format='json')
         
         # Check that both tokens exist for the user
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response2.status_code, status.HTTP_201_CREATED)
         self.assertEqual(DeviceToken.objects.count(), 2)
         tokens = DeviceToken.objects.filter(user=self.user)
         self.assertEqual(tokens.count(), 2)
@@ -105,6 +106,8 @@ class DeviceTokenTests(APITestCase):
         response2 = self.client.post(url, token2_data, format='json')
         
         # Verify both tokens exist
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response2.status_code, status.HTTP_201_CREATED)
         self.assertEqual(DeviceToken.objects.count(), 2)
         tokens = DeviceToken.objects.filter(user=self.user)
         self.assertEqual(tokens.count(), 2)
@@ -125,6 +128,8 @@ class DeviceTokenTests(APITestCase):
         response2 = self.client.post(url, self.valid_token_data, format='json')
         
         # Verify token ownership changed
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
         self.assertEqual(DeviceToken.objects.count(), 1)
         token = DeviceToken.objects.get()
         self.assertEqual(token.user, self.user2)
@@ -144,6 +149,9 @@ class DeviceTokenTests(APITestCase):
         # Try to use same token
         response2 = self.client.post(url, self.valid_token_data, format='json')
         
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+
         # Verify logging
         mock_logger.info.assert_called_with(
             'Device token ownership changed',
@@ -219,3 +227,16 @@ class TestPushNotificationTests(APITestCase):
             message='Test notification',
             user_ids=[self.user.id],
         )
+
+    @patch('notifications.views.send_push_notification_task')
+    def test_push_notification_rejects_anonymous_user(self, mock_send_push):
+        """Test anonymous users cannot trigger push notification tasks"""
+        unauthenticated_client = APIClient()
+        url = reverse('notifications:test-push-notification')
+        response = unauthenticated_client.post(url, self.notification_data, format='json')
+
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+        mock_send_push.delay.assert_not_called()

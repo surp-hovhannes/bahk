@@ -374,9 +374,13 @@ def send_promo_email_task(promo_id, batch_start_index=0):
 def get_target_users(promo):
     """Helper function to get eligible users for a promotional email."""
     if promo.selected_users.exists():
-        # If specific users are selected, use them directly
-        logger.info(f"PromoEmail {promo.id}: Sending to {promo.selected_users.count()} specifically selected users.")
-        return promo.selected_users.all()
+        # If specific users are selected, use them as the audience before opt-out filtering.
+        users = promo.selected_users.all()
+        if promo.exclude_unsubscribed:
+            users = users.exclude(profile__receive_promotional_emails=False)
+
+        logger.info(f"PromoEmail {promo.id}: Sending to {users.count()} specifically selected users.")
+        return users
 
     profiles = Profile.objects.all()
     
