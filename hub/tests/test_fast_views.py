@@ -9,6 +9,7 @@ from hub.views.fast import (
     FastByFeastDateView,
     JoinFastView,
     FastIntentionView,
+    FastParticipantsView,
     FastParticipantsMapView,
     FastStatsView,
 )
@@ -591,6 +592,96 @@ class FastStatsViewTest(TestCase):
         self.assertEqual(response.json()["total_fast_days"], 3)
         self.assertEqual(response.json()["completed_fasts"], 1)
         self.assertEqual(response.json()["checklist_uses"], 1)
+
+
+class FastParticipantsViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Participants Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="fastparticipants@example.com",
+            email="fastparticipants@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Participants Fast",
+            description="Fast for participants route tests",
+        )
+        self.participant_user = TestDataFactory.create_user(
+            username="participant@example.com",
+            email="participant@example.com",
+            password="testpass123",
+        )
+        self.participant_profile = TestDataFactory.create_profile(
+            user=self.participant_user,
+            church=self.church,
+            name="Participant One",
+            location="Glendale, CA",
+        )
+        self.other_user = TestDataFactory.create_user(
+            username="otherparticipant@example.com",
+            email="otherparticipant@example.com",
+            password="testpass123",
+        )
+        self.other_profile = TestDataFactory.create_profile(
+            user=self.other_user,
+            church=self.church,
+            name="Participant Two",
+            location="Pasadena, CA",
+        )
+        self.fast.profiles.add(self.participant_profile, self.other_profile)
+        self.url = reverse("fast-participants", kwargs={"fast_id": self.fast.id})
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_mounted_url_resolves_to_fast_participants_view(self):
+        match = resolve(f"/hub/fasts/{self.fast.id}/participants/")
+
+        self.assertEqual(match.func.view_class, FastParticipantsView)
+        self.assertEqual(match.url_name, "fast-participants")
+        self.assertEqual(match.kwargs["fast_id"], self.fast.id)
+
+    def test_fast_participants_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_participants_returns_serialized_profiles(self):
+        FastIntention.objects.create(
+            user=self.participant_user,
+            fast=self.fast,
+            text="Pray for the parish",
+            is_public=True,
+            is_active=True,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()), 2)
+        first_participant = response.json()[0]
+        self.assertEqual(first_participant["id"], self.participant_profile.id)
+        self.assertEqual(first_participant["name"], "Participant One")
+        self.assertEqual(first_participant["location"], "Glendale, CA")
+        self.assertEqual(first_participant["abbreviation"], "P")
+        self.assertEqual(first_participant["user"], "Participant One")
+        self.assertEqual(first_participant["intention"], "Pray for the parish")
+        self.assertIn("profile_image", first_participant)
+        self.assertIn("thumbnail", first_participant)
+
+    def test_fast_participants_returns_not_found_for_missing_fast(self):
+        self.client.force_login(self.user)
+        url = reverse("fast-participants", kwargs={"fast_id": self.fast.id + 999})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class FastParticipantsMapViewTest(TestCase):
