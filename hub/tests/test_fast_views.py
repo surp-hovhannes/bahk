@@ -723,7 +723,7 @@ class FastParticipantsMapViewTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_fast_participants_map_returns_existing_map_metadata(self):
-        FastParticipantMap.objects.create(
+        map_obj = FastParticipantMap.objects.create(
             fast=self.fast,
             map_file="fast_maps/map-fast.svg",
             participant_count=1,
@@ -734,7 +734,27 @@ class FastParticipantsMapViewTest(TestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()["map_url"], "/media/fast_maps/map-fast.svg")
+        self.assertEqual(response.json()["map_url"], map_obj.map_url)
+        self.assertEqual(response.json()["participant_count"], 1)
+        self.assertEqual(response.json()["format"], "svg")
+        self.assertIn("last_updated", response.json())
+        self.assertIn("age_hours", response.json())
+
+    def test_api_path_returns_existing_participants_map_metadata(self):
+        map_obj = FastParticipantMap.objects.create(
+            fast=self.fast,
+            map_file="fast_maps/map-fast.svg",
+            participant_count=1,
+            format="svg",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            f"/api/fasts/{self.fast.id}/participants/map/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["map_url"], map_obj.map_url)
         self.assertEqual(response.json()["participant_count"], 1)
         self.assertEqual(response.json()["format"], "svg")
         self.assertIn("last_updated", response.json())
