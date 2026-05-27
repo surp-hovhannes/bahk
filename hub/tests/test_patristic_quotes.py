@@ -1,15 +1,17 @@
 """Tests for patristic quotes feature."""
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
 
 from hub.models import Church, Fast, PatristicQuote
+from hub.views.patristic_quotes import PatristicQuotesByChurchView
 
 
 class PatristicQuoteModelTests(TestCase):
@@ -150,6 +152,17 @@ class PatristicQuoteAPITests(APITestCase):
         )
         self.quote3.churches.add(self.church2)
         self.quote3.tags.add('humility', 'virtue')
+
+        now = timezone.now()
+        PatristicQuote.objects.filter(pk=self.quote1.pk).update(
+            created_at=now - timedelta(minutes=2)
+        )
+        PatristicQuote.objects.filter(pk=self.quote2.pk).update(
+            created_at=now - timedelta(minutes=1)
+        )
+        PatristicQuote.objects.filter(pk=self.quote3.pk).update(
+            created_at=now
+        )
     
     def test_list_quotes(self):
         """Test listing all patristic quotes."""
@@ -174,7 +187,69 @@ class PatristicQuoteAPITests(APITestCase):
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 2)  # quote1 and quote2
+        self.assertEqual(
+            [quote['id'] for quote in response.data['results']],
+            [self.quote2.pk, self.quote1.pk],
+        )
+        for quote in response.data['results']:
+            self.assertEqual(
+                set(quote.keys()),
+                {
+                    'id',
+                    'text',
+                    'attribution',
+                    'churches',
+                    'church_names',
+                    'fasts',
+                    'fast_names',
+                    'tags',
+                    'created_at',
+                    'updated_at',
+                },
+            )
+            self.assertIn(self.church1.pk, quote['churches'])
+            self.assertIn(self.church1.name, quote['church_names'])
+        self.assertNotIn(
+            self.quote3.pk,
+            [quote['id'] for quote in response.data['results']],
+        )
+
+    def test_by_church_route_resolves_to_expected_view(self):
+        """Test the by-church URL remains mounted to the intended view."""
+        match = resolve(
+            reverse(
+                'patristic-quotes-by-church',
+                kwargs={'church_id': self.church1.pk},
+            )
+        )
+
+        self.assertEqual(match.func.view_class, PatristicQuotesByChurchView)
+        self.assertEqual(match.kwargs['church_id'], self.church1.pk)
+
+    def test_filter_by_church_with_no_quotes_returns_empty_page(self):
+        """Test an existing church with no quotes returns an empty result page."""
+        empty_church = Church.objects.create(name='Empty Test Church')
+        url = reverse(
+            'patristic-quotes-by-church',
+            kwargs={'church_id': empty_church.pk},
+        )
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+        self.assertEqual(response.data['results'], [])
+
+    def test_filter_by_nonexistent_church_returns_empty_page(self):
+        """Test an unknown church ID does not leak unrelated quotes."""
+        url = reverse(
+            'patristic-quotes-by-church',
+            kwargs={'church_id': max(self.church1.pk, self.church2.pk) + 999},
+        )
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+        self.assertEqual(response.data['results'], [])
     
     def test_filter_by_fast(self):
         """Test filtering quotes by fast."""
@@ -396,4 +471,3 @@ class PatristicQuoteOfTheDayTests(APITestCase):
             
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             self.assertEqual(response.data['id'], expected_quote.id)
-
