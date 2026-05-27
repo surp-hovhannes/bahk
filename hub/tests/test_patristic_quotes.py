@@ -11,7 +11,10 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 
 from hub.models import Church, Fast, PatristicQuote
-from hub.views.patristic_quotes import PatristicQuotesByChurchView
+from hub.views.patristic_quotes import (
+    PatristicQuoteOfTheDayView,
+    PatristicQuotesByChurchView,
+)
 
 
 class PatristicQuoteModelTests(TestCase):
@@ -330,6 +333,30 @@ class PatristicQuoteOfTheDayTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('text', response.data)
         self.assertIn('attribution', response.data)
+
+    def test_mounted_api_url_returns_quote_of_the_day(self):
+        """The public /api URL should remain wired to the quote-of-the-day view."""
+        match = resolve('/api/patristic-quotes/quote-of-the-day/')
+        response = self.client.get('/api/patristic-quotes/quote-of-the-day/')
+
+        self.assertEqual(match.func.view_class, PatristicQuoteOfTheDayView)
+        self.assertEqual(match.url_name, 'patristic-quote-of-the-day')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(response.data.keys()),
+            {
+                'id',
+                'text',
+                'attribution',
+                'churches',
+                'church_names',
+                'fasts',
+                'fast_names',
+                'tags',
+                'created_at',
+                'updated_at',
+            },
+        )
     
     def test_quote_of_the_day_deterministic(self):
         """Test that the same quote is returned for the same day."""
