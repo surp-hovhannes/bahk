@@ -126,7 +126,8 @@ class PromoEmailAdminTests(TestCase):
     def test_admin_list_view_requires_staff(self):
         """Test that the admin list view requires staff status."""
         self.client.logout()
-        self.client.login(username='regular', password='regularpass123')
+        login_successful = self.client.login(username='regular@example.com', password='regularpass123')
+        self.assertTrue(login_successful, "Regular user login failed")
         response = self.client.get(reverse('admin:notifications_promoemail_changelist'))
         self.assertEqual(response.status_code, 302)
         self.assertIn('/admin/login/', response.url)
