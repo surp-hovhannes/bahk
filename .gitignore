@@ -193,3 +193,5 @@ test_media/
 .agents/
 .crabbox.yaml
 .clawpatch/
+.crabbox.env
+.crabbox/
