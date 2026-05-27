@@ -302,18 +302,14 @@ class PromoEmailTaskTests(TestCase):
         self.assertEqual(self.promo.status, PromoEmail.SENT)
 
     def test_send_promo_email_selected_user_unsubscribed(self):
-        """
-        Test behavior when a selected user has opted out of promotional emails.
-        NOTE: Based on current task logic, selected users bypass the 
-        'receive_promotional_emails' check. This test verifies that behavior.
-        """
+        """Test that an opted-out selected user is skipped when unsubscribed users are excluded."""
         # Set user3 profile to unsubscribed
         self.profile3.receive_promotional_emails = False
         self.profile3.save()
         
         # Add user1 (subscribed) and user3 (unsubscribed) to selected_users
         self.promo.selected_users.add(self.user1, self.user3)
-        # Explicitly set exclude_unsubscribed - this *shouldn't* matter for selected_users
+        # Explicitly set exclude_unsubscribed for selected_users.
         self.promo.exclude_unsubscribed = True 
         self.promo.save()
         
@@ -323,10 +319,10 @@ class PromoEmailTaskTests(TestCase):
         # Refresh promo from database
         self.promo.refresh_from_db()
         
-        # Check that *both* selected users received the email, even the unsubscribed one
-        self.assertEqual(len(mail.outbox), 2, "Expected selected unsubscribed user to receive email (current task logic).")
+        # Check that only the subscribed selected user received the email
+        self.assertEqual(len(mail.outbox), 1)
         recipient_emails = sorted([email.to[0] for email in mail.outbox])
-        self.assertEqual(recipient_emails, ["user1@example.com", "user3@example.com"])
+        self.assertEqual(recipient_emails, ["user1@example.com"])
         self.assertEqual(self.promo.status, PromoEmail.SENT)
 
     @override_settings(EMAIL_RATE_LIMIT=2, EMAIL_API_DELAY_SECONDS=0.01)  # Speed up test
