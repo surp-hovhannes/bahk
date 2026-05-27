@@ -879,6 +879,12 @@ class FastByDateViewTest(TestCase):
     def tearDown(self):
         cache.clear()
 
+    def test_mounted_url_resolves_to_fast_by_date_view(self):
+        match = resolve("/hub/fasts/by-date/")
+
+        self.assertEqual(match.func.view_class, FastByDateView)
+        self.assertEqual(match.url_name, "fast-by-date")
+
     def _create_request(self, user=None, query_params=None):
         request = self.factory.get('/api/fasts/by-date/')
         if user:
