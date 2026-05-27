@@ -11,7 +11,7 @@ from rest_framework.test import APIRequestFactory
 
 from hub.models import Church, Day, Feast, FeastContext
 from hub.utils import _fetch_sacredtradition, _stable_url_key
-from hub.views.feasts import FeastContextFeedbackView
+from hub.views.feasts import FeastContextFeedbackView, GetFeastForDate
 
 
 class FeastViewDegradedResponseTests(TestCase):
@@ -132,7 +132,14 @@ class FeastAPIRouteTests(TestCase):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
         self.date_str = self.test_date.strftime("%Y-%m-%d")
+        self.hub_url = reverse("feast-for-date")
         cache.clear()
+
+    def test_hub_feasts_url_resolves_to_feast_for_date_view(self):
+        match = resolve("/hub/feasts/")
+
+        self.assertEqual(match.func.view_class, GetFeastForDate)
+        self.assertEqual(match.url_name, "feast-for-date")
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
     @patch("hub.views.feasts.get_or_create_feast_for_date")
@@ -142,8 +149,8 @@ class FeastAPIRouteTests(TestCase):
         self,
         mock_determine_designation,
         mock_match_icon,
-        mock_generate_context,
         mock_get_or_create,
+        mock_generate_context,
     ):
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
@@ -193,6 +200,84 @@ class FeastAPIRouteTests(TestCase):
                 "date": self.date_str,
                 "feast": None,
             },
+        )
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    @patch("hub.signals.match_icon_to_feast_task.delay")
+    @patch("hub.signals.determine_feast_designation_task.delay")
+    def test_hub_route_returns_serialized_feast_for_anonymous_request(
+        self,
+        mock_determine_designation,
+        mock_match_icon,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        feast = Feast.objects.create(
+            day=day,
+            name="Christmas",
+            designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
+        )
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get(self.hub_url, {"date": self.date_str})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["date"], self.date_str)
+        self.assertEqual(data["feast"]["id"], feast.id)
+        self.assertEqual(data["feast"]["name"], "Christmas")
+        self.assertEqual(
+            data["feast"]["designation"],
+            Feast.Designation.NATIVITY_MOTHER_OF_GOD,
+        )
+        self.assertIsNone(data["feast"]["icon"])
+        self.assertIsNone(data["feast"]["prayer"])
+        self.assertEqual(data["feast"]["text"], "")
+        self.assertEqual(data["feast"]["short_text"], "")
+        self.assertEqual(data["feast"]["context_thumbs_up"], 0)
+        self.assertEqual(data["feast"]["context_thumbs_down"], 0)
+        mock_get_or_create.assert_called_once_with(
+            self.test_date,
+            self.church,
+            check_fast=False,
+        )
+        mock_generate_context.assert_called_once_with(feast.id)
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    @patch("hub.signals.match_icon_to_feast_task.delay")
+    @patch("hub.signals.determine_feast_designation_task.delay")
+    def test_hub_route_defaults_to_today_when_date_is_missing(
+        self,
+        mock_determine_designation,
+        mock_match_icon,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        today = date.today()
+        Day.objects.create(date=today, church=self.church)
+        mock_get_or_create.return_value = (None, False, {"status": "not_found"})
+
+        response = self.client.get(self.hub_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"date": today.isoformat(), "feast": None})
+        mock_get_or_create.assert_called_once_with(
+            today,
+            self.church,
+            check_fast=False,
+        )
+        mock_generate_context.assert_not_called()
+
+    def test_hub_route_rejects_invalid_date_format(self):
+        response = self.client.get(self.hub_url, {"date": "12-25-2025"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "Invalid date format. Expected format: YYYY-MM-DD",
+            str(response.json()),
         )
 
 
