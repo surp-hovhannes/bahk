@@ -3,9 +3,10 @@ from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from hub.models import Church, Day, LLMPrompt, Reading
+from hub.views.admin import compare_reading_prompts
 
 
 class CompareReadingPromptsRouteTests(TestCase):
@@ -48,8 +49,12 @@ class CompareReadingPromptsRouteTests(TestCase):
 
         url = reverse("hub_reading_compare_prompts", args=[self.reading.pk])
         response = self.client.get(url)
+        match = resolve(url)
 
         self.assertEqual(url, f"/api/hub/reading/{self.reading.pk}/compare-prompts/")
+        self.assertEqual(match.func, compare_reading_prompts)
+        self.assertEqual(match.url_name, "hub_reading_compare_prompts")
+        self.assertEqual(match.kwargs["reading_id"], self.reading.pk)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["reading"], self.reading)
         self.assertCountEqual(response.context["prompts"], [self.prompt1, self.prompt2])

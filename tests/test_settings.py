@@ -73,6 +73,7 @@ SECRET_KEY = 'test-secret-key-for-testing-only'
 
 # Disable external service integrations for tests
 AWS_LOCATION_API_KEY = None  # Disable AWS Location Service
+GEOCODING_ENABLED = False
 SEND_PUSH_NOTIFICATIONS = False  # Disable push notifications
 
 # Disable real LLM API calls during tests.

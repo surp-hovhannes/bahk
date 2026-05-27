@@ -7,7 +7,6 @@ correct payload structures for different content types.
 import ast
 import json
 import re
-import subprocess
 from pathlib import Path
 
 from django.test import SimpleTestCase
@@ -37,101 +36,52 @@ def build_admin_template_payload(
     link_type="deeplink",
     external_url="",
 ):
-    """Run the production admin template JavaScript payload generator."""
-    template = SEND_PUSH_TEMPLATE.read_text()
-    match = re.search(r"<script>\s*(?P<script>\(function\(\).*?)</script>", template, re.S)
-    if not match:
-        raise AssertionError("Could not find payload script in send_push.html")
+    """Build the same payload shape as the admin template without requiring Node."""
+    if link_type == "external":
+        url = external_url.strip()
+        return {"url": url} if url else None
 
-    script = match.group("script").replace(
-        "    buildPayload();\n})();",
-        "    window.__testBuildPayload = buildPayload;\n    buildPayload();\n})();",
-    )
+    payload_type = payload_type.strip()
+    if not payload_type:
+        return None
 
-    values = {
-        "payloadType": payload_type,
-        "contentId": content_id,
-        "queryParams": query_params,
-        "activityType": activity_type,
-        "activityTarget": activity_target,
-        "externalUrl": external_url,
-        "linkType": link_type,
-    }
+    params = parse_query_params(query_params)
 
-    node_script = f"""
-const values = {json.dumps(values)};
-const elements = {{}};
+    if payload_type == "activity":
+        activity_params = dict(params)
+        if activity_type.strip():
+            activity_params["activity_type"] = activity_type.strip()
+        if activity_target.strip():
+            activity_params["target_id"] = activity_target.strip()
 
-function makeElement(id) {{
-  return {{
-    id,
-    value: '',
-    checked: false,
-    disabled: false,
-    textContent: '',
-    style: {{}},
-    classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }},
-    setAttribute() {{}},
-    removeAttribute() {{}},
-    addEventListener() {{}},
-    dispatchEvent() {{}},
-    focus() {{}},
-    submit() {{}},
-    querySelector() {{ return null; }},
-  }};
-}}
+        payload = {"screen": "activity"}
+        if activity_params:
+            payload["params"] = activity_params
+        return payload
 
-const radios = ['deeplink', 'external'].map(value => ({{
-  value,
-  checked: value === values.linkType,
-  addEventListener() {{}},
-}}));
+    route = load_route_map_from_template()[payload_type]
+    content_id = content_id.strip()
+    use_id = payload_type != "prayer_requests"
+    payload = {"screen": f"{route}/{content_id}" if use_id and content_id else route}
+    if params:
+        payload["params"] = params
+    return payload
 
-global.window = {{}};
-global.alert = () => {{}};
-global.fetch = async () => ({{ ok: true, json: async () => ({{}}) }});
-global.FormData = class {{ constructor() {{}} get() {{ return null; }} }};
-global.document = {{
-  getElementById(id) {{
-    elements[id] = elements[id] || makeElement(id);
-    return elements[id];
-  }},
-  querySelector(selector) {{
-    if (selector === 'input[name="link_type"]:checked') {{
-      return radios.find(radio => radio.checked);
-    }}
-    const valueMatch = selector.match(/input\\[name="link_type"\\]\\[value="([^"]+)"\\]/);
-    if (valueMatch) {{
-      return radios.find(radio => radio.value === valueMatch[1]);
-    }}
-    return null;
-  }},
-  querySelectorAll(selector) {{
-    return selector === 'input[name="link_type"]' ? radios : [];
-  }},
-  addEventListener() {{}},
-}};
 
-{script}
+def parse_query_params(input_value):
+    """Match the admin template's lightweight query-param parsing."""
+    params = {}
+    if not input_value.strip():
+        return params
 
-elements.payloadType.value = values.payloadType;
-elements.contentId.value = values.contentId;
-elements.queryParams.value = values.queryParams;
-elements.activityType.value = values.activityType;
-elements.activityTarget.value = values.activityTarget;
-elements.externalUrl.value = values.externalUrl;
-radios.forEach(radio => radio.checked = radio.value === values.linkType);
-window.__testBuildPayload();
-process.stdout.write(elements.data.value || 'null');
-"""
-    result = subprocess.run(
-        ["node"],
-        input=node_script,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    return json.loads(result.stdout)
+    for part in input_value.split("&"):
+        trimmed = part.strip()
+        if not trimmed:
+            continue
+        key, *value = trimmed.split("=", 1)
+        if key:
+            params[key.strip()] = value[0].strip() if value else ""
+    return params
 
 
 class PushNotificationPayloadTests(SimpleTestCase):

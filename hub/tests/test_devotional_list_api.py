@@ -125,6 +125,9 @@ class DevotionalListAPITests(TestCase):
         query = {"church_id": self.church.id, **params}
         return self.client.get("/api/devotionals/", query)
 
+    def _get_by_fast(self, fast_id, **params):
+        return self.client.get(f"/api/devotionals/by-fast/{fast_id}/", params)
+
     def test_devotional_list_default_behavior_still_works(self):
         response = self._get_list()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -134,6 +137,37 @@ class DevotionalListAPITests(TestCase):
         self.assertIn("results", response.data)
         self.assertEqual(response.data["count"], 6)
         self.assertEqual(response.data["results"][0]["date"], "2026-01-01")
+
+    def test_devotionals_by_fast_returns_only_requested_fast(self):
+        response = self._get_by_fast(self.fast.id)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 7)
+        self.assertTrue(
+            all(item["fast_id"] == self.fast.id for item in response.data["results"])
+        )
+        self.assertIn(
+            "Opening Prayer",
+            [item["title"] for item in response.data["results"]],
+        )
+        self.assertNotIn(
+            "Lent for Other Church",
+            [item["title"] for item in response.data["results"]],
+        )
+
+    def test_devotionals_by_fast_returns_empty_page_for_fast_without_devotionals(self):
+        empty_fast = Fast.objects.create(
+            name="Empty Fast",
+            church=self.church,
+            description="No devotionals yet",
+            culmination_feast="Empty culmination",
+        )
+
+        response = self._get_by_fast(empty_fast.id)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
 
     def test_authenticated_user_profile_timezone_controls_local_cutoff(self):
         request = APIRequestFactory().get("/api/devotionals/")

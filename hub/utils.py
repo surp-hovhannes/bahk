@@ -135,18 +135,15 @@ def invalidate_fast_participants_cache(fast_id):
     Invalidate cache for a specific fast's participant list.
     This should be called whenever the participant list changes.
     """
+    cache.delete(f"bahk:fast_participants_view:{fast_id}")
+    cache.delete(f"bahk:fast_participants_simple_view:{fast_id}")
+    cache.delete(f"bahk:fast_participants_count:{fast_id}")
+
     if hasattr(cache, 'delete_pattern'):
         # Invalidate PaginatedFastParticipantsView cache
         cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*fast.{fast_id}.participants.*")
         # Invalidate FastParticipantsView cache
         cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*{fast_id}/participants.*")
-        # Invalidate our new custom cache keys
-        cache.delete(f"bahk:fast_participants_view:{fast_id}")
-        cache.delete(f"bahk:fast_participants_simple_view:{fast_id}")
-        cache.delete(f"bahk:fast_participants_count:{fast_id}")
-    else:
-        # Fallback - less efficient
-        cache.clear()
 
 
 def invalidate_fast_stats_cache(user):

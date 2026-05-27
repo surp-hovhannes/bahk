@@ -1,9 +1,18 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
-from hub.models import Day
-from hub.views.fast import FastListView, FastByDateView, FastByFeastDateView
+from hub.models import Day, FastIntention, FastParticipantMap
+from hub.views.fast import (
+    FastListView,
+    FastByDateView,
+    FastByFeastDateView,
+    JoinFastView,
+    FastIntentionView,
+    FastParticipantsView,
+    FastParticipantsMapView,
+    FastStatsView,
+)
 from django.contrib.auth.models import AnonymousUser
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -34,7 +43,13 @@ class JoinFastViewTest(TestCase):
             name="Joinable Fast",
             description="Fast for join route tests",
         )
-        self.url = reverse("fast-join")
+        self.url = "/api/fasts/join/"
+
+    def test_mounted_api_url_resolves_to_join_fast_view(self):
+        match = resolve(self.url)
+
+        self.assertEqual(match.func.view_class, JoinFastView)
+        self.assertEqual(match.url_name, "fast-join")
 
     def test_join_fast_adds_membership(self):
         self.client.force_login(self.user)
@@ -89,6 +104,174 @@ class JoinFastViewTest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(self.profile.fasts.filter(id=self.fast.id).count(), 1)
+
+
+class LeaveFastViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Leave Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="leavefast@example.com",
+            email="leavefast@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Joined Fast",
+            description="Fast for leave route tests",
+        )
+        self.url = reverse("leave-fast")
+
+    def test_leave_fast_removes_membership(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["detail"], "Successfully left the fast.")
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_leave_fast_requires_authentication(self):
+        self.profile.fasts.add(self.fast)
+
+        response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_leave_fast_requires_valid_fast_id(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        missing_fast_id_response = self.client.put(
+            self.url,
+            data={},
+            content_type="application/json",
+        )
+        invalid_fast_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id + 999},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            missing_fast_id_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(invalid_fast_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(self.profile.fasts.filter(id=self.fast.id).exists())
+
+    def test_leave_fast_rejects_repeated_leave_attempt(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        first_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+        second_response = self.client.put(
+            self.url,
+            data={"fast_id": self.fast.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            second_response.json()["detail"],
+            "You are not part of this fast.",
+        )
+        self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+
+
+class FastIntentionViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Intention Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="intention@example.com",
+            email="intention@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Intention Fast",
+            description="Fast for intention route tests",
+        )
+        self.url = reverse("fast-intention", kwargs={"fast_id": self.fast.id})
+
+    def test_mounted_url_resolves_to_fast_intention_view(self):
+        match = resolve(f"/hub/fasts/{self.fast.id}/intention/")
+
+        self.assertEqual(match.func.view_class, FastIntentionView)
+        self.assertEqual(match.url_name, "fast-intention")
+        self.assertEqual(match.kwargs["fast_id"], self.fast.id)
+
+    def test_put_creates_intention_for_participant(self):
+        self.profile.fasts.add(self.fast)
+        self.client.force_login(self.user)
+
+        response = self.client.put(
+            self.url,
+            data={"text": "Pray for peace", "is_public": True},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["text"], "Pray for peace")
+        self.assertTrue(response.json()["is_public"])
+        self.assertTrue(
+            FastIntention.objects.filter(
+                user=self.user,
+                fast=self.fast,
+                text="Pray for peace",
+                is_public=True,
+                is_active=True,
+            ).exists()
+        )
+
+    def test_fast_intention_requires_authentication(self):
+        self.profile.fasts.add(self.fast)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_intention_requires_fast_membership(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.json()["detail"],
+            "You are not a participant in this fast.",
+        )
+
+    def test_fast_intention_returns_not_found_for_missing_fast(self):
+        self.client.force_login(self.user)
+        url = reverse("fast-intention", kwargs={"fast_id": self.fast.id + 999})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
 
 class FastListViewTest(TestCase):
     def setUp(self):
@@ -341,6 +524,12 @@ class FastStatsViewTest(TestCase):
     def tearDown(self):
         cache.clear()
 
+    def test_mounted_url_resolves_to_fast_stats_view(self):
+        match = resolve("/hub/fasts/stats/")
+
+        self.assertEqual(match.func.view_class, FastStatsView)
+        self.assertEqual(match.url_name, "fast-stats")
+
     def test_fast_stats_requires_authentication(self):
         response = self.client.get(self.url)
 
@@ -403,6 +592,182 @@ class FastStatsViewTest(TestCase):
         self.assertEqual(response.json()["total_fast_days"], 3)
         self.assertEqual(response.json()["completed_fasts"], 1)
         self.assertEqual(response.json()["checklist_uses"], 1)
+
+
+class FastParticipantsViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Participants Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="fastparticipants@example.com",
+            email="fastparticipants@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Participants Fast",
+            description="Fast for participants route tests",
+        )
+        self.participant_user = TestDataFactory.create_user(
+            username="participant@example.com",
+            email="participant@example.com",
+            password="testpass123",
+        )
+        self.participant_profile = TestDataFactory.create_profile(
+            user=self.participant_user,
+            church=self.church,
+            name="Participant One",
+            location="Glendale, CA",
+        )
+        self.other_user = TestDataFactory.create_user(
+            username="otherparticipant@example.com",
+            email="otherparticipant@example.com",
+            password="testpass123",
+        )
+        self.other_profile = TestDataFactory.create_profile(
+            user=self.other_user,
+            church=self.church,
+            name="Participant Two",
+            location="Pasadena, CA",
+        )
+        self.fast.profiles.add(self.participant_profile, self.other_profile)
+        self.url = reverse("fast-participants", kwargs={"fast_id": self.fast.id})
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_mounted_url_resolves_to_fast_participants_view(self):
+        match = resolve(f"/hub/fasts/{self.fast.id}/participants/")
+
+        self.assertEqual(match.func.view_class, FastParticipantsView)
+        self.assertEqual(match.url_name, "fast-participants")
+        self.assertEqual(match.kwargs["fast_id"], self.fast.id)
+
+    def test_fast_participants_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_participants_returns_serialized_profiles(self):
+        FastIntention.objects.create(
+            user=self.participant_user,
+            fast=self.fast,
+            text="Pray for the parish",
+            is_public=True,
+            is_active=True,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()), 2)
+        first_participant = response.json()[0]
+        self.assertEqual(first_participant["id"], self.participant_profile.id)
+        self.assertEqual(first_participant["name"], "Participant One")
+        self.assertEqual(first_participant["location"], "Glendale, CA")
+        self.assertEqual(first_participant["abbreviation"], "P")
+        self.assertEqual(first_participant["user"], "Participant One")
+        self.assertEqual(first_participant["intention"], "Pray for the parish")
+        self.assertIn("profile_image", first_participant)
+        self.assertIn("thumbnail", first_participant)
+
+    def test_fast_participants_returns_not_found_for_missing_fast(self):
+        self.client.force_login(self.user)
+        url = reverse("fast-participants", kwargs={"fast_id": self.fast.id + 999})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class FastParticipantsMapViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Map Fast Church")
+        self.user = TestDataFactory.create_user(
+            username="fastmap@example.com",
+            email="fastmap@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+            location="Los Angeles, CA",
+            latitude=34.0522,
+            longitude=-118.2437,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Map Fast",
+            description="Fast for map route tests",
+        )
+        self.profile.fasts.add(self.fast)
+        self.url = reverse("fast-participants-map", kwargs={"fast_id": self.fast.id})
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_mounted_url_resolves_to_fast_participants_map_view(self):
+        match = resolve(f"/hub/fasts/{self.fast.id}/participants/map/")
+
+        self.assertEqual(match.func.view_class, FastParticipantsMapView)
+        self.assertEqual(match.url_name, "fast-participants-map")
+        self.assertEqual(match.kwargs["fast_id"], self.fast.id)
+
+    def test_fast_participants_map_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fast_participants_map_returns_existing_map_metadata(self):
+        map_obj = FastParticipantMap.objects.create(
+            fast=self.fast,
+            map_file="fast_maps/map-fast.svg",
+            participant_count=1,
+            format="svg",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["map_url"], map_obj.map_url)
+        self.assertEqual(response.json()["participant_count"], 1)
+        self.assertEqual(response.json()["format"], "svg")
+        self.assertIn("last_updated", response.json())
+        self.assertIn("age_hours", response.json())
+
+    def test_api_path_returns_existing_participants_map_metadata(self):
+        map_obj = FastParticipantMap.objects.create(
+            fast=self.fast,
+            map_file="fast_maps/map-fast.svg",
+            participant_count=1,
+            format="svg",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            f"/api/fasts/{self.fast.id}/participants/map/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["map_url"], map_obj.map_url)
+        self.assertEqual(response.json()["participant_count"], 1)
+        self.assertEqual(response.json()["format"], "svg")
+        self.assertIn("last_updated", response.json())
+        self.assertIn("age_hours", response.json())
+
+    def test_fast_participants_map_returns_not_found_for_missing_fast(self):
+        self.client.force_login(self.user)
+        url = reverse("fast-participants-map", kwargs={"fast_id": self.fast.id + 999})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.json()["detail"], "Fast not found.")
 
 
 class FastByFeastDateViewTest(TestCase):
@@ -477,6 +842,13 @@ class FastByFeastDateViewTest(TestCase):
     def tearDown(self):
         """Clean up after each test."""
         cache.clear()
+
+    def test_mounted_url_resolves_to_fast_by_feast_date_view(self):
+        """The public hub URL should remain wired to this view."""
+        match = resolve("/hub/fasts/by-feast-date/")
+
+        self.assertEqual(match.func.view_class, FastByFeastDateView)
+        self.assertEqual(match.url_name, "fast-by-feast-date")
         
     def _create_request(self, user=None, query_params=None):
         """Helper method to create a properly configured request."""
@@ -773,6 +1145,12 @@ class FastByDateViewTest(TestCase):
 
     def tearDown(self):
         cache.clear()
+
+    def test_mounted_url_resolves_to_fast_by_date_view(self):
+        match = resolve("/hub/fasts/by-date/")
+
+        self.assertEqual(match.func.view_class, FastByDateView)
+        self.assertEqual(match.url_name, "fast-by-date")
 
     def _create_request(self, user=None, query_params=None):
         request = self.factory.get('/api/fasts/by-date/')
