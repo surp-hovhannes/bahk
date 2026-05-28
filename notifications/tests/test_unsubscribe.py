@@ -46,7 +46,10 @@ class UnsubscribeTests(TestCase):
 
     def test_unsubscribe_with_valid_token(self):
         """Test unsubscribing with a valid token."""
-        response = self.client.get(reverse('notifications:unsubscribe'), {'token': self.valid_token})
+        url = reverse('notifications:unsubscribe')
+        self.assertEqual(url, '/hub/notifications/unsubscribe/')
+
+        response = self.client.get(url, {'token': self.valid_token})
         
         # Check redirect to success page
         self.assertRedirects(response, reverse('notifications:unsubscribe_success'))
