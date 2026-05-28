@@ -11,6 +11,7 @@ class PrayerViewTrackingTests(BaseAPITestCase):
     def test_authenticated_prayer_detail_creates_prayer_viewed_event(self):
         church = self.create_church(name="Tracking Church")
         user = self.create_user(email="prayerviewer@example.com")
+        self.create_profile(user=user, church=church)
         self.authenticate(user)
 
         prayer = Prayer.objects.create(
@@ -67,4 +68,3 @@ class PrayerViewTrackingTests(BaseAPITestCase):
                 object_id=prayer.id,
             ).exists()
         )
-
