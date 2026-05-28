@@ -403,6 +403,45 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(response.data['count'], 0)
         self.assertEqual(response.data['results'], [])
 
+    def test_activity_feed_filters_request_users_items(self):
+        """Test activity feed filters by activity type and read status."""
+        unread_fast_join = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Unread fast join',
+            description='Unread matching activity',
+        )
+        UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Read fast join',
+            description='Read matching activity',
+            is_read=True,
+        )
+        UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='milestone',
+            title='Unread milestone',
+            description='Unread non-matching activity',
+        )
+        UserActivityFeed.objects.create(
+            user=self.other_user,
+            activity_type='fast_join',
+            title='Other user fast join',
+            description='Should not appear in the response',
+        )
+
+        response = self.client.get(
+            reverse('events:activity-feed'),
+            {'activity_type': 'fast_join', 'is_read': 'false'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['id'], unread_fast_join.id)
+        self.assertEqual(response.data['results'][0]['activity_type'], 'fast_join')
+        self.assertFalse(response.data['results'][0]['is_read'])
+
     def test_my_events_authentication_required(self):
         """Test that the my events endpoint requires authentication."""
         self.client.credentials()
