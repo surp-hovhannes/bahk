@@ -32,38 +32,13 @@ class Command(BaseCommand):
             default=False,
             help='Update all users with coordinates, even if they already have non-UTC timezone',
         )
-        parser.add_argument(
-            '--install-timezonefinder',
-            action='store_true',
-            dest='install_timezonefinder',
-            default=False,
-            help='Install timezonefinder library if not present',
-        )
+
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         force_all = options['force_all']
-        install_lib = options['install_timezonefinder']
-        
-        # Try to import timezonefinder
-        try:
-            from timezonefinder import TimezoneFinder
-        except ImportError:
-            if install_lib:
-                import subprocess
-                import sys
-                self.stdout.write("Installing timezonefinder library...")
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "timezonefinder"])
-                try:
-                    from timezonefinder import TimezoneFinder
-                    self.stdout.write(self.style.SUCCESS("Successfully installed timezonefinder"))
-                except ImportError:
-                    raise CommandError("Failed to install or import timezonefinder")
-            else:
-                raise CommandError(
-                    "timezonefinder library is required. Install it with: pip install timezonefinder "
-                    "or run this command with --install-timezonefinder"
-                )
+
+        from timezonefinder import TimezoneFinder
 
         # Initialize timezone finder
         try:
