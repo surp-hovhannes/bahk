@@ -122,7 +122,7 @@
     "yargs-parser": "^21.1.1"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py test --noinput --parallel --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings",
     "build-css": "sass hub/static/scss/custom.scss hub/static/css/custom.css",
     "watch-css": "sass --watch hub/static/scss/custom.scss:hub/static/css/custom.css"
   },
