@@ -2,7 +2,7 @@
 Management command to trigger event tracking tasks manually.
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from events.tasks import (
     track_fast_participant_milestone_task,
     track_fast_beginning_task,
@@ -253,4 +253,5 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(
                 self.style.ERROR(f'Error executing task: {e}')
-            ) 
+            )
+            raise CommandError(f'Task execution failed: {e}') from e

@@ -4,6 +4,7 @@ AWS Location Service Geocoding Integration Test
 This test verifies that the AWS Location Service geocoding functionality
 is working correctly with our Django application.
 """
+import os
 import time
 import logging
 from django.conf import settings
@@ -27,7 +28,8 @@ from hub.models import GeocodingCache
 # Skip condition for all tests in this module
 SKIP_AWS_TESTS = (
     not settings.AWS_LOCATION_API_KEY or 
-    settings.AWS_LOCATION_PLACE_INDEX == 'ExamplePlaceIndex'
+    settings.AWS_LOCATION_PLACE_INDEX == 'ExamplePlaceIndex' or
+    not os.environ.get('BAHK_RUN_INTEGRATION_TESTS')
 )
 SKIP_REASON = "AWS Location API key or Place Index not configured in application settings"
 

@@ -1,3 +1,8 @@
+[project]
+name = "bahk"
+version = "0.0.0"
+requires-python = ">=3.11,<3.12"
+
 [tool.ruff]
 # Target Python 3.11
 target-version = "py311"

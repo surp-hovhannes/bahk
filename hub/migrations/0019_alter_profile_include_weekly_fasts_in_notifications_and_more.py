@@ -25,4 +25,9 @@ class Migration(migrations.Migration):
             name="receive_upcoming_fast_reminders",
             field=models.BooleanField(default=False),
         ),
+        migrations.AlterField(
+            model_name="profile",
+            name="receive_upcoming_fast_push_notifications",
+            field=models.BooleanField(default=True),
+        ),
     ]
