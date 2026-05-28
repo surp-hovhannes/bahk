@@ -257,6 +257,17 @@ class BookmarkCacheManagerTests(BaseTestCase):
     def test_get_bookmarks_for_objects_rejects_mixed_types_with_pk_collision(self):
         """Mixed content types are rejected even when primary keys collide."""
         self.assertEqual(self.video1.id, self.article1.id)
+        Bookmark.objects.filter(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Article),
+            object_id=self.article1.id,
+        ).delete()
+        self.assertTrue(
+            BookmarkCacheManager.is_bookmarked(self.user, self.video1)
+        )
+        self.assertFalse(
+            BookmarkCacheManager.is_bookmarked(self.user, self.article1)
+        )
 
         with self.assertRaisesMessage(
             ValueError,
