@@ -323,6 +323,7 @@ class PromoEmailTaskTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         recipient_emails = sorted([email.to[0] for email in mail.outbox])
         self.assertEqual(recipient_emails, ["user1@example.com"])
+        self.assertNotIn("user3@example.com", recipient_emails)
         self.assertEqual(self.promo.status, PromoEmail.SENT)
 
     @override_settings(EMAIL_RATE_LIMIT=2, EMAIL_API_DELAY_SECONDS=0.01)  # Speed up test
