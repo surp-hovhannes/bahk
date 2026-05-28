@@ -253,22 +253,32 @@ class BookmarkCacheLoadTests(BaseTestCase):
         """Test cache performance under concurrent operations."""
         import threading
         import queue
+        import traceback
         
         results_queue = queue.Queue()
         content_type = ContentType.objects.get_for_model(Video)
         
         def worker(user, video_subset):
             """Worker function for concurrent testing."""
-            start_time = time.time()
-            bookmark_status = BookmarkCacheManager.get_bookmarks_for_objects(
-                user, video_subset
-            )
-            end_time = time.time()
-            results_queue.put({
-                'user_id': user.id,
-                'time': end_time - start_time,
-                'results': len(bookmark_status)
-            })
+            try:
+                start_time = time.time()
+                bookmark_status = BookmarkCacheManager.get_bookmarks_for_objects(
+                    user, video_subset
+                )
+                end_time = time.time()
+                results_queue.put({
+                    'status': 'success',
+                    'user_id': user.id,
+                    'time': end_time - start_time,
+                    'results': len(bookmark_status)
+                })
+            except Exception as exc:
+                results_queue.put({
+                    'status': 'error',
+                    'user_id': user.id,
+                    'exception': repr(exc),
+                    'traceback': traceback.format_exc()
+                })
         
         # Create threads for concurrent access
         threads = []
@@ -290,8 +300,22 @@ class BookmarkCacheLoadTests(BaseTestCase):
         
         # Collect results
         results = []
+        errors = []
         while not results_queue.empty():
-            results.append(results_queue.get())
+            result = results_queue.get()
+            if result['status'] == 'error':
+                errors.append(result)
+            else:
+                results.append(result)
+        
+        if errors:
+            self.fail(
+                "Concurrent worker failures:\n" +
+                "\n".join(
+                    f"User {error['user_id']}: {error['exception']}\n{error['traceback']}"
+                    for error in errors
+                )
+            )
         
         print(f"\nConcurrent operations ({len(threads)} threads) total time: {total_time:.4f}s")
         print(f"Average thread time: {sum(r['time'] for r in results)/len(results):.4f}s")

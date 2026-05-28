@@ -179,9 +179,6 @@ dump.rdb
 # claude rules
 .claude/
 
-# clawpatch
-.clawpatch/
-
 # push notifications
 certificate.pem
 certificates/
@@ -190,8 +187,17 @@ certificates/
 *.key
 test_media/
 
-.agents/
-.crabbox.yaml
-.clawpatch/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/crabbox/
+!.agents/skills/crabbox/SKILL.md
+
 .crabbox.env
 .crabbox/
+.crabbox/*
+!.crabbox.yaml
+!.crabbox.slug.conf
+
+.clawpatch/*
+!.clawpatch/config.json

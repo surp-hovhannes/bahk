@@ -507,8 +507,17 @@ class AnalyticsPerformanceTest(TestCase):
         self.assertIsNone(result)
         
         with patch.object(cache, 'set', side_effect=Exception('Cache Error')) as mock_set:
-            AnalyticsCacheService.set_daily_aggregates(start_date, 7, {'test': 'data'})
-        mock_set.assert_called_once()
+            result = AnalyticsCacheService.set_daily_aggregates(start_date, 7, {'test': 'data'})
+        self.assertIsNone(result)
+        mock_set.assert_called_once_with(
+            AnalyticsCacheService._get_cache_key(
+                'daily_aggregates',
+                start_date=start_date.isoformat(),
+                num_days=7
+            ),
+            {'test': 'data'},
+            AnalyticsCacheService.RECENT_DATA_TTL
+        )
     
     def test_query_optimizer_date_handling(self):
         """Test that query optimizer correctly handles different date formats."""

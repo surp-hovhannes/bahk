@@ -150,6 +150,20 @@ class EngagementTrackingEndpointsTest(APITestCase):
             title='Other Prayer Set',
             church=self.other_church
         )
+        self.other_prayer = Prayer.objects.create(
+            title='Other Prayer',
+            text='Other prayer text',
+            category='general',
+            church=self.other_church,
+            fast=self.other_fast,
+        )
+        self.other_prayer_request = PrayerRequest.objects.create(
+            title='Other Prayer Request',
+            description='Other prayer request description',
+            requester=self.other_user,
+            status='approved',
+            expiration_date=timezone.now(),
+        )
         
         # Set up authentication
         self.client = APIClient()
@@ -388,6 +402,45 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 0)
         self.assertEqual(response.data['results'], [])
+
+    def test_activity_feed_filters_request_users_items(self):
+        """Test activity feed filters by activity type and read status."""
+        unread_fast_join = UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Unread fast join',
+            description='Unread matching activity',
+        )
+        UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='fast_join',
+            title='Read fast join',
+            description='Read matching activity',
+            is_read=True,
+        )
+        UserActivityFeed.objects.create(
+            user=self.user,
+            activity_type='milestone',
+            title='Unread milestone',
+            description='Unread non-matching activity',
+        )
+        UserActivityFeed.objects.create(
+            user=self.other_user,
+            activity_type='fast_join',
+            title='Other user fast join',
+            description='Should not appear in the response',
+        )
+
+        response = self.client.get(
+            reverse('events:activity-feed'),
+            {'activity_type': 'fast_join', 'is_read': 'false'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['id'], unread_fast_join.id)
+        self.assertEqual(response.data['results'][0]['activity_type'], 'fast_join')
+        self.assertFalse(response.data['results'][0]['is_read'])
 
     def test_my_events_authentication_required(self):
         """Test that the my events endpoint requires authentication."""
@@ -810,6 +863,22 @@ class EngagementTrackingEndpointsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_track_prayer_viewed_allows_cross_church_prayer(self):
+        """Test prayer tracking follows the public prayer read contract."""
+        url = reverse('events:track-prayer-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(
+            url,
+            {'prayer_id': self.other_prayer.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
+
     def test_track_prayer_request_viewed_success(self):
         """Test successful prayer request viewed tracking."""
         url = reverse('events:track-prayer-request-viewed')
@@ -887,6 +956,22 @@ class EngagementTrackingEndpointsTest(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_prayer_request_viewed_allows_cross_church_request(self):
+        """Test prayer request tracking follows the public request read contract."""
+        url = reverse('events:track-prayer-request-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(
+            url,
+            {'prayer_request_id': self.other_prayer_request.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
     
     def test_track_checklist_used_success(self):
         """Test successful checklist used tracking."""

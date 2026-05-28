@@ -36,7 +36,7 @@ class DeviceTokenTests(APITestCase):
         url = reverse('notifications:register-device-token')
         response = self.client.post(url, self.valid_token_data, format='json')
         
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(DeviceToken.objects.count(), 1)
         self.assertEqual(DeviceToken.objects.get().token, self.valid_token_data['token'])
         self.assertEqual(DeviceToken.objects.get().user, self.user)
