@@ -29,6 +29,17 @@ class RegistrationAPITests(APITestCase):
         self.assertEqual(match.func.view_class, RegisterView)
         self.assertEqual(match.url_name, "auth_register")
 
+    def test_api_alias_resolves_and_serves_register_view(self):
+        match = resolve("/api/register/")
+
+        self.assertEqual(match.func.view_class, RegisterView)
+        self.assertEqual(match.url_name, "auth_register")
+
+        response = self.client.post("/api/register/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
     def test_anonymous_user_can_register(self):
         response = self.client.post(self.url, self._payload(), format="json")
 
