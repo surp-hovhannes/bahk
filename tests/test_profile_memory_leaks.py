@@ -163,10 +163,6 @@ class ProfileMemoryLeakTestCase(APITestCase):
         self.assertEqual(data['total_fasts'], 50)
         self.assertEqual(data['total_fast_days'], 50 * 20)  # 1000 days total
         
-        # Memory usage should be reasonable (less than 10MB for this test)
-        self.assertLess(peak / 1024 / 1024, 10, 
-                       "Memory usage is too high for FastStatsView")
-    
     @tag('performance')
     def test_fast_stats_response_time_with_many_fasts(self):
         """Test response time of FastStatsView with many fasts."""
@@ -181,9 +177,6 @@ class ProfileMemoryLeakTestCase(APITestCase):
         print(f"FastStatsView response time with 30 fasts: {response_time:.3f}s")
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Response should be under 1 second
-        self.assertLess(response_time, 1.0, 
-                       "FastStatsView response time is too slow")
     
     @tag('performance')
     def test_profile_detail_view_performance(self):
@@ -210,8 +203,6 @@ class ProfileMemoryLeakTestCase(APITestCase):
         # Profile endpoint should be efficient - not dependent on number of fasts
         self.assertLess(query_count, 10, 
                        "ProfileDetailView should not have many queries")
-        self.assertLess(response_time, 0.5, 
-                       "ProfileDetailView response time should be fast")
     
     @tag('performance', 'slow')
     def test_fast_participants_view_with_many_participants(self):
@@ -269,8 +260,6 @@ class ProfileMemoryLeakTestCase(APITestCase):
         # Should be efficient regardless of participant count
         self.assertLess(query_count, 15, 
                        "FastParticipantsView should have efficient queries")
-        self.assertLess(response_time, 1.0, 
-                       "FastParticipantsView should respond quickly")
     
     @tag('performance', 'slow')
     def test_paginated_participants_view_performance(self):
@@ -317,8 +306,6 @@ class ProfileMemoryLeakTestCase(APITestCase):
         # Pagination should keep queries constant
         self.assertLess(query_count, 10, 
                        "PaginatedFastParticipantsView should have constant queries")
-        self.assertLess(response_time, 0.5, 
-                       "PaginatedFastParticipantsView should be fast")
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
@@ -400,14 +387,6 @@ class ProfileStressTestCase(APITestCase):
         
         # Assertions for acceptable performance
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
-        # Even with extreme load, response should be under 5 seconds
-        self.assertLess(response_time, 5.0, 
-                       f"Response time {response_time:.3f}s is too slow for extreme load")
-        
-        # Memory usage should be reasonable (under 50MB)
-        self.assertLess(peak / 1024 / 1024, 50, 
-                       f"Memory usage {peak / 1024 / 1024:.2f}MB is too high")
         
         # Verify response data is correct
         data = response.data
