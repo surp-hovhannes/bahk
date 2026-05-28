@@ -298,6 +298,8 @@ class PrayerRequestAPITests(BaseAPITestCase):
     def test_retrieve_creates_prayer_request_viewed_event(self):
         """Tracking prayer request viewed should create a PRAYER_REQUEST_VIEWED event."""
         user = self.create_user(email='viewer@example.com')
+        church = self.create_church()
+        self.create_profile(user=user, church=church)
         self.authenticate(user)
 
         prayer_request = self.create_prayer_request(user, title='Track view event')
