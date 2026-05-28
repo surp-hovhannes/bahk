@@ -1296,6 +1296,25 @@ class FastByDateViewTest(TestCase):
         self.assertEqual(match.func.view_class, FastByDateView)
         self.assertEqual(match.url_name, "fast-by-date")
 
+    def test_api_url_returns_serialized_fasts_for_requested_date(self):
+        response = self.client.get(
+            "/api/fasts/by-date/",
+            {
+                "date": self.match_date.isoformat(),
+                "church_id": self.church.id,
+                "tz": "UTC",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()), 1)
+        fast = response.json()[0]
+        self.assertEqual(fast["id"], self.fast_on_date.id)
+        self.assertEqual(fast["name"], "Fast On Date")
+        self.assertEqual(fast["start_date"], self.match_date.isoformat())
+        self.assertEqual(fast["end_date"], self.match_date.isoformat())
+        self.assertEqual(fast["participant_count"], 1)
+
     def _create_request(self, user=None, query_params=None):
         request = self.factory.get('/api/fasts/by-date/')
         if user:
