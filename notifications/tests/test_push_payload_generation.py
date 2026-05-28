@@ -7,7 +7,6 @@ correct payload structures for different content types.
 import ast
 import json
 import re
-import shutil
 import subprocess
 import textwrap
 from pathlib import Path
@@ -82,17 +81,6 @@ def build_payload_with_admin_javascript(
     external_url="",
 ):
     """Build the production admin payload, executing template JavaScript when available."""
-    if not shutil.which("node"):
-        return build_payload_from_template_route_map(
-            payload_type,
-            content_id,
-            query_params,
-            activity_type,
-            activity_target,
-            link_type,
-            external_url,
-        )
-
     template = SEND_PUSH_TEMPLATE.read_text()
     match = re.search(r"<script>\s*(?P<script>.*?)\s*</script>", template, re.S)
     if not match:
