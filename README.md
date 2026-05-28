@@ -5,8 +5,8 @@ Bahk is an app for Christians curious about how, when, and why to fast.
 ## Prerequisites
 
 Bahk runs on [Django](https://www.djangoproject.com/), a "high-level Python web framework". To operate the app,
-download the [latest version of Python](https://www.python.org/downloads/)
-(Linux distros will come with Python--check using `python --version`).
+install Python 3.11
+(Linux distros will come with Python--check using `python3.11 --version`).
 
 *Note*: these instructions are written for Linux and Mac users. Windows development is not currently supported. For
 Windows users interested in using the app, we recommend installing the [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install).
@@ -22,11 +22,11 @@ git clone https://github.com/andylitalo/bahk.git
 
 We recommend separating this project's packages into their own Python virtual environment.
 If you do not have the `virtualenv` package in your Python installation, install it with
-`python -m pip install virtualenv`.
+`python3.11 -m pip install virtualenv`.
 Then, enter the project's root directory and create a virtual environment:
 ```
 cd bahk
-python -m venv venv
+python3.11 -m venv venv
 ```
 
 To activate the virtual environment, run `source venv/bin/activate`.
@@ -34,13 +34,13 @@ To activate the virtual environment, run `source venv/bin/activate`.
 The backend of this app runs on `PostgreSQL`. Python uses the PyPI package `psycopg2` to communicate with the database,
 which requires the following packages to be installed on your OS:
 ```
-python<X>-dev  # where <X> is the python version (2 or 3), but you can specify minor version, too (e.g., 3.9)
+python3.11-dev
 libpq-dev
 ```
 
 For example, to install these on Ubuntu or another `apt-get`-based OS, run
 ```
-sudo apt-get install python3-dev
+sudo apt-get install python3.11-dev
 sudo apt-get install libpq-dev
 ```
 
