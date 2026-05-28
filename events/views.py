@@ -560,9 +560,6 @@ class TrackPrayerViewedView(APIView):
         except (ValueError, Prayer.DoesNotExist):
             return Response({"error": "Invalid prayer_id"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not _user_can_access_church_resource(request.user, prayer.church_id):
-            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
-
         try:
             Event.create_event(
                 event_type_code=EventType.PRAYER_VIEWED,
@@ -600,10 +597,6 @@ class TrackPrayerRequestViewedView(APIView):
             prayer_request = PrayerRequest.objects.get(id=int(prayer_request_id))
         except (ValueError, PrayerRequest.DoesNotExist):
             return Response({"error": "Invalid prayer_request_id"}, status=status.HTTP_400_BAD_REQUEST)
-
-        requester_church_id = getattr(getattr(prayer_request.requester, 'profile', None), 'church_id', None)
-        if not _user_can_access_church_resource(request.user, requester_church_id):
-            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             Event.create_event(

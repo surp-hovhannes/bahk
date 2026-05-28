@@ -863,8 +863,8 @@ class EngagementTrackingEndpointsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_track_prayer_viewed_rejects_out_of_scope_prayer(self):
-        """Test prayer tracking rejects a prayer from another church."""
+    def test_track_prayer_viewed_allows_cross_church_prayer(self):
+        """Test prayer tracking follows the public prayer read contract."""
         url = reverse('events:track-prayer-viewed')
 
         initial_event_count = Event.objects.count()
@@ -875,9 +875,9 @@ class EngagementTrackingEndpointsTest(APITestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error'], 'Permission denied')
-        self.assertEqual(Event.objects.count(), initial_event_count)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
 
     def test_track_prayer_request_viewed_success(self):
         """Test successful prayer request viewed tracking."""
@@ -957,8 +957,8 @@ class EngagementTrackingEndpointsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_track_prayer_request_viewed_rejects_out_of_scope_request(self):
-        """Test prayer request tracking rejects a request from another church."""
+    def test_track_prayer_request_viewed_allows_cross_church_request(self):
+        """Test prayer request tracking follows the public request read contract."""
         url = reverse('events:track-prayer-request-viewed')
 
         initial_event_count = Event.objects.count()
@@ -969,9 +969,9 @@ class EngagementTrackingEndpointsTest(APITestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error'], 'Permission denied')
-        self.assertEqual(Event.objects.count(), initial_event_count)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'ok')
+        self.assertEqual(Event.objects.count(), initial_event_count + 1)
     
     def test_track_checklist_used_success(self):
         """Test successful checklist used tracking."""
