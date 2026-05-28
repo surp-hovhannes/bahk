@@ -993,6 +993,29 @@ class FastByFeastDateViewTest(TestCase):
 
         self.assertEqual(match.func.view_class, FastByFeastDateView)
         self.assertEqual(match.url_name, "fast-by-feast-date")
+
+    def test_api_url_returns_serialized_fasts_for_requested_feast_date(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            "/api/fasts/by-feast-date/",
+            {
+                "date": self.feast_date_1.isoformat(),
+                "tz": "UTC",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(len(response.json()["results"]), 1)
+        fast = response.json()["results"][0]
+        self.assertEqual(fast["id"], self.fast_1.id)
+        self.assertEqual(fast["name"], "Fast with Feast 1")
+        self.assertEqual(fast["culmination_feast"], "Easter")
+        self.assertEqual(
+            fast["culmination_feast_date"],
+            self.feast_date_1.isoformat(),
+        )
         
     def _create_request(self, user=None, query_params=None):
         """Helper method to create a properly configured request."""
