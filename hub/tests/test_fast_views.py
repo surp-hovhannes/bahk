@@ -253,6 +253,23 @@ class FastIntentionViewTest(TestCase):
             ).exists()
         )
 
+    def test_get_returns_existing_intention_for_participant(self):
+        self.profile.fasts.add(self.fast)
+        FastIntention.objects.create(
+            user=self.user,
+            fast=self.fast,
+            text="Pray for healing",
+            is_public=False,
+            is_active=True,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["text"], "Pray for healing")
+        self.assertFalse(response.json()["is_public"])
+
     def test_fast_intention_requires_authentication(self):
         self.profile.fasts.add(self.fast)
 
