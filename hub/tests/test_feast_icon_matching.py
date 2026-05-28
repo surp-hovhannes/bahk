@@ -26,6 +26,27 @@ class FeastIconMatchingTaskTests(TestCase):
         self.test_date = date(2025, 12, 25)
         cache.clear()
 
+    def _create_feast_without_signal(self, **kwargs):
+        """Create Feast fixtures without eager post-save task side effects."""
+        post_save.disconnect(handle_feast_save, sender=Feast)
+        try:
+            return Feast.objects.create(**kwargs)
+        finally:
+            post_save.connect(handle_feast_save, sender=Feast)
+
+    @patch('hub.signals.match_icon_to_feast_task.delay')
+    def test_create_feast_without_signal_does_not_enqueue_icon_task(self, mock_delay):
+        """Test that direct task fixtures are created without signal side effects."""
+        day = Day.objects.create(date=self.test_date, church=self.church)
+
+        feast = self._create_feast_without_signal(
+            day=day,
+            name="Christmas",
+        )
+
+        self.assertIsNotNone(feast.id)
+        mock_delay.assert_not_called()
+
     def test_match_icon_task_skips_if_icon_exists(self):
         """Test that task skips if icon is already set."""
         day = Day.objects.create(date=self.test_date, church=self.church)
@@ -39,7 +60,7 @@ class FeastIconMatchingTaskTests(TestCase):
             church=self.church,
             image=test_image
         )
-        feast = Feast.objects.create(
+        feast = self._create_feast_without_signal(
             day=day,
             name="Christmas",
             icon=icon,
@@ -64,7 +85,7 @@ class FeastIconMatchingTaskTests(TestCase):
     def test_match_icon_task_with_no_icons(self):
         """Test that task handles case when no icons exist for church."""
         day = Day.objects.create(date=self.test_date, church=self.church)
-        feast = Feast.objects.create(
+        feast = self._create_feast_without_signal(
             day=day,
             name="Christmas",
         )
@@ -90,7 +111,7 @@ class FeastIconMatchingTaskTests(TestCase):
             church=self.church,
             image=test_image
         )
-        feast = Feast.objects.create(
+        feast = self._create_feast_without_signal(
             day=day,
             name="Nativity of Christ",
         )
@@ -118,7 +139,7 @@ class FeastIconMatchingTaskTests(TestCase):
             church=self.church,
             image=test_image
         )
-        feast = Feast.objects.create(
+        feast = self._create_feast_without_signal(
             day=day,
             name="Christmas",
         )
@@ -147,7 +168,7 @@ class FeastIconMatchingTaskTests(TestCase):
             church=self.church,
             image=test_image
         )
-        feast = Feast.objects.create(
+        feast = self._create_feast_without_signal(
             day=day,
             name="Christmas",
         )
@@ -176,7 +197,7 @@ class FeastIconMatchingTaskTests(TestCase):
             church=self.church,
             image=test_image
         )
-        feast = Feast.objects.create(
+        feast = self._create_feast_without_signal(
             day=day,
             name="Christmas",
         )

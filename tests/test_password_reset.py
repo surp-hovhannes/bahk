@@ -1,6 +1,7 @@
 import re
 
 from django.core import mail
+from django.contrib.auth import authenticate
 from django.test import override_settings
 from django.urls import resolve
 from django.utils.http import urlsafe_base64_encode
@@ -138,10 +139,15 @@ class PasswordResetTests(APITestCase):
         
         response = self.client.post(self.password_reset_confirm_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': 'Password has been reset successfully.'})
         
         # Verify the password was actually changed
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password('newpassword123'))
+        self.assertEqual(
+            authenticate(username='test@example.com', password='newpassword123'),
+            self.user,
+        )
 
     def test_password_reset_confirm_endpoint_invalid_token(self):
         uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
@@ -176,6 +182,37 @@ class PasswordResetTests(APITestCase):
         # Verify the password was not changed
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password('oldpassword123')) 
+
+    def test_password_reset_confirm_endpoint_rejects_stale_token(self):
+        token = default_token_generator.make_token(self.user)
+        uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
+        self.user.set_password('intermediatepassword123')
+        self.user.save()
+
+        data = {
+            'token': token,
+            'uidb64': uidb64,
+            'new_password': 'newpassword123',
+            'confirm_password': 'newpassword123'
+        }
+
+        response = self.client.post(self.password_reset_confirm_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('non_field_errors', response.data)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('intermediatepassword123'))
+
+    def test_password_reset_confirm_endpoint_rejects_malformed_payload(self):
+        response = self.client.post(self.password_reset_confirm_url, {})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            set(response.data.keys()),
+            {'token', 'uidb64', 'new_password', 'confirm_password'},
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('oldpassword123'))
 
     def test_password_reset_confirm_endpoint_passwords_dont_match(self):
         token = default_token_generator.make_token(self.user)

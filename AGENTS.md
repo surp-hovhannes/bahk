@@ -12,7 +12,7 @@ docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py <com
 Examples:
 
 ```bash
-docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py migrate
-docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py test --settings=tests.test_settings
-docker exec -e IS_PRODUCTION=false bahk_devcontainer-app-1 python manage.py createsuperuser
+docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py migrate
+docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py test --settings=tests.test_settings
+docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py createsuperuser
 ```

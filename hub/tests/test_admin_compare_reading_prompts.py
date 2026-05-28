@@ -48,14 +48,21 @@ class CompareReadingPromptsRouteTests(TestCase):
         self.client.force_login(self.admin_user)
 
         url = reverse("hub_reading_compare_prompts", args=[self.reading.pk])
+        mounted_url = f"/hub/hub/reading/{self.reading.pk}/compare-prompts/"
         response = self.client.get(url)
+        mounted_response = self.client.get(mounted_url)
         match = resolve(url)
+        mounted_match = resolve(mounted_url)
 
         self.assertEqual(url, f"/api/hub/reading/{self.reading.pk}/compare-prompts/")
         self.assertEqual(match.func, compare_reading_prompts)
         self.assertEqual(match.url_name, "hub_reading_compare_prompts")
         self.assertEqual(match.kwargs["reading_id"], self.reading.pk)
+        self.assertEqual(mounted_match.func, compare_reading_prompts)
+        self.assertEqual(mounted_match.url_name, "hub_reading_compare_prompts")
+        self.assertEqual(mounted_match.kwargs["reading_id"], self.reading.pk)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(mounted_response.status_code, 200)
         self.assertEqual(response.context["reading"], self.reading)
         self.assertCountEqual(response.context["prompts"], [self.prompt1, self.prompt2])
         self.assertEqual(response.context["outputs"], [])

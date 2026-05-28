@@ -14,6 +14,7 @@ from hub.models import Church, Fast, PatristicQuote
 from hub.views.patristic_quotes import (
     PatristicQuoteOfTheDayView,
     PatristicQuotesByChurchView,
+    PatristicQuotesByFastView,
 )
 
 
@@ -260,7 +261,56 @@ class PatristicQuoteAPITests(APITestCase):
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 2)  # quote1 and quote2
+        self.assertEqual(
+            [quote['id'] for quote in response.data['results']],
+            [self.quote2.pk, self.quote1.pk],
+        )
+        for quote in response.data['results']:
+            self.assertEqual(
+                set(quote.keys()),
+                {
+                    'id',
+                    'text',
+                    'attribution',
+                    'churches',
+                    'church_names',
+                    'fasts',
+                    'fast_names',
+                    'tags',
+                    'created_at',
+                    'updated_at',
+                },
+            )
+            self.assertIn(self.fast1.pk, quote['fasts'])
+            self.assertIn(str(self.fast1), quote['fast_names'])
+        self.assertNotIn(
+            self.quote3.pk,
+            [quote['id'] for quote in response.data['results']],
+        )
+
+    def test_by_fast_route_resolves_to_expected_view(self):
+        """Test the by-fast URL remains mounted to the intended view."""
+        match = resolve(
+            reverse(
+                'patristic-quotes-by-fast',
+                kwargs={'fast_id': self.fast1.pk},
+            )
+        )
+
+        self.assertEqual(match.func.view_class, PatristicQuotesByFastView)
+        self.assertEqual(match.kwargs['fast_id'], self.fast1.pk)
+
+    def test_filter_by_nonexistent_fast_returns_empty_page(self):
+        """Test an unknown fast ID does not leak unrelated quotes."""
+        url = reverse(
+            'patristic-quotes-by-fast',
+            kwargs={'fast_id': max(self.fast1.pk, self.fast2.pk) + 999},
+        )
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+        self.assertEqual(response.data['results'], [])
     
     def test_filter_by_tags(self):
         """Test filtering quotes by tags."""

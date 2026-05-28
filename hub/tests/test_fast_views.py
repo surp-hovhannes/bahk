@@ -10,6 +10,7 @@ from hub.views.fast import (
     JoinFastView,
     FastIntentionView,
     FastParticipantsView,
+    PaginatedFastParticipantsView,
     FastParticipantsMapView,
     FastStatsView,
 )
@@ -43,9 +44,15 @@ class JoinFastViewTest(TestCase):
             name="Joinable Fast",
             description="Fast for join route tests",
         )
-        self.url = "/api/fasts/join/"
+        self.url = reverse("fast-join")
 
-    def test_mounted_api_url_resolves_to_join_fast_view(self):
+    def test_mounted_hub_url_resolves_to_join_fast_view(self):
+        match = resolve("/hub/fasts/join/")
+
+        self.assertEqual(match.func.view_class, JoinFastView)
+        self.assertEqual(match.url_name, "fast-join")
+
+    def test_named_url_resolves_to_join_fast_view(self):
         match = resolve(self.url)
 
         self.assertEqual(match.func.view_class, JoinFastView)
@@ -245,6 +252,23 @@ class FastIntentionViewTest(TestCase):
                 is_active=True,
             ).exists()
         )
+
+    def test_get_returns_existing_intention_for_participant(self):
+        self.profile.fasts.add(self.fast)
+        FastIntention.objects.create(
+            user=self.user,
+            fast=self.fast,
+            text="Pray for healing",
+            is_public=False,
+            is_active=True,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["text"], "Pray for healing")
+        self.assertFalse(response.json()["is_public"])
 
     def test_fast_intention_requires_authentication(self):
         self.profile.fasts.add(self.fast)
@@ -680,6 +704,126 @@ class FastParticipantsViewTest(TestCase):
         url = reverse("fast-participants", kwargs={"fast_id": self.fast.id + 999})
 
         response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class PaginatedFastParticipantsViewTest(TestCase):
+    def setUp(self):
+        self.church = TestDataFactory.create_church(name="Paginated Participants Church")
+        self.user = TestDataFactory.create_user(
+            username="paginatedfastparticipants@example.com",
+            email="paginatedfastparticipants@example.com",
+            password="testpass123",
+        )
+        self.profile = TestDataFactory.create_profile(
+            user=self.user,
+            church=self.church,
+        )
+        self.fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Paginated Participants Fast",
+            description="Fast for paginated participants route tests",
+        )
+        self.participant_user = TestDataFactory.create_user(
+            username="paginatedparticipant@example.com",
+            email="paginatedparticipant@example.com",
+            password="testpass123",
+        )
+        self.participant_profile = TestDataFactory.create_profile(
+            user=self.participant_user,
+            church=self.church,
+            name="Paginated Participant One",
+            location="Glendale, CA",
+        )
+        self.other_user = TestDataFactory.create_user(
+            username="paginatedotherparticipant@example.com",
+            email="paginatedotherparticipant@example.com",
+            password="testpass123",
+        )
+        self.other_profile = TestDataFactory.create_profile(
+            user=self.other_user,
+            church=self.church,
+            name="Paginated Participant Two",
+            location="Pasadena, CA",
+        )
+        self.fast.profiles.add(self.participant_profile, self.other_profile)
+        self.url = reverse(
+            "fast-participants-paginated",
+            kwargs={"fast_id": self.fast.id},
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_mounted_url_resolves_to_paginated_fast_participants_view(self):
+        match = resolve(f"/hub/fasts/{self.fast.id}/participants/paginated/")
+
+        self.assertEqual(match.func.view_class, PaginatedFastParticipantsView)
+        self.assertEqual(match.url_name, "fast-participants-paginated")
+        self.assertEqual(match.kwargs["fast_id"], self.fast.id)
+
+    def test_paginated_fast_participants_requires_authentication(self):
+        response = self.client.get(self.url, {"limit": 1})
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_paginated_fast_participants_returns_paginated_profiles(self):
+        FastIntention.objects.create(
+            user=self.participant_user,
+            fast=self.fast,
+            text="Pray for the parish",
+            is_public=True,
+            is_active=True,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url, {"limit": 1})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.json()
+        self.assertEqual(set(payload.keys()), {"count", "next", "previous", "results"})
+        self.assertEqual(payload["count"], 2)
+        self.assertIsNotNone(payload["next"])
+        self.assertIsNone(payload["previous"])
+        self.assertEqual(len(payload["results"]), 1)
+        first_participant = payload["results"][0]
+        self.assertEqual(first_participant["id"], self.participant_profile.id)
+        self.assertEqual(first_participant["name"], "Paginated Participant One")
+        self.assertEqual(first_participant["location"], "Glendale, CA")
+        self.assertEqual(first_participant["abbreviation"], "P")
+        self.assertEqual(first_participant["user"], "Paginated Participant One")
+        self.assertEqual(first_participant["intention"], "Pray for the parish")
+        self.assertIn("profile_image", first_participant)
+        self.assertIn("thumbnail", first_participant)
+
+    def test_paginated_fast_participants_returns_empty_page_for_empty_fast(self):
+        empty_fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Empty Paginated Participants Fast",
+        )
+        url = reverse(
+            "fast-participants-paginated",
+            kwargs={"fast_id": empty_fast.id},
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(url, {"limit": 1})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["count"], 0)
+        self.assertIsNone(response.json()["next"])
+        self.assertIsNone(response.json()["previous"])
+        self.assertEqual(response.json()["results"], [])
+
+    def test_paginated_fast_participants_returns_not_found_for_missing_fast(self):
+        self.client.force_login(self.user)
+        url = reverse(
+            "fast-participants-paginated",
+            kwargs={"fast_id": self.fast.id + 999},
+        )
+
+        response = self.client.get(url, {"limit": 1})
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 

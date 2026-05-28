@@ -1,16 +1,22 @@
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 from rest_framework import status
 
 from hub.models import Church
+from hub.views.church import ChurchDetailView
 
 
 class ChurchDetailAPITests(TestCase):
     def test_church_detail_returns_serialized_church(self):
         church = Church.objects.create(name="Detail Test Church")
+        url = f"/hub/churches/{church.pk}/"
 
-        response = self.client.get(reverse("church-detail", args=[church.pk]))
+        match = resolve(url)
+        response = self.client.get(url)
 
+        self.assertEqual(match.func.view_class, ChurchDetailView)
+        self.assertEqual(match.url_name, "church-detail")
+        self.assertEqual(match.kwargs["pk"], church.pk)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json(), {"id": church.pk, "name": church.name})
 

@@ -62,6 +62,16 @@ class RegistrationAPITests(APITestCase):
             get_user_model().objects.filter(email="mismatch@example.com").exists()
         )
 
+    def test_registration_rejects_missing_required_fields(self):
+        response = self.client.post(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+        self.assertIn("password", response.data)
+        self.assertIn("password2", response.data)
+        self.assertIn("profile", response.data)
+        self.assertEqual(get_user_model().objects.count(), 0)
+
     def test_registration_rejects_duplicate_email(self):
         get_user_model().objects.create_user(
             username="existing@example.com",

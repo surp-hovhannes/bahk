@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import resolve
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.filters import BaseFilterBackend
@@ -11,7 +12,7 @@ from zoneinfo import ZoneInfo
 from django.utils import timezone
 
 from hub.models import Church, Day, Devotional, Fast, Profile
-from hub.views.devotionals import DevotionalListView
+from hub.views.devotionals import DevotionalByDateView, DevotionalListView
 from learning_resources.models import Video
 
 
@@ -127,6 +128,24 @@ class DevotionalListAPITests(TestCase):
 
     def _get_by_fast(self, fast_id, **params):
         return self.client.get(f"/api/devotionals/by-fast/{fast_id}/", params)
+
+    def _get_by_date(self, **params):
+        query = {"church_id": self.church.id, **params}
+        return self.client.get("/api/devotionals/by-date/", query)
+
+    def test_devotional_by_date_route_resolves_to_expected_view(self):
+        match = resolve("/api/devotionals/by-date/")
+
+        self.assertEqual(match.func.view_class, DevotionalByDateView)
+        self.assertEqual(match.url_name, "devotional-on-date")
+
+    def test_devotional_by_date_returns_requested_day(self):
+        response = self._get_by_date(date="2026-01-03")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["title"], "Daily Reading")
+        self.assertEqual(response.data["date"], "2026-01-03")
+        self.assertEqual(response.data["fast_id"], self.fast.id)
 
     def test_devotional_list_default_behavior_still_works(self):
         response = self._get_list()

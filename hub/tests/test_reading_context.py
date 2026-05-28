@@ -1,13 +1,14 @@
 from datetime import date
 from unittest.mock import patch
 
-from django.conf import settings
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
+from rest_framework import status
 from rest_framework.test import APITestCase
 
 from hub.models import Church, Day, LLMPrompt, Reading, ReadingContext
 from hub.tasks.llm_tasks import generate_reading_context_task
+from hub.views.readings import ReadingContextFeedbackView
 from hub.services.llm_service import OpenAIService, AnthropicService
 from tests.fixtures.test_data import TestDataFactory
 
@@ -190,27 +191,62 @@ class FeedbackEndpointTests(APITestCase):
             reading=self.reading,
             text="Existing context",
         )
+        self.url = reverse("reading-context-feedback", args=[self.reading.id])
+
+    def test_mounted_url_resolves_to_reading_feedback_view(self):
+        match = resolve(f"/hub/readings/{self.reading.id}/feedback/")
+
+        self.assertEqual(match.func.view_class, ReadingContextFeedbackView)
+        self.assertEqual(match.url_name, "reading-context-feedback")
 
     def test_feedback_endpoint_up(self):
-        url = reverse("reading-context-feedback", args=[self.reading.id])
-        response = self.client.post(url, {"feedback_type": "up"}, format="json")
-        self.assertEqual(response.status_code, 200)
+        response = self.client.post(self.url, {"feedback_type": "up"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"status": "success", "regenerate": False})
         self.context.refresh_from_db()
-        self.assertEqual(self.reading.active_context.thumbs_up, 1)
+        self.assertEqual(self.context.thumbs_up, 1)
+        self.assertEqual(self.context.thumbs_down, 0)
 
     @patch("hub.views.readings.generate_reading_context_task.delay")
     def test_feedback_endpoint_down_triggers_regeneration(self, mock_delay):
-        settings.READING_CONTEXT_REGENERATION_THRESHOLD = 2
         # Start with one down vote
         self.context.thumbs_down = 1
         self.context.save()
 
-        url = reverse("reading-context-feedback", args=[self.reading.id])
-        response = self.client.post(url, {"feedback_type": "down"}, format="json")
-        self.assertEqual(response.status_code, 200)
+        with self.settings(READING_CONTEXT_REGENERATION_THRESHOLD=2):
+            response = self.client.post(
+                self.url, {"feedback_type": "down"}, format="json"
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"status": "success", "regenerate": True})
         self.context.refresh_from_db()
         self.assertEqual(self.context.thumbs_down, 2)
         mock_delay.assert_called_once_with(self.reading.id, force_regeneration=True)
+
+    def test_feedback_rejects_missing_or_invalid_payload(self):
+        missing_response = self.client.post(self.url, {}, format="json")
+        invalid_response = self.client.post(
+            self.url, {"feedback_type": "sideways"}, format="json"
+        )
+
+        self.assertEqual(missing_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            invalid_response.json(),
+            {"status": "error", "message": "Invalid feedback type"},
+        )
+        self.context.refresh_from_db()
+        self.assertEqual(self.context.thumbs_up, 0)
+        self.assertEqual(self.context.thumbs_down, 0)
+
+    def test_feedback_returns_not_found_for_unknown_reading(self):
+        url = reverse("reading-context-feedback", args=[self.reading.id + 999])
+
+        response = self.client.post(url, {"feedback_type": "up"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ReadingTranslationTests(APITestCase):

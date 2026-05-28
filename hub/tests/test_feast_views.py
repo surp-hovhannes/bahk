@@ -7,11 +7,12 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.urls import resolve, reverse
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from hub.models import Church, Day, Feast, FeastContext
 from hub.utils import _fetch_sacredtradition, _stable_url_key
 from hub.views.feasts import FeastContextFeedbackView, GetFeastForDate
+from tests.fixtures.test_data import TestDataFactory
 
 
 class FeastViewDegradedResponseTests(TestCase):
@@ -102,27 +103,62 @@ class FeastViewCacheTests(TestCase):
         from hub.views.feasts import GetFeastForDate
 
         day1 = Day.objects.create(date=self.test_date, church=self.church)
-        Feast.objects.create(day=day1, name="Christmas")
-        mock_get_or_create.return_value = (day1.feasts.first(), False, {"status": "success"})
+        feast1 = Feast.objects.create(day=day1, name="Christmas")
+        other_date = date(2025, 1, 6)
+        day2 = Day.objects.create(date=other_date, church=self.church)
+        feast2 = Feast.objects.create(day=day2, name="Epiphany")
+        other_church = Church.objects.create(name="Other Test Church")
+        other_day = Day.objects.create(date=self.test_date, church=other_church)
+        other_feast = Feast.objects.create(day=other_day, name="Other Christmas")
+        user = TestDataFactory.create_user(username="cache-user")
+        other_user = TestDataFactory.create_user(username="other-cache-user")
+        TestDataFactory.create_profile(user=user, church=self.church)
+        TestDataFactory.create_profile(user=other_user, church=other_church)
+
+        feasts_by_date_and_church = {
+            (self.test_date, self.church.id): feast1,
+            (other_date, self.church.id): feast2,
+            (self.test_date, other_church.id): other_feast,
+        }
+
+        def get_feast_for_request(date_obj, church, check_fast=False):
+            return (
+                feasts_by_date_and_church[(date_obj, church.id)],
+                False,
+                {"status": "success"},
+            )
+
+        mock_get_or_create.side_effect = get_feast_for_request
 
         factory = APIRequestFactory()
 
         # Call for first date
         request1 = factory.get(f'/feasts/?date={self.date_str}')
+        force_authenticate(request1, user=user)
         response1 = GetFeastForDate.as_view()(request1)
         self.assertEqual(mock_get_or_create.call_count, 1)
 
         # Call for a different date — should NOT use cache
-        other_date = date(2025, 1, 6)
         request2 = factory.get(f'/feasts/?date={other_date.strftime("%Y-%m-%d")}')
+        force_authenticate(request2, user=user)
         response2 = GetFeastForDate.as_view()(request2)
         self.assertEqual(mock_get_or_create.call_count, 2)
+        self.assertEqual(response2.data['feast']['name'], "Epiphany")
+
+        # Call for same date but a different church — should NOT use cache
+        request3 = factory.get(f'/feasts/?date={self.date_str}')
+        force_authenticate(request3, user=other_user)
+        response3 = GetFeastForDate.as_view()(request3)
+        self.assertEqual(mock_get_or_create.call_count, 3)
+        self.assertEqual(response3.data['feast']['name'], "Other Christmas")
 
         # First date's cached response should still be same
-        request3 = factory.get(f'/feasts/?date={self.date_str}')
-        response3 = GetFeastForDate.as_view()(request3)
-        self.assertEqual(mock_get_or_create.call_count, 2)  # Still cached
-        self.assertEqual(response3.data['feast']['name'], response1.data['feast']['name'])
+        request4 = factory.get(f'/feasts/?date={self.date_str}')
+        force_authenticate(request4, user=user)
+        response4 = GetFeastForDate.as_view()(request4)
+        self.assertEqual(mock_get_or_create.call_count, 3)  # Still cached
+        self.assertEqual(response4.data['feast']['name'], response1.data['feast']['name'])
+        self.assertEqual(response4.data['feast']['name'], "Christmas")
 
 
 class FeastAPIRouteTests(TestCase):
