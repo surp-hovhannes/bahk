@@ -26,13 +26,12 @@ class TimezoneModelTest(TestCase):
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.timezone, 'America/New_York')
     
-    def test_profile_timezone_validation(self):
-        """Test that invalid timezone strings are handled."""
-        # This test just ensures the field accepts string values
-        # Actual timezone validation would be done at the application level
-        self.profile.timezone = 'Invalid/Timezone'
+    def test_profile_timezone_accepts_valid_iana_timezone(self):
+        """Test that profile timezone stores valid IANA timezone strings."""
+        self.profile.timezone = 'America/New_York'
         self.profile.save()
-        self.assertEqual(self.profile.timezone, 'Invalid/Timezone')
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.timezone, 'America/New_York')
 
 
 class ProfileSerializerTest(TestCase):
@@ -68,6 +67,20 @@ class ProfileSerializerTest(TestCase):
         
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.timezone, 'Europe/London')
+
+    def test_profile_serializer_rejects_invalid_timezone(self):
+        """Test that ProfileSerializer rejects invalid timezone strings."""
+        serializer = ProfileSerializer(
+            self.profile,
+            data={'timezone': 'Invalid/Timezone'},
+            partial=True,
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('timezone', serializer.errors)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.timezone, 'UTC')
 
 
 class TimezoneMiddlewareTest(TestCase):

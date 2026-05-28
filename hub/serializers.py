@@ -1,5 +1,6 @@
 """Serializers for handling API requests."""
 import logging
+import pytz
 from django.utils import timezone  # Add missing timezone import
 
 from better_profanity import profanity
@@ -38,6 +39,13 @@ class ProfileSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
             except Exception:
                 return None
         return None
+
+    def validate_timezone(self, value):
+        try:
+            pytz.timezone(value)
+        except pytz.exceptions.UnknownTimeZoneError:
+            raise serializers.ValidationError("Invalid timezone.")
+        return value
 
     class Meta:
         model = models.Profile
