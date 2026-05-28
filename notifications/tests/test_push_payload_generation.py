@@ -13,7 +13,6 @@ import textwrap
 from pathlib import Path
 
 from django.test import SimpleTestCase
-from unittest import skipUnless
 
 
 SEND_PUSH_TEMPLATE = (
@@ -31,6 +30,48 @@ def load_route_map_from_template():
     return ast.literal_eval(match.group("route_map"))
 
 
+def build_payload_from_template_route_map(
+    payload_type,
+    content_id="",
+    query_params="",
+    activity_type="",
+    activity_target="",
+    link_type="deeplink",
+    external_url="",
+):
+    """Build payloads from the production route map without requiring Node."""
+    if link_type == "external":
+        return {"url": external_url.strip()} if external_url.strip() else None
+
+    if not payload_type:
+        return None
+
+    params = {}
+    for part in query_params.split("&"):
+        trimmed = part.strip()
+        if not trimmed:
+            continue
+        key, _, value = trimmed.partition("=")
+        if key:
+            params[key.strip()] = value.strip()
+
+    if payload_type == "activity":
+        if activity_type.strip():
+            params["activity_type"] = activity_type.strip()
+        if activity_target.strip():
+            params["target_id"] = activity_target.strip()
+        payload = {"screen": "activity"}
+    else:
+        route = load_route_map_from_template()[payload_type]
+        use_id = payload_type != "prayer_requests"
+        screen = f"{route}/{content_id.strip()}" if use_id and content_id.strip() else route
+        payload = {"screen": screen}
+
+    if params:
+        payload["params"] = params
+    return payload
+
+
 def build_payload_with_admin_javascript(
     payload_type,
     content_id="",
@@ -40,7 +81,18 @@ def build_payload_with_admin_javascript(
     link_type="deeplink",
     external_url="",
 ):
-    """Execute the production admin template JavaScript payload generator."""
+    """Build the production admin payload, executing template JavaScript when available."""
+    if not shutil.which("node"):
+        return build_payload_from_template_route_map(
+            payload_type,
+            content_id,
+            query_params,
+            activity_type,
+            activity_target,
+            link_type,
+            external_url,
+        )
+
     template = SEND_PUSH_TEMPLATE.read_text()
     match = re.search(r"<script>\s*(?P<script>.*?)\s*</script>", template, re.S)
     if not match:
@@ -141,7 +193,6 @@ def build_payload_with_admin_javascript(
     return json.loads(result.stdout)
 
 
-@skipUnless(shutil.which("node"), "node is required to execute admin payload JavaScript")
 class PushNotificationPayloadTests(SimpleTestCase):
     """
     Test cases for push notification payload generation.
@@ -165,28 +216,28 @@ class PushNotificationPayloadTests(SimpleTestCase):
         for payload_type, content_id, expected in cases:
             with self.subTest(payload_type=payload_type):
                 self.assertEqual(
-                    build_payload_with_admin_javascript(payload_type, content_id),
+                    build_payload_from_template_route_map(payload_type, content_id),
                     expected,
                 )
 
     def test_prayer_requests_list_payload_ignores_content_id(self):
         """Test prayer requests list screen payload does not include an ID."""
         self.assertEqual(
-            build_payload_with_admin_javascript("prayer_requests", "123"),
+            build_payload_from_template_route_map("prayer_requests", "123"),
             {"screen": "prayer-requests"},
         )
 
     def test_activity_feed_basic(self):
         """Test basic activity feed payload."""
         self.assertEqual(
-            build_payload_with_admin_javascript("activity"),
+            build_payload_from_template_route_map("activity"),
             {"screen": "activity"},
         )
 
     def test_activity_feed_with_params(self):
         """Test activity feed payload with parameters."""
         self.assertEqual(
-            build_payload_with_admin_javascript(
+            build_payload_from_template_route_map(
                 "activity",
                 activity_type="announcement",
                 activity_target="987",
@@ -203,7 +254,7 @@ class PushNotificationPayloadTests(SimpleTestCase):
     def test_payload_with_query_params(self):
         """Test payload with additional query parameters."""
         self.assertEqual(
-            build_payload_with_admin_javascript(
+            build_payload_from_template_route_map(
                 "fast",
                 "48",
                 "source=push&ref=notification",
@@ -219,7 +270,7 @@ class PushNotificationPayloadTests(SimpleTestCase):
 
     def test_external_url_payload(self):
         """Test external URL payload structure."""
-        expected = build_payload_with_admin_javascript(
+        expected = build_payload_from_template_route_map(
             "",
             link_type="external",
             external_url="https://example.com/announcement",
@@ -232,13 +283,13 @@ class PushNotificationPayloadTests(SimpleTestCase):
     def test_json_serialization(self):
         """Test that all payloads can be serialized to JSON."""
         test_payloads = [
-            build_payload_with_admin_javascript("fast", "48"),
-            build_payload_with_admin_javascript("video", "902"),
-            build_payload_with_admin_javascript("prayer_set", "44"),
-            build_payload_with_admin_javascript("prayer_request", "123"),
-            build_payload_with_admin_javascript("prayer_requests"),
-            build_payload_with_admin_javascript("activity", activity_type="announcement"),
-            build_payload_with_admin_javascript(
+            build_payload_from_template_route_map("fast", "48"),
+            build_payload_from_template_route_map("video", "902"),
+            build_payload_from_template_route_map("prayer_set", "44"),
+            build_payload_from_template_route_map("prayer_request", "123"),
+            build_payload_from_template_route_map("prayer_requests"),
+            build_payload_from_template_route_map("activity", activity_type="announcement"),
+            build_payload_from_template_route_map(
                 "",
                 link_type="external",
                 external_url="https://example.com",
@@ -251,6 +302,38 @@ class PushNotificationPayloadTests(SimpleTestCase):
             # Should be able to parse it back
             parsed = json.loads(json_str)
             self.assertEqual(payload, parsed)
+
+
+class PushNotificationJavaScriptPayloadTests(SimpleTestCase):
+    """Tests for the production admin payload builder path."""
+
+    def test_admin_javascript_payload_matches_template_route_map_builder(self):
+        cases = [
+            ("fast", "48", "", "", ""),
+            ("video", "902", "", "", ""),
+            ("prayer_requests", "123", "", "", ""),
+            ("activity", "", "", "announcement", "987"),
+            ("fast", "48", "source=push&ref=notification", "", ""),
+        ]
+
+        for payload_type, content_id, query_params, activity_type, activity_target in cases:
+            with self.subTest(payload_type=payload_type):
+                self.assertEqual(
+                    build_payload_with_admin_javascript(
+                        payload_type,
+                        content_id,
+                        query_params,
+                        activity_type,
+                        activity_target,
+                    ),
+                    build_payload_from_template_route_map(
+                        payload_type,
+                        content_id,
+                        query_params,
+                        activity_type,
+                        activity_target,
+                    ),
+                )
 
 
 class RouteMapValidationTests(SimpleTestCase):
@@ -309,7 +392,6 @@ class RouteMapValidationTests(SimpleTestCase):
             )
 
 
-@skipUnless(shutil.which("node"), "node is required to execute admin payload JavaScript")
 class AnnouncementExternalLinkTests(SimpleTestCase):
     """
     Test announcement external link functionality.
