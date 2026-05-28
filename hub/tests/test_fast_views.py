@@ -919,8 +919,9 @@ class FastByFeastDateViewTest(TestCase):
     
     def setUp(self):
         """Set up test data."""
+        cache.clear()
         # Create a church using TestDataFactory
-        self.church = TestDataFactory.create_church(name="Test Church")
+        self.church = TestDataFactory.create_church()
         
         # Create a user with profile using TestDataFactory
         self.user = TestDataFactory.create_user(
@@ -1269,7 +1270,8 @@ class FastByDateViewTest(TestCase):
     """Tests for the FastByDateView endpoint."""
 
     def setUp(self):
-        self.church = TestDataFactory.create_church(name="Test Church")
+        cache.clear()
+        self.church = TestDataFactory.create_church()
         self.user = TestDataFactory.create_user(
             username='fastbydate@example.com',
             email='fastbydate@example.com',
@@ -1330,8 +1332,9 @@ class FastByDateViewTest(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.json()), 1)
-        fast = response.json()[0]
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(len(response.json()["results"]), 1)
+        fast = response.json()["results"][0]
         self.assertEqual(fast["id"], self.fast_on_date.id)
         self.assertEqual(fast["name"], "Fast On Date")
         self.assertEqual(fast["start_date"], self.match_date.isoformat())
