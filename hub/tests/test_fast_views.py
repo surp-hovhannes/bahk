@@ -43,9 +43,15 @@ class JoinFastViewTest(TestCase):
             name="Joinable Fast",
             description="Fast for join route tests",
         )
-        self.url = "/api/fasts/join/"
+        self.url = reverse("fast-join")
 
-    def test_mounted_api_url_resolves_to_join_fast_view(self):
+    def test_mounted_hub_url_resolves_to_join_fast_view(self):
+        match = resolve("/hub/fasts/join/")
+
+        self.assertEqual(match.func.view_class, JoinFastView)
+        self.assertEqual(match.url_name, "fast-join")
+
+    def test_named_url_resolves_to_join_fast_view(self):
         match = resolve(self.url)
 
         self.assertEqual(match.func.view_class, JoinFastView)
