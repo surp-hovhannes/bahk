@@ -303,9 +303,12 @@ class LearningResourcesRouteTest(APITestCase):
     """Regression tests for the learning resources API mount."""
 
     def test_api_learning_resources_prefix_resolves_video_list(self):
+        self.assertEqual(reverse('video-list'), '/api/learning-resources/videos/')
+
         match = resolve('/api/learning-resources/videos/')
 
         self.assertIs(match.func.view_class, VideoListView)
+        self.assertEqual(match.url_name, 'video-list')
 
         response = self.client.get('/api/learning-resources/videos/')
 
