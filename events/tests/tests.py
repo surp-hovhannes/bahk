@@ -227,12 +227,13 @@ class EventSignalsTest(TestCase):
         self.assertEqual(join_event.target, self.fast)
         
         # Should also have created a feed item
-        feed_item = UserActivityFeed.objects.filter(
+        feed_items = UserActivityFeed.objects.filter(
             user=self.user,
             activity_type='fast_join',
             event=join_event,
-        ).first()
-        self.assertIsNotNone(feed_item)
+        )
+        self.assertEqual(feed_items.count(), 1)
+        feed_item = feed_items.get()
         self.assertEqual(feed_item.event, join_event)
     
     def test_fast_leave_signal(self):
