@@ -150,6 +150,20 @@ class EngagementTrackingEndpointsTest(APITestCase):
             title='Other Prayer Set',
             church=self.other_church
         )
+        self.other_prayer = Prayer.objects.create(
+            title='Other Prayer',
+            text='Other prayer text',
+            category='general',
+            church=self.other_church,
+            fast=self.other_fast,
+        )
+        self.other_prayer_request = PrayerRequest.objects.create(
+            title='Other Prayer Request',
+            description='Other prayer request description',
+            requester=self.other_user,
+            status='approved',
+            expiration_date=timezone.now(),
+        )
         
         # Set up authentication
         self.client = APIClient()
@@ -810,6 +824,22 @@ class EngagementTrackingEndpointsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_track_prayer_viewed_rejects_out_of_scope_prayer(self):
+        """Test prayer tracking rejects a prayer from another church."""
+        url = reverse('events:track-prayer-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(
+            url,
+            {'prayer_id': self.other_prayer.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
+
     def test_track_prayer_request_viewed_success(self):
         """Test successful prayer request viewed tracking."""
         url = reverse('events:track-prayer-request-viewed')
@@ -887,6 +917,22 @@ class EngagementTrackingEndpointsTest(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_track_prayer_request_viewed_rejects_out_of_scope_request(self):
+        """Test prayer request tracking rejects a request from another church."""
+        url = reverse('events:track-prayer-request-viewed')
+
+        initial_event_count = Event.objects.count()
+
+        response = self.client.post(
+            url,
+            {'prayer_request_id': self.other_prayer_request.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Permission denied')
+        self.assertEqual(Event.objects.count(), initial_event_count)
     
     def test_track_checklist_used_success(self):
         """Test successful checklist used tracking."""
