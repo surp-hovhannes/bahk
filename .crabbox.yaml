@@ -1,0 +1,177 @@
+provider: hetzner
+target: linux
+profile: bahk-django-hetzner
+class: standard
+lease:
+  idleTimeout: 20m
+  ttl: 60m
+sync:
+  delete: true
+  checksum: false
+  gitSeed: true
+  fingerprint: true
+  baseRef: main
+  timeout: 15m
+  warnFiles: 50000
+  warnBytes: 5368709120
+  failFiles: 150000
+  failBytes: 21474836480
+  exclude:
+    - .crabbox
+    - .cache
+    - .pytest_cache
+    - .ruff_cache
+    - .venv
+    - __pycache__
+    - coverage
+    - dist
+    - node_modules
+    - staticfiles
+    - test-results
+env:
+  allow:
+    - CI
+    - DEBUG
+    - DJANGO_SETTINGS_MODULE
+    - NODE_OPTIONS
+    - PYTHONWARNINGS
+    - REDIS_URL
+    - SENTRY_DSN
+run:
+  preflightTools:
+    - docker
+jobs:
+  test:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build redis app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T
+      -e CI=true
+      -e DEBUG=true
+      -e PYTHONWARNINGS=ignore
+      -e REDIS_URL=redis://redis:6379/1
+      -e SENTRY_DSN=
+      app python manage.py test --noinput --parallel --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
+    stop: always
+  ruff:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T app ruff check .
+    stop: always
+  lint:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T app ruff check .
+    stop: always
+  typecheck:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build redis app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T
+      -e CI=true
+      -e DEBUG=true
+      -e PYTHONWARNINGS=ignore
+      -e REDIS_URL=redis://redis:6379/1
+      -e SENTRY_DSN=
+      app python manage.py check --settings=tests.test_settings
+    stop: always
+  coverage:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build redis app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T
+      -e CI=true
+      -e DEBUG=true
+      -e PYTHONWARNINGS=ignore
+      -e REDIS_URL=redis://redis:6379/1
+      -e SENTRY_DSN=
+      app python manage.py test --noinput --parallel --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
+    stop: always
+  e2e:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build redis app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T
+      -e CI=true
+      -e DEBUG=true
+      -e PYTHONWARNINGS=ignore
+      -e REDIS_URL=redis://redis:6379/1
+      -e SENTRY_DSN=
+      app python manage.py test --noinput --parallel --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
+    stop: always
+  ci:
+    provider: hetzner
+    hydrate:
+      actions: false
+    shell: true
+    command: >
+      set -euo pipefail;
+      if ! command -v docker >/dev/null 2>&1; then
+        sudo apt-get update &&
+        sudo apt-get install -y docker.io docker-compose-v2;
+      fi;
+      sudo docker compose -f .devcontainer/docker-compose.yml up -d --build redis app;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T app ruff check .;
+      sudo docker compose -f .devcontainer/docker-compose.yml exec -T
+      -e CI=true
+      -e DEBUG=true
+      -e PYTHONWARNINGS=ignore
+      -e REDIS_URL=redis://redis:6379/1
+      -e SENTRY_DSN=
+      app python manage.py test --noinput --parallel --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
+    stop: always
+ssh:
+  user: crabbox
+  port: "2222"
+  fallbackPorts:
+    - "22"

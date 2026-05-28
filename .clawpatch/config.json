@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "stateDir": ".clawpatch",
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    "target/**",
+    ".build/**",
+    ".git/**",
+    ".clawpatch/**",
+    "__pycache__/**",
+    ".pytest_cache/**",
+    ".ruff_cache/**",
+    "staticfiles/**",
+    "test_media/**",
+    ".crabbox/**",
+    "migrations/**"
+  ],
+  "provider": {
+    "name": "codex",
+    "model": null,
+    "reasoningEffort": null
+  },
+  "commands": {
+    "typecheck": "scripts/crabbox-validate.sh typecheck",
+    "lint": "scripts/crabbox-validate.sh lint",
+    "format": null,
+    "test": "scripts/crabbox-validate.sh ci"
+  },
+  "review": {
+    "maxContextFiles": 24,
+    "maxOwnedFiles": 12,
+    "maxFindingsPerFeature": 10,
+    "minConfidenceToFix": "medium"
+  },
+  "git": {
+    "requireCleanWorktreeForFix": true,
+    "commit": true,
+    "openPr": false
+  }
+}
