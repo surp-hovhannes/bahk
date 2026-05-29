@@ -6,6 +6,8 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
+    replaces = [('notifications', '0003_promoemail_emailsubscriptionpreference')]
+
     dependencies = [
         ('hub', '0026_profile_receive_promotional_emails'),
         ('notifications', '0002_devicetoken_user_alter_devicetoken_device_type'),
