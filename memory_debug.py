@@ -28,8 +28,11 @@ memory_snapshots = []
 module_sizes = defaultdict(float)
 
 def get_memory_mb():
-    """Get current memory usage in MB"""
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+    """Get current memory usage in MB."""
+    max_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if sys.platform == "darwin":
+        return max_rss / (1024.0 * 1024.0)
+    return max_rss / 1024.0
 
 def log_memory(message, force_gc=False):
     """Log current memory usage with a message"""

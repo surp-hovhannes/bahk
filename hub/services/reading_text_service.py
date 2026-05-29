@@ -19,6 +19,7 @@ from typing import Any
 
 from django.utils import timezone
 
+from hub.constants import normalize_book_name
 from hub.services.bible_api_service import BibleAPIService
 
 logger = logging.getLogger(__name__)
@@ -133,27 +134,47 @@ def fetch_armenian_text(
         )
         return False
 
-    matched_text = None
-    for entry in armenian_texts:
+    reading_books = {
+        normalized_book
+        for normalized_book in (
+            normalize_book_name(getattr(reading, "book", None)),
+            normalize_book_name(getattr(reading, "book_hy", None)),
+        )
+        if normalized_book
+    }
+
+    range_matches = [
+        entry for entry in armenian_texts
         if (
             entry["start_chapter"] == reading.start_chapter
             and entry["start_verse"] == reading.start_verse
             and entry["end_chapter"] == reading.end_chapter
             and entry["end_verse"] == reading.end_verse
-        ):
-            matched_text = entry["text_hy"]
-            break
+        )
+    ]
 
-    if not matched_text:
+    book_matches = [
+        entry for entry in range_matches
+        if normalize_book_name(entry.get("book")) in reading_books
+    ]
+
+    matched_entry = book_matches[0] if book_matches else (
+        range_matches[0] if len(range_matches) == 1 else None
+    )
+
+    if not matched_entry:
         logger.warning(
             "No matching Armenian text found for Reading %s (%s).",
             reading.pk, reading.passage_reference,
         )
         return False
 
+    matched_text = matched_entry["text_hy"]
     reading.text_hy = matched_text
     reading.text_hy_version = ARMENIAN_TEXT_VERSION
     reading.text_hy_fetched_at = timezone.now()
+    # text_hy is a modeltrans virtual field; i18n is the concrete JSON field
+    # that stores the translated text.
     reading.save(update_fields=["i18n", "text_hy_version", "text_hy_fetched_at"])
 
     logger.info(

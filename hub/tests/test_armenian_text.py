@@ -282,6 +282,37 @@ class FetchArmenianReadingTextTaskTests(TestCase):
         self.assertEqual(reading.text_hy_fums_token, "")
 
     @patch("hub.utils.scrape_armenian_reading_texts")
+    def test_matching_uses_book_when_ranges_are_identical(self, mock_scrape):
+        """Test that identical ranges choose the text for the same book."""
+        mock_scrape.return_value = [
+            {
+                "book": "Genesis",
+                "start_chapter": 1,
+                "start_verse": 1,
+                "end_chapter": 1,
+                "end_verse": 5,
+                "text_hy": "Genesis Armenian text",
+            },
+            {
+                "book": "Exodus",
+                "start_chapter": 1,
+                "start_verse": 1,
+                "end_chapter": 1,
+                "end_verse": 5,
+                "text_hy": "Exodus Armenian text",
+            },
+        ]
+
+        reading = _create_reading(
+            self.day, book="Exodus", start_ch=1, start_v=1, end_ch=1, end_v=5,
+        )
+
+        fetch_armenian_reading_text_task(reading.id)
+
+        reading.refresh_from_db()
+        self.assertEqual(reading.text_hy, "Exodus Armenian text")
+
+    @patch("hub.utils.scrape_armenian_reading_texts")
     def test_no_match_leaves_text_hy_empty(self, mock_scrape):
         """Test that task leaves text_hy empty when no matching reading is found."""
         mock_scrape.return_value = [

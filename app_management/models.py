@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from markdownx.models import MarkdownxField
 from markdownx.utils import markdownify
 
@@ -8,7 +9,7 @@ class Changelog(models.Model):
     title = models.CharField(max_length=255)
     description = MarkdownxField()
     version = models.CharField(max_length=50)
-    date = models.DateField(auto_now_add=True)
+    date = models.DateField(default=timezone.localdate)
 
     @property
     def formatted_description(self):

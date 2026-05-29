@@ -284,10 +284,20 @@ def sync_beat_schedule_to_db(**kwargs):
                 'description': CODE_MANAGED_MARKER,
                 'enabled': True,
             }
-            pt, created = PeriodicTask.objects.update_or_create(
+            pt, created = PeriodicTask.objects.get_or_create(
                 name=name,
                 defaults=defaults,
             )
+            if not created:
+                update_fields = []
+                for field, value in defaults.items():
+                    if field in {'name', 'enabled'}:
+                        continue
+                    if getattr(pt, field) != value:
+                        setattr(pt, field, value)
+                        update_fields.append(field)
+                if update_fields:
+                    pt.save(update_fields=update_fields)
 
             seen_names.add(name)
             synced += 1

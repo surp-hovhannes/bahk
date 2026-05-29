@@ -394,6 +394,7 @@ def scrape_armenian_reading_texts(date_obj, church, date_format="%Y%m%d"):
 
         if clean_text:
             results.append({
+                "book": groups.group(1),
                 "start_chapter": start_chapter,
                 "start_verse": start_verse,
                 "end_chapter": end_chapter,
