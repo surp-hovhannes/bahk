@@ -1,6 +1,6 @@
 """Regenerate feast contexts to apply new parsing logic."""
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from hub.models import Feast
 from hub.tasks import generate_feast_context_task
@@ -30,8 +30,7 @@ class Command(BaseCommand):
                 generate_feast_context_task.delay(feast.id, force_regeneration=True)
                 self.stdout.write(self.style.SUCCESS(f"✓ Queued regeneration for feast {feast.id}"))
             except Feast.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f"Feast with ID {options['feast_id']} not found"))
-                return
+                raise CommandError(f"Feast with ID {options['feast_id']} not found")
         
         elif options.get("all"):
             # Regenerate for all feasts
@@ -51,7 +50,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"\n✓ Queued regeneration for {count} feasts"))
         
         else:
-            self.stdout.write(self.style.ERROR(
+            raise CommandError(
                 "Please specify either --all to regenerate all feasts or --feast-id <ID> for a specific feast"
-            ))
-
+            )
