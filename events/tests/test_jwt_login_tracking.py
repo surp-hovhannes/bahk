@@ -267,6 +267,25 @@ class JWTLoginTrackingTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
+
+    def test_jwt_login_audit_failure_is_logged_without_blocking_token_response(self):
+        """Audit write failures should be visible while token issuance still succeeds."""
+        url = reverse('token_obtain_pair')
+        data = {
+            'username': self.user.email,
+            'password': 'testpass123'
+        }
+
+        with patch('events.models.Event.create_event', side_effect=RuntimeError('audit unavailable')):
+            with self.assertLogs('bahk.urls', level='ERROR') as captured_logs:
+                response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+        self.assertTrue(
+            any('Failed to record JWT login audit event' in message for message in captured_logs.output)
+        )
     
     def test_jwt_login_response_format(self):
         """Test that JWT login response format is correct."""
