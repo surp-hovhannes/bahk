@@ -37,6 +37,7 @@ class BibleAPIService:
             raise ValueError(
                 "API key required. Set BIBLE_API_KEY in environment or Django settings."
             )
+        self.timeout = config("BIBLE_API_TIMEOUT_SECONDS", default=10, cast=float)
         self.session = requests.Session()
         self.session.headers.update({"api-key": self.api_key})
 
@@ -82,7 +83,7 @@ class BibleAPIService:
         }
 
         url = f"{BASE_URL}/bibles/{bible_id}/passages/{passage_id}"
-        resp = self.session.get(url, params=params)
+        resp = self.session.get(url, params=params, timeout=self.timeout)
         resp.raise_for_status()
         json_data = resp.json()
 

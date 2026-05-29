@@ -87,6 +87,20 @@ class BibleAPIServiceFumsTests(TestCase):
         params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params")
         self.assertEqual(params["fums-version"], "3")
 
+    @patch("hub.services.bible_api_service.requests.Session")
+    def test_get_passage_uses_configured_timeout(self, mock_session_cls):
+        """get_passage should pass a timeout to the external API call."""
+        mock_resp = Mock()
+        mock_resp.json.return_value = self.mock_response_json
+        mock_resp.raise_for_status = Mock()
+        mock_session = mock_session_cls.return_value
+        mock_session.get.return_value = mock_resp
+
+        service = BibleAPIService(api_key="fake-key")
+        service.get_passage("GEN", 1, 1, 1, 5)
+
+        self.assertEqual(mock_session.get.call_args.kwargs["timeout"], 10)
+
 
 class ReadingFumsTokenAPITests(TestCase):
     """Tests for FUMS token in the readings API response."""
