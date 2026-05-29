@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('notifications', '0003_promoemail_emailsubscriptionpreference'),
+        ('notifications', '0003_promoemail'),
     ]
 
     operations = [
