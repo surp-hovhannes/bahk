@@ -1,4 +1,5 @@
 import logging
+import hashlib
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
 from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
@@ -14,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 # Create your views here.
 
+def _device_token_log_id(token_value):
+    """Stable token identifier for logs without exposing the push token."""
+    return hashlib.sha256(token_value.encode('utf-8')).hexdigest()[:12]
+
+
 class DeviceTokenCreateView(generics.CreateAPIView):
     queryset = DeviceToken.objects.all()
     serializer_class = DeviceTokenSerializer
@@ -23,8 +29,15 @@ class DeviceTokenCreateView(generics.CreateAPIView):
         serializer.save(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        logger.info(f"Received request data: {request.data}")
         token_value = request.data.get('token')
+        logger.info(
+            'Received device token registration request',
+            extra={
+                'device_type': request.data.get('device_type'),
+                'has_token': bool(token_value),
+                'user_id': request.user.id,
+            }
+        )
         
         # Validate request has necessary data
         if not token_value:
@@ -50,7 +63,7 @@ class DeviceTokenCreateView(generics.CreateAPIView):
                 logger.info(
                     'Device token ownership changed',
                     extra={
-                        'device_token': token_value,
+                        'device_token_id': _device_token_log_id(token_value),
                         'old_user_id': old_user_id,
                         'new_user_id': new_user_id
                     }
