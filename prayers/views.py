@@ -1,5 +1,6 @@
 """Views for prayers app."""
 from django.db.models import Q
+from django.db import transaction
 from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
@@ -433,22 +434,18 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if already accepted
-        if PrayerRequestAcceptance.objects.filter(
-            prayer_request=prayer_request,
-            user=request.user
-        ).exists():
+        with transaction.atomic():
+            acceptance, created = PrayerRequestAcceptance.objects.get_or_create(
+                prayer_request=prayer_request,
+                user=request.user,
+                defaults={'counts_for_milestones': True},
+            )
+
+        if not created:
             return Response(
                 {'detail': 'You have already accepted this prayer request.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # Create acceptance
-        acceptance = PrayerRequestAcceptance.objects.create(
-            prayer_request=prayer_request,
-            user=request.user,
-            counts_for_milestones=True
-        )
 
         # Create event
         Event.create_event(
