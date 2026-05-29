@@ -1,8 +1,13 @@
 """
 Tests for timezone functionality in user profiles.
 """
+from io import StringIO
+from unittest.mock import patch
+
+from django.core.management import call_command
 from django.test import TestCase, RequestFactory
 from django.http import HttpResponse
+from hub.models import Profile
 from hub.serializers import ProfileSerializer
 from hub.middleware import TimezoneUpdateMiddleware
 from tests.fixtures.test_data import TestDataFactory
@@ -195,3 +200,39 @@ class TimezoneIntegrationTest(TestCase):
         # Save and check tracking resets
         self.profile.save()
         self.assertFalse(self.profile.tracker.has_changed('timezone'))
+
+
+class UpdateUserTimezonesCommandTest(TestCase):
+    """Test the timezone backfill management command."""
+
+    def test_updates_all_initially_eligible_profiles_across_batches(self):
+        """Updating earlier rows should not make later offset batches disappear."""
+        profile_ids = []
+        church = TestDataFactory.create_church()
+
+        for index in range(105):
+            user = TestDataFactory.create_user(email=f'timezone-{index}@example.com')
+            profile = TestDataFactory.create_profile(
+                user=user,
+                church=church,
+                location='San Francisco',
+                latitude=37.7749,
+                longitude=-122.4194,
+                timezone='UTC' if index % 2 == 0 else '',
+            )
+            profile_ids.append(profile.id)
+
+        fake_timezone_finder = type(
+            'FakeTimezoneFinder',
+            (),
+            {'timezone_at': lambda self, lng, lat: 'America/Los_Angeles'},
+        )
+
+        with patch('timezonefinder.TimezoneFinder', return_value=fake_timezone_finder()):
+            call_command('update_user_timezones', stdout=StringIO())
+
+        updated_count = Profile.objects.filter(
+            id__in=profile_ids,
+            timezone='America/Los_Angeles',
+        ).count()
+        self.assertEqual(updated_count, len(profile_ids))
