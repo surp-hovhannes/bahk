@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User, Group
 from rest_framework import viewsets, permissions, generics
 from hub import serializers
@@ -34,13 +35,15 @@ class RegisterView(generics.CreateAPIView):
 class PasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = serializers.PasswordResetSerializer
+    success_response = {"detail": "If an account exists for this email, a password reset email has been sent."}
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
+            user_model = get_user_model()
             try:
-                user = User.objects.get(email=email)
+                user = user_model.objects.get(email=email)
                 
                 # Generate password reset token
                 token = default_token_generator.make_token(user)
@@ -71,15 +74,9 @@ class PasswordResetView(APIView):
                 email.attach_alternative(html_content, "text/html")
                 email.send()
             
-                return Response(
-                    {"detail": "Password reset email has been sent."},
-                    status=status.HTTP_200_OK
-                )
-            except User.DoesNotExist:
-                return Response(
-                    {"detail": "Email address not found."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response(self.success_response, status=status.HTTP_200_OK)
+            except user_model.DoesNotExist:
+                return Response(self.success_response, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetConfirmView(APIView):
