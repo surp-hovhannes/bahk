@@ -188,10 +188,7 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             keys = cache.keys(pattern)
             if keys:
                 cache.delete_many(keys)
-        else:
-            # LocMemCache doesn't support pattern matching, so we'll clear all cache
-            # This is less efficient but works for testing
-            cache.clear()
+        # On LocMemCache, the TTL will expire stale entries naturally
 
 
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
