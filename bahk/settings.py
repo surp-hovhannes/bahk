@@ -18,6 +18,7 @@ import ssl
 
 from pathlib import Path
 from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
 from ssl import CERT_NONE
 
 # Sentry SDK for error and performance monitoring
@@ -98,18 +99,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Default church name (used if user is not logged in)
 DEFAULT_CHURCH_NAME = "Armenian Apostolic Church"
 
+# Determine if we are running in production
+IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-340y5$yaevl3%&50ob@)r@6htxve-6b0161m03j$)4r_%g8djq')
+SECRET_KEY = config('SECRET_KEY', default=None)
+if not SECRET_KEY:
+    if IS_PRODUCTION:
+        raise ImproperlyConfigured("SECRET_KEY must be configured in production.")
+    SECRET_KEY = 'django-insecure-340y5$yaevl3%&50ob@)r@6htxve-6b0161m03j$)4r_%g8djq'
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
-
-# Determine if we are running in production
-IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
 
 # Enable/disable rate limiting on the icon feedback endpoint
 ENABLE_FEEDBACK_THROTTLING = config('ENABLE_FEEDBACK_THROTTLING', default=True, cast=bool)
@@ -301,9 +307,10 @@ REST_FRAMEWORK = {
 # Analytics settings
 ANALYTICS_SESSION_TIMEOUT_MINUTES = int(config('ANALYTICS_SESSION_TIMEOUT_MINUTES', default=30))
 
-# extend lifetime of JWT refresh tokens
 SIMPLE_JWT = {
-    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(days=100*365)  # set to expire in 100 years (~forever)
+    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(
+        days=config('JWT_REFRESH_TOKEN_LIFETIME_DAYS', default=30, cast=int)
+    )
 }
 
 # path to backend for authenticating users by email
