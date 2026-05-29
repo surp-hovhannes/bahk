@@ -24,6 +24,30 @@ class IsAdminOrReadOnly(BasePermission):
 logger = logging.getLogger(__name__)
 
 
+def anonymize_ip_address(raw_ip):
+    """Anonymize a valid client IP address, or discard invalid/proxy-style values."""
+    if not raw_ip:
+        return None
+
+    raw_ip = raw_ip.strip()
+    if ',' in raw_ip:
+        return None
+
+    try:
+        addr = ipaddress.ip_address(raw_ip)
+    except ValueError:
+        return None
+
+    if addr.version == 4:
+        network = ipaddress.ip_network(f"{addr}/24", strict=False)
+        return str(network.network_address)
+
+    masked = ipaddress.IPv6Address(
+        int(addr) & 0xffff_ffff_ffff_0000_0000_0000_0000_0000
+    )
+    return str(masked)
+
+
 class IconPagination(PageNumberPagination):
     """Larger page size for icon grid browsing."""
     page_size = 15
@@ -538,24 +562,7 @@ class IconFeedbackCreateView(views.APIView):
         tags_string = ', '.join(tag.name for tag in icon.tags.all())
 
         # 4. Anonymize IP
-        raw_ip = request.META.get('REMOTE_ADDR', '')
-        anonymized_ip = None
-        if raw_ip:
-            if '.' in raw_ip:
-                # IPv4 — zero out last octet
-                parts = raw_ip.split('.')
-                parts[-1] = '0'
-                anonymized_ip = '.'.join(parts)
-            else:
-                # IPv6 — preserve /48 prefix, zero out the rest
-                try:
-                    addr = ipaddress.IPv6Address(raw_ip)
-                    masked = ipaddress.IPv6Address(
-                        int(addr) & 0xffff_ffff_ffff_0000_0000_0000_0000_0000
-                    )
-                    anonymized_ip = str(masked)
-                except (ipaddress.AddressValueError, ValueError):
-                    anonymized_ip = raw_ip
+        anonymized_ip = anonymize_ip_address(request.META.get('REMOTE_ADDR', ''))
 
         # 5. Create feedback record
         IconFeedback.objects.create(
