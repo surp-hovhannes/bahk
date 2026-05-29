@@ -75,7 +75,7 @@ urlpatterns = [
 
     # TODO: Remove these legacy endpoints after frontend is updated
     path('user/fasts/', FastOnDate.as_view(), name="fast_on_date"),
-    path("fast/", FastOnDateWithoutUser.as_view(), name="fast_on_date"),
+    path("fast/", FastOnDateWithoutUser.as_view(), name="fast_on_date_without_user"),
    
     # Day endpoints
     path('fasts/<int:fast_id>/days/', FastDaysListView.as_view(), name='fast-days-list'),
@@ -115,7 +115,7 @@ urlpatterns = [
 
     # Admin endpoints
     path(
-        "hub/reading/<int:reading_id>/compare-prompts/",
+        "reading/<int:reading_id>/compare-prompts/",
         compare_reading_prompts,
         name="hub_reading_compare_prompts",
     ),
