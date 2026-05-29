@@ -268,6 +268,10 @@ class ParticipantPayloadIntentionTests(BaseAPITestCase):
         self.profile.fasts.add(self.fast)
 
     def test_public_intention_on_participant_list(self):
+        # Clear the participant view cache to avoid stale response from parallel tests
+        from django.core.cache import cache
+        cache.clear()
+        
         FastIntention.objects.create(
             user=self.user,
             fast=self.fast,
