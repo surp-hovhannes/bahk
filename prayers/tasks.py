@@ -369,12 +369,23 @@ def moderate_prayer_request_task(self, prayer_request_id):
         except Exception as llm_error:
             logger.error(f"LLM moderation error for prayer request {prayer_request_id}: {llm_error}")
             # If LLM fails, mark as pending and send email to admin
+            prayer_request.status = 'pending_moderation'
+            prayer_request.requires_human_review = True
+            prayer_request.moderation_severity = 'high'
             prayer_request.moderation_result = {
                 'profanity_check': {'passed': True},
                 'llm_check': {'error': str(llm_error)},
                 'reason': 'LLM moderation failed, requires manual review'
             }
-            prayer_request.save()
+            prayer_request.save(
+                update_fields=[
+                    'status',
+                    'requires_human_review',
+                    'moderation_severity',
+                    'moderation_result',
+                    'updated_at',
+                ]
+            )
 
             # Send email to admin for manual review
             _send_moderation_alert_email(prayer_request, 'llm_error')
