@@ -1,6 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 import logging
 import os
+from urllib.parse import urlsplit, urlunsplit
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import celeryd_init, beat_init, worker_ready
@@ -198,10 +199,29 @@ app.conf.beat_schedule = {
 
 # ── Startup: Redis connectivity check ─────────────────────────────────────────────
 
+def _redact_url_for_logs(url):
+    """Return a Redis URL safe for logs by stripping credentials."""
+    try:
+        parsed = urlsplit(str(url))
+    except ValueError:
+        return "<redacted-url>"
+
+    hostname = parsed.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+
+    netloc = hostname
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+
+    return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+
+
 @celeryd_init.connect
 def check_redis_connectivity(**kwargs):
     """Verify Redis is reachable before the worker starts accepting tasks."""
     broker_url = app.conf.broker_url
+    safe_broker_url = _redact_url_for_logs(broker_url)
     try:
         import redis
         redis_kwargs = {'socket_connect_timeout': 5}
@@ -211,10 +231,12 @@ def check_redis_connectivity(**kwargs):
             redis_kwargs['ssl_cert_reqs'] = None  # mirrors CELERY_BROKER_USE_SSL
         r = redis.from_url(broker_url, **redis_kwargs)
         r.ping()
-        logger.info("✅ Redis connection OK: %s", broker_url)
+        logger.info("✅ Redis connection OK: %s", safe_broker_url)
     except Exception as exc:
-        logger.error("❌ Redis connection FAILED: %s — %s", broker_url, exc)
-        sentry_sdk.capture_exception(exc)
+        logger.error("❌ Redis connection FAILED: %s — %s", safe_broker_url, exc.__class__.__name__)
+        with sentry_sdk.push_scope() as scope:
+            scope.set_context("redis", {"broker_url": safe_broker_url})
+            sentry_sdk.capture_message("Redis connection failed", level="error")
 
 
 # ── Startup: Sync inline beat_schedule → django_celery_beat DB ─────────────────────
@@ -354,7 +376,7 @@ def _crontab_field(schedule_def, field):
 @worker_ready.connect
 def log_worker_ready(**kwargs):
     """Confirm the worker is ready to process tasks."""
-    logger.info("🚀 Celery worker ready — listening for tasks on %s", app.conf.broker_url)
+    logger.info("🚀 Celery worker ready — listening for tasks on %s", _redact_url_for_logs(app.conf.broker_url))
 
 
 # ── Sentry initialization ──────────────────────────────────────────────────────────

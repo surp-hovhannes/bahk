@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='profile',
             name='receive_weekly_prayer_request_push_notifications',
-            field=models.BooleanField(default=True),
+            field=models.BooleanField(default=False),
         ),
     ]

@@ -5,6 +5,7 @@ from rest_framework import status
 from unittest.mock import patch
 from ..models import DeviceToken
 from ..tasks import send_push_notification_to_users_task
+from ..views import _device_token_log_id
 from tests.fixtures.test_data import TestDataFactory
 
 class DeviceTokenTests(APITestCase):
@@ -154,15 +155,17 @@ class DeviceTokenTests(APITestCase):
         self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
 
-        # Verify logging
-        mock_logger.info.assert_called_with(
+        # Verify logging without exposing the raw push token
+        mock_logger.info.assert_any_call(
             'Device token ownership changed',
             extra={
-                'device_token': self.valid_token_data['token'],
+                'device_token_id': _device_token_log_id(self.valid_token_data['token']),
                 'old_user_id': self.user.id,
                 'new_user_id': self.user2.id
             }
         )
+        for call in mock_logger.info.call_args_list:
+            self.assertNotIn(self.valid_token_data['token'], str(call))
 
 class TestPushNotificationTests(APITestCase):
     def setUp(self):
