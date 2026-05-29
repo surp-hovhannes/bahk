@@ -120,5 +120,3 @@ urlpatterns = [
         name="hub_reading_compare_prompts",
     ),
 ]
-
-urlpatterns += router.urls
