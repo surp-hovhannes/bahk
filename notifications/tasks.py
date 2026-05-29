@@ -78,9 +78,9 @@ def send_push_notification_task(message, data=None, user_ids=None, notification_
 
 
 @shared_task
-def send_push_notification_to_users_task(message, data=None, user_ids=None):
+def send_push_notification_to_users_task(message, data=None, user_ids=None, device_token_ids=None):
     """
-    Send push notifications to a list of users in chunks of 100.
+    Send push notifications to a list of users or device tokens in chunks of 100.
 
     This task is used by the admin interface when sending to more than 100
     device tokens so that the HTTP request does not time out.
@@ -89,9 +89,11 @@ def send_push_notification_to_users_task(message, data=None, user_ids=None):
         message (str): The notification message to send.
         data (dict, optional): Additional data payload.
         user_ids (list): List of user IDs to send notifications to.
+        device_token_ids (list): List of DeviceToken IDs to send notifications to.
     """
-    if not user_ids:
-        logger.warning("send_push_notification_to_users_task called with no user_ids")
+    target_ids = device_token_ids or user_ids
+    if not target_ids:
+        logger.warning("send_push_notification_to_users_task called with no target ids")
         return
 
     chunk_size = 100
@@ -99,16 +101,21 @@ def send_push_notification_to_users_task(message, data=None, user_ids=None):
     total_failed = 0
     total_invalid = 0
 
-    for i in range(0, len(user_ids), chunk_size):
-        chunk = user_ids[i:i + chunk_size]
-        result = send_push_notification(message=message, data=data, users=chunk)
+    for i in range(0, len(target_ids), chunk_size):
+        chunk = target_ids[i:i + chunk_size]
+        result = send_push_notification(
+            message=message,
+            data=data,
+            users=None if device_token_ids else chunk,
+            device_token_ids=chunk if device_token_ids else None,
+        )
         total_sent += result['sent']
         total_failed += result['failed']
         total_invalid += len(result.get('invalid_tokens', []))
 
     logger.info(
-        "Chunked push notification complete: sent=%d, failed=%d, invalid_tokens=%d, total_users=%d",
-        total_sent, total_failed, total_invalid, len(user_ids)
+        "Chunked push notification complete: sent=%d, failed=%d, invalid_tokens=%d, total_targets=%d",
+        total_sent, total_failed, total_invalid, len(target_ids)
     )
 
 def get_email_count():

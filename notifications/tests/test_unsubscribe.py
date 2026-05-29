@@ -44,8 +44,10 @@ class UnsubscribeTests(TestCase):
         # Create client
         self.client = Client()
 
-    def test_unsubscribe_with_valid_token(self):
+    @patch('notifications.views.get_user_model')
+    def test_unsubscribe_with_valid_token(self, mock_get_user_model):
         """Test unsubscribing with a valid token."""
+        mock_get_user_model.return_value = User
         url = reverse('notifications:unsubscribe')
         self.assertEqual(url, '/hub/notifications/unsubscribe/')
 
@@ -57,6 +59,7 @@ class UnsubscribeTests(TestCase):
         # Check that preferences were updated
         self.profile.refresh_from_db()
         self.assertFalse(self.profile.receive_promotional_emails)
+        mock_get_user_model.assert_called_once_with()
 
     def test_unsubscribe_with_invalid_token(self):
         """Test unsubscribing with an invalid token."""
