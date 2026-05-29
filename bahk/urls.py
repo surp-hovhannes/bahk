@@ -13,6 +13,8 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import logging
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -26,6 +28,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
+
+logger = logging.getLogger(__name__)
 
 
 class HealthCheckView(APIView):
@@ -93,7 +97,7 @@ class TrackingTokenObtainPairView(TokenObtainPairView):
                     request=request,
                 )
             except Exception:
-                pass
+                logger.exception("Failed to record JWT login audit event", extra={"user_id": user.pk})
 
         return Response(serializer.validated_data, status=200)
 

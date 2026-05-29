@@ -44,8 +44,7 @@ class PasswordResetTests(APITestCase):
 
     def test_password_reset_serializer_invalid_email(self):
         serializer = PasswordResetSerializer(data={'email': 'nonexistent@example.com'})
-        self.assertFalse(serializer.is_valid())
-        self.assertIn('email', serializer.errors)
+        self.assertTrue(serializer.is_valid())
 
     def test_password_reset_confirm_serializer_passwords_match(self):
         # Generate valid token and uidb64
@@ -78,16 +77,27 @@ class PasswordResetTests(APITestCase):
     def test_password_reset_endpoint(self):
         response = self.client.post(self.password_reset_url, {'email': 'test@example.com'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, {'detail': 'Password reset email has been sent.'})
+        self.assertEqual(response.data, PasswordResetView.success_response)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('test@example.com', mail.outbox[0].to)
         self.assertEqual(mail.outbox[0].subject, 'Password Reset Request')
 
     def test_password_reset_endpoint_invalid_email(self):
         response = self.client.post(self.password_reset_url, {'email': 'nonexistent@example.com'})
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, PasswordResetView.success_response)
         self.assertEqual(len(mail.outbox), 0)
-        self.assertIn('email', response.data)
+
+    def test_password_reset_endpoint_returns_same_response_for_existing_and_unknown_email(self):
+        existing_response = self.client.post(self.password_reset_url, {'email': 'test@example.com'})
+        outbox_after_existing = len(mail.outbox)
+
+        unknown_response = self.client.post(self.password_reset_url, {'email': 'unknown@example.com'})
+
+        self.assertEqual(existing_response.status_code, unknown_response.status_code)
+        self.assertEqual(existing_response.data, unknown_response.data)
+        self.assertEqual(outbox_after_existing, 1)
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_password_reset_endpoint_rejects_malformed_input(self):
         response = self.client.post(self.password_reset_url, {'email': 'not-an-email'})
