@@ -1,7 +1,6 @@
 """Tests for the Feast model."""
 from datetime import date
 
-from django.db import IntegrityError
 from django.test import TestCase
 from django.test.utils import tag
 
@@ -44,20 +43,20 @@ class FeastModelTests(TestCase):
         self.assertEqual(feast.name, "Christmas")
         self.assertEqual(feast.name_hy, "Սուրբ Ծնունդ")
 
-    def test_feast_unique_constraint(self):
-        """Test that the unique constraint on day works."""
+    def test_multiple_feasts_can_share_the_same_day(self):
+        """Test that distinct commemorations can be stored for the same day."""
         day = Day.objects.create(date=self.test_date, church=self.church)
-        Feast.objects.create(
+        first_feast = Feast.objects.create(
             day=day,
             name="First Feast",
         )
+        second_feast = Feast.objects.create(
+            day=day,
+            name="Second Feast",
+        )
 
-        # Try to create another feast on same day - should fail
-        with self.assertRaises(IntegrityError):
-            Feast.objects.create(
-                day=day,
-                name="Second Feast",
-            )
+        self.assertNotEqual(first_feast.id, second_feast.id)
+        self.assertEqual(Feast.objects.filter(day=day).count(), 2)
 
     def test_feast_different_churches_same_date(self):
         """Test that different churches can have feasts on the same date."""
