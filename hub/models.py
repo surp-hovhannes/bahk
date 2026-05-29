@@ -169,8 +169,10 @@ class Fast(models.Model):
 
         # Update year if days exist
         if self.days.exists():
-            self.year = self.days.first().date.year
-            super().save(update_fields=["year"])
+            first_day = self.days.order_by("date").first()
+            if first_day and self.year != first_day.date.year:
+                self.year = first_day.date.year
+                super().save(update_fields=["year"])
 
         # Invalidate the cache for this church's fast list
         from hub.views.fast import FastListView

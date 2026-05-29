@@ -147,6 +147,44 @@ class DevotionalListAPITests(TestCase):
         self.assertEqual(response.data["date"], "2026-01-03")
         self.assertEqual(response.data["fast_id"], self.fast.id)
 
+    def test_devotional_by_date_uses_deterministic_fallback_for_multiple_languages(self):
+        fallback_day = Day.objects.create(
+            date=date(2026, 2, 1),
+            fast=self.fast,
+            church=self.church,
+        )
+        es_video = Video.objects.create(
+            title="Spanish fallback",
+            description="Fallback devotional",
+            category="devotional",
+            language_code="es",
+        )
+        hy_video = Video.objects.create(
+            title="Armenian fallback",
+            description="Fallback devotional",
+            category="devotional",
+            language_code="hy",
+        )
+        Devotional.objects.create(
+            day=fallback_day,
+            description="Spanish text",
+            video=es_video,
+            order=1,
+            language_code="es",
+        )
+        Devotional.objects.create(
+            day=fallback_day,
+            description="Armenian text",
+            video=hy_video,
+            order=1,
+            language_code="hy",
+        )
+
+        response = self._get_by_date(date="2026-02-01", lang="fr")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["title"], "Spanish fallback")
+
     def test_devotional_list_default_behavior_still_works(self):
         response = self._get_list()
         self.assertEqual(response.status_code, status.HTTP_200_OK)

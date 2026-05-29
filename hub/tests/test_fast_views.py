@@ -19,6 +19,7 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory
 from rest_framework.test import force_authenticate
 from datetime import timedelta
+from unittest.mock import patch
 from django.core.cache import cache
 from events.models import Event, EventType
 from tests.fixtures.test_data import TestDataFactory
@@ -61,15 +62,17 @@ class JoinFastViewTest(TestCase):
     def test_join_fast_adds_membership(self):
         self.client.force_login(self.user)
 
-        response = self.client.put(
-            self.url,
-            data={"fast_id": self.fast.id},
-            content_type="application/json",
-        )
+        with patch("hub.views.fast.FastListView.invalidate_cache") as mock_invalidate:
+            response = self.client.put(
+                self.url,
+                data={"fast_id": self.fast.id},
+                content_type="application/json",
+            )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(self.profile.fasts.filter(id=self.fast.id).exists())
         self.assertEqual(self.profile.fasts.filter(id=self.fast.id).count(), 1)
+        mock_invalidate.assert_called_once_with(self.fast.church_id)
 
     def test_join_fast_requires_authentication(self):
         response = self.client.put(
@@ -136,15 +139,17 @@ class LeaveFastViewTest(TestCase):
         self.profile.fasts.add(self.fast)
         self.client.force_login(self.user)
 
-        response = self.client.put(
-            self.url,
-            data={"fast_id": self.fast.id},
-            content_type="application/json",
-        )
+        with patch("hub.views.fast.FastListView.invalidate_cache") as mock_invalidate:
+            response = self.client.put(
+                self.url,
+                data={"fast_id": self.fast.id},
+                content_type="application/json",
+            )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["detail"], "Successfully left the fast.")
         self.assertFalse(self.profile.fasts.filter(id=self.fast.id).exists())
+        mock_invalidate.assert_called_once_with(self.fast.church_id)
 
     def test_leave_fast_requires_authentication(self):
         self.profile.fasts.add(self.fast)
