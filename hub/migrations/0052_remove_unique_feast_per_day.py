@@ -5,7 +5,7 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('hub', '0040_add_feast_models_and_llmprompt_applies_to'),
+        ('hub', '0051_fast_intention'),
     ]
 
     operations = [
