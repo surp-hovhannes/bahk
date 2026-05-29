@@ -173,6 +173,32 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertEqual(milestone_qs.count(), 1)
 
     @tag('integration')
+    def test_duplicate_accept_returns_validation_response(self):
+        """Duplicate accepts should return the existing client error, not a server error."""
+        intercessor = self.create_user(email='duplicate-pray@example.com')
+        requester = self.create_user(email='duplicate-requester@example.com')
+        self.authenticate(intercessor)
+        prayer_request = self.create_prayer_request(requester, title='Community need')
+        accept_url = f'/api/prayer-requests/{prayer_request.id}/accept/'
+
+        first_response = self.client.post(accept_url)
+        second_response = self.client.post(accept_url)
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            second_response.data,
+            {'detail': 'You have already accepted this prayer request.'},
+        )
+        self.assertEqual(
+            PrayerRequestAcceptance.objects.filter(
+                prayer_request=prayer_request,
+                user=intercessor,
+            ).count(),
+            1,
+        )
+
+    @tag('integration')
     def test_mark_prayed_requires_acceptance_and_prevents_duplicates(self):
         """Users must accept a request before logging prayer, and can only log once per day."""
         requester = self.create_user(email='requester2@example.com')
