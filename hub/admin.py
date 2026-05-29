@@ -545,6 +545,8 @@ class FastAdmin(admin.ModelAdmin):
                     Day.objects.create(date=date, fast=fast, church=data["church"])
 
                 # Derive year from the first created day
+                if dates:
+                    fast.year = dates[0].year
                 fast.save(update_fields=["year"])
 
                 # go back to fast admin page
