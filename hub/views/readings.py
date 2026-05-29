@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 
 from django.conf import settings
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics, status
@@ -284,18 +285,21 @@ class ReadingContextFeedbackView(APIView):
 
         feedback_type = request.data.get("feedback_type")
         if feedback_type == "up":
-            active_context.thumbs_up += 1
-            active_context.save(update_fields=["thumbs_up"])
+            active_context.__class__.objects.filter(pk=active_context.pk).update(
+                thumbs_up=F("thumbs_up") + 1
+            )
             return Response({"status": "success", "regenerate": False})
         elif feedback_type == "down":
-            active_context.thumbs_down += 1
+            active_context.__class__.objects.filter(pk=active_context.pk).update(
+                thumbs_down=F("thumbs_down") + 1
+            )
+            active_context.refresh_from_db(fields=["thumbs_down"])
             threshold = getattr(settings, "READING_CONTEXT_REGENERATION_THRESHOLD", 5)
             regenerate = False
             if active_context.thumbs_down >= threshold:
                 regenerate = True
                 # Force regeneration via Celery task
                 generate_reading_context_task.delay(reading.id, force_regeneration=True)
-            active_context.save(update_fields=["thumbs_down"])
             return Response({"status": "success", "regenerate": regenerate})
         else:
             return Response(

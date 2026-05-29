@@ -208,6 +208,15 @@ class FeedbackEndpointTests(APITestCase):
         self.assertEqual(self.context.thumbs_up, 1)
         self.assertEqual(self.context.thumbs_down, 0)
 
+    def test_feedback_endpoint_up_preserves_multiple_votes(self):
+        first_response = self.client.post(self.url, {"feedback_type": "up"}, format="json")
+        second_response = self.client.post(self.url, {"feedback_type": "up"}, format="json")
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.context.refresh_from_db()
+        self.assertEqual(self.context.thumbs_up, 2)
+
     @patch("hub.views.readings.generate_reading_context_task.delay")
     def test_feedback_endpoint_down_triggers_regeneration(self, mock_delay):
         # Start with one down vote
