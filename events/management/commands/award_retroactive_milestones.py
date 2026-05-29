@@ -159,12 +159,11 @@ class Command(BaseCommand):
                 # Get all fasts this user has participated in that have ended
                 today = timezone.now().date()
                 user_completed_fasts = Fast.objects.filter(
-                    profiles=user.profile,
-                    days__date__lt=today  # Only fasts that have ended
+                    profiles=user.profile
                 ).annotate(
                     end_date=models.Max('days__date')
                 ).filter(
-                    end_date__lt=today  # Ensure the fast has actually ended
+                    end_date__lt=today  # Fast's latest day is in the past
                 ).distinct().order_by('end_date')
                 
                 # Filter out weekly fasts and find the first non-weekly completed fast

@@ -399,13 +399,17 @@ class Command(BaseCommand):
         # Get all join events
         join_events = Event.objects.filter(
             event_type__code=EventType.USER_JOINED_FAST,
-            content_type=fast_content_type
+            content_type=fast_content_type,
+            timestamp__gte=start_dt,
+            timestamp__lte=end_dt
         ).select_related('user').order_by('user_id', 'object_id', 'timestamp')
         
         # Get all leave events
         leave_events = Event.objects.filter(
             event_type__code=EventType.USER_LEFT_FAST,
-            content_type=fast_content_type
+            content_type=fast_content_type,
+            timestamp__gte=start_dt,
+            timestamp__lte=end_dt
         ).select_related('user').order_by('user_id', 'object_id', 'timestamp')
         
         # Build chronological event sequences for each user-fast combination
