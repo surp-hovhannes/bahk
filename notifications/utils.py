@@ -21,7 +21,7 @@ def is_weekly_fast(fast):
     return bool(re.match("wednesday|friday", fast.name, re.I))
 
 
-def send_push_notification(message, data=None, users=None, notification_type=None):
+def send_push_notification(message, data=None, users=None, notification_type=None, device_token_ids=None):
     """
     Send push notifications to specified tokens or all registered devices.
     
@@ -31,6 +31,7 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
         users (list, optional): List of specific users to send to. If None, sends to all registered users.
         notification_type (str, optional): Type of notification. If not specified, will send to all users regardless of
             preferences. Defaults to None. Other options: ('upcoming_fast', 'ongoing_fast', 'daily_fast', 'weekly_fast')
+        device_token_ids (list, optional): List of specific DeviceToken IDs to send to.
     
     Returns:
         dict: Contains success status and details about sent/failed notifications
@@ -44,12 +45,14 @@ def send_push_notification(message, data=None, users=None, notification_type=Non
     }
 
     try:
-        logger.info(f"Starting push notification with users: {users or 'all'}")
+        logger.info(f"Starting push notification with users: {users or 'all'}, device_token_ids: {device_token_ids or 'all'}")
         
         # Get all active tokens for the specified users
         tokens_queryset = DeviceToken.objects.filter(is_active=True)
         
-        if users:
+        if device_token_ids:
+            tokens_queryset = tokens_queryset.filter(id__in=device_token_ids)
+        elif users:
             tokens_queryset = tokens_queryset.filter(user__in=users)
 
         if notification_type in NOTIFICATION_TYPE_FILTERS:

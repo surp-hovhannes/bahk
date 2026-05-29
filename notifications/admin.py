@@ -158,25 +158,26 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                     )
 
                 token_count = tokens.count()
-                users = list(tokens.values_list('user', flat=True).distinct())
+                token_ids = list(tokens.values_list('id', flat=True))
+                user_count = tokens.values_list('user', flat=True).distinct().count()
 
                 if token_count > 100:
                     # Offload to background worker to avoid request timeout
                     send_push_notification_to_users_task.delay(
                         message=message,
                         data=data,
-                        user_ids=users,
+                        device_token_ids=token_ids,
                     )
                     messages.success(
                         request,
-                        f"Sending notifications to {token_count} devices ({len(users)} users) in the background. "
+                        f"Sending notifications to {token_count} devices ({user_count} users) in the background. "
                         f"They will be delivered in chunks shortly."
                     )
                 else:
                     result = send_push_notification(
                         message=message,
                         data=data,
-                        users=users
+                        device_token_ids=token_ids
                     )
 
                     if result['success']:
