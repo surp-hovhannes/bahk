@@ -685,6 +685,29 @@ class PrayerBookmarkTests(APITestCase):
         self.assertEqual(content['type'], 'prayer')
         self.assertEqual(content['title'], 'Morning Prayer')
         self.assertIn('Lord, bless this day.', content['description'])
+
+    def test_bookmark_list_filters_prayers(self):
+        """Test filtering bookmark list to prayer bookmarks."""
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id,
+            note='My favorite prayer'
+        )
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(PrayerSet),
+            object_id=self.prayer_set.id,
+            note='Essential prayers'
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(reverse('bookmark-list'), {'content_type': 'prayer'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['content_type_name'], 'prayer')
+        self.assertEqual(response.data['results'][0]['object_id'], self.prayer.id)
     
     def test_bookmark_list_includes_prayersets(self):
         """Test that bookmark list endpoint includes bookmarked prayer sets."""
@@ -713,6 +736,31 @@ class PrayerBookmarkTests(APITestCase):
         self.assertEqual(content['type'], 'prayerset')
         self.assertEqual(content['title'], 'Daily Prayers')
         self.assertEqual(content['description'], 'A collection of daily prayers')
+
+    def test_bookmark_list_filters_prayersets(self):
+        """Test filtering bookmark list to prayer set bookmarks."""
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(Prayer),
+            object_id=self.prayer.id,
+            note='My favorite prayer'
+        )
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=ContentType.objects.get_for_model(PrayerSet),
+            object_id=self.prayer_set.id,
+            note='Essential prayers'
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(
+            reverse('bookmark-list'), {'content_type': 'prayerset'}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['content_type_name'], 'prayerset')
+        self.assertEqual(response.data['results'][0]['object_id'], self.prayer_set.id)
     
     def test_bookmark_requires_authentication(self):
         """Test that creating bookmarks requires authentication."""
@@ -725,4 +773,3 @@ class PrayerBookmarkTests(APITestCase):
         response = self.client.post(url, data, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
