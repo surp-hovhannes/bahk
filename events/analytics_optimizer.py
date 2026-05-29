@@ -99,7 +99,7 @@ class AnalyticsQueryOptimizer:
         fast_joins_by_day = {}
         fast_leaves_by_day = {}
         
-        for i in range(num_days + 1):
+        for i in range(num_days):
             day = start_of_window + timedelta(days=i)
             date_str = day.strftime('%Y-%m-%d')
             events_by_day[date_str] = 0
@@ -208,7 +208,7 @@ class AnalyticsQueryOptimizer:
             # Note: A rolling window of N days can span N+1 calendar days
             daily_joins = {}
             daily_leaves = {}
-            for i in range(num_days + 1):
+            for i in range(num_days):
                 day = start_of_window + timedelta(days=i)
                 date_str = day.strftime('%Y-%m-%d')
                 daily_joins[date_str] = 0

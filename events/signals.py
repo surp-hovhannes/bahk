@@ -524,10 +524,11 @@ def check_and_track_participation_milestones(fast):
     """
     try:
         current_count = fast.profiles.count()
-        track_fast_participant_milestone(fast, current_count)
+        return track_fast_participant_milestone(fast, current_count)
         
     except Exception as e:
         logger.error(f"Error checking participation milestones for fast {fast}: {e}")
+        return False
 
 
 @receiver(post_save, sender=Event)

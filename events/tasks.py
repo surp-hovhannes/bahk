@@ -706,8 +706,7 @@ def check_completed_fast_milestones_task():
                     # Check if this is their first completed non-weekly fast
                     # Get all fasts this user has participated in that have ended before today
                     user_completed_fasts = Fast.objects.filter(
-                        profiles=profile,
-                        days__date__lt=timezone.now().date()
+                        profiles=profile
                     ).annotate(
                         end_date=models.Max('days__date')
                     ).filter(
