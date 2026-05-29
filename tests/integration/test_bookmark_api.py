@@ -1,5 +1,7 @@
 """Integration tests for bookmark API endpoints."""
 
+from unittest.mock import patch
+
 from django.urls import reverse
 from django.contrib.contenttypes.models import ContentType
 from rest_framework import status
@@ -48,6 +50,35 @@ class BookmarkAPITests(BaseAPITestCase):
         # Check database
         bookmark = Bookmark.objects.get(user=self.user, object_id=self.video.id)
         self.assertEqual(bookmark.note, 'Great video!')
+
+    def test_create_bookmark_succeeds_when_cache_update_fails(self):
+        """Cache failures should not fail an otherwise successful bookmark create."""
+        url = reverse('bookmark-create')
+        data = {
+            'content_type': 'video',
+            'object_id': self.video.id,
+            'note': 'Save despite cache outage'
+        }
+
+        with patch(
+            'learning_resources.views.BookmarkCacheManager.bookmark_created',
+            side_effect=RuntimeError('redis unavailable')
+        ), self.assertLogs('learning_resources', level='WARNING') as logs:
+            response = self.client.post(url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['content_type_name'], 'video')
+        self.assertTrue(
+            Bookmark.objects.filter(
+                user=self.user,
+                content_type=ContentType.objects.get_for_model(Video),
+                object_id=self.video.id
+            ).exists()
+        )
+        self.assertIn(
+            'Cache update failed during bookmark creation',
+            '\n'.join(logs.output)
+        )
     
     def test_create_article_bookmark(self):
         """Test creating a bookmark for an article."""

@@ -70,13 +70,18 @@ class Command(BaseCommand):
             )
             self.stdout.write(f"Will update {profiles_to_update.count()} profiles with UTC/empty timezone")
 
-        if profiles_to_update.count() == 0:
+        profile_ids = list(
+            profiles_to_update.order_by('pk').values_list('pk', flat=True)
+        )
+        total_profiles = len(profile_ids)
+
+        if total_profiles == 0:
             self.stdout.write(self.style.SUCCESS("No profiles need timezone updates!"))
             return
 
         # Track statistics
         stats = {
-            'total': profiles_to_update.count(),
+            'total': total_profiles,
             'successful': 0,
             'failed': 0,
             'skipped': 0,
@@ -87,7 +92,13 @@ class Command(BaseCommand):
         batch_size = 100
         
         for i in range(0, stats['total'], batch_size):
-            batch = profiles_to_update[i:i+batch_size]
+            batch_ids = profile_ids[i:i + batch_size]
+            batch = (
+                Profile.objects
+                .filter(pk__in=batch_ids)
+                .select_related('user')
+                .order_by('pk')
+            )
             self.stdout.write(f"Processing batch {i//batch_size + 1}: profiles {i+1} to {min(i+batch_size, stats['total'])}")
             
             batch_updates = []
