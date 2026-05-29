@@ -1,8 +1,10 @@
+from django.test import Client, TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from unittest.mock import patch
 from ..models import DeviceToken
+from ..tasks import send_push_notification_to_users_task
 from tests.fixtures.test_data import TestDataFactory
 
 class DeviceTokenTests(APITestCase):
@@ -240,3 +242,77 @@ class TestPushNotificationTests(APITestCase):
             [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
         )
         mock_send_push.delay.assert_not_called()
+
+
+class DeviceTokenAdminPushTests(TestCase):
+    def setUp(self):
+        self.admin_user = TestDataFactory.create_user(
+            username='admin@example.com',
+            email='admin@example.com',
+            password='testpass123'
+        )
+        self.admin_user.is_staff = True
+        self.admin_user.is_superuser = True
+        self.admin_user.save()
+
+        self.user = TestDataFactory.create_user(
+            username='pushuser@example.com',
+            email='pushuser@example.com',
+            password='testpass123'
+        )
+        self.selected_token = DeviceToken.objects.create(
+            user=self.user,
+            token='ExponentPushToken[selected-token]',
+            device_type='ios'
+        )
+        self.other_token = DeviceToken.objects.create(
+            user=self.user,
+            token='ExponentPushToken[other-token]',
+            device_type='android'
+        )
+
+        self.client = Client()
+        self.client.force_login(self.admin_user)
+
+    @patch('notifications.utils.PushClient')
+    def test_admin_send_push_targets_only_selected_device_token(self, mock_push_client):
+        session = self.client.session
+        session['selected_tokens'] = [self.selected_token.id]
+        session.save()
+
+        response = self.client.post(
+            reverse('admin:notifications_devicetoken_send_push'),
+            {
+                'message': 'Selected device only',
+                'data': '{}',
+            }
+        )
+
+        self.assertRedirects(response, reverse('admin:notifications_devicetoken_changelist'))
+        publish = mock_push_client.return_value.publish
+        publish.assert_called_once()
+        push_message = publish.call_args.args[0]
+        self.assertEqual(push_message.to, self.selected_token.token)
+
+        self.other_token.refresh_from_db()
+        self.assertIsNone(self.other_token.last_used)
+
+    @patch('notifications.tasks.send_push_notification')
+    def test_chunked_task_can_target_device_token_ids(self, mock_send_push):
+        mock_send_push.return_value = {
+            'sent': 1,
+            'failed': 0,
+            'invalid_tokens': [],
+        }
+
+        send_push_notification_to_users_task(
+            message='Selected device only',
+            device_token_ids=[self.selected_token.id],
+        )
+
+        mock_send_push.assert_called_once_with(
+            message='Selected device only',
+            data=None,
+            users=None,
+            device_token_ids=[self.selected_token.id],
+        )

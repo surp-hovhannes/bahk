@@ -1,6 +1,6 @@
 import logging
 from django.shortcuts import render, redirect
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -103,7 +103,9 @@ def unsubscribe(request):
     token = request.GET.get('token')
     if not token:
         return redirect('notifications:unsubscribe_error')
-    
+
+    User = get_user_model()
+
     try:
         signer = TimestampSigner()
         user_id = signer.unsign(token, max_age=60*60*24*7)  # 7 days
