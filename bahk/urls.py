@@ -18,8 +18,10 @@ import logging
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import include, path
 from django.views.generic import RedirectView
+from markdownx.views import ImageUploadView, MarkdownifyView
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -112,7 +114,16 @@ urlpatterns = [
     path('api/token/', TrackingTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    path('markdownx/', include('markdownx.urls')),  # Include markdownx URLs
+    path(
+        'markdownx/upload/',
+        staff_member_required(ImageUploadView.as_view()),
+        name='markdownx_upload',
+    ),
+    path(
+        'markdownx/markdownify/',
+        staff_member_required(MarkdownifyView.as_view()),
+        name='markdownx_markdownify',
+    ),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # add account authentication urls

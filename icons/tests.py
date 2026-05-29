@@ -347,6 +347,30 @@ class IconFeedbackAPITests(APITestCase):
         feedback = IconFeedback.objects.first()
         self.assertIsNone(feedback.ip_address)
 
+    def test_malformed_ip_is_not_stored(self):
+        """Test that malformed IP addresses are discarded."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(),
+            format='json',
+            REMOTE_ADDR='not.an.ip'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        feedback = IconFeedback.objects.first()
+        self.assertIsNone(feedback.ip_address)
+
+    def test_proxy_style_ip_list_is_not_stored(self):
+        """Test that comma-separated proxy-style address lists are discarded."""
+        response = self.client.post(
+            self.feedback_url,
+            self._valid_payload(),
+            format='json',
+            REMOTE_ADDR='203.0.113.42, 10.0.0.5'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        feedback = IconFeedback.objects.first()
+        self.assertIsNone(feedback.ip_address)
+
     def test_user_agent_captured(self):
         """Test that HTTP_USER_AGENT is captured on submission."""
         response = self.client.post(
