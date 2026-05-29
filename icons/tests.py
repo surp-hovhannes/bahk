@@ -51,6 +51,26 @@ class IconModelTests(TestCase):
         )
         
         self.assertEqual(str(icon), "Test Icon")
+
+    def test_icon_save_accepts_model_save_positional_arguments(self):
+        """Test direct compatibility with Django Model.save positional args."""
+        test_image = SimpleUploadedFile(
+            name='test_icon.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+
+        icon = Icon.objects.create(
+            title="Test Icon",
+            church=self.church,
+            image=test_image
+        )
+
+        icon.title = "Updated Icon"
+        icon.save(False, False, None, ['title'])
+
+        icon.refresh_from_db()
+        self.assertEqual(icon.title, "Updated Icon")
     
     def test_icon_tags(self):
         """Test adding tags to an icon."""
