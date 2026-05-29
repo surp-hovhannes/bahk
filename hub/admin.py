@@ -544,6 +544,9 @@ class FastAdmin(admin.ModelAdmin):
                 for date in dates:
                     Day.objects.create(date=date, fast=fast, church=data["church"])
 
+                # Derive year from the first created day
+                fast.save(update_fields=["year"])
+
                 # go back to fast admin page
                 obj_url = reverse(
                     f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"

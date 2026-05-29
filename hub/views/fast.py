@@ -188,10 +188,7 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
             keys = cache.keys(pattern)
             if keys:
                 cache.delete_many(keys)
-        else:
-            # LocMemCache doesn't support pattern matching, so we'll clear all cache
-            # This is less efficient but works for testing
-            cache.clear()
+        # On LocMemCache, the TTL will expire stale entries naturally
 
 
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
@@ -528,6 +525,9 @@ class JoinFastView(generics.UpdateAPIView):
         
         # Invalidate the stats cache for this user
         invalidate_fast_stats_cache(self.request.user)
+        
+        # Invalidate fast list caches for this church
+        cache.delete(f'church_{fast.church_id}_participant_count')
 
 
 class LeaveFastView(generics.UpdateAPIView):
@@ -611,6 +611,9 @@ class LeaveFastView(generics.UpdateAPIView):
         
         # Invalidate the stats cache for this user
         invalidate_fast_stats_cache(self.request.user)
+        
+        # Invalidate fast list caches for this church
+        cache.delete(f'church_{fast.church_id}_participant_count')
 
 
 def vary_on_query_params(*params):
