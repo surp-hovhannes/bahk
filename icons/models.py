@@ -59,16 +59,20 @@ class Icon(models.Model):
     def __str__(self):
         return self.title
     
-    def save(self, **kwargs):
+    def save(self, *args, **kwargs):
         """Save method with thumbnail caching logic."""
+        update_fields = kwargs.get('update_fields')
+        if len(args) >= 4:
+            update_fields = args[3]
+
         # First check if this is a new instance or if the image field has changed
         is_new_image = (
             self._state.adding
-            or 'image' in kwargs.get('update_fields', [])
+            or 'image' in (update_fields or [])
             or (not self._state.adding and self.tracker.has_changed('image'))
         )
         
-        super().save(**kwargs)
+        super().save(*args, **kwargs)
         
         # Handle thumbnail URL caching after the instance and image are fully saved to S3
         if self.image:
