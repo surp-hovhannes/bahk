@@ -527,7 +527,7 @@ class JoinFastView(generics.UpdateAPIView):
         invalidate_fast_stats_cache(self.request.user)
         
         # Invalidate fast list caches for this church
-        cache.delete(f'church_{fast.church_id}_participant_count')
+        FastListView().invalidate_cache(fast.church_id)
 
 
 class LeaveFastView(generics.UpdateAPIView):
@@ -613,7 +613,7 @@ class LeaveFastView(generics.UpdateAPIView):
         invalidate_fast_stats_cache(self.request.user)
         
         # Invalidate fast list caches for this church
-        cache.delete(f'church_{fast.church_id}_participant_count')
+        FastListView().invalidate_cache(fast.church_id)
 
 
 def vary_on_query_params(*params):
