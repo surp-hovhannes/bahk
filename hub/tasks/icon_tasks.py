@@ -105,10 +105,10 @@ If unsure whether an icon is relevant:
 DO NOT RETURN IT.
 """
     
-    allowed_ids = [icon.id for icon in icons]
+    allowed_ids = {icon.id for icon in icons}
     
     user_message = f"""User request: "{prompt}"
-Allowed icon IDs: {allowed_ids}
+Allowed icon IDs: {sorted(allowed_ids)}
 
 Available icons (ID, Title, Tags):
 {chr(10).join(icon_descriptions)}
@@ -230,19 +230,35 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                 if isinstance(item, dict):
                     # New format: {"id": 3, "confidence": "high"}
                     if 'id' in item:
+                        try:
+                            icon_id = int(item['id'])
+                        except (TypeError, ValueError):
+                            logger.warning("Skipping invalid icon ID from LLM response: %r", item['id'])
+                            continue
+                        if icon_id not in allowed_ids:
+                            logger.warning("Skipping out-of-scope icon ID from LLM response: %s", icon_id)
+                            continue
                         confidence = item.get('confidence', 'medium')
                         # Validate confidence level
                         if confidence not in valid_confidence_levels:
                             logger.warning(f"Invalid confidence '{confidence}', defaulting to 'medium'")
                             confidence = 'medium'
                         matched_results.append({
-                            'id': item['id'],
+                            'id': icon_id,
                             'confidence': confidence
                         })
                 elif isinstance(item, (int, str)):
                     # Backward compatibility: just an ID
+                    try:
+                        icon_id = int(item)
+                    except (TypeError, ValueError):
+                        logger.warning("Skipping invalid icon ID from LLM response: %r", item)
+                        continue
+                    if icon_id not in allowed_ids:
+                        logger.warning("Skipping out-of-scope icon ID from LLM response: %s", icon_id)
+                        continue
                     matched_results.append({
-                        'id': int(item),
+                        'id': icon_id,
                         'confidence': 'medium'  # Default if not provided
                     })
             
@@ -253,6 +269,7 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
         except json.JSONDecodeError:
             # Fallback: extract numbers from response
             matched_ids = [int(x) for x in re.findall(r'\d+', llm_response)]
+            matched_ids = [icon_id for icon_id in matched_ids if icon_id in allowed_ids]
             return [
                 {'id': icon_id, 'confidence': 'medium'}
                 for icon_id in matched_ids[:max_results]
@@ -329,7 +346,7 @@ def match_icon_to_feast_task(self, feast_id: int):
             # Found a high confidence match, save it
             icon_id = first_match['id']
             try:
-                icon = Icon.objects.get(pk=icon_id)
+                icon = Icon.objects.get(pk=icon_id, church=church)
                 feast.icon = icon
                 feast.save(update_fields=['icon'])
                 logger.info(
@@ -348,4 +365,3 @@ def match_icon_to_feast_task(self, feast_id: int):
         logger.error(f"Error matching icon to feast {feast_id}: {e}", exc_info=True)
         # Don't retry on general exceptions, just log the error
         # Feasts can exist without icons, so this is not a critical failure
-

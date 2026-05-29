@@ -8,7 +8,11 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from hub.models import Church, Day, Feast
-from hub.tasks.icon_tasks import match_icon_to_feast_task, _simple_match_icons
+from hub.tasks.icon_tasks import (
+    match_icon_to_feast_task,
+    _match_icons_with_llm,
+    _simple_match_icons,
+)
 from hub.signals import handle_feast_save
 from icons.models import Icon
 
@@ -247,6 +251,87 @@ class FeastIconMatchingTaskTests(TestCase):
         # Test no match
         result = _simple_match_icons(icons, "Christmas", max_results=1)
         self.assertEqual(len(result), 0)
+
+
+class FeastIconMatchingScopeTests(TestCase):
+    """Tests for church scoping in icon matching."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.other_church = Church.objects.create(name="Other Church")
+        self.test_date = date(2025, 12, 25)
+        self.test_image = SimpleUploadedFile(
+            name='icon.jpg',
+            content=b'fake image content',
+            content_type='image/jpeg'
+        )
+
+    def _create_feast_without_signal(self, **kwargs):
+        """Create Feast fixtures without eager post-save task side effects."""
+        post_save.disconnect(handle_feast_save, sender=Feast)
+        try:
+            return Feast.objects.create(**kwargs)
+        finally:
+            post_save.connect(handle_feast_save, sender=Feast)
+
+    def test_match_icon_task_rejects_icon_from_another_church(self):
+        """Task must not assign a matched icon outside the feast church."""
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        feast = self._create_feast_without_signal(
+            day=day,
+            name="Nativity of Christ",
+        )
+        Icon.objects.create(
+            title="Local Nativity Icon",
+            church=self.church,
+            image=self.test_image,
+        )
+        other_icon = Icon.objects.create(
+            title="Other Church Nativity Icon",
+            church=self.other_church,
+            image=SimpleUploadedFile(
+                name='other_icon.jpg',
+                content=b'fake image content',
+                content_type='image/jpeg'
+            ),
+        )
+
+        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
+            mock_match.return_value = [
+                {'id': other_icon.id, 'confidence': 'high'}
+            ]
+            match_icon_to_feast_task(feast.id)
+
+        feast.refresh_from_db()
+        self.assertIsNone(feast.icon)
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('openai.OpenAI')
+    def test_llm_parser_filters_out_of_scope_icon_ids(self, mock_openai):
+        """LLM parser should only return IDs from the provided icon list."""
+        icon = Icon.objects.create(
+            title="Local Nativity Icon",
+            church=self.church,
+            image=self.test_image,
+        )
+        other_icon = Icon.objects.create(
+            title="Other Church Nativity Icon",
+            church=self.other_church,
+            image=SimpleUploadedFile(
+                name='other_icon_parser.jpg',
+                content=b'fake image content',
+                content_type='image/jpeg'
+            ),
+        )
+        mock_choice = mock_openai.return_value.chat.completions.create.return_value.choices[0]
+        mock_choice.message.content = (
+            f'[{{"id": {other_icon.id}, "confidence": "high"}}, '
+            f'{{"id": {icon.id}, "confidence": "high"}}]'
+        )
+
+        matches = _match_icons_with_llm([icon], "Nativity", max_results=2)
+
+        self.assertEqual(matches, [{'id': icon.id, 'confidence': 'high'}])
 
 
 @tag('slow', 'integration')

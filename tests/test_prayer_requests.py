@@ -1187,6 +1187,39 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertTrue(prayer_request.requires_human_review)
         mock_email.assert_called_once()
 
+    def test_moderation_task_llm_error_sets_manual_review_flag(self):
+        """LLM failures should leave the request visible in the manual-review queue."""
+        requester = self.create_user(email='llmerror@example.com')
+        prayer_request = PrayerRequest.objects.create(
+            title='Prayer needing moderation',
+            description='Please pray for wisdom.',
+            requester=requester,
+            duration_days=3,
+            status='pending_moderation',
+            reviewed=False,
+            requires_human_review=False,
+            expiration_date=timezone.now() + timedelta(days=3),
+        )
+
+        with patch('anthropic.Anthropic') as mock_anthropic, \
+             patch('prayers.tasks._send_moderation_alert_email') as mock_email:
+            mock_client = mock_anthropic.return_value
+            mock_client.messages.create.side_effect = RuntimeError('service down')
+            result = moderate_prayer_request_task(prayer_request.id)
+
+        prayer_request.refresh_from_db()
+        self.assertFalse(result['success'])
+        self.assertTrue(result['requires_manual_review'])
+        self.assertEqual(prayer_request.status, 'pending_moderation')
+        self.assertTrue(prayer_request.requires_human_review)
+        self.assertEqual(prayer_request.moderation_severity, 'high')
+        self.assertIn('service down', prayer_request.moderation_result['llm_check']['error'])
+        self.assertEqual(
+            prayer_request.moderation_result['reason'],
+            'LLM moderation failed, requires manual review',
+        )
+        mock_email.assert_called_once_with(prayer_request, 'llm_error')
+
     @tag('integration')
     def test_api_exposes_moderation_severity(self):
         """API should expose moderation_severity field."""
