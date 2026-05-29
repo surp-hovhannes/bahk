@@ -58,7 +58,7 @@ if not (config('CI', default=False, cast=bool) or 'test' in sys.argv):
         # environment variable, or infer a git commit
         # SHA as release, however you may want to set
         # something more human-readable.
-        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@1.0.0")),
+        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@2.4.0")),
         # Enable performance monitoring
         enable_tracing=True,
         # Only enable Sentry in production or when explicitly configured

@@ -5,7 +5,7 @@ from markdownx.utils import markdownify
 
 # Create your models here.
 class Changelog(models.Model):
-    """Model for tracking changes or updates in the app."""
+    """Deprecated in-app changelog; GitHub releases are the canonical release record."""
     title = models.CharField(max_length=255)
     description = MarkdownxField()
     version = models.CharField(max_length=50)
