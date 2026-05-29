@@ -1,6 +1,7 @@
 """Integration tests for FastIntention API endpoints."""
 
 from django.urls import reverse
+from django.test import override_settings
 from rest_framework import status
 from hub.models import FastIntention
 from tests.base import BaseAPITestCase
@@ -257,6 +258,7 @@ class FastIntentionEndpointTests(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
 class ParticipantPayloadIntentionTests(BaseAPITestCase):
     """Tests that intentions appear correctly on participant payloads."""
 
@@ -268,10 +270,6 @@ class ParticipantPayloadIntentionTests(BaseAPITestCase):
         self.profile.fasts.add(self.fast)
 
     def test_public_intention_on_participant_list(self):
-        # Clear the participant view cache to avoid stale response from parallel tests
-        from django.core.cache import cache
-        cache.clear()
-        
         FastIntention.objects.create(
             user=self.user,
             fast=self.fast,
