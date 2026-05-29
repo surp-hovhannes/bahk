@@ -17,8 +17,8 @@ def daterange(start_date: date, end_date: date):
 class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--church", required=True, help="name of church to add reading to their calendar")
-        parser.add_argument('--start_date', default=date.today().strftime("%Y-%m-%d"), help="date to start importing readings")
-        parser.add_argument('--end_date', default=(date.today() + timedelta(10)).strftime("%Y-%m-%d"),
+        parser.add_argument('--start_date', default=None, help="date to start importing readings")
+        parser.add_argument('--end_date', default=None,
                             help="date to end importing readings")
 
     def handle(self, *args, **options):
@@ -28,8 +28,12 @@ class Command(BaseCommand):
             logging.error("Church %s does not exist. No readings imported.", options["church"])
             return
 
-        start_date = datetime.strptime(options["start_date"], "%Y-%m-%d")
-        end_date = datetime.strptime(options["end_date"], "%Y-%m-%d")
+        today = date.today()
+        start_date_value = options["start_date"] or today.strftime("%Y-%m-%d")
+        end_date_value = options["end_date"] or (today + timedelta(10)).strftime("%Y-%m-%d")
+
+        start_date = datetime.strptime(start_date_value, "%Y-%m-%d")
+        end_date = datetime.strptime(end_date_value, "%Y-%m-%d")
         for date_obj in daterange(start_date, end_date):
             day, _ = models.Day.objects.get_or_create(church=church, date=date_obj)
             readings = scrape_readings(date_obj, church)

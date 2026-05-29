@@ -31,6 +31,7 @@ class Command(BaseCommand):
         # Create days
         base_date = timezone.now().date()
         day1 = Day.objects.create(date=base_date, fast=fast, church=church)
+        fast.save(update_fields=["year"])
 
         # DevotionalSet with translations
         dset = DevotionalSet.objects.create(
@@ -125,4 +126,3 @@ class Command(BaseCommand):
         # Skipping creation of a feed item without a user
 
         self.stdout.write(self.style.SUCCESS("Seeded multilingual data for en and hy."))
-

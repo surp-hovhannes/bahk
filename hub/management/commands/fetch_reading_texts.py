@@ -1,7 +1,11 @@
 """Fetch Bible text from API.Bible for readings missing text."""
 import logging
+from datetime import timedelta
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.db.models import Q
+from django.utils import timezone
 
 from hub.models import Reading
 from hub.tasks import refresh_all_reading_texts_task
@@ -21,15 +25,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        refresh_days = getattr(settings, "READING_TEXT_REFRESH_DAYS", 23)
+        threshold = timezone.now() - timedelta(days=refresh_days)
+        stale_filter = Q(text_fetched_at__isnull=True) | Q(text_fetched_at__lt=threshold)
+
         missing_count = Reading.objects.filter(text="").count()
+        stale_count = Reading.objects.filter(stale_filter).count()
         total_count = Reading.objects.count()
 
         self.stdout.write(
-            f"Readings without text: {missing_count}/{total_count}"
+            f"Readings without text: {missing_count}/{total_count}; stale: {stale_count}/{total_count}"
         )
 
-        if missing_count == 0:
-            self.stdout.write(self.style.SUCCESS("All readings already have text."))
+        if stale_count == 0:
+            self.stdout.write(self.style.SUCCESS("All readings already have fresh text."))
             return
 
         if options["run_async"]:

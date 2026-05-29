@@ -9,8 +9,10 @@ Tests cover:
     - API response (includes text fields)
 """
 from datetime import date, timedelta
+from io import StringIO
 from unittest.mock import patch, MagicMock
 
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -44,6 +46,37 @@ def _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=
         end_verse=end_v,
         **kwargs,
     )
+
+
+# ------------------------------------------------------------------ #
+#  fetch_reading_texts Management Command Tests
+# ------------------------------------------------------------------ #
+
+@override_settings(READING_TEXT_REFRESH_DAYS=23)
+class FetchReadingTextsCommandTests(TestCase):
+    """Tests for the fetch_reading_texts management command."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+
+    @patch("hub.management.commands.fetch_reading_texts.refresh_all_reading_texts_task")
+    def test_stale_populated_reading_runs_refresh(self, mock_refresh_task):
+        """Stale readings with existing text should still trigger refresh."""
+        day = Day.objects.create(date=date(2025, 3, 15), church=self.church)
+        _create_reading(
+            day,
+            book="Genesis",
+            start_ch=1,
+            start_v=1,
+            end_ch=1,
+            end_v=5,
+            text="Old text",
+            text_fetched_at=timezone.now() - timedelta(days=25),
+        )
+
+        call_command("fetch_reading_texts", stdout=StringIO())
+
+        mock_refresh_task.assert_called_once_with()
 
 
 # ------------------------------------------------------------------ #

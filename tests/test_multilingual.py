@@ -153,5 +153,7 @@ class MultilingualAPITests(APITestCase):
         call_command('seed_multilingual_data')
         self.assertTrue(Fast.objects.filter(name="Great Lent").exists())
         fast = Fast.objects.get(name="Great Lent")
+        day = fast.days.get()
+        self.assertEqual(fast.year, day.date.year)
         activate('hy')
         self.assertEqual(fast.name_i18n, "Մեծ Պահք")
