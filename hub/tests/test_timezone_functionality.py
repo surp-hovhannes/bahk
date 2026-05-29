@@ -23,6 +23,10 @@ class TimezoneModelTest(TestCase):
     def test_profile_has_default_utc_timezone(self):
         """Test that new profiles default to UTC timezone."""
         self.assertEqual(self.profile.timezone, 'UTC')
+
+    def test_profile_defaults_out_of_weekly_prayer_request_push_notifications(self):
+        """New profiles should not be opted into this push category by default."""
+        self.assertFalse(self.profile.receive_weekly_prayer_request_push_notifications)
     
     def test_profile_timezone_can_be_updated(self):
         """Test that profile timezone can be updated."""
