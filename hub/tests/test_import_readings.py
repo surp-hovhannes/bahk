@@ -153,3 +153,25 @@ class ImportReadingsCommandTests(TestCase):
         reading.refresh_from_db()
         self.assertEqual(reading.book_hy, "Յովհաննէս")
 
+    @patch("hub.management.commands.import_readings.scrape_readings")
+    def test_import_readings_default_dates_are_computed_at_execution(self, mock_scrape):
+        """Test omitted dates use the current date when the command executes."""
+        mock_scrape.return_value = []
+
+        class FrozenDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 2, 3)
+
+        out = StringIO()
+
+        with patch("hub.management.commands.import_readings.date", FrozenDate):
+            call_command(
+                "import_readings",
+                "--church", self.church.name,
+                stdout=out
+            )
+
+        self.assertEqual(mock_scrape.call_count, 10)
+        self.assertEqual(mock_scrape.call_args_list[0].args[0].date(), date(2026, 2, 3))
+        self.assertEqual(mock_scrape.call_args_list[-1].args[0].date(), date(2026, 2, 12))
