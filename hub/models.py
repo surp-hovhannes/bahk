@@ -758,12 +758,7 @@ class Feast(models.Model):
     i18n = TranslationField(fields=('name',))
 
     class Meta:
-        constraints = [
-            constraints.UniqueConstraint(
-                fields=["day"],
-                name="unique_feast_per_day",
-            ),
-        ]
+        pass
 
     @property
     def active_context(self):

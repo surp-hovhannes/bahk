@@ -63,12 +63,12 @@ class DevotionalByDateView(ChurchContextMixin, TimezoneMixin, generics.RetrieveA
                 return Devotional.objects.get(day__church=church, day__date=target_date, language_code='en')
             except Devotional.DoesNotExist:
                 pass
-        try:
-            return Devotional.objects.get(day__church=church, day__date=target_date)
-        except Devotional.DoesNotExist:
+        devotional = Devotional.objects.filter(day__church=church, day__date=target_date).order_by('language_code').first()
+        if devotional is None:
             # No devotional for this date — this is expected for some churches/days.
             logging.debug(f"No devotional for {target_date} for church {church.name}")
             return None
+        return devotional
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
