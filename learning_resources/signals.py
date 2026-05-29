@@ -46,11 +46,18 @@ def bookmark_created_signal(sender, instance, created, **kwargs):
     any method (API, admin, Django shell, etc.).
     """
     if created:
-        BookmarkCacheManager.bookmark_created(
-            user=instance.user,
-            content_type=instance.content_type,
-            object_id=instance.object_id
-        )
+        try:
+            BookmarkCacheManager.bookmark_created(
+                user=instance.user,
+                content_type=instance.content_type,
+                object_id=instance.object_id
+            )
+        except Exception as cache_error:
+            logger.warning(
+                f"Cache update failed during bookmark creation signal for user {instance.user.id}, "
+                f"content_type {instance.content_type_id}, object_id {instance.object_id}: {cache_error}"
+            )
+            return
         logger.debug(f"Signal: Bookmark created for user {instance.user.id}, "
                     f"content_type {instance.content_type.id}, object {instance.object_id}")
 

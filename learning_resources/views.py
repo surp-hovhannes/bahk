@@ -572,12 +572,20 @@ class BookmarkCreateView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         bookmark = serializer.save()
         
-        # Update Redis cache - add bookmark
-        BookmarkCacheManager.bookmark_created(
-            user=request.user,
-            content_type=bookmark.content_type,
-            object_id=bookmark.object_id
-        )
+        # Update Redis cache - add bookmark. Cache failures should not turn a
+        # successful database create into a 500 response.
+        try:
+            BookmarkCacheManager.bookmark_created(
+                user=request.user,
+                content_type=bookmark.content_type,
+                object_id=bookmark.object_id
+            )
+        except Exception as cache_error:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Cache update failed during bookmark creation for user {request.user.id}, "
+                f"content_type {bookmark.content_type_id}, object_id {bookmark.object_id}: {cache_error}"
+            )
         
         # Return the full bookmark representation
         response_serializer = BookmarkSerializer(bookmark)
