@@ -146,6 +146,40 @@ class IconAPITests(APITestCase):
         response = self.client.post('/api/icons/match/', data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('matches', response.data)
+
+    def test_icon_match_accepts_form_encoded_max_results_string(self):
+        """Test that numeric form max_results is normalized before matching."""
+        data = {
+            'prompt': 'nativity',
+            'return_format': 'id',
+            'max_results': '2'
+        }
+        response = self.client.post('/api/icons/match/', data, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('matches', response.data)
+        self.assertLessEqual(len(response.data['matches']), 2)
+
+    def test_icon_match_rejects_negative_max_results(self):
+        """Test that negative max_results is rejected."""
+        data = {
+            'prompt': 'nativity',
+            'return_format': 'id',
+            'max_results': -1
+        }
+        response = self.client.post('/api/icons/match/', data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('max_results', response.data['error'])
+
+    def test_icon_match_rejects_non_numeric_max_results(self):
+        """Test that non-numeric max_results is rejected."""
+        data = {
+            'prompt': 'nativity',
+            'return_format': 'id',
+            'max_results': 'two'
+        }
+        response = self.client.post('/api/icons/match/', data, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('max_results', response.data['error'])
     
     def test_icon_match_requires_prompt(self):
         """Test that icon matching requires a prompt."""

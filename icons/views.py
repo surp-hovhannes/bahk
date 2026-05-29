@@ -163,7 +163,7 @@ class IconMatchView(views.APIView):
         prompt = request.data.get('prompt')
         church_id = request.data.get('church_id')
         return_format = request.data.get('return_format', 'full')
-        max_results = request.data.get('max_results', 3)
+        raw_max_results = request.data.get('max_results', 3)
         
         # Validate prompt
         if not prompt:
@@ -176,6 +176,22 @@ class IconMatchView(views.APIView):
         if return_format not in ['id', 'full']:
             return Response(
                 {'error': 'return_format must be "id" or "full"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            if isinstance(raw_max_results, (bool, float)):
+                raise ValueError
+            max_results = int(raw_max_results)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'max_results must be an integer'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if max_results < 1 or max_results > 100:
+            return Response(
+                {'error': 'max_results must be between 1 and 100'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
