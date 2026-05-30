@@ -2,7 +2,7 @@
 Management command to regenerate a participant map for a specific fast.
 """
 from django.core.management.base import BaseCommand, CommandError
-from hub.models import Fast, FastParticipantMap
+from hub.models import Fast
 from hub.tasks import generate_participant_map
 import time
 
@@ -22,11 +22,6 @@ class Command(BaseCommand):
             fast = Fast.objects.get(id=fast_id)
         except Fast.DoesNotExist:
             raise CommandError(f'Fast with ID {fast_id} does not exist')
-        
-        # Delete existing map if it exists
-        FastParticipantMap.objects.filter(fast=fast).delete()
-        
-        self.stdout.write(self.style.SUCCESS(f'Deleted existing map for fast "{fast}"'))
         
         # Trigger map generation
         task = generate_participant_map.delay(fast_id)

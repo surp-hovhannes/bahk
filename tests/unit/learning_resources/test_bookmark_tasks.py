@@ -2,8 +2,9 @@
 Tests for learning resources Celery tasks.
 """
 from django.test.utils import override_settings
+from django.contrib.contenttypes.models import ContentType
 from tests.base import BaseTestCase
-from learning_resources.models import Bookmark
+from learning_resources.models import Bookmark, Video
 
 
 class BookmarkTasksTests(BaseTestCase):
@@ -103,6 +104,27 @@ class BookmarkTasksIntegrationTests(BaseTestCase):
         
         # Test that task is properly configured for this scenario
         self.assertTrue(hasattr(cleanup_orphaned_bookmarks_async, 'delay'))
+
+    def test_cleanup_task_deletes_all_orphans_across_batches(self):
+        """Deleting each batch should not cause later orphan rows to be skipped."""
+        from learning_resources.tasks import cleanup_orphaned_bookmarks_async
+
+        video_ct = ContentType.objects.get_for_model(Video)
+        for object_id in range(10_000, 10_005):
+            Bookmark.objects.create(
+                user=self.user,
+                content_type=video_ct,
+                object_id=object_id,
+            )
+
+        result = cleanup_orphaned_bookmarks_async.apply(
+            kwargs={"batch_size": 2, "dry_run": False}
+        ).get()
+
+        self.assertEqual(result["total_processed"], 5)
+        self.assertEqual(result["orphaned_found"], 5)
+        self.assertEqual(result["deleted"], 5)
+        self.assertEqual(Bookmark.objects.count(), 0)
 
 
 @override_settings(
