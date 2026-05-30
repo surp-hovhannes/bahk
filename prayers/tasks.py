@@ -12,6 +12,7 @@ from django.utils import timezone
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
+from hub.tasks.icon_tasks import _match_icons_with_llm
 from icons.models import Icon
 from prayers.models import Prayer, PrayerRequest, PrayerRequestPrayerLog
 
@@ -23,14 +24,22 @@ configure_profanity_filter()
 
 @shared_task
 def match_icons_for_imported_prayers_task(prayer_ids, church_id):
-    """Assign the best simple title/tag icon match to imported prayers."""
+    """Assign the best LLM-matched icon to imported prayers."""
     icons = list(Icon.objects.filter(church_id=church_id).prefetch_related("tags"))
+    if not icons:
+        return
+
+    icons_by_id = {icon.id: icon for icon in icons}
 
     for prayer_id in prayer_ids:
         try:
             prayer = Prayer.objects.prefetch_related("tags").get(id=prayer_id, church_id=church_id)
             prompt = f"{prayer.title} {' '.join(tag.name for tag in prayer.tags.all())}"
-            matched_icon = _simple_match_icon(icons, prompt)
+            matched_results = _match_icons_with_llm(icons, prompt, max_results=1)
+            if not matched_results:
+                continue
+
+            matched_icon = icons_by_id.get(matched_results[0]["id"])
             if matched_icon:
                 prayer.icon = matched_icon
                 prayer.save(update_fields=["icon", "updated_at"])
@@ -41,30 +50,6 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
                 church_id,
                 exc,
             )
-
-
-def _simple_match_icon(icons, prompt):
-    """Return the highest scoring icon based on title and tag keyword overlap."""
-    prompt_lower = prompt.lower()
-    scored_icons = []
-
-    for icon in icons:
-        score = 0
-        title_lower = icon.title.lower()
-        tags_lower = [tag.name.lower() for tag in icon.tags.all()]
-
-        if prompt_lower in title_lower or title_lower in prompt_lower:
-            score += 10
-
-        for tag in tags_lower:
-            if tag in prompt_lower or prompt_lower in tag:
-                score += 5
-
-        if score > 0:
-            scored_icons.append((score, icon.id, icon))
-
-    scored_icons.sort(reverse=True, key=lambda item: (item[0], item[1]))
-    return scored_icons[0][2] if scored_icons else None
 
 
 def _get_moderation_prompt_and_service(prayer_request):

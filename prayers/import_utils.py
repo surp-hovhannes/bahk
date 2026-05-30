@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 VALID_CATEGORIES = {"morning", "evening", "general"}
 SET_REQUIRED_FIELDS = ("title", "category", "prayers")
 PRAYER_REQUIRED_FIELDS = ("title", "text", "category")
+PRAYER_SET_TITLE_MAX_LENGTH = 128
+PRAYER_TITLE_MAX_LENGTH = 200
 TRANSLATABLE_FIELDS = {
     "set": ("title", "description"),
     "prayer": ("title", "text"),
@@ -33,8 +35,17 @@ def validate_import_json(data: dict) -> None:
         if not isinstance(prayer_set, dict):
             raise ValueError(_("Prayer set %(index)s must be an object.") % {"index": set_index})
 
-        _validate_required_fields(prayer_set, SET_REQUIRED_FIELDS, f"Prayer set {set_index}")
-        _validate_category(prayer_set["category"], f"Prayer set {set_index}")
+        set_context = f"Prayer set {set_index}"
+        _validate_required_fields(prayer_set, SET_REQUIRED_FIELDS, set_context)
+        _validate_string_field(
+            prayer_set["title"],
+            "title",
+            set_context,
+            max_length=PRAYER_SET_TITLE_MAX_LENGTH,
+        )
+        if "description" in prayer_set and prayer_set["description"] not in (None, ""):
+            _validate_string_field(prayer_set["description"], "description", set_context)
+        _validate_category(prayer_set["category"], set_context)
 
         prayers = prayer_set["prayers"]
         if not isinstance(prayers, list) or not prayers:
@@ -52,7 +63,16 @@ def validate_import_json(data: dict) -> None:
 
             context = f'Prayer {prayer_index} in set "{prayer_set["title"]}"'
             _validate_required_fields(prayer, PRAYER_REQUIRED_FIELDS, context)
+            _validate_string_field(
+                prayer["title"],
+                "title",
+                context,
+                max_length=PRAYER_TITLE_MAX_LENGTH,
+            )
+            _validate_string_field(prayer["text"], "text", context)
             _validate_category(prayer["category"], context)
+            if "tags" in prayer:
+                _validate_tags(prayer["tags"], context)
 
 
 def detect_conflicts(data: dict, church) -> list[dict]:
@@ -168,7 +188,48 @@ def _validate_required_fields(item: dict, required_fields: tuple[str, ...], cont
             )
 
 
+def _validate_string_field(
+    value,
+    field_name: str,
+    context: str,
+    *,
+    max_length: int | None = None,
+) -> None:
+    """Raise ValueError if a field is not a non-empty string or exceeds max length."""
+    if not isinstance(value, str):
+        raise ValueError(
+            _('%(context)s field "%(field)s" must be a string.') % {"context": context, "field": field_name}
+        )
+    if not value.strip():
+        raise ValueError(
+            _('%(context)s field "%(field)s" must not be empty.') % {"context": context, "field": field_name}
+        )
+    if max_length is not None and len(value) > max_length:
+        raise ValueError(
+            _('%(context)s field "%(field)s" exceeds maximum length of %(max)s characters.')
+            % {"context": context, "field": field_name, "max": max_length}
+        )
+
+
+def _validate_tags(tags, context: str) -> None:
+    """Raise ValueError if tags are not a string, list of strings, or empty."""
+    if tags in (None, "", []):
+        return
+    if isinstance(tags, str):
+        return
+    if isinstance(tags, list):
+        for tag_index, tag in enumerate(tags, start=1):
+            if not isinstance(tag, str):
+                raise ValueError(
+                    _("%(context)s tag %(index)s must be a string.") % {"context": context, "index": tag_index}
+                )
+        return
+    raise ValueError(_('%(context)s field "tags" must be a string or array of strings.') % {"context": context})
+
+
 def _validate_category(category: str, context: str) -> None:
+    if not isinstance(category, str):
+        raise ValueError(_('%(context)s field "category" must be a string.') % {"context": context})
     if category not in VALID_CATEGORIES:
         valid_categories = ", ".join(sorted(VALID_CATEGORIES))
         raise ValueError(
@@ -196,13 +257,14 @@ def _apply_translations(obj, item: dict, object_type: str) -> None:
         for key, value in item.items():
             prefix = f"{field}_"
             if key.startswith(prefix) and value:
-                suffix = key[len(prefix):]
+                suffix = key[len(prefix) :]
                 if suffix in known_language_codes:
                     setattr(obj, key, value)
                 else:
                     logger.warning(
                         "Skipping unrecognized translation key '%s' for %s (unknown language code)",
-                        key, object_type,
+                        key,
+                        object_type,
                     )
 
     translations = item.get("translations") or item.get("i18n") or {}
@@ -215,7 +277,8 @@ def _apply_translations(obj, item: dict, object_type: str) -> None:
         if language_code not in known_language_codes:
             logger.warning(
                 "Skipping translations for unknown language code '%s' in %s",
-                language_code, object_type,
+                language_code,
+                object_type,
             )
             continue
         for field in TRANSLATABLE_FIELDS[object_type]:

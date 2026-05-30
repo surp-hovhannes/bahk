@@ -1,9 +1,11 @@
 """Admin interface for prayers app."""
 
 import json
+import uuid
 
 from django import forms
 from django.contrib import admin, messages
+from django.core.cache import cache
 from django.core.validators import FileExtensionValidator
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
@@ -199,6 +201,9 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
                         "conflicts": conflicts,
                     }
                     if conflicts:
+                        if "prayer_import" in request.session:
+                            del request.session["prayer_import"]
+                            request.session.modified = True
                         return render(
                             request,
                             "admin/prayers/import_conflicts.html",
@@ -209,6 +214,7 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
                         "data": data,
                         "church_id": church.id,
                         "use_ai_icon_matching": form.cleaned_data["use_ai_icon_matching"],
+                        "import_id": str(uuid.uuid4()),
                     }
                     request.session.modified = True
                     return render(
@@ -244,18 +250,33 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
             church = Church.objects.get(id=import_state["church_id"])
         except Church.DoesNotExist:
             messages.error(request, "The selected church no longer exists. Please start a new import.")
-            del request.session["prayer_import"]
+            request.session.pop("prayer_import", None)
             request.session.modified = True
             return redirect(reverse("admin:prayers_import"))
 
         data = import_state["data"]
+        conflicts = detect_conflicts(data, church)
+        if conflicts:
+            request.session.pop("prayer_import", None)
+            request.session.modified = True
+            messages.error(
+                request,
+                "Import blocked because title conflicts were detected. Resolve conflicts and start a new import.",
+            )
+            return redirect(reverse("admin:prayers_import"))
+
+        import_id = import_state.get("import_id")
+        if import_id and not cache.add(f"prayer_import:{import_id}", True, timeout=3600):
+            messages.error(request, "This import has already been submitted.")
+            return redirect(reverse("admin:prayers_import"))
+
+        request.session.pop("prayer_import", None)
+        request.session.modified = True
+
         sets_created, prayers_created, created_prayer_ids = execute_import(data, church)
 
         if import_state.get("use_ai_icon_matching") and created_prayer_ids:
             match_icons_for_imported_prayers_task.delay(created_prayer_ids, church.id)
-
-        del request.session["prayer_import"]
-        request.session.modified = True
 
         messages.success(
             request,
