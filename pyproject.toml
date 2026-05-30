@@ -1,6 +1,6 @@
 [project]
 name = "bahk"
-version = "2.4.0"
+version = "2.5.0"
 requires-python = ">=3.11,<3.12"
 
 [tool.ruff]
