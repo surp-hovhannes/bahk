@@ -85,6 +85,25 @@ class PrayerAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("icon")
 
+    actions = ["match_icons_with_ai"]
+
+    @admin.action(description="Match icons with AI for selected prayers")
+    def match_icons_with_ai(self, request, queryset):
+        """Run AI icon matching on selected prayers."""
+        if not queryset.exists():
+            self.message_user(request, "No prayers selected.", messages.WARNING)
+            return
+        church_ids = set(queryset.values_list("church_id", flat=True).distinct())
+        for church_id in church_ids:
+            church_prayers = queryset.filter(church_id=church_id)
+            prayer_ids = list(church_prayers.values_list("id", flat=True))
+            match_icons_for_imported_prayers_task.delay(prayer_ids, church_id)
+        self.message_user(
+            request,
+            f"Icon matching scheduled for {queryset.count()} prayer(s) across {len(church_ids)} church(es).",
+            messages.SUCCESS,
+        )
+
     fieldsets = (
         (None, {"fields": ("title", "title_hy", "text", "text_hy", "category")}),
         ("Media", {"fields": ("video", "icon", "icon_preview")}),
@@ -133,16 +152,19 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
     list_display = ("title", "category", "church", "prayer_count", "image_preview", "created_at")
     list_filter = ("church", "category", "created_at", "updated_at")
     search_fields = ("title", "description")
-    raw_id_fields = ("church",)
-    readonly_fields = ("created_at", "updated_at", "image_preview", "prayer_count")
+    raw_id_fields = ("church", "icon")
+    readonly_fields = ("created_at", "updated_at", "image_preview", "prayer_count", "icon_preview")
     inlines = [PrayerSetMembershipInline]
 
     fieldsets = (
         (None, {"fields": ("title", "title_hy", "description", "description_hy", "category", "church")}),
-        ("Media", {"fields": ("image", "image_preview")}),
+        ("Media", {"fields": ("image", "image_preview", "icon", "icon_preview")}),
         ("Statistics", {"fields": ("prayer_count",), "classes": ("collapse",)}),
         ("Metadata", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("icon")
 
     def image_preview(self, obj):
         """Display a thumbnail preview of the image."""
@@ -155,6 +177,34 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
         return "No image"
 
     image_preview.short_description = "Image Preview"
+
+    def icon_preview(self, obj):
+        """Display the selected icon thumbnail."""
+        if not obj.icon:
+            return "No icon"
+        if getattr(obj.icon, "cached_thumbnail_url", None):
+            return format_html(
+                '<img src="{}" style="max-height: 40px; max-width: 40px;" /> {}',
+                obj.icon.cached_thumbnail_url,
+                obj.icon.title,
+            )
+        try:
+            return format_html(
+                '<img src="{}" style="max-height: 40px; max-width: 40px;" /> {}',
+                obj.icon.thumbnail.url,
+                obj.icon.title,
+            )
+        except Exception:
+            try:
+                return format_html(
+                    '<img src="{}" style="max-height: 40px; max-width: 40px;" /> {}',
+                    obj.icon.image.url,
+                    obj.icon.title,
+                )
+            except Exception:
+                return obj.icon.title
+
+    icon_preview.short_description = "Icon"
 
     def prayer_count(self, obj):
         """Return the number of prayers in this set."""
