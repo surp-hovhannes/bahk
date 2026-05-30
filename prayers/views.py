@@ -58,7 +58,7 @@ class PrayerListView(generics.ListAPIView):
         ) or 'en'
         activate(lang)
         
-        queryset = Prayer.objects.select_related('church', 'fast').prefetch_related('tags')
+        queryset = Prayer.objects.select_related('church', 'fast', 'icon').prefetch_related('tags')
         
         # Apply search filter if provided
         search = self.request.query_params.get('search', None)
