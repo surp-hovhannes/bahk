@@ -64,6 +64,13 @@ class Prayer(models.Model):
         related_name='prayers',
         help_text='Video containing audio recording of the prayer being read aloud and visuals integrated with the prayer'
     )
+    icon = models.ForeignKey(
+        'icons.Icon',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='prayers',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
