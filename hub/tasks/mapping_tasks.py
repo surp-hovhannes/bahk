@@ -427,8 +427,18 @@ def generate_participant_map(self, fast_id, delay=0):
         # Generate the map (always SVG)
         map_file, participant_count = create_map(fast_id)
         
-        # Save to database
-        participant_map, created = FastParticipantMap.objects.get_or_create(fast=fast)
+        # Save to database after rendering so a failed generation preserves old maps.
+        participant_map = (
+            FastParticipantMap.objects.filter(fast=fast)
+            .order_by("-last_updated", "-id")
+            .first()
+        )
+        if participant_map is None:
+            participant_map = FastParticipantMap(fast=fast)
+        else:
+            FastParticipantMap.objects.filter(fast=fast).exclude(
+                pk=participant_map.pk
+            ).delete()
         participant_map.map_file = map_file
         participant_map.participant_count = participant_count
         participant_map.save()
@@ -514,4 +524,4 @@ def update_current_fast_maps():
 if __name__ == "__main__":
     # This allows testing the map generation directly by running this file
     output_path = generate_sample_map()
-    print(f"Sample map generated at: {output_path}") 
+    print(f"Sample map generated at: {output_path}")

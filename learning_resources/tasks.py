@@ -79,16 +79,19 @@ def cleanup_orphaned_bookmarks_async(
             }
         )
         
-        batch_start = 0
-        while batch_start < total_bookmarks:
-            batch_end = min(batch_start + batch_size, total_bookmarks)
-            
-            # Get batch of bookmarks with their IDs to handle potential deletions
+        last_seen_id = 0
+        while True:
+            # Page by stable primary-key windows because deleting rows mutates
+            # queryset offsets and can otherwise skip later orphaned records.
             batch_bookmarks = list(
-                bookmarks_qs[batch_start:batch_end].values(
+                bookmarks_qs.filter(id__gt=last_seen_id).order_by('id').values(
                     'id', 'user_id', 'content_type_id', 'object_id', 'content_type__model'
-                )
+                )[:batch_size]
             )
+            if not batch_bookmarks:
+                break
+
+            last_seen_id = batch_bookmarks[-1]['id']
             
             batch_orphaned = []
             
@@ -148,8 +151,7 @@ def cleanup_orphaned_bookmarks_async(
             
             logger.info(f"Batch progress: {processed}/{total_bookmarks} ({progress_percent}%) - Found {len(batch_orphaned)} orphaned in this batch")
             
-            batch_start += batch_size
-        
+
         end_time = timezone.now()
         duration = (end_time - start_time).total_seconds()
         
