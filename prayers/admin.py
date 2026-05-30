@@ -1,6 +1,7 @@
 """Admin interface for prayers app."""
 
 import json
+import logging
 import uuid
 
 from django import forms
@@ -32,6 +33,7 @@ from prayers.models import (
 )
 from prayers.tasks import match_icons_for_imported_prayers_task
 
+logger = logging.getLogger(__name__)
 
 MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024  # 5 MB
 
@@ -296,7 +298,14 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
         request.session.modified = True
 
         if import_state.get("use_ai_icon_matching") and created_prayer_ids:
-            match_icons_for_imported_prayers_task.delay(created_prayer_ids, church.id)
+            try:
+                match_icons_for_imported_prayers_task.delay(created_prayer_ids, church.id)
+            except Exception:
+                logger.exception("Failed to enqueue icon matching task after prayer import")
+                messages.warning(
+                    request,
+                    "Import succeeded but AI icon matching could not be scheduled.",
+                )
 
         messages.success(
             request,
