@@ -124,7 +124,10 @@ class PrayerSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSer
             try:
                 return obj.icon.thumbnail.url
             except (AttributeError, ValueError, OSError):
-                return obj.icon.image.url
+                try:
+                    return obj.icon.image.url
+                except (AttributeError, ValueError, OSError):
+                    return None
         return None
     
     def get_prayers(self, obj):
@@ -171,7 +174,7 @@ class PrayerSetListSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
     def get_thumbnail_url(self, obj):
-        """Get cached or generated thumbnail URL."""
+        """Get cached or generated thumbnail URL, falling back to icon."""
         if obj.image:
             cached_url = self.update_thumbnail_cache(obj, 'image', 'thumbnail')
             if cached_url:
@@ -179,7 +182,18 @@ class PrayerSetListSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
             try:
                 return obj.thumbnail.url
             except (AttributeError, ValueError, OSError):
-                return None
+                pass
+        if obj.icon:
+            cached_url = self.update_thumbnail_cache(obj.icon, 'image', 'thumbnail')
+            if cached_url:
+                return cached_url
+            try:
+                return obj.icon.thumbnail.url
+            except (AttributeError, ValueError, OSError):
+                try:
+                    return obj.icon.image.url
+                except (AttributeError, ValueError, OSError):
+                    return None
         return None
     
     def get_prayer_count(self, obj):

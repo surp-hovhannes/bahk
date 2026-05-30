@@ -275,24 +275,34 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
             return redirect(reverse("admin:prayers_import"))
 
         import_id = import_state.get("import_id")
-        if import_id and not cache.add(f"prayer_import:{import_id}", True, timeout=3600):
-            messages.error(request, "This import has already been submitted.")
+        import_cache_key = f"prayer_import:{import_id}" if import_id else None
+        if import_cache_key and not cache.add(import_cache_key, "in_progress", timeout=3600):
+            if cache.get(import_cache_key) == "completed":
+                messages.error(request, "This import has already been submitted.")
+            else:
+                messages.error(
+                    request,
+                    "This import is already in progress. Please wait or try again shortly.",
+                )
             return redirect(reverse("admin:prayers_import"))
 
         try:
             sets_created, prayers_created, created_prayer_ids = execute_import(data, church)
         except ValueError as exc:
-            if import_id:
-                cache.delete(f"prayer_import:{import_id}")
+            if import_cache_key:
+                cache.delete(import_cache_key)
             request.session.pop("prayer_import", None)
             request.session.modified = True
             messages.error(request, str(exc))
             return redirect(reverse("admin:prayers_import"))
         except Exception:
-            if import_id:
-                cache.delete(f"prayer_import:{import_id}")
+            if import_cache_key:
+                cache.delete(import_cache_key)
             messages.error(request, "Import failed. Please try confirming again.")
             return redirect(reverse("admin:prayers_import"))
+
+        if import_cache_key:
+            cache.set(import_cache_key, "completed", timeout=3600)
 
         request.session.pop("prayer_import", None)
         request.session.modified = True
