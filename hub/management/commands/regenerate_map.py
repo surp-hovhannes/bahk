@@ -52,11 +52,11 @@ class Command(BaseCommand):
                     f'Participants: {result.get("participants")}'
                 ))
             else:
-                self.stdout.write(self.style.ERROR(
-                    f'\nMap generation failed: {result.get("message")}'
-                ))
+                raise CommandError(
+                    f'Map generation failed: {result.get("message")}'
+                )
         else:
             self.stdout.write(self.style.WARNING(
                 'Map generation is running in the background. '
                 'Check the map URL in a few minutes.'
-            )) 
+            ))
