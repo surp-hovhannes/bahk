@@ -16,6 +16,17 @@ from hub.models import DevotionalSet
 from django.utils.translation import activate, get_language_from_request
 
 
+def _get_bookmark_content_type(content_type):
+    model_name = content_type.lower()
+    if model_name == 'devotionalset':
+        return ContentType.objects.get(app_label='hub', model='devotionalset')
+    if model_name in ['devotional', 'fast', 'reading']:
+        return ContentType.objects.get(app_label='hub', model=model_name)
+    if model_name in ['prayer', 'prayerset']:
+        return ContentType.objects.get(app_label='prayers', model=model_name)
+    return ContentType.objects.get(app_label='learning_resources', model=model_name)
+
+
 class BookmarkOptimizedMixin:
     """
     Mixin to optimize bookmark queries using Redis caching.
@@ -505,14 +516,7 @@ class BookmarkListView(generics.ListAPIView):
         content_type = self.request.query_params.get('content_type')
         if content_type:
             try:
-                if content_type.lower() == 'devotionalset':
-                    ct = ContentType.objects.get(app_label='hub', model='devotionalset')
-                elif content_type.lower() in ['devotional', 'fast', 'reading']:
-                    ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
-                else:
-                    ct = ContentType.objects.get(
-                        app_label='learning_resources', model=content_type.lower()
-                    )
+                ct = _get_bookmark_content_type(content_type)
                 queryset = queryset.filter(content_type=ct)
             except ContentType.DoesNotExist:
                 # Return empty queryset for invalid content types
@@ -626,16 +630,7 @@ def bookmark_delete_view(request, content_type, object_id):
     
     # Get the content type with specific error handling
     try:
-        if content_type.lower() == 'devotionalset':
-            ct = ContentType.objects.get(app_label='hub', model='devotionalset')
-        elif content_type.lower() in ['devotional', 'fast', 'reading']:
-            ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
-        elif content_type.lower() in ['prayer', 'prayerset']:
-            ct = ContentType.objects.get(app_label='prayers', model=content_type.lower())
-        else:
-            ct = ContentType.objects.get(
-                app_label='learning_resources', model=content_type.lower()
-            )
+        ct = _get_bookmark_content_type(content_type)
     except ContentType.DoesNotExist:
         return Response(
             {'error': f'Invalid content type: {content_type}'}, 
@@ -721,16 +716,7 @@ def bookmark_check_view(request, content_type, object_id):
     
     # Get the content type with specific error handling
     try:
-        if content_type.lower() == 'devotionalset':
-            ct = ContentType.objects.get(app_label='hub', model='devotionalset')
-        elif content_type.lower() in ['devotional', 'fast', 'reading']:
-            ct = ContentType.objects.get(app_label='hub', model=content_type.lower())
-        elif content_type.lower() in ['prayer', 'prayerset']:
-            ct = ContentType.objects.get(app_label='prayers', model=content_type.lower())
-        else:
-            ct = ContentType.objects.get(
-                app_label='learning_resources', model=content_type.lower()
-            )
+        ct = _get_bookmark_content_type(content_type)
     except ContentType.DoesNotExist:
         return Response(
             {'error': f'Invalid content type: {content_type}'}, 
