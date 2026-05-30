@@ -289,8 +289,13 @@ def _apply_translations(obj, item: dict, object_type: str) -> None:
                         object_type,
                     )
 
-    translations = item.get("translations") or item.get("i18n") or {}
-    if not isinstance(translations, dict):
+    raw_translations = item.get("translations")
+    raw_i18n = item.get("i18n")
+    if isinstance(raw_translations, dict):
+        translations = raw_translations or (raw_i18n if isinstance(raw_i18n, dict) else {})
+    elif isinstance(raw_i18n, dict):
+        translations = raw_i18n
+    else:
         return
 
     for language_code, translated_fields in translations.items():
