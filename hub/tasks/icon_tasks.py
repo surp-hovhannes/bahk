@@ -40,13 +40,9 @@ def _simple_match_icons(icons, prompt, max_results):
     return [icon_id for _, icon_id in scored_icons[:max_results]]
 
 
-def _match_icons_with_llm(icons, prompt, max_results=3, min_confidence='high'):
+def _match_icons_with_llm(icons, prompt, max_results=3):
     """
     Match icons using LLM-based matching.
-    
-    Args:
-        min_confidence: Minimum confidence level to accept ('high', 'medium', 'low').
-            Prayers typically use 'medium', feasts use 'high'.
     
     Returns a list of dicts with 'id' and 'confidence' keys.
     """
@@ -347,7 +343,7 @@ def match_icon_to_feast_task(self, feast_id: int):
         
         # Compare confidence levels: 'high' > 'medium' > 'low'
         confidence_order = {'high': 3, 'medium': 2, 'low': 1}
-        threshold_order = confidence_order.get(min_confidence, 2)
+        threshold_order = confidence_order.get(ICON_MATCH_CONFIDENCE_THRESHOLD, 2)
         match_order = confidence_order.get(match_confidence, 0)
         
         if match_order >= threshold_order:
@@ -366,7 +362,7 @@ def match_icon_to_feast_task(self, feast_id: int):
         else:
             logger.info(
                 "Icon match found for feast %s but confidence %s is below threshold %s",
-                feast_id, match_confidence, min_confidence
+                feast_id, match_confidence, ICON_MATCH_CONFIDENCE_THRESHOLD
             )
     
     except Exception as e:

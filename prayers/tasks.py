@@ -37,7 +37,7 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
         try:
             prayer = Prayer.objects.prefetch_related("tags").get(id=prayer_id, church_id=church_id)
             prompt = f"{prayer.title} {' '.join(tag.name for tag in prayer.tags.all())}"
-            matched_results = _match_icons_with_llm(icons, prompt, max_results=1, min_confidence=PRAYER_ICON_MATCH_CONFIDENCE)
+            matched_results = _match_icons_with_llm(icons, prompt, max_results=1)
             if not matched_results:
                 continue
 
