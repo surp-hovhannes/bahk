@@ -47,6 +47,19 @@
 {% block sidebar %}
 <div id="content-related">
     <!-- Custom Analytics Section -->
+    <div class="module" id="prayer-import-module">
+        <h2>Prayer Tools</h2>
+        <ul class="actionlist">
+            <li>
+                <a href="{% url 'admin:prayers_import' %}" style="font-weight: bold; color: #417690;">
+                    Import Prayer Sets
+                </a>
+                <br>
+                <span class="mini quiet">Upload prayer set JSON and preview it before creating records</span>
+            </li>
+        </ul>
+    </div>
+
     <div class="module" id="analytics-module">
         <h2>📊 Analytics Dashboards</h2>
         <ul class="actionlist">

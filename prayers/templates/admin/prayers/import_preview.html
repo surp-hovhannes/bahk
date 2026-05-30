@@ -1,0 +1,41 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label='prayers' %}">Prayers</a>
+  &rsaquo; <a href="{% url 'admin:prayers_prayerset_changelist' %}">Prayer Sets</a>
+  &rsaquo; Import preview
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="module">
+    <h2>Preview import for {{ church.name }}</h2>
+    <p>{{ counts.sets }} prayer set(s), {{ counts.prayers }} prayer(s)</p>
+  </div>
+
+  <div class="module">
+    {% for prayer_set in prayer_sets %}
+      <details>
+        <summary><strong>{{ prayer_set.title }}</strong> ({{ prayer_set.category }})</summary>
+        <ol>
+          {% for prayer in prayer_set.prayers %}
+            <li>{{ prayer.title }} ({{ prayer.category }})</li>
+          {% endfor %}
+        </ol>
+      </details>
+    {% endfor %}
+  </div>
+
+  <form method="post" action="{% url 'admin:prayers_import_confirm' %}">
+    {% csrf_token %}
+    <div class="submit-row">
+      <input type="submit" value="Confirm import" class="default">
+      <a href="{% url 'admin:prayers_import' %}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

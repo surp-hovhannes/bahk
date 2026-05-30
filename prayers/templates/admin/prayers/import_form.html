@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label='prayers' %}">Prayers</a>
+  &rsaquo; <a href="{% url 'admin:prayers_prayerset_changelist' %}">Prayer Sets</a>
+  &rsaquo; Import
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row{% if field.errors %} errors{% endif %}">
+          {{ field.errors }}
+          <div>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}
+              <div class="help">{{ field.help_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="Upload and preview" class="default">
+      <a href="{% url 'admin:prayers_prayerset_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
