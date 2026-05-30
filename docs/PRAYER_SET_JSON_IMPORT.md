@@ -127,6 +127,22 @@ Alternatively, use a `translations` (or `i18n`) block:
 Translatable fields for **prayer sets**: `title`, `description`
 Translatable fields for **prayers**: `title`, `text`
 
+## Tag Discovery
+
+When generating import JSON (manually or via LLM), prefer tags that already exist in the system for consistency. The public `/api/tags/` endpoint lists all unique tags currently in use.
+
+```bash
+# Get all prayer tags as a flat sorted array
+curl https://api.fastandpray.app/api/tags/?model=prayer
+# → ["daily", "evening", "fasting", "morning", "thanksgiving"]
+
+# Get tags for all supported models
+curl https://api.fastandpray.app/api/tags/
+# → {"prayer": [...], "icon": [...], "patristic_quote": [...]}
+```
+
+**LLM workflow tip:** When an LLM generates a prayer set import, it should first call `/api/tags/?model=prayer` to discover existing tags, then use those (plus any new ones needed) in the `"tags"` field of each prayer. This keeps the tag vocabulary consistent and makes prayers discoverable through existing filters.
+
 ## AI Icon Matching
 
 The import form includes a checkbox: **"Use AI to match icons to imported prayers"**. When checked:
