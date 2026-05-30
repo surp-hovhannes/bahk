@@ -1,9 +1,27 @@
+from datetime import date, timedelta
+
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 from django.utils.translation import activate
 from hub.models import Church, Fast, Day, DevotionalSet, Devotional
 from learning_resources.models import Video, Article, Recipe
 from events.models import Announcement
+
+
+SEED_FAST_YEAR = 2025
+SEED_FAST_START_DATE = date(SEED_FAST_YEAR, 3, 3)
+SEED_FAST_FEAST_DATE = date(SEED_FAST_YEAR, 4, 20)
+
+
+def update_first_or_create(model, lookup, defaults):
+    instance = model.objects.filter(**lookup).order_by("pk").first()
+    if instance is None:
+        values = {**lookup, **defaults}
+        return model.objects.create(**values), True
+
+    for field, value in defaults.items():
+        setattr(instance, field, value)
+    instance.save()
+    return instance, False
 
 
 class Command(BaseCommand):
@@ -13,17 +31,25 @@ class Command(BaseCommand):
         activate('en')
 
         church, _ = Church.objects.get_or_create(name="Armenian Apostolic Church")
+        feast_date = SEED_FAST_FEAST_DATE
+        while (
+            Fast.objects.filter(
+                church=church, culmination_feast_date=feast_date
+            )
+            .exclude(name="Great Lent", year=SEED_FAST_YEAR)
+            .exists()
+        ):
+            feast_date += timedelta(days=1)
 
         # Create or update Fast with translations
         fast, _ = Fast.objects.update_or_create(
             name="Great Lent",
             church=church,
+            year=SEED_FAST_YEAR,
             defaults={
                 "description": "A period of fasting and prayer before Easter.",
                 "culmination_feast": "Easter",
-                "culmination_feast_date": (
-                    timezone.now().date() + timezone.timedelta(days=40)
-                ),
+                "culmination_feast_date": feast_date,
             },
         )
         # Armenian translations
@@ -33,8 +59,9 @@ class Command(BaseCommand):
         fast.save()
 
         # Create days
-        base_date = timezone.now().date()
-        day1, _ = Day.objects.get_or_create(date=base_date, fast=fast, church=church)
+        day1, _ = Day.objects.get_or_create(
+            date=SEED_FAST_START_DATE, fast=fast, church=church
+        )
         fast.save(update_fields=["year"])
 
         # DevotionalSet with translations
@@ -48,28 +75,36 @@ class Command(BaseCommand):
         dset.save()
 
         # Videos EN and HY
-        video_en, _ = Video.objects.update_or_create(
-            category='devotional',
-            language_code='en',
-            defaults={
-                "title": "Day 1 Reflection",
+        video_en, _ = update_first_or_create(
+            Video,
+            {
+                "category": "devotional",
+                "language_code": "en",
                 "description": "Introduction to the fast",
+            },
+            {
+                "title": "Day 1 Reflection",
             },
         )
         video_en.title_hy = "Օր 1 Խորհրդածություն"
         video_en.description_hy = "Ներածություն պահքին"
         video_en.save()
 
-        video_hy, _ = Video.objects.update_or_create(
-            category='devotional',
-            language_code='hy',
-            defaults={
-                "title": "Օր 1 Խորհրդածություն",
-                "description": "Ներածություն պահքին (HY)",
+        video_hy, _ = update_first_or_create(
+            Video,
+            {
+                "category": "devotional",
+                "language_code": "hy",
+                "title_en": "Day 1 Reflection (HY)",
+            },
+            {
+                "description_en": "Introduction to the fast",
             },
         )
         video_hy.title_en = "Day 1 Reflection (HY)"
         video_hy.description_en = "Introduction to the fast"
+        video_hy.title_hy = "Օր 1 Խորհրդածություն"
+        video_hy.description_hy = "Ներածություն պահքին (HY)"
         video_hy.save()
 
         # Devotionals EN and HY
@@ -98,22 +133,29 @@ class Command(BaseCommand):
         devo_hy.save()
 
         # Article with translations
-        article, _ = Article.objects.update_or_create(
-            title="Fasting Basics",
-            defaults={"body": "Markdown: Fasting is a spiritual discipline..."},
+        article, _ = update_first_or_create(
+            Article,
+            {
+                "title": "Fasting Basics",
+                "body": "Markdown: Fasting is a spiritual discipline...",
+            },
+            {},
         )
         article.title_hy = "Պահքի հիմունքներ"
         article.body_hy = "Markdown: Պահքն հոգևոր կարգապահություն է..."
         article.save()
 
         # Recipe with translations
-        recipe, _ = Recipe.objects.update_or_create(
-            title="Lentil Soup",
-            defaults={
+        recipe, _ = update_first_or_create(
+            Recipe,
+            {
+                "title": "Lentil Soup",
+                "ingredients": "- Lentils\n- Onion\n- Water",
+            },
+            {
                 "description": "A hearty soup.",
                 "time_required": "30 minutes",
                 "serves": "4",
-                "ingredients": "- Lentils\n- Onion\n- Water",
                 "directions": "Boil and season.",
             },
         )
@@ -126,9 +168,13 @@ class Command(BaseCommand):
         recipe.save()
 
         # Announcement and Activity Feed with translations
-        announcement, _ = Announcement.objects.update_or_create(
-            title="Welcome to Great Lent",
-            defaults={
+        announcement, _ = update_first_or_create(
+            Announcement,
+            {
+                "title": "Welcome to Great Lent",
+                "description": "Join us in prayer and fasting.",
+            },
+            {
                 "description": "Join us in prayer and fasting.",
                 "status": 'published',
             },

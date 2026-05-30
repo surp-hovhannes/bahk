@@ -4,10 +4,12 @@ import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase, skipIf
+from unittest.mock import patch
 
 from django.test import override_settings
 
 from cleanup_test_media import cleanup_test_media
+from tests.test_runner import MediaCleanupTestRunner
 from tests.test_utils import cleanup_test_media as cleanup_settings_test_media
 
 
@@ -78,3 +80,14 @@ class CleanupTestMediaTests(TestCase):
             self.assertFalse(cleaned)
             self.assertTrue(external_file.exists())
             self.assertEqual(external_file.read_text(), "do not delete")
+
+    @patch("tests.test_runner.DiscoverRunner.teardown_test_environment")
+    @patch("tests.test_runner.cleanup_test_media", return_value=False)
+    def test_test_runner_raises_when_media_cleanup_is_refused(self, cleanup, teardown):
+        runner = MediaCleanupTestRunner()
+
+        with self.assertRaisesRegex(RuntimeError, "Test media cleanup failed"):
+            runner.teardown_test_environment()
+
+        cleanup.assert_called_once_with()
+        teardown.assert_not_called()

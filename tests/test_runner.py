@@ -13,5 +13,6 @@ class MediaCleanupTestRunner(DiscoverRunner):
     
     def teardown_test_environment(self, **kwargs):
         """Clean up test environment and remove media files."""
-        cleanup_test_media()
-        super().teardown_test_environment(**kwargs) 
+        if not cleanup_test_media():
+            raise RuntimeError("Test media cleanup failed or was refused")
+        super().teardown_test_environment(**kwargs)
