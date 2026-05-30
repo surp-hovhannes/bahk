@@ -22,6 +22,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import include, path
 from django.views.generic import RedirectView
 from markdownx.views import ImageUploadView, MarkdownifyView
+from bahk.tag_views import SystemTagsView
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -133,6 +134,7 @@ urlpatterns += [
 
 # pin hub endpoints to /api/ root url
 urlpatterns += [
+    path("api/tags/", SystemTagsView.as_view(), name="system-tags"),
     path("api/", include("hub.urls")),
     path("api/learning-resources/", include("learning_resources.urls")),
     path("api/events/", include("events.urls")),
