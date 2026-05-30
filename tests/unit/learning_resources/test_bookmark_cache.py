@@ -2,6 +2,7 @@
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
+from django.core.management import call_command
 from learning_resources.models import Video, Article, Bookmark
 from learning_resources.cache import BookmarkCacheService, BookmarkCacheManager
 from tests.base import BaseTestCase
@@ -151,6 +152,25 @@ class BookmarkCacheServiceTests(BaseTestCase):
             self.user, self.article_ct
         )
         self.assertEqual(article_cached, article_bookmarks)
+
+    def test_bookmark_cache_clear_command_preserves_unrelated_cache(self):
+        """The global clear command should only remove bookmark cache keys."""
+        Bookmark.objects.create(
+            user=self.user,
+            content_type=self.video_ct,
+            object_id=self.video1.id
+        )
+        BookmarkCacheService.set_user_bookmarks(
+            self.user, self.video_ct, {self.video1.id}
+        )
+        cache.set("unrelated-cache-key", "keep-me", 3600)
+
+        call_command("bookmark_cache", "clear")
+
+        self.assertIsNone(
+            BookmarkCacheService.get_user_bookmarks(self.user, self.video_ct)
+        )
+        self.assertEqual(cache.get("unrelated-cache-key"), "keep-me")
     
     def test_preload_user_bookmarks(self):
         """Test preloading user bookmarks from database."""

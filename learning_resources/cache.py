@@ -41,6 +41,11 @@ class BookmarkCacheService:
     def _get_user_cache_pattern(cls, user_id: int) -> str:
         """Generate cache key pattern for all user bookmarks."""
         return f"{cls.CACHE_PREFIX}:user:{user_id}:ct:*"
+
+    @classmethod
+    def _get_all_cache_pattern(cls) -> str:
+        """Generate cache key pattern for all bookmark caches."""
+        return f"{cls.CACHE_PREFIX}:user:*:ct:*"
     
     @classmethod
     def get_user_bookmarks(cls, user: User, content_type: ContentType) -> Optional[Set[int]]:
@@ -204,6 +209,45 @@ class BookmarkCacheService:
         except Exception as e:
             logger.warning(f"Redis cache invalidation failed for user {user.id}: {e}")
             return False
+
+    @classmethod
+    def clear_all_bookmark_caches(cls) -> int:
+        """
+        Clear bookmark cache entries without touching unrelated cache keys.
+
+        Redis-backed deployments can delete by key pattern. Test and fallback
+        cache backends do not support pattern deletion, so they delete the
+        known bookmark key space generated from current bookmark users and
+        supported content types.
+        """
+        try:
+            if hasattr(cache, "delete_pattern"):
+                deleted_count = cache.delete_pattern(cls._get_all_cache_pattern())
+                return int(deleted_count or 0)
+
+            from learning_resources.models import Bookmark, Video, Article, Recipe
+            from hub.models import DevotionalSet, Fast, Devotional, Reading
+
+            content_types = [
+                ContentType.objects.get_for_model(Video),
+                ContentType.objects.get_for_model(Article),
+                ContentType.objects.get_for_model(Recipe),
+                ContentType.objects.get_for_model(DevotionalSet),
+                ContentType.objects.get_for_model(Fast),
+                ContentType.objects.get_for_model(Devotional),
+                ContentType.objects.get_for_model(Reading),
+            ]
+            user_ids = Bookmark.objects.values_list("user_id", flat=True).distinct()
+            cache_keys = [
+                cls._get_cache_key(user_id, content_type.id)
+                for user_id in user_ids
+                for content_type in content_types
+            ]
+            cache.delete_many(cache_keys)
+            return len(cache_keys)
+        except Exception as e:
+            logger.warning(f"Redis bookmark cache clear failed: {e}")
+            return 0
     
     @classmethod
     def preload_user_bookmarks(cls, user: User, content_type: ContentType) -> Set[int]:

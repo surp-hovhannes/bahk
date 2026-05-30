@@ -113,14 +113,12 @@ class Command(BaseCommand):
                     self.style.ERROR(f"❌ User {user_id} not found")
                 )
         else:
-            # Clear all bookmark caches (this is a simplified approach)
-            # In production, you might want to use Redis SCAN for pattern deletion
             try:
-                from django.core.cache import cache
-                # This clears the entire cache - use with caution
-                cache.clear()
+                cleared_count = BookmarkCacheService.clear_all_bookmark_caches()
                 self.stdout.write(
-                    self.style.WARNING("🧹 Cleared entire cache (all bookmark caches removed)")
+                    self.style.WARNING(
+                        f"🧹 Cleared bookmark cache entries ({cleared_count} keys targeted)"
+                    )
                 )
             except Exception as e:
                 self.stdout.write(
