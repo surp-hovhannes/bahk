@@ -393,7 +393,7 @@ def init_sentry_worker(**kwargs):
             ),
         ],
         environment=config('SENTRY_ENVIRONMENT', default=os.environ.get("SENTRY_ENVIRONMENT", "development")),
-        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@1.0.0")),
+        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@2.4.0")),
         traces_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
     )
     sentry_sdk.set_tag("process_type", "celery_worker")
@@ -410,7 +410,7 @@ def init_sentry_beat(**kwargs):
             ),
         ],
         environment=config('SENTRY_ENVIRONMENT', default=os.environ.get("SENTRY_ENVIRONMENT", "development")),
-        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@1.0.0")),
+        release=config('SENTRY_RELEASE', default=os.environ.get("SENTRY_RELEASE", "fastandpray@2.4.0")),
         traces_sample_rate=0.2 if config('IS_PRODUCTION', default=False, cast=bool) else 1.0,
     )
     sentry_sdk.set_tag("process_type", "celery_beat")
