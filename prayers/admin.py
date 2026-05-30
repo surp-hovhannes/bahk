@@ -4,6 +4,7 @@ import json
 
 from django import forms
 from django.contrib import admin, messages
+from django.core.validators import FileExtensionValidator
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
@@ -16,7 +17,6 @@ from prayers.import_utils import (
     detect_conflicts,
     execute_import,
     get_import_counts,
-    get_prayer_titles,
     validate_import_json,
 )
 from prayers.models import (
@@ -31,16 +31,31 @@ from prayers.models import (
 from prayers.tasks import match_icons_for_imported_prayers_task
 
 
+MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
 class PrayerSetImportForm(forms.Form):
     """Admin form for importing prayer sets from JSON."""
 
     church = forms.ModelChoiceField(queryset=Church.objects.all(), required=True)
-    json_file = forms.FileField(required=True)
+    json_file = forms.FileField(
+        required=True,
+        validators=[FileExtensionValidator(allowed_extensions=["json"])],
+    )
     use_ai_icon_matching = forms.BooleanField(
         required=False,
         initial=False,
         label="Use AI icon matching",
     )
+
+    def clean_json_file(self):
+        uploaded = self.cleaned_data.get("json_file")
+        if uploaded:
+            if uploaded.size > MAX_IMPORT_FILE_BYTES:
+                raise forms.ValidationError(
+                    f"File too large ({uploaded.size} bytes). Maximum is {MAX_IMPORT_FILE_BYTES} bytes."
+                )
+        return uploaded
 
 
 class PrayerSetMembershipInline(SortableInlineAdminMixin, admin.TabularInline):
@@ -62,6 +77,9 @@ class PrayerAdmin(admin.ModelAdmin):
     search_fields = ("title", "text")
     raw_id_fields = ("church", "fast", "video", "icon")
     readonly_fields = ("created_at", "updated_at", "icon_preview")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("icon")
 
     fieldsets = (
         (None, {"fields": ("title", "title_hy", "text", "text_hy", "category")}),
@@ -222,18 +240,19 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
             messages.error(request, "No prayer import is ready to confirm.")
             return redirect(reverse("admin:prayers_import"))
 
-        church = Church.objects.get(id=import_state["church_id"])
-        data = import_state["data"]
-        prayer_titles = get_prayer_titles(data)
-        sets_created, prayers_created = execute_import(data, church)
+        try:
+            church = Church.objects.get(id=import_state["church_id"])
+        except Church.DoesNotExist:
+            messages.error(request, "The selected church no longer exists. Please start a new import.")
+            del request.session["prayer_import"]
+            request.session.modified = True
+            return redirect(reverse("admin:prayers_import"))
 
-        if import_state.get("use_ai_icon_matching"):
-            prayer_ids = list(
-                Prayer.objects.filter(church=church, title__in=prayer_titles)
-                .order_by("-id")
-                .values_list("id", flat=True)[:prayers_created]
-            )
-            match_icons_for_imported_prayers_task.delay(prayer_ids, church.id)
+        data = import_state["data"]
+        sets_created, prayers_created, created_prayer_ids = execute_import(data, church)
+
+        if import_state.get("use_ai_icon_matching") and created_prayer_ids:
+            match_icons_for_imported_prayers_task.delay(created_prayer_ids, church.id)
 
         del request.session["prayer_import"]
         request.session.modified = True

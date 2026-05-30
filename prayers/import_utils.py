@@ -1,9 +1,15 @@
 """Utilities for importing prayer sets from JSON."""
 
+import logging
+import re
+
+from django.conf import settings as django_settings
 from django.db import transaction
 from django.utils.translation import gettext as _
 
 from prayers.models import Prayer, PrayerSet, PrayerSetMembership
+
+logger = logging.getLogger(__name__)
 
 VALID_CATEGORIES = {"morning", "evening", "general"}
 SET_REQUIRED_FIELDS = ("title", "category", "prayers")
@@ -50,13 +56,19 @@ def validate_import_json(data: dict) -> None:
 
 
 def detect_conflicts(data: dict, church) -> list[dict]:
-    """Detect existing prayer sets and prayers with matching titles for a church."""
+    """Detect existing prayer sets and prayers with matching titles for a church.
+
+    Matching is case-insensitive so 'Morning Set' and 'morning set' are
+    treated as duplicates.
+    """
     prayer_sets = data.get("prayer_sets", [])
     set_titles = [prayer_set["title"] for prayer_set in prayer_sets]
     prayer_titles = [prayer["title"] for prayer_set in prayer_sets for prayer in prayer_set.get("prayers", [])]
 
     conflicts = []
-    for prayer_set in PrayerSet.objects.filter(church=church, title__in=set_titles).order_by("title", "id"):
+    for prayer_set in PrayerSet.objects.filter(
+        church=church, title__iregex=rf"^({'|'.join(map(re.escape, set_titles))})$"
+    ).order_by("title", "id"):
         conflicts.append(
             {
                 "type": "Prayer Set",
@@ -65,7 +77,9 @@ def detect_conflicts(data: dict, church) -> list[dict]:
             }
         )
 
-    for prayer in Prayer.objects.filter(church=church, title__in=prayer_titles).order_by("title", "id"):
+    for prayer in Prayer.objects.filter(
+        church=church, title__iregex=rf"^({'|'.join(map(re.escape, prayer_titles))})$"
+    ).order_by("title", "id"):
         conflicts.append(
             {
                 "type": "Prayer",
@@ -77,28 +91,33 @@ def detect_conflicts(data: dict, church) -> list[dict]:
     return conflicts
 
 
-def execute_import(data: dict, church) -> tuple[int, int]:
-    """Create prayer sets, prayers, and ordered memberships from import data."""
+def execute_import(data: dict, church) -> tuple[int, int, list[int]]:
+    """Create prayer sets, prayers, and ordered memberships from import data.
+
+    Returns a tuple of (sets_created, prayers_created, created_prayer_ids).
+    """
     sets_created = 0
     prayers_created = 0
+    created_prayer_ids: list[int] = []
 
     with transaction.atomic():
         for set_data in data["prayer_sets"]:
-            prayers = []
+            prayers: list[Prayer] = []
             for prayer_data in set_data["prayers"]:
-                prayer = Prayer.objects.create(
+                prayer = Prayer(
                     title=prayer_data["title"],
                     text=prayer_data["text"],
                     category=prayer_data["category"],
                     church=church,
                 )
                 _apply_translations(prayer, prayer_data, "prayer")
-                _apply_tags(prayer, prayer_data.get("tags", []))
                 prayer.save()
+                _apply_tags(prayer, prayer_data.get("tags", []))
                 prayers.append(prayer)
+                created_prayer_ids.append(prayer.id)
                 prayers_created += 1
 
-            prayer_set = PrayerSet.objects.create(
+            prayer_set = PrayerSet(
                 title=set_data["title"],
                 description=set_data.get("description", ""),
                 category=set_data["category"],
@@ -119,7 +138,7 @@ def execute_import(data: dict, church) -> tuple[int, int]:
             )
             sets_created += 1
 
-    return sets_created, prayers_created
+    return sets_created, prayers_created, created_prayer_ids
 
 
 def get_prayer_titles(data: dict) -> list[str]:
@@ -137,6 +156,7 @@ def get_import_counts(data: dict) -> dict:
 
 
 def _validate_required_fields(item: dict, required_fields: tuple[str, ...], context: str) -> None:
+    """Raise ValueError if any required field is missing or empty."""
     for field in required_fields:
         if field not in item or item[field] in (None, ""):
             raise ValueError(
@@ -170,11 +190,20 @@ def _apply_tags(obj, tag_names) -> None:
 
 
 def _apply_translations(obj, item: dict, object_type: str) -> None:
+    known_language_codes = {lang for lang, _ in getattr(django_settings, "LANGUAGES", [])}
+
     for field in TRANSLATABLE_FIELDS[object_type]:
         for key, value in item.items():
             prefix = f"{field}_"
             if key.startswith(prefix) and value:
-                setattr(obj, key, value)
+                suffix = key[len(prefix):]
+                if suffix in known_language_codes:
+                    setattr(obj, key, value)
+                else:
+                    logger.warning(
+                        "Skipping unrecognized translation key '%s' for %s (unknown language code)",
+                        key, object_type,
+                    )
 
     translations = item.get("translations") or item.get("i18n") or {}
     if not isinstance(translations, dict):
@@ -182,6 +211,12 @@ def _apply_translations(obj, item: dict, object_type: str) -> None:
 
     for language_code, translated_fields in translations.items():
         if not isinstance(translated_fields, dict):
+            continue
+        if language_code not in known_language_codes:
+            logger.warning(
+                "Skipping translations for unknown language code '%s' in %s",
+                language_code, object_type,
+            )
             continue
         for field in TRANSLATABLE_FIELDS[object_type]:
             value = translated_fields.get(field)

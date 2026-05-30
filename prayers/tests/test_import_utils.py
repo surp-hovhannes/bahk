@@ -150,10 +150,11 @@ class ExecuteImportTests(TestCase):
         self.church = Church.objects.create(name="Execute Import Church")
 
     def test_execute_import_creates_records_memberships_and_tags(self):
-        sets_created, prayers_created = execute_import(valid_import_data(), self.church)
+        sets_created, prayers_created, created_ids = execute_import(valid_import_data(), self.church)
 
         self.assertEqual(sets_created, 1)
         self.assertEqual(prayers_created, 2)
+        self.assertEqual(len(created_ids), 2)
 
         prayer_set = PrayerSet.objects.get(title="Morning Set")
         self.assertEqual(prayer_set.church, self.church)
