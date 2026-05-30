@@ -185,11 +185,6 @@ def execute_import(data: dict, church) -> tuple[int, int, list[int]]:
     return sets_created, prayers_created, created_prayer_ids
 
 
-def get_prayer_titles(data: dict) -> list[str]:
-    """Return prayer titles from import data in JSON order."""
-    return [prayer["title"] for prayer_set in data.get("prayer_sets", []) for prayer in prayer_set.get("prayers", [])]
-
-
 def get_import_counts(data: dict) -> dict:
     """Return preview counts for import data."""
     prayer_sets = data.get("prayer_sets", [])

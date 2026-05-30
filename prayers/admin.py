@@ -255,6 +255,13 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
             return redirect(reverse("admin:prayers_import"))
 
         data = import_state["data"]
+        try:
+            validate_import_json(data)
+        except ValueError as exc:
+            request.session.pop("prayer_import", None)
+            request.session.modified = True
+            messages.error(request, str(exc))
+            return redirect(reverse("admin:prayers_import"))
         conflicts = detect_conflicts(data, church)
         if conflicts:
             request.session.pop("prayer_import", None)
