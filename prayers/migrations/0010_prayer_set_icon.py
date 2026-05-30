@@ -7,7 +7,7 @@ import prayers.utils
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("icons", "0004_prayer_set_icon"),
+        ("icons", "0003_iconfeedback"),
         ("prayers", "0009_prayer_icon"),
     ]
 
