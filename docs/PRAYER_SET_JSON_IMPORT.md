@@ -133,11 +133,11 @@ When generating import JSON (manually or via LLM), prefer tags that already exis
 
 ```bash
 # Get all prayer tags as a flat sorted array
-curl https://example.com/api/tags/?model=prayer
+curl https://api.fastandpray.app/api/tags/?model=prayer
 # → ["daily", "evening", "fasting", "morning", "thanksgiving"]
 
 # Get tags for all supported models
-curl https://example.com/api/tags/
+curl https://api.fastandpray.app/api/tags/
 # → {"prayer": [...], "icon": [...], "patristic_quote": [...]}
 ```
 
