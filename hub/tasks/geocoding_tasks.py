@@ -157,7 +157,7 @@ def batch_geocode_profiles(self, update_all=False):
                 entry.location_text: (entry.latitude, entry.longitude) 
                 for entry in GeocodingCache.objects.filter(
                     location_text__in=normalized_locations,
-                    error_count__lt=5
+                    error_count=0
                 )
             }
             
@@ -235,4 +235,4 @@ def batch_geocode_profiles(self, update_all=False):
         return {
             "status": "error",
             "message": str(e)
-        } 
+        }
