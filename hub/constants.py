@@ -5,7 +5,7 @@ import unicodedata
 DAYS_TO_CACHE_THUMBNAIL = 7
 NUMBER_PARTICIPANTS_TO_SHOW_WEB = 6  # number of participant thumbnails to show on fast card on web version
 DATE_FORMAT_STRING = "%m/%d/%Y"  # format string for dates (month, day, year)
-ICON_MATCH_CONFIDENCE_THRESHOLD = 'high'  # Minimum confidence level required for icon matching to feasts
+ICON_MATCH_CONFIDENCE_THRESHOLD = 'high'  # Minimum confidence for icon matching (feasts use 'high', prayers use 'medium')
 
 # --- API.Bible USFM mappings ---
 # Maps book names (as stored in Reading.book, matching CATENA_ABBREV_FOR_BOOK keys)

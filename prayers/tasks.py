@@ -12,7 +12,8 @@ from django.utils import timezone
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
-from hub.constants import ICON_MATCH_CONFIDENCE_THRESHOLD
+
+PRAYER_ICON_MATCH_CONFIDENCE = 'medium'  # More permissive than feast matching
 from hub.tasks.icon_tasks import _match_icons_with_llm
 from icons.models import Icon
 from prayers.models import Prayer, PrayerRequest, PrayerRequestPrayerLog
@@ -43,7 +44,7 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
             first_match = matched_results[0]
             match_confidence = first_match.get("confidence", "medium")
             confidence_order = {"high": 3, "medium": 2, "low": 1}
-            threshold_order = confidence_order.get(ICON_MATCH_CONFIDENCE_THRESHOLD, 2)
+            threshold_order = confidence_order.get(PRAYER_ICON_MATCH_CONFIDENCE, 2)
             match_order = confidence_order.get(match_confidence, 0)
             if match_order < threshold_order:
                 continue
