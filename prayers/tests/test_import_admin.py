@@ -2,6 +2,7 @@
 
 import io
 import json
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -104,7 +105,8 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
     def setUp(self):
         self.church = Church.objects.create(name="Task Church")
 
-    def test_task_assigns_matching_icon_and_leaves_unmatched_prayer(self):
+    @patch("prayers.tasks._match_icons_with_llm")
+    def test_task_assigns_matching_icon_and_leaves_unmatched_prayer(self, mock_match_icons):
         icon = Icon.objects.create(
             title="Healing Christ",
             church=self.church,
@@ -125,6 +127,13 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
             category="general",
             church=self.church,
         )
+
+        def match_side_effect(icons, prompt, max_results=1):
+            if "healing" in prompt.lower():
+                return [{"id": icon.id, "confidence": "high"}]
+            return []
+
+        mock_match_icons.side_effect = match_side_effect
 
         match_icons_for_imported_prayers_task([matching_prayer.id, unmatched_prayer.id], self.church.id)
 

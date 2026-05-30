@@ -270,10 +270,23 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
             messages.error(request, "This import has already been submitted.")
             return redirect(reverse("admin:prayers_import"))
 
+        try:
+            sets_created, prayers_created, created_prayer_ids = execute_import(data, church)
+        except ValueError as exc:
+            if import_id:
+                cache.delete(f"prayer_import:{import_id}")
+            request.session.pop("prayer_import", None)
+            request.session.modified = True
+            messages.error(request, str(exc))
+            return redirect(reverse("admin:prayers_import"))
+        except Exception:
+            if import_id:
+                cache.delete(f"prayer_import:{import_id}")
+            messages.error(request, "Import failed. Please try confirming again.")
+            return redirect(reverse("admin:prayers_import"))
+
         request.session.pop("prayer_import", None)
         request.session.modified = True
-
-        sets_created, prayers_created, created_prayer_ids = execute_import(data, church)
 
         if import_state.get("use_ai_icon_matching") and created_prayer_ids:
             match_icons_for_imported_prayers_task.delay(created_prayer_ids, church.id)

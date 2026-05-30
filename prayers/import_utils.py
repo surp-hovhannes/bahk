@@ -7,6 +7,7 @@ from django.conf import settings as django_settings
 from django.db import transaction
 from django.utils.translation import gettext as _
 
+from hub.models import Church
 from prayers.models import Prayer, PrayerSet, PrayerSetMembership
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,9 @@ def validate_import_json(data: dict) -> None:
     if not isinstance(prayer_sets, list) or not prayer_sets:
         raise ValueError(_("Import JSON must include a non-empty prayer_sets array."))
 
+    set_titles_seen: dict[str, str] = {}
+    prayer_titles_seen: dict[str, str] = {}
+
     for set_index, prayer_set in enumerate(prayer_sets, start=1):
         if not isinstance(prayer_set, dict):
             raise ValueError(_("Prayer set %(index)s must be an object.") % {"index": set_index})
@@ -46,6 +50,14 @@ def validate_import_json(data: dict) -> None:
         if "description" in prayer_set and prayer_set["description"] not in (None, ""):
             _validate_string_field(prayer_set["description"], "description", set_context)
         _validate_category(prayer_set["category"], set_context)
+
+        set_title_key = prayer_set["title"].casefold()
+        if set_title_key in set_titles_seen:
+            raise ValueError(
+                _('Duplicate prayer set title "%(title)s" (titles are matched case-insensitively).')
+                % {"title": prayer_set["title"]}
+            )
+        set_titles_seen[set_title_key] = prayer_set["title"]
 
         prayers = prayer_set["prayers"]
         if not isinstance(prayers, list) or not prayers:
@@ -71,6 +83,13 @@ def validate_import_json(data: dict) -> None:
             )
             _validate_string_field(prayer["text"], "text", context)
             _validate_category(prayer["category"], context)
+            prayer_title_key = prayer["title"].casefold()
+            if prayer_title_key in prayer_titles_seen:
+                raise ValueError(
+                    _('Duplicate prayer title "%(title)s" (titles are matched case-insensitively).')
+                    % {"title": prayer["title"]}
+                )
+            prayer_titles_seen[prayer_title_key] = prayer["title"]
             if "tags" in prayer:
                 _validate_tags(prayer["tags"], context)
 
@@ -121,6 +140,11 @@ def execute_import(data: dict, church) -> tuple[int, int, list[int]]:
     created_prayer_ids: list[int] = []
 
     with transaction.atomic():
+        locked_church = Church.objects.select_for_update().get(pk=church.pk)
+        conflicts = detect_conflicts(data, locked_church)
+        if conflicts:
+            raise ValueError(_("Import blocked because title conflicts were detected."))
+
         for set_data in data["prayer_sets"]:
             prayers: list[Prayer] = []
             for prayer_data in set_data["prayers"]:
@@ -128,7 +152,7 @@ def execute_import(data: dict, church) -> tuple[int, int, list[int]]:
                     title=prayer_data["title"],
                     text=prayer_data["text"],
                     category=prayer_data["category"],
-                    church=church,
+                    church=locked_church,
                 )
                 _apply_translations(prayer, prayer_data, "prayer")
                 prayer.save()
@@ -141,7 +165,7 @@ def execute_import(data: dict, church) -> tuple[int, int, list[int]]:
                 title=set_data["title"],
                 description=set_data.get("description", ""),
                 category=set_data["category"],
-                church=church,
+                church=locked_church,
             )
             _apply_translations(prayer_set, set_data, "set")
             prayer_set.save()
