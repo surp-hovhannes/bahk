@@ -12,7 +12,6 @@ from django.utils import timezone
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
-from hub.constants import ICON_MATCH_CONFIDENCE_THRESHOLD
 
 PRAYER_ICON_MATCH_CONFIDENCE = 'medium'  # More permissive than feast matching
 from hub.tasks.icon_tasks import _match_icons_with_llm
