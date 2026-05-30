@@ -162,7 +162,7 @@ class PrayerSetListView(generics.ListAPIView):
         ) or 'en'
         activate(lang)
         
-        queryset = PrayerSet.objects.select_related('church')
+        queryset = PrayerSet.objects.select_related('church', 'icon')
         
         # Apply search filter if provided
         search = self.request.query_params.get('search', None)
@@ -214,7 +214,7 @@ class PrayerSetDetailView(generics.RetrieveAPIView):
     
     def get_queryset(self):
         """Optimize queryset with prefetch for prayers."""
-        return PrayerSet.objects.select_related('church').prefetch_related(
+        return PrayerSet.objects.select_related('church', 'icon').prefetch_related(
             'memberships__prayer__church',
             'memberships__prayer__fast',
             'memberships__prayer__tags'

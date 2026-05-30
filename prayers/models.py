@@ -128,7 +128,15 @@ class PrayerSet(models.Model):
         upload_to=prayer_set_image_upload_path,
         null=True,
         blank=True,
-        help_text='Image for the prayer set. Recommended size: 1600x1200 pixels (4:3)'
+        help_text='Custom image for the prayer set. Recommended size: 1600x1200 pixels (4:3)'
+    )
+    icon = models.ForeignKey(
+        'icons.Icon',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='prayer_sets',
+        help_text='Optional fallback icon for this prayer set (used when no custom image is uploaded)'
     )
     thumbnail = ImageSpecField(
         source='image',

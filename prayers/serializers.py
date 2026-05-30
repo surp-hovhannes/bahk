@@ -83,6 +83,7 @@ class PrayerSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSer
     
     church_name = serializers.CharField(source='church.name', read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
+    icon = serializers.SerializerMethodField()
     prayers = serializers.SerializerMethodField()
     prayer_count = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
@@ -91,24 +92,39 @@ class PrayerSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSer
         model = PrayerSet
         fields = [
             'id', 'title', 'description', 'category', 'church', 'church_name',
-            'image', 'thumbnail_url', 'prayers', 'prayer_count',
+            'image', 'icon', 'thumbnail_url', 'prayers', 'prayer_count',
             'created_at', 'updated_at', 'is_bookmarked'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
+    def get_icon(self, obj):
+        """Return icon details or null if no icon is assigned."""
+        if not obj.icon:
+            return None
+        return {
+            'id': obj.icon.id,
+            'title': obj.icon.title,
+            'thumbnail_url': obj.icon.cached_thumbnail_url or None,
+        }
+    
     def get_thumbnail_url(self, obj):
-        """Get cached or generated thumbnail URL."""
+        """Get cached or generated thumbnail URL, falling back to icon."""
         if obj.image:
-            # Try to get/update cached URL
             cached_url = self.update_thumbnail_cache(obj, 'image', 'thumbnail')
             if cached_url:
                 return cached_url
-            
-            # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.thumbnail.url
             except (AttributeError, ValueError, OSError):
-                return None
+                pass
+        if obj.icon:
+            cached_url = self.update_thumbnail_cache(obj.icon, 'image', 'thumbnail')
+            if cached_url:
+                return cached_url
+            try:
+                return obj.icon.thumbnail.url
+            except (AttributeError, ValueError, OSError):
+                return obj.icon.image.url
         return None
     
     def get_prayers(self, obj):
