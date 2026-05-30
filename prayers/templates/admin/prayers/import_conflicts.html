@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label='prayers' %}">Prayers</a>
+  &rsaquo; <a href="{% url 'admin:prayers_prayerset_changelist' %}">Prayer Sets</a>
+  &rsaquo; Import conflicts
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p class="errornote">Resolve these conflicts before importing for {{ church.name }}.</p>
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+        <th scope="col">Title</th>
+        <th scope="col">Existing ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for conflict in conflicts %}
+        <tr>
+          <td>{{ conflict.type }}</td>
+          <td>{{ conflict.title }}</td>
+          <td>{{ conflict.existing_id }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="submit-row">
+    <a href="{% url 'admin:prayers_import' %}" class="button default">Back to import form</a>
+    <a href="{% url 'admin:prayers_prayerset_changelist' %}" class="button cancel-link">Cancel</a>
+  </div>
+</div>
+{% endblock %}

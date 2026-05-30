@@ -31,18 +31,29 @@ class PrayerSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerial
     church_name = serializers.CharField(source='church.name', read_only=True)
     fast_name = serializers.CharField(source='fast.name', read_only=True)
     is_bookmarked = serializers.SerializerMethodField()
+    icon = serializers.SerializerMethodField()
     
     class Meta:
         model = Prayer
         fields = [
             'id', 'title', 'text', 'category', 'video', 'church', 'church_name',
-            'fast', 'fast_name', 'tags', 'created_at', 'updated_at', 'is_bookmarked'
+            'fast', 'fast_name', 'icon', 'tags', 'created_at', 'updated_at', 'is_bookmarked'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
     def get_tags(self, obj):
         """Return list of tag names."""
         return [tag.name for tag in obj.tags.all()]
+    
+    def get_icon(self, obj):
+        """Return icon details or null if no icon is assigned."""
+        if not obj.icon:
+            return None
+        return {
+            'id': obj.icon.id,
+            'title': obj.icon.title,
+            'thumbnail_url': obj.icon.cached_thumbnail_url or None,
+        }
     
     def to_representation(self, instance):
         """Add translation support."""
@@ -72,6 +83,7 @@ class PrayerSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSer
     
     church_name = serializers.CharField(source='church.name', read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
+    icon = serializers.SerializerMethodField()
     prayers = serializers.SerializerMethodField()
     prayer_count = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
@@ -80,24 +92,42 @@ class PrayerSetSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSer
         model = PrayerSet
         fields = [
             'id', 'title', 'description', 'category', 'church', 'church_name',
-            'image', 'thumbnail_url', 'prayers', 'prayer_count',
+            'image', 'icon', 'thumbnail_url', 'prayers', 'prayer_count',
             'created_at', 'updated_at', 'is_bookmarked'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
+    def get_icon(self, obj):
+        """Return icon details or null if no icon is assigned."""
+        if not obj.icon:
+            return None
+        return {
+            'id': obj.icon.id,
+            'title': obj.icon.title,
+            'thumbnail_url': obj.icon.cached_thumbnail_url or None,
+        }
+    
     def get_thumbnail_url(self, obj):
-        """Get cached or generated thumbnail URL."""
+        """Get cached or generated thumbnail URL, falling back to icon."""
         if obj.image:
-            # Try to get/update cached URL
             cached_url = self.update_thumbnail_cache(obj, 'image', 'thumbnail')
             if cached_url:
                 return cached_url
-            
-            # Fall back to direct thumbnail URL if caching fails
             try:
                 return obj.thumbnail.url
             except (AttributeError, ValueError, OSError):
-                return None
+                pass
+        if obj.icon:
+            cached_url = self.update_thumbnail_cache(obj.icon, 'image', 'thumbnail')
+            if cached_url:
+                return cached_url
+            try:
+                return obj.icon.thumbnail.url
+            except (AttributeError, ValueError, OSError):
+                try:
+                    return obj.icon.image.url
+                except (AttributeError, ValueError, OSError):
+                    return None
         return None
     
     def get_prayers(self, obj):
@@ -144,7 +174,7 @@ class PrayerSetListSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
         read_only_fields = ['created_at', 'updated_at', 'is_bookmarked']
     
     def get_thumbnail_url(self, obj):
-        """Get cached or generated thumbnail URL."""
+        """Get cached or generated thumbnail URL, falling back to icon."""
         if obj.image:
             cached_url = self.update_thumbnail_cache(obj, 'image', 'thumbnail')
             if cached_url:
@@ -152,7 +182,18 @@ class PrayerSetListSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
             try:
                 return obj.thumbnail.url
             except (AttributeError, ValueError, OSError):
-                return None
+                pass
+        if obj.icon:
+            cached_url = self.update_thumbnail_cache(obj.icon, 'image', 'thumbnail')
+            if cached_url:
+                return cached_url
+            try:
+                return obj.icon.thumbnail.url
+            except (AttributeError, ValueError, OSError):
+                try:
+                    return obj.icon.image.url
+                except (AttributeError, ValueError, OSError):
+                    return None
         return None
     
     def get_prayer_count(self, obj):
