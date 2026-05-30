@@ -217,6 +217,7 @@ class PrayerSetDetailView(generics.RetrieveAPIView):
         return PrayerSet.objects.select_related('church', 'icon').prefetch_related(
             'memberships__prayer__church',
             'memberships__prayer__fast',
+            'memberships__prayer__icon',
             'memberships__prayer__tags'
         )
 
