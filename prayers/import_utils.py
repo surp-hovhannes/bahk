@@ -1,7 +1,6 @@
 """Utilities for importing prayer sets from JSON."""
 
 import logging
-import re
 
 from django.conf import settings as django_settings
 from django.db import transaction
@@ -101,31 +100,35 @@ def detect_conflicts(data: dict, church) -> list[dict]:
     treated as duplicates.
     """
     prayer_sets = data.get("prayer_sets", [])
-    set_titles = [prayer_set["title"] for prayer_set in prayer_sets]
-    prayer_titles = [prayer["title"] for prayer_set in prayer_sets for prayer in prayer_set.get("prayers", [])]
+    set_title_keys = {prayer_set["title"].casefold() for prayer_set in prayer_sets}
+    prayer_title_keys = {
+        prayer["title"].casefold()
+        for prayer_set in prayer_sets
+        for prayer in prayer_set.get("prayers", [])
+    }
 
     conflicts = []
-    for prayer_set in PrayerSet.objects.filter(
-        church=church, title__iregex=rf"^({'|'.join(map(re.escape, set_titles))})$"
-    ).order_by("title", "id"):
-        conflicts.append(
-            {
-                "type": "Prayer Set",
-                "title": prayer_set.title,
-                "existing_id": prayer_set.id,
-            }
-        )
+    if set_title_keys:
+        for prayer_set in PrayerSet.objects.filter(church=church).order_by("title", "id"):
+            if prayer_set.title.casefold() in set_title_keys:
+                conflicts.append(
+                    {
+                        "type": "Prayer Set",
+                        "title": prayer_set.title,
+                        "existing_id": prayer_set.id,
+                    }
+                )
 
-    for prayer in Prayer.objects.filter(
-        church=church, title__iregex=rf"^({'|'.join(map(re.escape, prayer_titles))})$"
-    ).order_by("title", "id"):
-        conflicts.append(
-            {
-                "type": "Prayer",
-                "title": prayer.title,
-                "existing_id": prayer.id,
-            }
-        )
+    if prayer_title_keys:
+        for prayer in Prayer.objects.filter(church=church).order_by("title", "id"):
+            if prayer.title.casefold() in prayer_title_keys:
+                conflicts.append(
+                    {
+                        "type": "Prayer",
+                        "title": prayer.title,
+                        "existing_id": prayer.id,
+                    }
+                )
 
     return conflicts
 
