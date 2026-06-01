@@ -100,7 +100,7 @@ class Command(BaseCommand):
                     # Delete S3 image file first, then the DB record
                     try:
                         if dup_image:
-                            dup_image.delete()
+                            dup_image.delete(save=False)
                     except Exception as exc:
                         self.stderr.write(
                             f'Warning: could not delete S3 image for icon {dup_pk}: {exc}'
