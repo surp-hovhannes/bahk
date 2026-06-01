@@ -2,6 +2,7 @@
 import ipaddress
 import logging
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Q
 from rest_framework import generics, status, views
 from rest_framework.pagination import PageNumberPagination
@@ -9,6 +10,7 @@ from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
+from icons.cache import IconViewCache
 from icons.models import Icon, IconFeedback
 from icons.serializers import IconSerializer, IconFeedbackSerializer
 
@@ -91,6 +93,18 @@ class IconListView(generics.ListCreateAPIView):
     serializer_class = IconSerializer
     permission_classes = [IsAdminOrReadOnly]
     pagination_class = IconPagination
+
+    def list(self, request, *args, **kwargs):
+        """Return cached icon list responses for repeated GET requests."""
+        cache_key = IconViewCache.list_key(request.query_params)
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            cache.set(cache_key, response.data, IconViewCache.LIST_TTL)
+        return response
     
     def get_queryset(self):
         """Get icons with optional filtering."""
@@ -141,6 +155,18 @@ class IconDetailView(generics.RetrieveAPIView):
     serializer_class = IconSerializer
     permission_classes = [AllowAny]
     queryset = Icon.objects.select_related('church').prefetch_related('tags')
+
+    def retrieve(self, request, *args, **kwargs):
+        """Return cached icon detail responses for repeated GET requests."""
+        cache_key = IconViewCache.detail_key(kwargs["pk"])
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        response = super().retrieve(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            cache.set(cache_key, response.data, IconViewCache.DETAIL_TTL)
+        return response
 
 
 class IconMatchView(views.APIView):
@@ -218,6 +244,35 @@ class IconMatchView(views.APIView):
                 {'error': 'max_results must be between 1 and 100'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Normalize prompt (whitespace-only becomes empty string)
+        prompt = prompt.strip() if isinstance(prompt, str) else str(prompt).strip()
+        if not prompt:
+            return Response(
+                {'error': 'prompt is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Normalize church_id to int or None for stable cache keys
+        if church_id is not None:
+            try:
+                church_id = int(church_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'church_id must be an integer'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        normalized_cache_data = {
+            'prompt': prompt,
+            'church_id': church_id or '',
+            'return_format': return_format,
+            'max_results': max_results,
+        }
+        cache_key = IconViewCache.match_key(normalized_cache_data)
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data, status=status.HTTP_200_OK)
         
         # Get icons to match against
         queryset = Icon.objects.select_related('church').prefetch_related('tags')
@@ -227,10 +282,9 @@ class IconMatchView(views.APIView):
         icons = list(queryset)
         
         if not icons:
-            return Response(
-                {'matches': []},
-                status=status.HTTP_200_OK
-            )
+            response_data = {'matches': []}
+            cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
+            return Response(response_data, status=status.HTTP_200_OK)
         
         # Pre-filter: use simple matching to narrow candidates before sending to LLM.
         # With 550+ icons the full list overwhelms the model; pre-filter to top 30.
@@ -499,9 +553,11 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                 logger.warning(f"LLM returned non-existent icon ID: {icon_id}")
                 continue
         
-        return Response({
+        response_data = {
             'matches': matches
-        }, status=status.HTTP_200_OK)
+        }
+        cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
+        return Response(response_data, status=status.HTTP_200_OK)
     
     def _simple_match_icons(self, icons, prompt, max_results):
         """Simple fallback matching based on title and tag keywords."""
