@@ -16,9 +16,10 @@ class IconSerializer(serializers.ModelSerializer):
         model = Icon
         fields = [
             'id', 'title', 'church', 'church_name', 'tags', 'tag_list',
-            'image', 'thumbnail_url', 'created_at', 'updated_at'
+            'image', 'thumbnail_url', 'image_hash', 'phash',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'image_hash', 'phash']
 
     def get_thumbnail_url(self, obj):
         """Get the thumbnail URL, never triggering generation during serialization.

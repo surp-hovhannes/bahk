@@ -1,11 +1,15 @@
 """Models for the icons app."""
+import hashlib
 import logging
+from io import BytesIO
 
 from django.db import models
 from django.utils import timezone
+import imagehash
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit
 from model_utils.tracker import FieldTracker
+from PIL import Image
 from taggit.managers import TaggableManager
 
 from hub.constants import DAYS_TO_CACHE_THUMBNAIL
@@ -38,6 +42,8 @@ class Icon(models.Model):
     # Cache the thumbnail URL to avoid S3 calls
     cached_thumbnail_url = models.URLField(max_length=2048, null=True, blank=True)
     cached_thumbnail_updated = models.DateTimeField(null=True, blank=True)
+    image_hash = models.CharField(max_length=64, blank=True)
+    phash = models.CharField(max_length=64, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -58,9 +64,27 @@ class Icon(models.Model):
     
     def __str__(self):
         return self.title
+
+    def _compute_image_footprints(self):
+        """Compute exact and perceptual hashes for the stored image."""
+        self.image.open('rb')
+        try:
+            raw_bytes = self.image.read()
+        finally:
+            self.image.close()
+
+        image_hash = hashlib.sha256(raw_bytes).hexdigest()
+        phash = ''
+        try:
+            with Image.open(BytesIO(raw_bytes)) as image:
+                phash = str(imagehash.phash(image))
+        except Exception as exc:
+            logger.warning('Could not compute pHash for Icon %s: %s', self.pk, exc)
+
+        return image_hash, phash
     
     def save(self, *args, **kwargs):
-        """Save method with thumbnail caching logic."""
+        """Save method with image footprint and thumbnail caching logic."""
         update_fields = kwargs.get('update_fields')
         if len(args) >= 4:
             update_fields = args[3]
@@ -73,9 +97,27 @@ class Icon(models.Model):
         )
         
         super().save(*args, **kwargs)
+
+        post_save_update_fields = []
         
-        # Handle thumbnail URL caching after the instance and image are fully saved to S3
+        # Handle footprints and thumbnails after the instance and image are fully saved to S3
         if self.image:
+            if is_new_image:
+                try:
+                    image_hash, phash = self._compute_image_footprints()
+                    if self.image_hash != image_hash:
+                        self.image_hash = image_hash
+                        post_save_update_fields.append('image_hash')
+                    if self.phash != phash:
+                        self.phash = phash
+                        post_save_update_fields.append('phash')
+                except Exception as exc:
+                    logger.error(
+                        'Error computing image footprints for Icon %s: %s',
+                        self.pk,
+                        exc,
+                    )
+
             # Update cache if:
             # 1. No cached URL exists
             # 2. Image was changed/uploaded
@@ -98,26 +140,32 @@ class Icon(models.Model):
                     # Get the S3 URL after the file has been uploaded
                     self.cached_thumbnail_url = self.thumbnail.url
                     self.cached_thumbnail_updated = timezone.now()
-                    
-                    # Save again to update the cache fields only
-                    super().save(
-                        update_fields=[
-                            'cached_thumbnail_url',
-                            'cached_thumbnail_updated',
-                        ]
-                    )
+                    post_save_update_fields.extend([
+                        'cached_thumbnail_url',
+                        'cached_thumbnail_updated',
+                    ])
                 except Exception as e:
                     logger.error(
                         f'Error caching S3 thumbnail URL for Icon {self.id}: {e}'
                     )
         else:
-            # Clear cached URL if image is removed
+            # Clear cached URL and footprints if image is removed
             if self.cached_thumbnail_url or self.cached_thumbnail_updated:
                 self.cached_thumbnail_url = None
                 self.cached_thumbnail_updated = None
-                super().save(
-                    update_fields=['cached_thumbnail_url', 'cached_thumbnail_updated']
-                )
+                post_save_update_fields.extend([
+                    'cached_thumbnail_url',
+                    'cached_thumbnail_updated',
+                ])
+            if self.image_hash:
+                self.image_hash = ''
+                post_save_update_fields.append('image_hash')
+            if self.phash:
+                self.phash = ''
+                post_save_update_fields.append('phash')
+
+        if post_save_update_fields:
+            super().save(update_fields=list(dict.fromkeys(post_save_update_fields)))
 
 
 class IconFeedback(models.Model):

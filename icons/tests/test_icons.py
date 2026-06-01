@@ -1,12 +1,32 @@
 """Tests for the icons app."""
 
+import hashlib
+from io import BytesIO, StringIO
+
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework.test import APITestCase
 from rest_framework import status
 
 from hub.models import Church
 from icons.models import Icon, IconFeedback
+from icons.serializers import IconSerializer
+
+
+def create_test_image(name='test_icon.png', color='white', pattern=None):
+    """Create a small valid uploaded PNG for footprint tests."""
+    image = Image.new('RGB', (32, 32), color)
+    if pattern == 'diagonal':
+        for index in range(32):
+            image.putpixel((index, index), (255, 255, 255))
+            image.putpixel((31 - index, index), (255, 255, 255))
+
+    buffer = BytesIO()
+    image.save(buffer, format='PNG')
+    content = buffer.getvalue()
+    return SimpleUploadedFile(name, content, content_type='image/png'), content
 
 
 class IconModelTests(TestCase):
@@ -90,6 +110,80 @@ class IconModelTests(TestCase):
         self.assertEqual(icon.tags.count(), 2)
         self.assertIn("cross", [tag.name for tag in icon.tags.all()])
 
+    def test_icon_save_computes_image_footprints_for_valid_image(self):
+        """Test saving a valid image computes SHA-256 and pHash values."""
+        test_image, content = create_test_image()
+
+        icon = Icon.objects.create(
+            title="Test Icon",
+            church=self.church,
+            image=test_image
+        )
+
+        self.assertEqual(icon.image_hash, hashlib.sha256(content).hexdigest())
+        self.assertEqual(len(icon.image_hash), 64)
+        self.assertNotEqual(icon.phash, '')
+
+    def test_icon_save_does_not_recompute_footprints_for_metadata_update(self):
+        """Test metadata-only saves do not refresh image footprints."""
+        test_image, _content = create_test_image()
+        icon = Icon.objects.create(
+            title="Test Icon",
+            church=self.church,
+            image=test_image
+        )
+        Icon.objects.filter(pk=icon.pk).update(image_hash='manual-hash', phash='manual-phash')
+
+        icon.refresh_from_db()
+        icon.title = "Updated Icon"
+        icon.save(update_fields=['title'])
+
+        icon.refresh_from_db()
+        self.assertEqual(icon.title, "Updated Icon")
+        self.assertEqual(icon.image_hash, 'manual-hash')
+        self.assertEqual(icon.phash, 'manual-phash')
+
+    def test_replacing_icon_image_refreshes_footprints(self):
+        """Test replacing an image changes exact and perceptual hashes."""
+        test_image, _content = create_test_image(color='white')
+        icon = Icon.objects.create(
+            title="Test Icon",
+            church=self.church,
+            image=test_image
+        )
+        original_image_hash = icon.image_hash
+        original_phash = icon.phash
+
+        replacement_image, _replacement_content = create_test_image(
+            name='replacement.png',
+            color='black',
+            pattern='diagonal',
+        )
+        icon.image = replacement_image
+        icon.save(update_fields=['image'])
+
+        icon.refresh_from_db()
+        self.assertNotEqual(icon.image_hash, original_image_hash)
+        self.assertNotEqual(icon.phash, original_phash)
+
+    def test_invalid_image_bytes_save_with_hash_and_blank_phash(self):
+        """Test corrupt image bytes still save exact hashes and leave pHash blank."""
+        content = b'fake image content'
+        test_image = SimpleUploadedFile(
+            name='test_icon.jpg',
+            content=content,
+            content_type='image/jpeg'
+        )
+
+        icon = Icon.objects.create(
+            title="Test Icon",
+            church=self.church,
+            image=test_image
+        )
+
+        self.assertEqual(icon.image_hash, hashlib.sha256(content).hexdigest())
+        self.assertEqual(icon.phash, '')
+
 
 class IconAPITests(APITestCase):
     """Tests for the Icon API endpoints."""
@@ -136,6 +230,28 @@ class IconAPITests(APITestCase):
         response = self.client.get(f'/api/icons/{self.icon1.id}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['title'], "Nativity Icon")
+
+    def test_serializer_includes_read_only_footprints(self):
+        """Test icon serializer exposes footprints and ignores client supplied values."""
+        serializer = IconSerializer(self.icon1)
+        self.assertIn('image_hash', serializer.data)
+        self.assertIn('phash', serializer.data)
+
+        upload, _content = create_test_image(name='serializer_icon.png')
+        write_serializer = IconSerializer(data={
+            'title': 'Serializer Icon',
+            'church': self.church.pk,
+            'image': upload,
+            'image_hash': 'client-hash',
+            'phash': 'client-phash',
+        })
+        self.assertTrue(write_serializer.is_valid(), write_serializer.errors)
+
+        icon = write_serializer.save()
+        self.assertNotEqual(icon.image_hash, 'client-hash')
+        self.assertNotEqual(icon.phash, 'client-phash')
+        self.assertEqual(len(icon.image_hash), 64)
+        self.assertNotEqual(icon.phash, '')
     
     def test_filter_by_church(self):
         """Test filtering icons by church."""
@@ -424,3 +540,78 @@ class IconFeedbackAPITests(APITestCase):
                 format='json'
             )
             self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
+class BackfillIconFootprintsCommandTests(TestCase):
+    """Tests for the icon footprint backfill command."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.church = Church.objects.create(name="Test Church")
+
+    def create_icon(self, title="Test Icon"):
+        test_image, _content = create_test_image(name=f'{title.lower().replace(" ", "_")}.png')
+        return Icon.objects.create(
+            title=title,
+            church=self.church,
+            image=test_image
+        )
+
+    def call_backfill(self, *args):
+        out = StringIO()
+        err = StringIO()
+        call_command('backfill_icon_footprints', *args, stdout=out, stderr=err)
+        return out.getvalue(), err.getvalue()
+
+    def test_backfill_skips_rows_with_existing_footprints(self):
+        """Test rows with both footprint values are skipped unless forced."""
+        self.create_icon()
+
+        out, _err = self.call_backfill()
+
+        self.assertIn('scanned=0', out)
+        self.assertIn('updated=0', out)
+
+    def test_backfill_updates_rows_missing_footprints(self):
+        """Test backfill updates rows missing either footprint value."""
+        icon = self.create_icon()
+        Icon.objects.filter(pk=icon.pk).update(image_hash='', phash='')
+
+        out, _err = self.call_backfill()
+
+        icon.refresh_from_db()
+        self.assertIn('scanned=1', out)
+        self.assertIn('updated=1', out)
+        self.assertEqual(len(icon.image_hash), 64)
+        self.assertNotEqual(icon.phash, '')
+
+    def test_backfill_honors_dry_run(self):
+        """Test dry-run reports pending updates without saving."""
+        icon = self.create_icon()
+        Icon.objects.filter(pk=icon.pk).update(image_hash='', phash='')
+
+        out, _err = self.call_backfill('--dry-run')
+
+        icon.refresh_from_db()
+        self.assertIn('scanned=1', out)
+        self.assertIn('would_update=1', out)
+        self.assertEqual(icon.image_hash, '')
+        self.assertEqual(icon.phash, '')
+
+    def test_backfill_honors_force(self):
+        """Test force recomputes rows that already have both values."""
+        icon = self.create_icon()
+        Icon.objects.filter(pk=icon.pk).update(image_hash='client-hash', phash='client-phash')
+
+        out, _err = self.call_backfill()
+        icon.refresh_from_db()
+        self.assertIn('scanned=0', out)
+        self.assertEqual(icon.image_hash, 'client-hash')
+        self.assertEqual(icon.phash, 'client-phash')
+
+        out, _err = self.call_backfill('--force')
+        icon.refresh_from_db()
+        self.assertIn('scanned=1', out)
+        self.assertIn('updated=1', out)
+        self.assertNotEqual(icon.image_hash, 'client-hash')
+        self.assertNotEqual(icon.phash, 'client-phash')
