@@ -325,6 +325,19 @@ class PrayerRequestSerializer(serializers.ModelSerializer, ThumbnailCacheMixin):
                     return None
         return None
 
+    def to_representation(self, instance):
+        """Represent icon-backed requests with the icon's full image URL."""
+        data = super().to_representation(instance)
+        if not data.get('image') and instance.icon_id and instance.icon:
+            try:
+                image_url = instance.icon.image.url
+            except (AttributeError, ValueError, OSError):
+                pass
+            else:
+                request = self.context.get('request')
+                data['image'] = request.build_absolute_uri(image_url) if request else image_url
+        return data
+
     def get_acceptance_count(self, obj):
         """Get the number of users who accepted this request."""
         return obj.get_acceptance_count()
