@@ -206,6 +206,31 @@ class IconDedupUploadTests(APITestCase):
         self.assertEqual(response.data['existing_icon']['id'], existing.pk)
         self.assertEqual(Icon.objects.count(), 1)
 
+    def test_direct_model_create_allows_duplicate_image_bytes(self):
+        """Internal icon creation does not fail when image bytes duplicate."""
+        upload, _content = create_test_image(name='existing.png', color='white')
+        existing = Icon.objects.create(
+            title='Existing Icon',
+            church=self.church,
+            image=upload,
+        )
+        duplicate_upload, _content = create_test_image(
+            name='duplicate.png',
+            color='white',
+        )
+
+        duplicate = Icon.objects.create(
+            title='Duplicate Internal Icon',
+            church=self.church,
+            image=duplicate_upload,
+        )
+
+        self.assertEqual(Icon.objects.count(), 2)
+        existing.refresh_from_db()
+        duplicate.refresh_from_db()
+        self.assertNotEqual(existing.image_hash, '')
+        self.assertEqual(duplicate.image_hash, '')
+
     def test_upload_duplicate_similar_phash(self):
         """Uploading a perceptually similar image returns a 409."""
         upload, _content = create_test_image(name='existing.png', color='white')
