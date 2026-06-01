@@ -10,7 +10,6 @@ from django.db.models import OuterRef, Subquery, Count, Q
 from django.core.cache import cache
 import logging
 import time
-import sentry_sdk
 from .constants import (
     DAILY_FAST_MESSAGE, UPCOMING_FAST_MESSAGE, ONGOING_FAST_MESSAGE,
     ONGOING_FAST_WITH_DEVOTIONAL_MESSAGE, FAST_NONJOIN_NUDGE_MESSAGE,
@@ -530,7 +529,6 @@ def send_daily_fast_push_notification_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-culmination-feast-notifications')
 def send_culmination_feast_push_notification_task():
     """
     Send push notifications to users on the culmination feast date of their joined fasts.
@@ -588,7 +586,6 @@ def send_culmination_feast_push_notification_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='weekly-prayer-request-notifications')
 def send_weekly_prayer_request_push_notification_task():
     """
     Send weekly push notifications about available prayer requests.
@@ -685,7 +682,6 @@ def send_weekly_prayer_request_push_notification_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-fast-nonjoin-nudge')
 def send_fast_nonjoin_nudge_task():
     """
     On days 2, 10, and 20 of an active fast, nudge church members who haven't joined.
@@ -742,7 +738,6 @@ def send_fast_nonjoin_nudge_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-inactive-fast-member-nudge')
 def send_inactive_fast_member_nudge_task():
     """
     Nudge users who joined an active fast but haven't opened the app in 5+ days.
@@ -802,7 +797,6 @@ def send_inactive_fast_member_nudge_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-activity-feed-nudge')
 def send_activity_feed_nudge_task():
     """
     Nudge users with 5+ unread activity feed items who haven't opened the app in 5+ days.
@@ -855,7 +849,6 @@ def send_activity_feed_nudge_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-prayer-acceptance-nudge')
 def send_prayer_acceptance_nudge_task():
     """
     Remind users who accepted a prayer request but haven't logged a prayer for it

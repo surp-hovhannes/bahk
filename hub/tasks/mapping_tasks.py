@@ -459,7 +459,6 @@ def generate_participant_map(self, fast_id, delay=0):
 
 
 @shared_task(name='hub.tasks.update_current_fast_maps')
-@sentry_sdk.monitor(monitor_slug='daily-fast-map-updates')
 def update_current_fast_maps():
     """
     Update maps for current and upcoming fasts only.

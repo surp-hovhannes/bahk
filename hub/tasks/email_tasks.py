@@ -11,7 +11,6 @@ def test_email_task():
     test_email()
 
 @shared_task(name='hub.tasks.send_fast_reminder_task')
-@sentry_sdk.monitor(monitor_slug='daily-fast-notifications')
 def send_fast_reminder_task():
     """Send reminders about upcoming fasts."""
     # Add additional context for Sentry

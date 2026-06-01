@@ -578,12 +578,18 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(response.data['fasts_left'], 0)
 
     def test_event_stats_hides_other_users_milestone_events_for_non_staff(self):
-        """Non-staff users should not receive other users' milestone event rows."""
+        """Non-staff users should receive own and system milestone rows only."""
         own_event = Event.create_event(
             event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
             user=self.user,
             target=self.fast,
             title='Own milestone',
+        )
+        system_event = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=None,
+            target=self.fast,
+            title='System milestone',
         )
         Event.create_event(
             event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
@@ -596,8 +602,8 @@ class EngagementTrackingEndpointsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            [event['id'] for event in response.data['milestone_events']],
-            [own_event.id],
+            {event['id'] for event in response.data['milestone_events']},
+            {own_event.id, system_event.id},
         )
 
     def test_event_stats_staff_can_see_global_milestone_events(self):
@@ -626,7 +632,7 @@ class EngagementTrackingEndpointsTest(APITestCase):
         )
 
     def test_fast_event_stats_hides_other_users_event_rows_for_non_staff(self):
-        """Non-staff users should only receive their own per-fast event rows."""
+        """Non-staff users should receive own and system per-fast event rows."""
         own_recent = Event.create_event(
             event_type_code=EventType.USER_JOINED_FAST,
             user=self.user,
@@ -638,6 +644,12 @@ class EngagementTrackingEndpointsTest(APITestCase):
             user=self.user,
             target=self.fast,
             title='Own milestone',
+        )
+        system_milestone = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=None,
+            target=self.fast,
+            title='System milestone',
         )
         Event.create_event(
             event_type_code=EventType.USER_LEFT_FAST,
@@ -658,8 +670,8 @@ class EngagementTrackingEndpointsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            [event['id'] for event in response.data['milestone_events']],
-            [own_milestone.id],
+            {event['id'] for event in response.data['milestone_events']},
+            {own_milestone.id, system_milestone.id},
         )
         self.assertEqual(
             {event['id'] for event in response.data['recent_activity']},
