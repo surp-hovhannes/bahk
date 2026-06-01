@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Count
 
 from icons.models import Icon
-from icons.utils import count_icon_associations, icon_association_count_expression
+from icons.utils import count_icon_associations
 
 
 class Command(BaseCommand):
@@ -60,7 +60,6 @@ class Command(BaseCommand):
                 icons = list(
                     Icon.objects.select_for_update()
                     .filter(phash=group['phash'])
-                    .annotate(association_count=icon_association_count_expression())
                     .order_by('-created_at', 'pk')
                 )
                 if len(icons) < 2:
