@@ -7,7 +7,6 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 import logging
-import sentry_sdk
 
 from .models import UserActivityFeed, Event
 
@@ -170,7 +169,6 @@ def batch_create_activity_feed_items_task(event_ids, user_id=None):
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-activity-feed-cleanup')
 def cleanup_old_activity_feed_items_task():
     """
     Clean up old activity feed items based on retention policies.
@@ -307,7 +305,6 @@ def track_fast_beginning_task(self, fast_id):
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-fast-beginning-check')
 def check_fast_beginning_events_task():
     """
     Check for fasts that are beginning today and create beginning events.
@@ -367,7 +364,6 @@ def check_fast_beginning_events_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-participation-milestones-check')
 def check_participation_milestones_task():
     """
     Check all active fasts for participation milestones.
@@ -421,7 +417,6 @@ def check_participation_milestones_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-devotional-availability-check')
 def check_devotional_availability_task():
     """
     Check for devotionals that become available today and create availability events.
@@ -657,7 +652,6 @@ def track_video_published_task(self, video_id):
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-completed-fast-milestones-check')
 def check_completed_fast_milestones_task():
     """
     Check for users who have completed their first non-weekly fast and award milestones.

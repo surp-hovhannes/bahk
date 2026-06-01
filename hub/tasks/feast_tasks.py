@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(name='hub.tasks.create_feast_date_task')
-@sentry_sdk.monitor(monitor_slug='daily-feast-date-creation')
 def create_feast_date_task():
     """
     Create feast date for today if it doesn't already exist.

@@ -9,7 +9,6 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.db.models import Count, Q
 from django.utils import timezone
-import sentry_sdk
 
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.models import LLMPrompt
@@ -482,7 +481,6 @@ Admin URL: {settings.SITE_URL}/admin/prayers/prayerrequest/{prayer_request.id}/c
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='frequent-expired-prayer-requests-check')
 def check_expired_prayer_requests_task():
     """
     Check for expired prayer requests and mark them as completed.
@@ -519,7 +517,6 @@ def check_expired_prayer_requests_task():
 
 
 @shared_task
-@sentry_sdk.monitor(monitor_slug='daily-prayer-count-notifications')
 def send_daily_prayer_count_notifications_task():
     """
     Send daily notifications to prayer request creators about how many people prayed.

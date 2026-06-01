@@ -15,7 +15,6 @@ import logging
 import time
 from datetime import timedelta
 
-import sentry_sdk
 from celery import shared_task
 from django.conf import settings
 from django.db.models import Q
@@ -57,7 +56,6 @@ def fetch_reading_text_task(self, reading_id: int):
 
 
 @shared_task(bind=True, max_retries=1, default_retry_delay=300, name='hub.tasks.refresh_all_reading_texts_task')
-@sentry_sdk.monitor(monitor_slug='weekly-reading-text-refresh')
 def refresh_all_reading_texts_task(self):
     """Refresh Bible text (all languages) for all stale readings.
 
