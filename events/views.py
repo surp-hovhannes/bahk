@@ -3,7 +3,7 @@ API views for the events app.
 Provides endpoints for retrieving events, analytics, and statistics.
 """
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from datetime import timedelta
@@ -229,7 +229,12 @@ class EventStatsView(APIView):
             timestamp__gte=last_30d
         ).select_related(
             'event_type', 'user', 'content_type'
-        ).order_by('-timestamp')[:5]
+        ).order_by('-timestamp')
+        if not request.user.is_staff:
+            milestone_events = milestone_events.filter(
+                Q(user__isnull=True) | Q(user=request.user)
+            )
+        milestone_events = milestone_events[:5]
         
         stats_data = {
             'total_events': total_events,
@@ -353,7 +358,12 @@ class FastEventStatsView(APIView):
             event_type__code=EventType.FAST_PARTICIPANT_MILESTONE
         ).select_related(
             'event_type', 'user', 'content_type'
-        ).order_by('-timestamp')[:5]
+        ).order_by('-timestamp')
+        if not request.user.is_staff:
+            milestone_events = milestone_events.filter(
+                Q(user__isnull=True) | Q(user=request.user)
+            )
+        milestone_events = milestone_events[:5]
         
         # Join timeline (last 30 days)
         now = timezone.now()
@@ -386,7 +396,10 @@ class FastEventStatsView(APIView):
         # Recent activity
         recent_activity = fast_events.select_related(
             'event_type', 'user', 'content_type'
-        ).order_by('-timestamp')[:10]
+        ).order_by('-timestamp')
+        if not request.user.is_staff:
+            recent_activity = recent_activity.filter(user=request.user)
+        recent_activity = recent_activity[:10]
         
         stats_data = {
             'fast_id': fast.id,

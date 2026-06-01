@@ -479,6 +479,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         self.assertEqual(results[0]['id'], created_request.id)
         self.assertEqual(results[0]['icon_id'], icon.id)
         self.assertEqual(results[0]['thumbnail_url'], icon.cached_thumbnail_url)
+        self.assertEqual(results[0]['image'], f'http://testserver{icon.image.url}')
 
     @tag('integration')
     def test_create_allows_icon_when_user_has_no_profile(self):

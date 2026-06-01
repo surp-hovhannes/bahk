@@ -576,6 +576,133 @@ class EngagementTrackingEndpointsTest(APITestCase):
         self.assertEqual(response.data['total_events'], 1)
         self.assertEqual(response.data['fasts_joined'], 1)
         self.assertEqual(response.data['fasts_left'], 0)
+
+    def test_event_stats_hides_other_users_milestone_events_for_non_staff(self):
+        """Non-staff users should receive own and system milestone rows only."""
+        own_event = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=self.user,
+            target=self.fast,
+            title='Own milestone',
+        )
+        system_event = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=None,
+            target=self.fast,
+            title='System milestone',
+        )
+        Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=self.other_user,
+            target=self.fast,
+            title='Other milestone',
+        )
+
+        response = self.client.get(reverse('events:event-stats'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {event['id'] for event in response.data['milestone_events']},
+            {own_event.id, system_event.id},
+        )
+
+    def test_event_stats_staff_can_see_global_milestone_events(self):
+        """Staff users keep global milestone visibility for analytics."""
+        own_event = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=self.user,
+            target=self.fast,
+            title='Own milestone',
+        )
+        other_event = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=self.other_user,
+            target=self.fast,
+            title='Other milestone',
+        )
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(reverse('events:event-stats'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {event['id'] for event in response.data['milestone_events']},
+            {own_event.id, other_event.id},
+        )
+
+    def test_fast_event_stats_hides_other_users_event_rows_for_non_staff(self):
+        """Non-staff users should receive own and system per-fast event rows."""
+        own_recent = Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.user,
+            target=self.fast,
+            title='Own join',
+        )
+        own_milestone = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=self.user,
+            target=self.fast,
+            title='Own milestone',
+        )
+        system_milestone = Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=None,
+            target=self.fast,
+            title='System milestone',
+        )
+        Event.create_event(
+            event_type_code=EventType.USER_LEFT_FAST,
+            user=self.other_user,
+            target=self.fast,
+            title='Other leave',
+        )
+        Event.create_event(
+            event_type_code=EventType.FAST_PARTICIPANT_MILESTONE,
+            user=self.other_user,
+            target=self.fast,
+            title='Other milestone',
+        )
+
+        response = self.client.get(
+            reverse('events:fast-event-stats', kwargs={'fast_id': self.fast.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {event['id'] for event in response.data['milestone_events']},
+            {own_milestone.id, system_milestone.id},
+        )
+        self.assertEqual(
+            {event['id'] for event in response.data['recent_activity']},
+            {own_recent.id, own_milestone.id},
+        )
+
+    def test_fast_event_stats_staff_can_see_global_event_rows(self):
+        """Staff users keep global per-fast event row visibility."""
+        own_event = Event.create_event(
+            event_type_code=EventType.USER_JOINED_FAST,
+            user=self.user,
+            target=self.fast,
+            title='Own join',
+        )
+        other_event = Event.create_event(
+            event_type_code=EventType.USER_LEFT_FAST,
+            user=self.other_user,
+            target=self.fast,
+            title='Other leave',
+        )
+        refresh = RefreshToken.for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        response = self.client.get(
+            reverse('events:fast-event-stats', kwargs={'fast_id': self.fast.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        event_ids = {event['id'] for event in response.data['recent_activity']}
+        self.assertIn(own_event.id, event_ids)
+        self.assertIn(other_event.id, event_ids)
     
     def test_track_devotional_viewed_success(self):
         """Test successful devotional viewed tracking."""
