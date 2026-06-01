@@ -1,6 +1,7 @@
 """Celery tasks for the prayers app."""
 
 import logging
+import time
 
 from better_profanity import profanity
 from celery import shared_task
@@ -60,6 +61,8 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
                 church_id,
                 exc,
             )
+        finally:
+            time.sleep(0.5)
 
 
 def _get_moderation_prompt_and_service(prayer_request):
