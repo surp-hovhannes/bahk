@@ -16,8 +16,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--dry-run',
             action='store_true',
-            default=True,
-            help='Report merge actions without deleting records (default).',
+            help='Report merge actions without deleting records (default unless --execute).',
         )
         parser.add_argument(
             '--execute',
@@ -33,7 +32,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         batch_size = options['batch_size']
-        execute = options['execute']
+        execute = options['execute'] and not options['dry_run']
 
         if batch_size < 1:
             raise CommandError('--batch-size must be greater than 0.')
