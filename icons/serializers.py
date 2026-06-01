@@ -1,6 +1,19 @@
 """Serializers for the icons app."""
+from rest_framework.exceptions import APIException
 from rest_framework import serializers
-from icons.models import Icon
+
+from icons.models import DuplicateIconError, Icon
+from icons.utils import compute_image_footprints_from_file
+
+
+class DuplicateIconAPIException(APIException):
+    """API response for duplicate icon uploads."""
+
+    status_code = 409
+    default_code = 'duplicate_icon'
+
+    def __init__(self, detail):
+        self.detail = detail
 
 
 class IconSerializer(serializers.ModelSerializer):
@@ -39,7 +52,27 @@ class IconSerializer(serializers.ModelSerializer):
         """Handle tag creation on icon upload."""
         # Extract tags from validated data (comes as comma-separated string)
         tags_string = validated_data.pop('tags', '')
-        icon = Icon.objects.create(**validated_data)
+        image = validated_data.get('image')
+        if image and (
+            not validated_data.get('image_hash')
+            or not validated_data.get('phash')
+        ):
+            image_hash, phash = compute_image_footprints_from_file(image)
+            validated_data['image_hash'] = image_hash
+            validated_data['phash'] = phash
+
+        try:
+            icon = Icon.objects.create(**validated_data)
+        except DuplicateIconError as exc:
+            existing_icon = exc.existing_icon
+            raise DuplicateIconAPIException({
+                'detail': 'Duplicate icon detected.',
+                'existing_icon': {
+                    'id': existing_icon.pk,
+                    'title': existing_icon.title,
+                    'thumbnail_url': self.get_thumbnail_url(existing_icon),
+                },
+            }) from exc
 
         # Process tags: split by comma and clean up
         if tags_string:
