@@ -1,4 +1,5 @@
 """Serializers for the icons app."""
+from django.db import IntegrityError
 from rest_framework.exceptions import APIException
 from rest_framework import serializers
 
@@ -73,6 +74,25 @@ class IconSerializer(serializers.ModelSerializer):
                     'thumbnail_url': self.get_thumbnail_url(existing_icon),
                 },
             }) from exc
+        except IntegrityError:
+            # UniqueConstraint on image_hash was violated — another concurrent
+            # upload passed the signal check before us. Fall back to a lookup.
+            image_hash = validated_data.get('image_hash', '')
+            if image_hash:
+                existing_icon = Icon.objects.filter(image_hash=image_hash).first()
+                if existing_icon:
+                    raise DuplicateIconAPIException({
+                        'detail': 'Duplicate icon detected.',
+                        'existing_icon': {
+                            'id': existing_icon.pk,
+                            'title': existing_icon.title,
+                            'thumbnail_url': self.get_thumbnail_url(existing_icon),
+                        },
+                    })
+            # Hash not available or not found — re-raise as a generic error
+            raise serializers.ValidationError({
+                'detail': 'Icon could not be created. Please try again.',
+            }) from None
 
         # Process tags: split by comma and clean up
         if tags_string:

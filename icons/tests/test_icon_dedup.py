@@ -111,10 +111,10 @@ class IconDedupCommandTests(TestCase):
             phash=self.duplicate_phash,
         )
 
-        out, err = self.call_icons('merge-duplicates')
+        out, err = self.call_icons('merge-duplicates', '--execute')
 
         self.assertEqual(err, '')
-        self.assertIn(f'Merged icon {duplicate.pk} (Duplicate)', out)
+        self.assertIn(f'Deleted icon {duplicate.pk} (Duplicate)', out)
         self.assertTrue(Icon.objects.filter(pk=canonical.pk).exists())
         self.assertFalse(Icon.objects.filter(pk=duplicate.pk).exists())
 
@@ -138,10 +138,10 @@ class IconDedupCommandTests(TestCase):
         self.attach_prayer_set(canonical)
         self.attach_prayer_request(duplicate)
 
-        out, err = self.call_icons('merge-duplicates')
+        out, err = self.call_icons('merge-duplicates', '--execute')
 
         self.assertIn('Merged 0, Skipped 1, Groups 1', out)
-        self.assertIn(f'Skipped icon {duplicate.pk} (Associated Duplicate)', err)
+        self.assertIn(f'SKIP icon {duplicate.pk} (Associated Duplicate)', err)
         self.assertTrue(Icon.objects.filter(pk=canonical.pk).exists())
         self.assertTrue(Icon.objects.filter(pk=duplicate.pk).exists())
 
@@ -158,10 +158,10 @@ class IconDedupCommandTests(TestCase):
         self.attach_prayer_set(most_used)
         self.attach_prayer_request(older)
 
-        out, err = self.call_icons('merge-duplicates')
+        out, err = self.call_icons('merge-duplicates', '--execute')
 
         self.assertIn('Merged 1, Skipped 1, Groups 1', out)
-        self.assertIn(f'Skipped icon {older.pk} (Older)', err)
+        self.assertIn(f'SKIP icon {older.pk} (Older)', err)
         self.assertTrue(Icon.objects.filter(pk=most_used.pk).exists())
         self.assertTrue(Icon.objects.filter(pk=older.pk).exists())
         self.assertFalse(Icon.objects.filter(pk=unused.pk).exists())
