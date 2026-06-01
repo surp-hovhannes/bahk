@@ -19,6 +19,14 @@ from icons.utils import icon_image_upload_path
 logger = logging.getLogger(__name__)
 
 
+class DuplicateIconError(Exception):
+    """Raised when a new icon duplicates an existing icon."""
+
+    def __init__(self, existing_icon):
+        self.existing_icon = existing_icon
+        super().__init__(f"Duplicate icon detected: {existing_icon.title}")
+
+
 class Icon(models.Model):
     """Model for icons that can be used in the application."""
     
@@ -106,8 +114,15 @@ class Icon(models.Model):
                 try:
                     image_hash, phash = self._compute_image_footprints()
                     if self.image_hash != image_hash:
-                        self.image_hash = image_hash
-                        post_save_update_fields.append('image_hash')
+                        duplicate_hash_exists = type(self).objects.exclude(
+                            pk=self.pk
+                        ).filter(image_hash=image_hash).exists()
+                        if not duplicate_hash_exists:
+                            self.image_hash = image_hash
+                            post_save_update_fields.append('image_hash')
+                        elif self.image_hash:
+                            self.image_hash = ''
+                            post_save_update_fields.append('image_hash')
                     if self.phash != phash:
                         self.phash = phash
                         post_save_update_fields.append('phash')
