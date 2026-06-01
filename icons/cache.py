@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 class IconViewCache:
     """Centralized cache keys, TTLs, and invalidation for icon API views."""
 
-    LIST_TTL = 5 * 60
-    DETAIL_TTL = 15 * 60
-    MATCH_TTL = 60
+    LIST_TTL = 60 * 60        # 1 hour
+    DETAIL_TTL = 6 * 60 * 60  # 6 hours
+    MATCH_TTL = 5 * 60        # 5 minutes
 
     LIST_PREFIX = "icons:list"
     DETAIL_PREFIX = "icons:detail"
