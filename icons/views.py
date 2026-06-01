@@ -286,6 +286,12 @@ class IconMatchView(views.APIView):
             cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
             return Response(response_data, status=status.HTTP_200_OK)
         
+        # Pre-filter: use simple matching to narrow candidates before sending to LLM.
+        # With 550+ icons the full list overwhelms the model; pre-filter to top 30.
+        prefilter_ids = self._simple_match_icons(icons, prompt, max_results=30)
+        if prefilter_ids:
+            icons = [icon for icon in icons if icon.id in prefilter_ids]
+
         # Format icon data for LLM
         icon_descriptions = []
         for icon in icons:
@@ -516,6 +522,15 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         
+        # If LLM returned no matches, fall back to simple keyword matching
+        if not matched_results:
+            logger.info("LLM returned no matches, falling back to simple matching")
+            matched_ids = self._simple_match_icons(icons, prompt, max_results)
+            matched_results = [
+                {'id': icon_id, 'confidence': 'medium'}
+                for icon_id in matched_ids
+            ]
+
         # Build response using matched_results with confidence from LLM
         matches = []
         for match_result in matched_results:
