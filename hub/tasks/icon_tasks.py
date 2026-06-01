@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import time
 
 from celery import shared_task
 from django.conf import settings
@@ -11,6 +12,44 @@ from hub.models import Feast
 from icons.models import Icon
 
 logger = logging.getLogger(__name__)
+
+
+def _get_openai_error_details(api_error):
+    error_body = getattr(api_error, 'body', {}) or {}
+    error_payload = error_body.get('error', error_body) if isinstance(error_body, dict) else {}
+    error_code = ''
+    error_message = str(api_error)
+    if isinstance(error_payload, dict):
+        error_code = error_payload.get('code') or ''
+        error_message = error_payload.get('message') or error_message
+    return str(error_code), str(error_message)
+
+
+def _is_openai_rate_limit_error(api_error, error_code, error_message):
+    status_code = getattr(api_error, 'status_code', None)
+    return (
+        status_code == 429
+        or 'rate_limit_exceeded' in error_code
+        or 'rate_limit' in error_code
+        or 'rate limit' in error_message.lower()
+    )
+
+
+def _extract_openai_retry_delay(api_error, error_message):
+    response = getattr(api_error, 'response', None)
+    headers = getattr(response, 'headers', {}) or {}
+    retry_after = headers.get('retry-after') or headers.get('Retry-After')
+    if retry_after:
+        try:
+            return float(retry_after)
+        except (TypeError, ValueError):
+            pass
+
+    match = re.search(r'please try again in ([0-9]+(?:\.[0-9]+)?)s', error_message, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+
+    return None
 
 
 def _simple_match_icons(icons, prompt, max_results):
@@ -155,9 +194,52 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                 break
             except APIError as api_error:
                 last_error = api_error
-                error_body = getattr(api_error, 'body', {}) or {}
-                error_code = error_body.get('error', {}).get('code', '')
-                error_message = str(api_error)
+                error_code, error_message = _get_openai_error_details(api_error)
+
+                if _is_openai_rate_limit_error(api_error, error_code, error_message):
+                    max_rate_limit_retries = 3
+                    for attempt in range(1, max_rate_limit_retries + 1):
+                        retry_delay = _extract_openai_retry_delay(api_error, error_message)
+                        backoff_delay = 2 ** (attempt - 1)
+                        delay = max(backoff_delay, retry_delay or 0)
+                        logger.warning(
+                            "Rate limited by OpenAI, retrying in %.2fs (attempt %s/%s)",
+                            delay,
+                            attempt,
+                            max_rate_limit_retries,
+                        )
+                        time.sleep(delay)
+                        try:
+                            response = client.chat.completions.create(
+                                model=model,
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": user_message},
+                                ],
+                                max_completion_tokens=500
+                            )
+                            logger.info(f"Successfully used model: {model}")
+                            break
+                        except APIError as retry_api_error:
+                            last_error = retry_api_error
+                            error_code, error_message = _get_openai_error_details(retry_api_error)
+                            if _is_openai_rate_limit_error(retry_api_error, error_code, error_message):
+                                api_error = retry_api_error
+                                continue
+                            raise
+                        except Exception as retry_error:
+                            last_error = retry_error
+                            raise
+
+                    if response:
+                        break
+
+                    logger.warning("OpenAI rate limit retries exhausted, falling back to simple tag matching")
+                    matched_ids = _simple_match_icons(icons, prompt, max_results)
+                    return [
+                        {'id': icon_id, 'confidence': 'medium'}
+                        for icon_id in matched_ids
+                    ]
                 
                 # Check if it's a model access error (403 or model_not_found)
                 if api_error.status_code == 403 or 'model_not_found' in error_code or 'does not have access' in error_message:

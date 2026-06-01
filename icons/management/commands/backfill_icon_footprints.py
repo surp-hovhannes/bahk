@@ -2,8 +2,6 @@
 import logging
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Q
-
 from icons.models import Icon
 
 logger = logging.getLogger(__name__)
