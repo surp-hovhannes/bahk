@@ -247,6 +247,11 @@ class IconMatchView(views.APIView):
 
         # Normalize prompt (whitespace-only becomes empty string)
         prompt = prompt.strip() if isinstance(prompt, str) else str(prompt).strip()
+        if not prompt:
+            return Response(
+                {'error': 'prompt is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Normalize church_id to int or None for stable cache keys
         if church_id is not None:
