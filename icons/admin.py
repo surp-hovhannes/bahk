@@ -7,10 +7,17 @@ from icons.models import Icon, IconFeedback
 class IconAdmin(admin.ModelAdmin):
     """Admin interface for Icon model."""
     
-    list_display = ['title', 'church', 'get_tag_list', 'created_at']
+    list_display = ['title', 'church', 'get_tag_list', 'image_hash', 'phash', 'created_at']
     list_filter = ['church', 'created_at', 'tags']
-    search_fields = ['title', 'tags__name']
-    readonly_fields = ['created_at', 'updated_at', 'cached_thumbnail_url', 'cached_thumbnail_updated']
+    search_fields = ['title', 'tags__name', 'image_hash', 'phash']
+    readonly_fields = [
+        'created_at',
+        'updated_at',
+        'cached_thumbnail_url',
+        'cached_thumbnail_updated',
+        'image_hash',
+        'phash',
+    ]
     
     fieldsets = (
         ('Basic Information', {
@@ -18,6 +25,10 @@ class IconAdmin(admin.ModelAdmin):
         }),
         ('Image', {
             'fields': ('image', 'cached_thumbnail_url', 'cached_thumbnail_updated')
+        }),
+        ('Footprints', {
+            'fields': ('image_hash', 'phash'),
+            'classes': ('collapse',)
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
