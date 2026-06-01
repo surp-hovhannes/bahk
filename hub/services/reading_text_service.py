@@ -55,13 +55,15 @@ def fetch_english_text(reading, *, service: BibleAPIService | None = None, **_kw
             return False
 
     try:
-        usfm_id = BibleAPIService.resolve_book_name(reading.book)
-        result = service.get_passage(
-            usfm_id,
+        passage = BibleAPIService.resolve_reading_passage(
+            reading.book,
             reading.start_chapter,
             reading.start_verse,
             reading.end_chapter,
             reading.end_verse,
+        )
+        result = service.get_passage(
+            *passage,
         )
 
         ReadingModel.objects.filter(pk=reading.pk).update(

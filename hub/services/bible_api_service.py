@@ -122,6 +122,31 @@ class BibleAPIService:
         return usfm_id
 
     @staticmethod
+    def resolve_reading_passage(
+        book_name: str,
+        start_chapter: int,
+        start_verse: int,
+        end_chapter: int,
+        end_verse: int,
+    ) -> tuple[str, int, int, int, int]:
+        """Resolve a Reading reference to the API.Bible book/range.
+
+        KJVAIC stores the Greek additions to Esther as ESG 1-7. The liturgical
+        source may refer to the first addition as Esther 10:4-13, which maps to
+        API.Bible's ESG 1:4-13.
+        """
+        usfm_id = BibleAPIService.resolve_book_name(book_name)
+        if (
+            usfm_id == "EST"
+            and start_chapter == 10
+            and end_chapter == 10
+            and start_verse >= 4
+            and end_verse <= 13
+        ):
+            return "ESG", 1, start_verse, 1, end_verse
+        return usfm_id, start_chapter, start_verse, end_chapter, end_verse
+
+    @staticmethod
     def _bible_id_for_book(usfm_book_id: str) -> tuple[str, str]:
         """Return the (bible_id, version_name) to use for a given book.
 
@@ -182,10 +207,15 @@ def fetch_text_for_reading(reading, service: BibleAPIService | None = None) -> b
             return False
 
     try:
-        usfm_id = BibleAPIService.resolve_book_name(reading.book)
+        passage = BibleAPIService.resolve_reading_passage(
+            reading.book,
+            reading.start_chapter,
+            reading.start_verse,
+            reading.end_chapter,
+            reading.end_verse,
+        )
         result = service.get_passage(
-            usfm_id, reading.start_chapter, reading.start_verse,
-            reading.end_chapter, reading.end_verse,
+            *passage,
         )
 
         ReadingModel.objects.filter(pk=reading.pk).update(
