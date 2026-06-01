@@ -27,20 +27,8 @@ class DuplicateIconError(Exception):
         super().__init__(f"Duplicate icon detected: {existing_icon.title}")
 
 
-class IconManager(models.Manager):
-    """Query helpers for icons."""
-
-    def find_similar(self, phash, threshold=3):
-        """Return an icon with a perceptual hash within the threshold."""
-        from icons.utils import find_similar_phash
-
-        return find_similar_phash(phash, threshold=threshold)
-
-
 class Icon(models.Model):
     """Model for icons that can be used in the application."""
-
-    objects = IconManager()
     
     title = models.CharField(max_length=200, help_text='Title of the icon')
     church = models.ForeignKey(

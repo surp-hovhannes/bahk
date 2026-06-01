@@ -6,6 +6,7 @@ from io import BytesIO
 
 from django.utils import timezone
 from django.utils.text import slugify
+from django.db.models import Count
 import imagehash
 from PIL import Image
 
@@ -87,6 +88,16 @@ def find_similar_phash(phash, threshold=3):
         if distance <= threshold:
             return icon
     return None
+
+
+def icon_association_count_expression():
+    """Return an annotation expression for icon FK association counts."""
+    return (
+        Count('prayers', distinct=True)
+        + Count('prayer_sets', distinct=True)
+        + Count('prayer_requests', distinct=True)
+        + Count('feasts', distinct=True)
+    )
 
 
 def count_icon_associations(icon):

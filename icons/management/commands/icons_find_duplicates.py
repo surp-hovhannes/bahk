@@ -3,14 +3,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count
 
 from icons.models import Icon
-
-
-ASSOCIATION_COUNT = (
-    Count('prayers', distinct=True)
-    + Count('prayer_sets', distinct=True)
-    + Count('prayer_requests', distinct=True)
-    + Count('feasts', distinct=True)
-)
+from icons.utils import icon_association_count_expression
 
 
 class Command(BaseCommand):
@@ -34,7 +27,7 @@ class Command(BaseCommand):
             icons = list(
                 Icon.objects.filter(phash=group['phash'])
                 .select_related('church')
-                .annotate(association_count=ASSOCIATION_COUNT)
+                .annotate(association_count=icon_association_count_expression())
                 .order_by('-association_count', 'created_at', 'pk')
             )
             total_icons += len(icons)

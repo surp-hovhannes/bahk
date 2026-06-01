@@ -3,27 +3,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Count
 
-from hub.models import Feast
 from icons.models import Icon
-from prayers.models import Prayer, PrayerRequest, PrayerSet
-
-
-ASSOCIATION_COUNT = (
-    Count('prayers', distinct=True)
-    + Count('prayer_sets', distinct=True)
-    + Count('prayer_requests', distinct=True)
-    + Count('feasts', distinct=True)
-)
-
-
-def get_association_count(icon):
-    """Count all FK associations for an icon in a single query."""
-    return (
-        Prayer.objects.filter(icon=icon).count()
-        + PrayerSet.objects.filter(icon=icon).count()
-        + PrayerRequest.objects.filter(icon=icon).count()
-        + Feast.objects.filter(icon=icon).count()
-    )
+from icons.utils import count_icon_associations, icon_association_count_expression
 
 
 class Command(BaseCommand):
@@ -79,16 +60,16 @@ class Command(BaseCommand):
                 icons = list(
                     Icon.objects.select_for_update()
                     .filter(phash=group['phash'])
+                    .annotate(association_count=icon_association_count_expression())
                     .order_by('-created_at', 'pk')
                 )
                 if len(icons) < 2:
                     continue
 
-                # Compute association counts with row-level locking on FK tables
-                # to prevent concurrent reassignment during merge
+                # Re-check association counts inside the merge transaction.
                 icon_associations = {}
                 for icon in icons:
-                    icon_associations[icon.pk] = get_association_count(icon)
+                    icon_associations[icon.pk] = count_icon_associations(icon)
 
                 # Sort by association count descending, then created_at ascending
                 icons.sort(key=lambda i: (-icon_associations[i.pk], i.created_at))
