@@ -50,7 +50,10 @@ class Command(BaseCommand):
 
         queryset = Icon.objects.exclude(image='')
         if not force:
-            queryset = queryset.filter(Q(image_hash='') | Q(phash=''))
+            # Only backfill rows missing image_hash.
+            # Blank phash is a valid terminal state for corrupt images;
+            # use --force to reattempt pHash for those rows.
+            queryset = queryset.filter(image_hash='')
         queryset = queryset.order_by('pk')
         if limit is not None:
             queryset = queryset[:limit]
@@ -59,6 +62,7 @@ class Command(BaseCommand):
         skipped = 0
         updated = 0
         would_update = 0
+        stale = 0
         phash_failures = 0
         storage_failures = 0
 
@@ -89,14 +93,21 @@ class Command(BaseCommand):
                 would_update += 1
                 continue
 
-            icon.image_hash = image_hash
-            icon.phash = phash
-            icon.save(update_fields=['image_hash', 'phash'])
-            updated += 1
+            # Use a conditional update to avoid:
+            #   - overwriting footprints set by a newer concurrent upload.
+            #   - triggering Icon.save() side effects (thumbnail work).
+            rows = Icon.objects.filter(
+                pk=icon.pk, image=icon.image.name
+            ).update(image_hash=image_hash, phash=phash)
+            if rows:
+                updated += 1
+            else:
+                stale += 1
 
         summary = (
             f'scanned={scanned} skipped={skipped} '
             f'updated={updated} would_update={would_update} '
+            f'stale={stale} '
             f'phash_failures={phash_failures} storage_failures={storage_failures}'
         )
         self.stdout.write(summary)
