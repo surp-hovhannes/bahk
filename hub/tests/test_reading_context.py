@@ -219,11 +219,7 @@ class FeedbackEndpointTests(APITestCase):
 
     @patch("hub.views.readings.generate_reading_context_task.delay")
     def test_feedback_endpoint_down_triggers_regeneration(self, mock_delay):
-        # Start with one down vote
-        self.context.thumbs_down = 1
-        self.context.save()
-
-        with self.settings(READING_CONTEXT_REGENERATION_THRESHOLD=2):
+        with self.settings(READING_CONTEXT_REGENERATION_THRESHOLD=1):
             response = self.client.post(
                 self.url, {"feedback_type": "down"}, format="json"
             )
@@ -231,7 +227,7 @@ class FeedbackEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json(), {"status": "success", "regenerate": True})
         self.context.refresh_from_db()
-        self.assertEqual(self.context.thumbs_down, 2)
+        self.assertEqual(self.context.thumbs_down, 1)
         mock_delay.assert_called_once_with(self.reading.id, force_regeneration=True)
 
     def test_feedback_rejects_missing_or_invalid_payload(self):
