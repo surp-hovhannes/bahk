@@ -1,12 +1,26 @@
 from datetime import date, timedelta
+from io import StringIO
 from unittest.mock import Mock, patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from events.models import Announcement
-from hub.models import Church, Fast, FastParticipantMap, Day, DevotionalSet, Devotional
+from hub.models import (
+    Church,
+    Fast,
+    FastParticipantMap,
+    Day,
+    DevotionalSet,
+    Devotional,
+    Feast,
+    FeastContext,
+    LLMPrompt,
+    Reading,
+    ReadingContext,
+)
 from hub.tasks.mapping_tasks import generate_participant_map
 from learning_resources.models import Article, Recipe, Video
 
@@ -49,6 +63,120 @@ class RegenerateCommandErrorTests(TestCase):
         existing_map.refresh_from_db()
         self.assertEqual(existing_map.participant_count, 12)
         self.assertEqual(FastParticipantMap.objects.filter(fast=fast).count(), 1)
+
+
+@override_settings(CACHES=TEST_CACHES)
+class AuditThumbsCommandTests(TestCase):
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2026, 1, 15), church=self.church)
+        self.reading = Reading.objects.create(
+            day=self.day,
+            book="John",
+            start_chapter=3,
+            start_verse=16,
+            end_chapter=3,
+            end_verse=18,
+        )
+        self.feast = Feast.objects.create(day=self.day, name="Theophany")
+        self.reading_prompt = LLMPrompt.objects.create(
+            model="gpt-4.1-mini",
+            role="Reading role",
+            prompt="Reading prompt",
+            applies_to="readings",
+        )
+        self.feast_prompt = LLMPrompt.objects.create(
+            model="gpt-4.1-mini",
+            role="Feast role",
+            prompt="Feast prompt",
+            applies_to="feasts",
+        )
+
+    def test_audit_thumbs_groups_totals_with_default_since(self):
+        ReadingContext.objects.create(
+            reading=self.reading,
+            text="Reading context",
+            prompt=self.reading_prompt,
+            thumbs_up=2,
+            thumbs_down=1,
+        )
+        ReadingContext.objects.create(
+            reading=self.reading,
+            text="Reading context without prompt",
+            thumbs_up=1,
+            thumbs_down=3,
+        )
+        FeastContext.objects.create(
+            feast=self.feast,
+            text="Feast context",
+            short_text="Short",
+            prompt=self.feast_prompt,
+            thumbs_up=4,
+            thumbs_down=2,
+        )
+
+        output = StringIO()
+        call_command("audit_thumbs", stdout=output)
+
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [
+                "applies_to contexts thumbs_up thumbs_down",
+                "feasts 1 4 2",
+                "readings 2 3 4",
+            ],
+        )
+
+    def test_audit_thumbs_explicit_since_excludes_old_contexts(self):
+        old_context = ReadingContext.objects.create(
+            reading=self.reading,
+            text="Old reading context",
+            prompt=self.reading_prompt,
+            thumbs_up=20,
+            thumbs_down=10,
+        )
+        ReadingContext.objects.filter(pk=old_context.pk).update(
+            time_of_generation=timezone.now() - timedelta(days=31)
+        )
+        ReadingContext.objects.create(
+            reading=self.reading,
+            text="Recent reading context",
+            prompt=self.reading_prompt,
+            thumbs_up=2,
+            thumbs_down=1,
+        )
+
+        output = StringIO()
+        call_command("audit_thumbs", "--since=30d", stdout=output)
+
+        self.assertIn("readings 1 2 1", output.getvalue().splitlines())
+        self.assertNotIn("readings 2 22 11", output.getvalue().splitlines())
+
+    def test_audit_thumbs_csv_output(self):
+        FeastContext.objects.create(
+            feast=self.feast,
+            text="Feast context without prompt",
+            short_text="Short",
+            thumbs_up=5,
+            thumbs_down=6,
+        )
+
+        output = StringIO()
+        call_command("audit_thumbs", "--csv", stdout=output)
+
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [
+                "applies_to,contexts,thumbs_up,thumbs_down",
+                "feasts,1,5,6",
+            ],
+        )
+
+    def test_audit_thumbs_rejects_invalid_since(self):
+        with self.assertRaisesMessage(
+            CommandError, "--since must be a day duration like 30d"
+        ):
+            call_command("audit_thumbs", "--since=30")
 
     @patch("hub.tasks.mapping_tasks.create_map", return_value=("fast_maps/new.svg", 4))
     def test_generate_participant_map_replaces_duplicate_maps_after_render(self, _):

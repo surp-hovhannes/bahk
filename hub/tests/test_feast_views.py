@@ -354,10 +354,7 @@ class FeastContextFeedbackAPITests(TestCase):
         self.assertEqual(self.context.thumbs_down, 0)
 
     def test_feedback_down_returns_regeneration_flag_at_threshold(self):
-        self.context.thumbs_down = 1
-        self.context.save()
-
-        with self.settings(FEAST_CONTEXT_REGENERATION_THRESHOLD=2), patch(
+        with self.settings(FEAST_CONTEXT_REGENERATION_THRESHOLD=1), patch(
             "hub.views.feasts.generate_feast_context_task.delay"
         ) as mock_delay:
             response = self.client.post(
@@ -369,7 +366,7 @@ class FeastContextFeedbackAPITests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json(), {"status": "success", "regenerate": True})
         self.context.refresh_from_db()
-        self.assertEqual(self.context.thumbs_down, 2)
+        self.assertEqual(self.context.thumbs_down, 1)
         mock_delay.assert_called_once_with(self.feast.id, force_regeneration=True)
 
     def test_feedback_rejects_missing_or_invalid_payload(self):
