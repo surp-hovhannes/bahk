@@ -242,6 +242,24 @@ class BibleAPIServiceResolveBookNameTests(TestCase):
         self.assertIn("Nonexistent Book", str(ctx.exception))
 
 
+class BibleAPIServiceResolveReadingPassageTests(TestCase):
+    """Tests for Reading reference resolution into API.Bible passage IDs."""
+
+    def test_esther_greek_addition_uses_esg_numbering(self):
+        """Esther 10:4-9 maps to the KJVAIC Esther Additions book."""
+        self.assertEqual(
+            BibleAPIService.resolve_reading_passage("Esther", 10, 4, 10, 9),
+            ("ESG", 1, 4, 1, 9),
+        )
+
+    def test_regular_esther_stays_canonical(self):
+        """Canonical Esther references should continue to use EST."""
+        self.assertEqual(
+            BibleAPIService.resolve_reading_passage("Esther", 10, 1, 10, 3),
+            ("EST", 10, 1, 10, 3),
+        )
+
+
 class BibleAPIServiceBibleIdSelectionTests(TestCase):
     """Tests for BibleAPIService._bible_id_for_book."""
 
@@ -647,6 +665,35 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         # Check that the failure was logged
         log_output = "\n".join(log.output)
         self.assertIn("API call failed", log_output)
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_refresh_maps_esther_greek_addition_to_esg(self, mock_config, mock_get_passage):
+        """Esther 10:4-9 should fetch from KJVAIC's ESG 1:4-9."""
+        mock_get_passage.return_value = {
+            "content": "Then Mordecai said...",
+            "copyright": "KJVAIC copyright",
+            "version": "KJVAIC",
+            "reference": "Esther (Additions) 1:4-9",
+            "fums_token": "test-fums-token",
+        }
+
+        day = Day.objects.create(date=date(2025, 3, 15), church=self.church)
+        reading = _create_reading(
+            day,
+            book="Esther",
+            start_ch=10,
+            start_v=4,
+            end_ch=10,
+            end_v=9,
+        )
+
+        refresh_all_reading_texts_task()
+
+        mock_get_passage.assert_called_once_with("ESG", 1, 4, 1, 9)
+        reading.refresh_from_db()
+        self.assertEqual(reading.text, "Then Mordecai said...")
+        self.assertEqual(reading.text_version, "KJVAIC")
 
     @patch('hub.services.bible_api_service.config', return_value="")
     def test_no_api_key_aborts_refresh(self, mock_config):
