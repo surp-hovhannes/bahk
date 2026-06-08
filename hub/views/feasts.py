@@ -19,8 +19,10 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Feast, FeastContext
 from hub.tasks import generate_feast_context_task
+from hub.tasks.icon_tasks import match_icon_to_feast_task
 from hub.utils import get_user_profile_safe, get_or_create_feast_for_date
 from icons.serializers import IconSerializer
+from icons.views import IsAdminOrReadOnly
 
 
 class GetFeastForDate(generics.GenericAPIView):
@@ -230,6 +232,35 @@ class GetFeastForDate(generics.GenericAPIView):
                 },
                 status=status.HTTP_200_OK  # Return 200 not 500 so clients handle gracefully
             )
+
+
+class FeastMatchIconView(APIView):
+    """Admin-only endpoint to enqueue icon matching for a feast missing an icon."""
+
+    permission_classes = [IsAdminOrReadOnly]
+
+    def post(self, request, feast_id: int):
+        feast = get_object_or_404(Feast, pk=feast_id)
+
+        if feast.icon_id is None:
+            match_icon_to_feast_task.delay(feast.id)
+            return Response(
+                {
+                    "status": "enqueued",
+                    "feast_id": feast.id,
+                    "reason": "icon missing",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {
+                "status": "skipped",
+                "feast_id": feast.id,
+                "reason": "icon already present",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class FeastContextFeedbackView(APIView):

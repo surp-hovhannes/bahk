@@ -30,7 +30,7 @@ from .views.user import (
 )
 from .views.church import ChurchListView, ChurchDetailView
 from .views.readings import GetDailyReadingsForDate, ReadingContextFeedbackView
-from .views.feasts import GetFeastForDate, FeastContextFeedbackView
+from .views.feasts import FeastContextFeedbackView, FeastMatchIconView, GetFeastForDate
 from .views.patristic_quotes import (
     PatristicQuoteListView,
     PatristicQuoteDetailView,
@@ -106,6 +106,11 @@ urlpatterns = [
 
     # Feasts endpoints
     path("feasts/", GetFeastForDate.as_view(), name="feast-for-date"),
+    path(
+        "feasts/<int:feast_id>/match-icon/",
+        FeastMatchIconView.as_view(),
+        name="feast-match-icon",
+    ),
     path("feasts/<int:pk>/feedback/", FeastContextFeedbackView.as_view(), name="feast-context-feedback"),
 
 
