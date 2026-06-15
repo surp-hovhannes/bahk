@@ -4,14 +4,17 @@ from unittest.mock import Mock, patch
 import urllib.error
 
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import resolve, reverse
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from hub.models import Church, Day, Feast, FeastContext
+from hub.tasks.icon_tasks import match_icon_to_feast_task
 from hub.utils import _fetch_sacredtradition, _stable_url_key
 from hub.views.feasts import FeastContextFeedbackView, GetFeastForDate
+from icons.models import Icon
 from tests.fixtures.test_data import TestDataFactory
 
 
@@ -171,6 +174,35 @@ class FeastAPIRouteTests(TestCase):
         self.hub_url = reverse("feast-for-date")
         cache.clear()
 
+    def _create_feast(self, **kwargs):
+        day = kwargs.pop(
+            "day",
+            Day.objects.create(date=self.test_date, church=self.church),
+        )
+        with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
+            "hub.signals.determine_feast_designation_task.delay"
+        ):
+            return Feast.objects.create(day=day, **kwargs)
+
+    def _create_icon(self, title="Nativity Icon"):
+        return Icon.objects.create(
+            title=title,
+            church=self.church,
+            image=SimpleUploadedFile(
+                "test-icon.jpg",
+                b"fake image content",
+                content_type="image/jpeg",
+            ),
+            cached_thumbnail_url="https://example.com/test-icon.jpg",
+        )
+
+    def _get_cached_feast_response(self, feast):
+        with patch("hub.views.feasts.generate_feast_context_task.delay"), patch(
+            "hub.views.feasts.get_or_create_feast_for_date",
+            return_value=(feast, False, {"status": "success"}),
+        ):
+            return self.client.get("/api/feasts/", {"date": self.date_str})
+
     def test_hub_feasts_url_resolves_to_feast_for_date_view(self):
         match = resolve("/hub/feasts/")
 
@@ -315,6 +347,129 @@ class FeastAPIRouteTests(TestCase):
             "Invalid date format. Expected format: YYYY-MM-DD",
             str(response.json()),
         )
+
+    def test_feast_save_invalidates_cached_icon_response(self):
+        feast = self._create_feast(name="Christmas")
+        icon = self._create_icon()
+
+        first_response = self._get_cached_feast_response(feast)
+        self.assertIsNone(first_response.json()["feast"]["icon"])
+
+        feast.icon = icon
+        feast.save(update_fields=["icon"])
+
+        second_response = self._get_cached_feast_response(feast)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.json()["feast"]["icon"]["id"], icon.id)
+
+    def test_icon_matching_task_save_invalidates_cached_response(self):
+        feast = self._create_feast(name="Nativity of Christ")
+        icon = self._create_icon()
+
+        first_response = self._get_cached_feast_response(feast)
+        self.assertIsNone(first_response.json()["feast"]["icon"])
+
+        with patch("hub.tasks.icon_tasks._match_icons_with_llm") as mock_match:
+            mock_match.return_value = [{"id": icon.id, "confidence": "high"}]
+            match_icon_to_feast_task(feast.id)
+
+        feast.refresh_from_db()
+        second_response = self._get_cached_feast_response(feast)
+        self.assertEqual(second_response.json()["feast"]["icon"]["id"], icon.id)
+
+    def test_feast_context_save_invalidates_cached_context_response(self):
+        feast = self._create_feast(name="Christmas")
+        context = FeastContext.objects.create(
+            feast=feast,
+            text="Old context",
+            short_text="Old short",
+        )
+
+        first_response = self._get_cached_feast_response(feast)
+        self.assertEqual(first_response.json()["feast"]["text"], "Old context")
+
+        context.text = "New context"
+        context.short_text = "New short"
+        context.save(update_fields=["text", "short_text"])
+
+        second_response = self._get_cached_feast_response(feast)
+        self.assertEqual(second_response.json()["feast"]["text"], "New context")
+        self.assertEqual(second_response.json()["feast"]["short_text"], "New short")
+
+    def test_feast_context_feedback_invalidates_cached_vote_counts(self):
+        feast = self._create_feast(name="Christmas")
+        FeastContext.objects.create(
+            feast=feast,
+            text="Existing feast context",
+            short_text="Existing short context",
+        )
+
+        first_response = self._get_cached_feast_response(feast)
+        self.assertEqual(first_response.json()["feast"]["context_thumbs_up"], 0)
+
+        feedback_response = self.client.post(
+            reverse("feast-context-feedback", args=[feast.id]),
+            data={"feedback_type": "up"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(feedback_response.status_code, status.HTTP_200_OK)
+        second_response = self._get_cached_feast_response(feast)
+        self.assertEqual(second_response.json()["feast"]["context_thumbs_up"], 1)
+
+    def test_icon_save_invalidates_cached_icon_payload(self):
+        icon = self._create_icon(title="Old Icon Title")
+        feast = self._create_feast(name="Christmas", icon=icon)
+
+        first_response = self._get_cached_feast_response(feast)
+        self.assertEqual(
+            first_response.json()["feast"]["icon"]["title"],
+            "Old Icon Title",
+        )
+
+        icon.title = "New Icon Title"
+        icon.save(update_fields=["title"])
+
+        second_response = self._get_cached_feast_response(feast)
+        self.assertEqual(
+            second_response.json()["feast"]["icon"]["title"],
+            "New Icon Title",
+        )
+
+    def test_icon_tag_change_invalidates_cached_icon_payload(self):
+        icon = self._create_icon()
+        icon.tags.add("old-tag")
+        feast = self._create_feast(name="Christmas", icon=icon)
+
+        first_response = self._get_cached_feast_response(feast)
+        self.assertEqual(
+            first_response.json()["feast"]["icon"]["tag_list"],
+            ["old-tag"],
+        )
+
+        icon.tags.add("new-tag")
+
+        second_response = self._get_cached_feast_response(feast)
+        self.assertEqual(
+            set(second_response.json()["feast"]["icon"]["tag_list"]),
+            {"old-tag", "new-tag"},
+        )
+
+    def test_feast_delete_invalidates_cached_response(self):
+        feast = self._create_feast(name="Christmas")
+        with patch("hub.views.feasts.generate_feast_context_task.delay"), patch(
+            "hub.views.feasts.get_or_create_feast_for_date"
+        ) as mock_get_or_create:
+            mock_get_or_create.return_value = (feast, False, {"status": "success"})
+            first_response = self.client.get("/api/feasts/", {"date": self.date_str})
+            self.assertEqual(first_response.json()["feast"]["id"], feast.id)
+
+            feast.delete()
+
+            mock_get_or_create.return_value = (None, False, {"status": "not_found"})
+            second_response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertIsNone(second_response.json()["feast"])
 
 
 class FeastContextFeedbackAPITests(TestCase):

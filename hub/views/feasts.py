@@ -17,6 +17,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from hub.cache import feast_api_cache_key, invalidate_feast_api_cache_for_feast
 from hub.models import Church, Day, Feast, FeastContext
 from hub.tasks import generate_feast_context_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
@@ -76,7 +77,7 @@ class GetFeastForDate(generics.GenericAPIView):
             church = Church.objects.get(pk=Church.get_default_pk())
 
         # Cache key for feast lookup (includes lang to prevent cross-language poisoning)
-        cache_key = f"feast:{date_obj}:{church.id}:{lang}"
+        cache_key = feast_api_cache_key(date_obj, church.id, lang)
         cached_result = cache.get(cache_key)
         if cached_result:
             return Response(cached_result)
@@ -315,12 +316,14 @@ class FeastContextFeedbackView(APIView):
             FeastContext.objects.filter(pk=active_context.pk).update(
                 thumbs_up=F('thumbs_up') + 1
             )
+            invalidate_feast_api_cache_for_feast(feast)
             return Response({"status": "success", "regenerate": False})
         elif feedback_type == "down":
             # Use atomic increment to prevent race conditions
             FeastContext.objects.filter(pk=active_context.pk).update(
                 thumbs_down=F('thumbs_down') + 1
             )
+            invalidate_feast_api_cache_for_feast(feast)
             # Refresh the object to get the updated value for threshold check
             active_context.refresh_from_db()
             threshold = getattr(settings, "FEAST_CONTEXT_REGENERATION_THRESHOLD", 5)
