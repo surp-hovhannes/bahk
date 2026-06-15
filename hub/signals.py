@@ -1,11 +1,13 @@
 import logging
 
-from django.db.models.signals import m2m_changed, post_save
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
 from django.dispatch import receiver
 from django.core.cache import cache
-from hub.models import Profile, Feast
+from hub.cache import invalidate_feast_api_cache_for_feast
+from hub.models import Profile, Feast, FeastContext
 from hub.tasks.llm_tasks import determine_feast_designation_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
+from icons.models import Icon
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,8 @@ def handle_feast_save(sender, instance, created, **kwargs):
     translations are updated immediately after creation.
     The task itself will also check and skip if designation is already set.
     """
+    invalidate_feast_api_cache_for_feast(instance)
+
     # Only trigger designation task on creation, not on updates
     # This prevents duplicate task enqueuing when translations are set immediately after creation
     if created and not instance.designation:
@@ -65,3 +69,46 @@ def handle_feast_save(sender, instance, created, **kwargs):
     # Trigger icon matching when feast is created
     if created:
         match_icon_to_feast_task.delay(instance.id)
+
+
+@receiver(post_delete, sender=Feast)
+def handle_feast_delete(sender, instance, **kwargs):
+    """Invalidate feast API cache entries when a feast is deleted."""
+    invalidate_feast_api_cache_for_feast(instance)
+
+
+@receiver(post_save, sender=FeastContext)
+def handle_feast_context_save(sender, instance, **kwargs):
+    """Invalidate feast API cache entries when context content or votes change."""
+    invalidate_feast_api_cache_for_feast(instance.feast)
+
+
+@receiver(post_delete, sender=FeastContext)
+def handle_feast_context_delete(sender, instance, **kwargs):
+    """Invalidate feast API cache entries when context is deleted."""
+    invalidate_feast_api_cache_for_feast(instance.feast)
+
+
+def invalidate_feast_api_cache_for_icon(icon):
+    """Invalidate feast API cache entries for every feast using an icon."""
+    for feast in icon.feasts.select_related("day", "day__church").all():
+        invalidate_feast_api_cache_for_feast(feast)
+
+
+@receiver(post_save, sender=Icon)
+def handle_icon_save(sender, instance, **kwargs):
+    """Invalidate feast API cache entries when serialized icon fields change."""
+    invalidate_feast_api_cache_for_icon(instance)
+
+
+@receiver(pre_delete, sender=Icon)
+def handle_icon_delete(sender, instance, **kwargs):
+    """Invalidate feast API cache entries before icon deletion clears feast links."""
+    invalidate_feast_api_cache_for_icon(instance)
+
+
+@receiver(m2m_changed, sender=Icon.tags.through)
+def handle_icon_tags_change(sender, instance, action, **kwargs):
+    """Invalidate feast API cache entries when serialized icon tags change."""
+    if isinstance(instance, Icon) and action in ("post_add", "post_remove", "post_clear"):
+        invalidate_feast_api_cache_for_icon(instance)
