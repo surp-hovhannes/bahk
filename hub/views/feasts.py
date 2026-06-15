@@ -21,6 +21,7 @@ from hub.cache import feast_api_cache_key, invalidate_feast_api_cache_for_feast
 from hub.models import Church, Day, Feast, FeastContext
 from hub.tasks import generate_feast_context_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
+from hub.tasks.llm_tasks import is_feast_context_generation_eligible
 from hub.utils import get_user_profile_safe, get_or_create_feast_for_date
 from icons.serializers import IconSerializer
 from icons.views import IsAdminOrReadOnly
@@ -119,11 +120,7 @@ class GetFeastForDate(generics.GenericAPIView):
 
             # Check if context exists and has all translations
             active_context = feast.active_context
-            should_trigger_generation = True
-            
-            # Don't trigger context generation if feast name includes "Fast"
-            if "Fast" in feast.name:
-                should_trigger_generation = False
+            should_trigger_generation = is_feast_context_generation_eligible(feast)
             
             if active_context is None:
                 # No context at all, trigger generation for all languages if appropriate

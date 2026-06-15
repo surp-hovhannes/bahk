@@ -2,12 +2,13 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
-from hub.models import Reading, ReadingContext, LLMPrompt, Day, Fast, Church
+from hub.models import Church, Day, Fast, Feast, LLMPrompt, Reading, ReadingContext
 from hub.tasks.llm_tasks import (
     _check_all_translations_present,
     _update_context_translations,
     _create_context_with_translations,
     generate_reading_context_task,
+    is_feast_context_generation_eligible,
 )
 
 
@@ -256,6 +257,85 @@ class CreateContextWithTranslationsTests(TestCase):
         self.assertFalse(context.text_hy)
 
 
+class FeastContextGenerationEligibilityTests(TestCase):
+    """Tests for deciding which feasts should receive generated context."""
+
+    def setUp(self):
+        self.church = Church.objects.create(name="Test Church")
+        self.day = Day.objects.create(
+            date=timezone.now().date(),
+            church=self.church,
+        )
+
+    def test_fast_named_real_commemoration_is_eligible(self):
+        feast = Feast.objects.create(
+            day=self.day,
+            name=(
+                "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
+                "Patriarch, and his three disciples"
+            ),
+            designation=Feast.Designation.MARTYRS,
+        )
+
+        self.assertTrue(is_feast_context_generation_eligible(feast))
+
+    def test_unclassified_fast_named_real_commemoration_is_eligible(self):
+        feast = Feast.objects.create(
+            day=self.day,
+            name=(
+                "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
+                "Patriarch, and his three disciples"
+            ),
+        )
+
+        self.assertTrue(is_feast_context_generation_eligible(feast))
+
+    def test_generic_fast_designation_is_not_eligible(self):
+        feast = Feast.objects.create(
+            day=self.day,
+            name="First day of the Fast",
+            designation=Feast.Designation.FAST,
+        )
+
+        self.assertFalse(is_feast_context_generation_eligible(feast))
+
+    def test_unclassified_generic_fast_name_is_not_eligible(self):
+        feast = Feast.objects.create(
+            day=self.day,
+            name="First day of the Fast",
+        )
+
+        self.assertFalse(is_feast_context_generation_eligible(feast))
+
+    def test_unclassified_plural_saints_name_is_eligible(self):
+        # Regression: "Sts." and plural "Martyrs" must be recognized as
+        # a named commemoration even before designation is classified.
+        feast = Feast.objects.create(
+            day=self.day,
+            name="Commemoration of Sts. Martyrs",
+        )
+
+        self.assertTrue(is_feast_context_generation_eligible(feast))
+
+    def test_unclassified_mijink_is_not_eligible(self):
+        # Mijink (Median day of Great Lent) is a known generic fast day
+        # whose rendered name does not match the "fast day / lent day" pattern.
+        feast = Feast.objects.create(
+            day=self.day,
+            name="Median day of Great Lent (Mijink)",
+        )
+
+        self.assertFalse(is_feast_context_generation_eligible(feast))
+
+    def test_mijink_alone_is_not_eligible(self):
+        feast = Feast.objects.create(
+            day=self.day,
+            name="Mijink",
+        )
+
+        self.assertFalse(is_feast_context_generation_eligible(feast))
+
+
 class GenerateReadingContextTaskTests(TestCase):
     """Tests for the generate_reading_context_task Celery task."""
 
@@ -476,4 +556,3 @@ class GenerateReadingContextTaskTests(TestCase):
             
             # Verify retry was called with ValueError
             mock_retry.assert_called_once()
-

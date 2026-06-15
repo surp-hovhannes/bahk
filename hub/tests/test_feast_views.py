@@ -175,10 +175,9 @@ class FeastAPIRouteTests(TestCase):
         cache.clear()
 
     def _create_feast(self, **kwargs):
-        day = kwargs.pop(
-            "day",
-            Day.objects.create(date=self.test_date, church=self.church),
-        )
+        day = kwargs.pop("day", None)
+        if day is None:
+            day = Day.objects.create(date=self.test_date, church=self.church)
         with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
             "hub.signals.determine_feast_designation_task.delay"
         ):
@@ -269,6 +268,146 @@ class FeastAPIRouteTests(TestCase):
                 "feast": None,
             },
         )
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    def test_api_route_enqueues_context_for_fast_named_real_commemoration(
+        self,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        fast = TestDataFactory.create_fast(
+            church=self.church,
+            name="Fast of our Holy Father St Gregory the Illuminator",
+        )
+        day = Day.objects.create(date=self.test_date, church=self.church, fast=fast)
+        feast = self._create_feast(
+            day=day,
+            name=(
+                "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
+                "Patriarch, and his three disciples"
+            ),
+            designation=Feast.Designation.MARTYRS,
+        )
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["feast"]["designation"], Feast.Designation.MARTYRS)
+        self.assertEqual(data["feast"]["text"], "")
+        self.assertEqual(data["feast"]["short_text"], "")
+        mock_generate_context.assert_called_once_with(feast.id)
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    def test_api_route_enqueues_context_for_unclassified_fast_named_commemoration(
+        self,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        feast = self._create_feast(
+            name=(
+                "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
+                "Patriarch, and his three disciples"
+            ),
+        )
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNone(data["feast"]["designation"])
+        self.assertEqual(data["feast"]["text"], "")
+        self.assertEqual(data["feast"]["short_text"], "")
+        mock_generate_context.assert_called_once_with(feast.id)
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    def test_api_route_does_not_enqueue_context_for_generic_fast_designation(
+        self,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        feast = self._create_feast(
+            name="First day of the Fast",
+            designation=Feast.Designation.FAST,
+        )
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["feast"]["designation"], Feast.Designation.FAST)
+        self.assertEqual(data["feast"]["text"], "")
+        self.assertEqual(data["feast"]["short_text"], "")
+        mock_generate_context.assert_not_called()
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    def test_api_route_does_not_enqueue_context_for_unclassified_generic_fast(
+        self,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        feast = self._create_feast(name="First day of the Fast")
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNone(data["feast"]["designation"])
+        self.assertEqual(data["feast"]["text"], "")
+        self.assertEqual(data["feast"]["short_text"], "")
+        mock_generate_context.assert_not_called()
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    @patch("hub.signals.match_icon_to_feast_task.delay")
+    @patch("hub.signals.determine_feast_designation_task.delay")
+    def test_api_route_does_not_enqueue_context_for_mijink(
+        self,
+        mock_determine_designation,
+        mock_match_icon,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        feast = self._create_feast(name="Median day of Great Lent (Mijink)")
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNone(data["feast"]["designation"])
+        self.assertEqual(data["feast"]["text"], "")
+        self.assertEqual(data["feast"]["short_text"], "")
+        mock_generate_context.assert_not_called()
+
+    @patch("hub.views.feasts.generate_feast_context_task.delay")
+    @patch("hub.views.feasts.get_or_create_feast_for_date")
+    @patch("hub.signals.match_icon_to_feast_task.delay")
+    @patch("hub.signals.determine_feast_designation_task.delay")
+    def test_api_route_enqueues_context_for_unclassified_plural_saints(
+        self,
+        mock_determine_designation,
+        mock_match_icon,
+        mock_get_or_create,
+        mock_generate_context,
+    ):
+        feast = self._create_feast(name="Commemoration of Sts. Martyrs")
+        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+
+        response = self.client.get("/api/feasts/", {"date": self.date_str})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNone(data["feast"]["designation"])
+        mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
     @patch("hub.views.feasts.get_or_create_feast_for_date")
