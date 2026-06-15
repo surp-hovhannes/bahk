@@ -219,7 +219,7 @@ def _has_named_commemoration(feast_name: str) -> bool:
             # singular|plural alternations (e.g. "Martyrs?" matches both).
             r"\b(?:Saints?|Sts?\.?|Martyrs?|Blesseds?|Holy\s+(?!Cross)|Prophets?|"
             r"Apostles?|Patriarchs?|Vartapets?|Bishops?|Confessors?|Evangelists?|"
-            r"Righteous(?:es)?|Prophetesses?|Lord|Translation|Relics|"
+            r"Righteous(?:es)?|Prophetess(?:es)?|Lord|Translation|Relics|"
             r"Consecration|Commemoration)\b",
             feast_name,
             re.IGNORECASE,

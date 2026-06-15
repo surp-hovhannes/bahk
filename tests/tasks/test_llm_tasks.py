@@ -335,6 +335,18 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
         self.assertFalse(is_feast_context_generation_eligible(feast))
 
+    def test_unclassified_prophetess_singular_is_eligible(self):
+        # Regression: "Prophetess" (singular) must be recognized as a named
+        # commemoration. The plural-aware alternation Prophetesses? previously
+        # matched only "Prophetesse"/"Prophetesses" (e + s?), so the singular
+        # "Prophetess" alone was missed and the fast-day would be skipped.
+        feast = Feast.objects.create(
+            day=self.day,
+            name="Fast day, Prophetess Anna",
+        )
+
+        self.assertTrue(is_feast_context_generation_eligible(feast))
+
 
 class GenerateReadingContextTaskTests(TestCase):
     """Tests for the generate_reading_context_task Celery task."""
