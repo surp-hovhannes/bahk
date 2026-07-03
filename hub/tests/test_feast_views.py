@@ -208,6 +208,11 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(match.func.view_class, GetFeastForDate)
         self.assertEqual(match.url_name, "feast-for-date")
 
+    def test_get_queryset_is_configured_for_drf_introspection(self):
+        queryset = GetFeastForDate().get_queryset()
+
+        self.assertEqual(queryset.model, Feast)
+
     @patch("hub.views.feasts.generate_feast_context_task.delay")
     @patch("hub.views.feasts.get_or_create_feast_for_date")
     @patch("hub.signals.match_icon_to_feast_task.delay")
@@ -485,6 +490,19 @@ class FeastAPIRouteTests(TestCase):
         self.assertIn(
             "Invalid date format. Expected format: YYYY-MM-DD",
             str(response.json()),
+        )
+
+    def test_hub_route_rejects_invalid_date_format_for_browsable_api(self):
+        response = self.client.get(
+            self.hub_url,
+            {"date": "2026"},
+            HTTP_ACCEPT="text/html",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            b"Invalid date format. Expected format: YYYY-MM-DD",
+            response.content,
         )
 
     def test_feast_save_invalidates_cached_icon_response(self):
