@@ -1,0 +1,75 @@
+{
+  "_description": "Corrections applied by scripts/scrape_bible_hy.py to the raw sacredtradition.am library text. 'resolutions' fix verse-labeling/chapter-heading defects that affect verses the lectionary actually serves; each was validated against the corresponding daily-readings-page block (see ERRATA.md). 'deferred' acknowledges known defects in chapters NO lectionary reading references — they get a safe keep_first fallback so the scrape still succeeds, and are documented for later repair. Any duplicate verse number NOT covered by a resolution or deferred entry is a HARD ERROR (the scraper refuses to emit that book) so nothing is ever silently overwritten.",
+  "_resolution_types": {
+    "chapter_relabel": "A chapter heading whose number was malformed. Match the heading by superscription-text prefix and override its chapter number. Applied before verse_relabel.",
+    "verse_relabel": "A verse token with the wrong number. Identify the Nth (1-based 'occurrence') token equal to 'wrong' within 'chapter' and renumber it to 'to'.",
+    "collision_policy": "For a chapter whose numbering legitimately restarts (LXX reorder/merge), resolve duplicates by keeping the 'keep_first' (or 'keep_last') occurrence."
+  },
+  "daily_source": {
+    "_note": "Book chapters whose verse-keyed corpus is NOT authoritative and must be served from the sacredtradition.am daily-readings page instead (production's existing per-date scrape, hub/utils.scrape_armenian_reading_texts). load_bible_hy SKIPS loading these chapters into BibleVerse so the corpus never returns divergent text; the serving cutover routes any Reading touching these ranges to the daily scrape.",
+    "SNG": {
+      "chapters": [6, 7, 8],
+      "reason": "Song of Songs 6-8 has a chapter/verse-division divergence between the library text and the lectionary numbering, AND the engine's Song references are discontinuous spans the daily page splits differently (e.g. engine 'Song 2.8-6.12' is served as daily 2.8-16 + 5.1 + 6.8-11; engine '6.9-11' shows as daily '6.8-11'). A contiguous corpus range cannot faithfully reproduce these, so serve Song 6-8 from the daily page by date.",
+      "review": "The discontinuous-span issue may affect Song readings beyond ch6-8 (any multi-pericope span). Worth reviewing the engine's Song reference representation separately."
+    }
+  },
+  "resolutions": {
+    "2831": {
+      "book": "ISA",
+      "needs_review": false,
+      "entries": [
+        {"type": "verse_relabel", "chapter": 7, "wrong": 3, "occurrence": 2, "to": 9,
+         "note": "Source typo: verse 9 mislabeled '3'. Seq [1..8,3,10..24] -> the 2nd '3' is verse 9. Served in 'Isaiah 7.1-9'. Same typo on daily page 2026-08-09."}
+      ]
+    },
+    "2849": {
+      "book": "MAT",
+      "needs_review": false,
+      "entries": [
+        {"type": "verse_relabel", "chapter": 18, "wrong": 28, "occurrence": 2, "to": 29,
+         "note": "Source typo: verse 29 mislabeled '28'. Seq [..27,28,28,30..] -> 2nd '28' is verse 29. Served in 'Matthew 18.10-35' and '18.23-35'. Same typo on daily page 2026-07-24. Verse 11 is present (not omitted here)."}
+      ]
+    },
+    "2825": {
+      "book": "PRO",
+      "needs_review": false,
+      "entries": [
+        {"type": "collision_policy", "chapter": 24, "policy": "keep_first",
+         "note": "LXX chapter reorder: real 24:1-5 are the FIRST occurrence; a reordered section repeats 1-5 at the end. keep_first retains the canonical 24:1-5 (served in 'Proverbs 24.1-12'); the appended 1-5 are dropped (not read). Daily page 2026-02-05 renders 24.1-12 correctly."}
+      ]
+    },
+    "2827": {
+      "book": "SNG",
+      "needs_review": true,
+      "_validation": "chapter_relabel restores Song to 8 chapters (structure), but Song 6-8 verse DIVISION diverges from the lectionary numbering and the engine emits discontinuous Song spans. RESOLVED via 'daily_source' above: SNG 6-8 is served from the daily page, not the corpus (load_bible_hy skips those chapters). The chapter_relabel/keep_last entries below still apply so the book JSON stays well-formed for chapters 1-5 and for reference. The other four resolutions validate exactly against their daily-page blocks.",
+      "entries": [
+        {"type": "chapter_relabel", "match_superscription_prefix": "«Ի՞նչ էք տեսնում", "to_chapter": 7,
+         "note": "Chapter 7 heading lost its number (rendered as a second '1 «Ի՞նչ էք տեսնում...'). Relabel to 7 so the chapter exists. REVIEW: Song 7 has a Hebrew-vs-Greek off-by-one; verse 1 text sits in the heading and a stray empty '7' token leaks from the source."},
+        {"type": "collision_policy", "chapter": 7, "policy": "keep_last",
+         "note": "ch7 tokens open with an empty stray '7' (leaked chapter number) that collides with the real verse 7. keep_last drops the empty token and retains real 7:7. REVIEW: Song 7:1 text currently sits in the chapter superscription, not verse 1."}
+      ]
+    },
+    "2841": {
+      "book": "HAG",
+      "needs_review": true,
+      "entries": [
+        {"type": "chapter_relabel", "match_superscription_prefix": "Վեցերորդ ամսի քսանչորսին", "to_chapter": 2,
+         "note": "Chapter 2 heading carries the sixth-month dateline (Haggai 1:15/2:1 boundary) and was mis-numbered '1'. Relabel to 2."},
+        {"type": "verse_relabel", "chapter": 2, "wrong": 2, "occurrence": 1, "to": 1,
+         "note": "After relabel, ch2 opens '[2,2,...]'; the first '2' (seventh-month dateline) is verse 1. Renumber to make [1..24] collision-free. VALIDATED: Haggai 2:10 = daily-page text (2026-07-28). REVIEW: the 1:15/2:1 split leaves ch2 with 24 vs the canonical 23 verses; only 2:10 is lectionary-served and it is correct."}
+      ]
+    }
+  },
+  "deferred": {
+    "_note": "Damaged chapters that NO lectionary reading references. keep_first prevents silent loss and lets the scrape succeed; repair later for corpus completeness (see ERRATA.md).",
+    "2804": {"book": "NUM", "chapters": [7],  "fallback": "keep_first", "reason": "Source typo: verse 80 -> '8'."},
+    "2807": {"book": "JDG", "chapters": [3],  "fallback": "keep_first", "reason": "Source typo: verses 16-18 -> 26-28."},
+    "2812": {"book": "2KI", "chapters": [10], "fallback": "keep_first", "reason": "Source typo in verse numbering."},
+    "2814": {"book": "2CH", "chapters": [2, 11, 18], "fallback": "keep_first", "reason": "Source typos in verse numbering."},
+    "2818": {"book": "EST", "chapters": "all", "fallback": "keep_first", "reason": "Greek/expanded Esther: additions inserted as duplicate chapter numbers (13, 15, ...) that merge and collide. Whole book deferred; not read by lectionary."},
+    "2822": {"book": "2MA", "chapters": [4],  "fallback": "keep_first", "reason": "Source typo in verse numbering."},
+    "2824": {"book": "PSA", "chapters": [9, 16, 60, 113, 150], "fallback": "keep_first", "reason": "LXX psalter merges (Ps 9=Heb 9+10, Ps 113=Heb 114+115) restart numbering mid-chapter."},
+    "2829": {"book": "SIR", "chapters": "all", "fallback": "keep_first", "reason": "Dirty source: empty <b></b> headings drop 13 chapter numbers, merging chapters and colliding verses throughout. Whole book deferred; the lectionary reads no Sirach."},
+    "2875": {"book": "REV", "chapters": [3],  "fallback": "keep_first", "reason": "Source typo in verse numbering."}
+  }
+}

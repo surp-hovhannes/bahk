@@ -26,6 +26,7 @@ from hub.forms import (
 )
 from learning_resources.models import Video
 from hub.models import (
+    BibleVerse,
     Church,
     Day,
     Devotional,
@@ -1545,3 +1546,18 @@ class FastIntentionAdmin(admin.ModelAdmin):
         return '(empty)'
 
     text_preview.short_description = 'Text'
+
+
+@admin.register(BibleVerse, site=admin.site)
+class BibleVerseAdmin(admin.ModelAdmin):
+    list_display = ("version", "book", "chapter", "verse", "verse_preview")
+    list_display_links = ("verse_preview",)
+    list_filter = ("version", "book")
+    search_fields = ("text",)
+    ordering = ("version", "book", "chapter", "verse")
+    list_per_page = 50
+
+    def verse_preview(self, obj):
+        return Truncator(obj.text).chars(80) if obj.text else "(empty)"
+
+    verse_preview.short_description = "Text"

@@ -1,0 +1,878 @@
+[
+ {
+  "idArt": 2801,
+  "name_hy": "Ծննդոց",
+  "title_hy": "ԳԻՐՔ ԾՆՆԴՈՑ",
+  "num_chapters": 50,
+  "num_verses": 1532,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2802,
+  "name_hy": "Ելք",
+  "title_hy": "ԵԼՔ",
+  "num_chapters": 40,
+  "num_verses": 1210,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2803,
+  "name_hy": "Ղեւտական",
+  "title_hy": "ՂԵՒՏԱԿԱՆ",
+  "num_chapters": 27,
+  "num_verses": 858,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 21: non-contiguous verses; missing [3]"
+  ]
+ },
+ {
+  "idArt": 2804,
+  "name_hy": "Թուեր",
+  "title_hy": "ԹՈՒԵՐ",
+  "num_chapters": 36,
+  "num_verses": 1287,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 7: non-contiguous verses; missing [80]",
+   "ch 26: non-contiguous verses; missing [24]"
+  ]
+ },
+ {
+  "idArt": 2805,
+  "name_hy": "Երկրորդ օրէնք",
+  "title_hy": "ԵՐԿՐՈՐԴ ՕՐԷՆՔ",
+  "num_chapters": 34,
+  "num_verses": 958,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 27: non-contiguous verses; missing [23]"
+  ]
+ },
+ {
+  "idArt": 2806,
+  "name_hy": "Նաւէի որդի Յեսուի գիրքը",
+  "title_hy": "ՆԱՒԷԻ ՈՐԴԻ ՅԵՍՈՒԻ ԳԻՐՔԸ",
+  "num_chapters": 24,
+  "num_verses": 660,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2807,
+  "name_hy": "Դատաւորներ",
+  "title_hy": "ԴԱՏԱՒՈՐՆԵՐ",
+  "num_chapters": 21,
+  "num_verses": 614,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 3: non-contiguous verses; missing [16, 17, 18]"
+  ]
+ },
+ {
+  "idArt": 2808,
+  "name_hy": "Հռութ",
+  "title_hy": "ՀՌՈՒԹ",
+  "num_chapters": 4,
+  "num_verses": 85,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2809,
+  "name_hy": "Ա Թագաւորութիւններ",
+  "title_hy": "ԹԱԳԱՒՈՐՈՒԹԻՒՆՆԵՐ Ա",
+  "num_chapters": 31,
+  "num_verses": 810,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2810,
+  "name_hy": "Բ Թագաւորութիւններ",
+  "title_hy": "ԹԱԳԱՒՈՐՈՒԹԻՒՆՆԵՐ Բ",
+  "num_chapters": 24,
+  "num_verses": 695,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 13: non-contiguous verses; missing [37, 40, 41, 42]"
+  ]
+ },
+ {
+  "idArt": 2811,
+  "name_hy": "Գ Թագաւորութիւններ",
+  "title_hy": "ԹԱԳԱՒՈՐՈՒԹԻՒՆՆԵՐ Գ",
+  "num_chapters": 22,
+  "num_verses": 817,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2812,
+  "name_hy": "Դ Թագաւորութիւններ",
+  "title_hy": "ԹԱԳԱՒՈՐՈՒԹԻՒՆՆԵՐ Դ",
+  "num_chapters": 25,
+  "num_verses": 719,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 10: non-contiguous verses; missing [18]"
+  ]
+ },
+ {
+  "idArt": 2813,
+  "name_hy": "Ա Մնացորդաց",
+  "title_hy": "Ա ՄՆԱՑՈՐԴՆԵՐ",
+  "num_chapters": 29,
+  "num_verses": 941,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2814,
+  "name_hy": "Բ Մնացորդաց",
+  "title_hy": "Բ ՄՆԱՑՈՐԴՆԵՐ",
+  "num_chapters": 36,
+  "num_verses": 818,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 2: non-contiguous verses; missing [15]",
+   "ch 11: non-contiguous verses; missing [18]",
+   "ch 18: non-contiguous verses; missing [12]"
+  ]
+ },
+ {
+  "idArt": 2815,
+  "name_hy": "Ա Եզրաս",
+  "title_hy": "Ա ԵԶՐԱՍ",
+  "num_chapters": 9,
+  "num_verses": 449,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 6: non-contiguous verses; missing [16]"
+  ]
+ },
+ {
+  "idArt": 2816,
+  "name_hy": "Բ Եզրաս",
+  "title_hy": "Բ ԵԶՐԱՍ",
+  "num_chapters": 10,
+  "num_verses": 276,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 4: non-contiguous verses; missing [11, 12]",
+   "ch 10: non-contiguous verses; missing [15, 21]"
+  ]
+ },
+ {
+  "idArt": 2817,
+  "name_hy": "Նէեմիի գիրքը",
+  "title_hy": "ՆԷԵՄԻԻ ԳԻՐՔԸ",
+  "num_chapters": 13,
+  "num_verses": 368,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 3: non-contiguous verses; missing [7]",
+   "ch 4: non-contiguous verses; missing [6]",
+   "ch 7: non-contiguous verses; missing [22]",
+   "ch 8: non-contiguous verses; missing [8]",
+   "ch 11: non-contiguous verses; missing [16, 18, 20, 21, 26, 27, 28, 29, 32, 33, 34, 35]",
+   "ch 12: non-contiguous verses; missing [4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 38, 40, 41, 42]"
+  ]
+ },
+ {
+  "idArt": 2818,
+  "name_hy": "Եսթերի գիրքը",
+  "title_hy": "ԵՍԹԵՐԻ ԳԻՐՔԸ",
+  "num_chapters": 16,
+  "num_verses": 262,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 4: non-contiguous verses; missing [6, 9, 10, 11]",
+   "ch 5: non-contiguous verses; missing [1, 2, 3]",
+   "ch 8: non-contiguous verses; missing [12]",
+   "ch 9: non-contiguous verses; missing [5, 30]"
+  ]
+ },
+ {
+  "idArt": 2819,
+  "name_hy": "Յուդիթ",
+  "title_hy": "ՅՈՒԴԻԹ",
+  "num_chapters": 16,
+  "num_verses": 307,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 3: non-contiguous verses; missing [4, 5, 8]",
+   "ch 4: non-contiguous verses; missing [11, 12, 13, 14, 15]",
+   "ch 5: non-contiguous verses; missing [15, 16, 17, 18, 19]",
+   "ch 6: non-contiguous verses; missing [17, 18]",
+   "ch 7: non-contiguous verses; missing [19, 20, 21, 22]",
+   "ch 8: non-contiguous verses; missing [24, 25, 26, 27, 29, 31, 33]",
+   "ch 9: non-contiguous verses; missing [7, 8, 9, 10, 13, 14, 16]",
+   "ch 11: non-contiguous verses; missing [15, 16]",
+   "ch 13: non-contiguous verses; missing [21]"
+  ]
+ },
+ {
+  "idArt": 2820,
+  "name_hy": "Տոբիթ",
+  "title_hy": "ՏՈԲԻԹ",
+  "num_chapters": 14,
+  "num_verses": 255,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 1: non-contiguous verses; missing [11, 14, 16, 17]",
+   "ch 2: non-contiguous verses; missing [11, 12, 13, 14, 15, 16, 17]",
+   "ch 3: non-contiguous verses; missing [12, 18, 19, 20, 21, 22, 23]",
+   "ch 4: non-contiguous verses; missing [22]",
+   "ch 5: non-contiguous verses; missing [12, 13, 14, 15]",
+   "ch 6: non-contiguous verses; missing [3, 23, 24, 25, 26, 27]",
+   "ch 7: non-contiguous verses; missing [11, 12]",
+   "ch 8: non-contiguous verses; missing [4, 5, 6, 21]",
+   "ch 9: non-contiguous verses; missing [2, 7, 8, 9, 10, 11]",
+   "ch 11: non-contiguous verses; missing [11, 12, 20]",
+   "ch 13: non-contiguous verses; missing [15, 20]"
+  ]
+ },
+ {
+  "idArt": 2821,
+  "name_hy": "Ա Մակաբայեցիներ",
+  "title_hy": "Ա ՄԱԿԱԲԱՅԵՑԻՆԵՐ",
+  "num_chapters": 16,
+  "num_verses": 917,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 4: non-contiguous verses; missing [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]",
+   "ch 7: non-contiguous verses; missing [44]",
+   "ch 14: non-contiguous verses; missing [5, 6]"
+  ]
+ },
+ {
+  "idArt": 2822,
+  "name_hy": "Բ Մակաբայեցիներ",
+  "title_hy": "Բ ՄԱԿԱԲԱՅԵՑԻՆԵՐ",
+  "num_chapters": 15,
+  "num_verses": 555,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 4: non-contiguous verses; missing [43]",
+   "ch 7: non-contiguous verses; missing [11]"
+  ]
+ },
+ {
+  "idArt": 2823,
+  "name_hy": "Գ Մակաբայեցիներ",
+  "title_hy": "Գ ՄԱԿԱԲԱՅԵՑԻՆԵՐ",
+  "num_chapters": 7,
+  "num_verses": 137,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2824,
+  "name_hy": "Սաղմոսներ",
+  "title_hy": "ՍԱՂՄՈՍՆԵՐ",
+  "num_chapters": 150,
+  "num_verses": 2499,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "2 empty chapter heading(s) — dropped chapter numbers",
+   "ch 60: non-contiguous verses; missing [8]",
+   "ch 79: non-contiguous verses; missing [6]",
+   "ch 115: non-contiguous verses; missing [1, 2, 3, 4, 5, 6, 7, 8, 9]",
+   "ch 147: non-contiguous verses; missing [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]"
+  ]
+ },
+ {
+  "idArt": 2825,
+  "name_hy": "Առակներ",
+  "title_hy": "ԱՌԱԿՆԵՐ",
+  "num_chapters": 31,
+  "num_verses": 914,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2826,
+  "name_hy": "Ժողովող",
+  "title_hy": "ԺՈՂՈՎՈՂ",
+  "num_chapters": 12,
+  "num_verses": 222,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2827,
+  "name_hy": "Երգ երգոց",
+  "title_hy": "ԵՐԳ ԵՐԳՈՑ",
+  "num_chapters": 8,
+  "num_verses": 114,
+  "needs_review": true,
+  "errors": [],
+  "anomalies": [
+   "ch 2: non-contiguous verses; missing [1]",
+   "ch 7: non-contiguous verses; missing [1]"
+  ]
+ },
+ {
+  "idArt": 2828,
+  "name_hy": "Իմաստութիւն Սողոմոնի",
+  "title_hy": "ԻՄԱՍՏՈՒԹԻՒՆ ՍՈՂՈՄՈՆԻ",
+  "num_chapters": 19,
+  "num_verses": 439,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2829,
+  "name_hy": "Սիրաքի իմաստութիւնը",
+  "title_hy": "ՅԵՍՈՒԻ ՈՐԴԻ ՍԻՐԱՔԻ ԻՄԱՍՏՈՒԹԻՒՆԸ",
+  "num_chapters": 38,
+  "num_verses": 1118,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "12 empty chapter heading(s) — dropped chapter numbers",
+   "non-contiguous chapters; missing [8, 36, 37]",
+   "ch 1: non-contiguous verses; missing [36, 39, 41]",
+   "ch 2: non-contiguous verses; missing [10, 17, 21]",
+   "ch 3: non-contiguous verses; missing [1, 7, 10, 21, 25, 32]",
+   "ch 4: non-contiguous verses; missing [12, 21, 27, 29, 31]",
+   "ch 5: non-contiguous verses; missing [10]",
+   "ch 9: non-contiguous verses; missing [10, 11, 13]",
+   "ch 10: non-contiguous verses; missing [21]",
+   "ch 11: non-contiguous verses; missing [15, 16]",
+   "ch 12: non-contiguous verses; missing [16]",
+   "ch 13: non-contiguous verses; missing [11, 17, 18]",
+   "ch 14: non-contiguous verses; missing [21]",
+   "ch 15: non-contiguous verses; missing [15]",
+   "ch 17: non-contiguous verses; missing [15, 24]",
+   "ch 19: non-contiguous verses; missing [3, 6, 16]",
+   "ch 20: non-contiguous verses; missing [3, 4]",
+   "ch 22: non-contiguous verses; missing [23]",
+   "ch 23: non-contiguous verses; missing [31]",
+   "ch 24: non-contiguous verses; missing [3, 4, 6, 24, 25, 28, 31, 40, 45]",
+   "ch 25: non-contiguous verses; missing [15, 17]",
+   "ch 26: non-contiguous verses; missing [24]",
+   "ch 27: non-contiguous verses; missing [16]",
+   "ch 29: non-contiguous verses; missing [17, 18, 21, 23]",
+   "ch 31: non-contiguous verses; missing [11, 22]",
+   "ch 32: non-contiguous verses; missing [3, 19]",
+   "ch 33: non-contiguous verses; missing [4]",
+   "ch 34: non-contiguous verses; missing [34, 35, 37]",
+   "ch 35: non-contiguous verses; missing [9]",
+   "ch 38: non-contiguous verses; missing [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]"
+  ]
+ },
+ {
+  "idArt": 2830,
+  "name_hy": "Յոբի գիրքը",
+  "title_hy": "ՅՈԲԻ ԳԻՐՔԸ",
+  "num_chapters": 42,
+  "num_verses": 1071,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2831,
+  "name_hy": "Եսայու մարգարէութիւնը",
+  "title_hy": "ԵՍԱՅՈՒ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 66,
+  "num_verses": 1287,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 23: non-contiguous verses; missing [18, 19, 20, 21, 22, 23, 24, 25, 26, 27]",
+   "ch 24: non-contiguous verses; missing [11]"
+  ]
+ },
+ {
+  "idArt": 2832,
+  "name_hy": "Օսէէի մարգարէութիւնը",
+  "title_hy": "ՕՍԷԷԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 14,
+  "num_verses": 198,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2833,
+  "name_hy": "Ամոսի մարգարէութիւնը",
+  "title_hy": "ԱՄՈՍԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 9,
+  "num_verses": 147,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2834,
+  "name_hy": "Միքիայի մարգարէութիւնը",
+  "title_hy": "ՄԻՔԻԱՅԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 7,
+  "num_verses": 104,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2835,
+  "name_hy": "Յովէլի մարգարէութիւնը",
+  "title_hy": "ՅՈՎԷԼԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 3,
+  "num_verses": 73,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2836,
+  "name_hy": "Աբդիուի մարգարէութիւնը",
+  "title_hy": "ԱԲԴԻՈՒԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 1,
+  "num_verses": 21,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2837,
+  "name_hy": "Յովնանի մարգարէութիւնը",
+  "title_hy": "ՅՈՎՆԱՆԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 4,
+  "num_verses": 48,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2838,
+  "name_hy": "Նաւումի մարգարէութիւնը",
+  "title_hy": "ՆԱՒՈՒՄԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 3,
+  "num_verses": 47,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2839,
+  "name_hy": "Ամբակումի մարգարէութիւնը",
+  "title_hy": "ԱՄԲԱԿՈՒՄԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 3,
+  "num_verses": 56,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2840,
+  "name_hy": "Սոփոնիայի մարգարէութիւնը",
+  "title_hy": "ՍՈՓՈՆԻԱՅԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 3,
+  "num_verses": 53,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2841,
+  "name_hy": "Անգէի մարգարէութիւնը",
+  "title_hy": "ԱՆԳԷԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 2,
+  "num_verses": 38,
+  "needs_review": true,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2842,
+  "name_hy": "Զաքարիայի մարգարէութիւնը",
+  "title_hy": "ԶԱՔԱՐԻԱՅԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 14,
+  "num_verses": 210,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2843,
+  "name_hy": "Մաղաքիայի մարգարէութիւնը",
+  "title_hy": "ՄԱՂԱՔԻԱՅԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 4,
+  "num_verses": 55,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2844,
+  "name_hy": "Երեմիայի մարգարէութիւնը",
+  "title_hy": "ԵՐԵՄԻԱՅԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 52,
+  "num_verses": 1362,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 16: non-contiguous verses; missing [1]",
+   "ch 39: non-contiguous verses; missing [15, 19, 20, 21, 22, 23, 24]"
+  ]
+ },
+ {
+  "idArt": 2845,
+  "name_hy": "Բարուքի թուղթը",
+  "title_hy": "ԲԱՐՈՒՔԻ ԹՈՒՂԹԸ",
+  "num_chapters": 5,
+  "num_verses": 141,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2846,
+  "name_hy": "Երեմիա մարգարէի ողբը",
+  "title_hy": "ԵՐԵՄԻԱ ՄԱՐԳԱՐԷԻ ՈՂԲԸ",
+  "num_chapters": 5,
+  "num_verses": 154,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2847,
+  "name_hy": "Դանիէլի մարգարէութիւնը",
+  "title_hy": "ԴԱՆԻԷԼԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 14,
+  "num_verses": 530,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 4: non-contiguous verses; missing [35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97]",
+   "ch 14: non-contiguous verses; missing [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64]"
+  ]
+ },
+ {
+  "idArt": 2848,
+  "name_hy": "Եզեկիէլի մարգարէութիւնը",
+  "title_hy": "ԵԶԵԿԻԷԼԻ ՄԱՐԳԱՐԷՈՒԹԻՒՆԸ",
+  "num_chapters": 48,
+  "num_verses": 1273,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2849,
+  "name_hy": "Աւետարան ըստ Մատթէոսի",
+  "title_hy": "ԱՒԵՏԱՐԱՆ ԸՍՏ ՄԱՏԹԷՈՍԻ",
+  "num_chapters": 28,
+  "num_verses": 1068,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 16: non-contiguous verses; missing [3]",
+   "ch 23: non-contiguous verses; missing [14]"
+  ]
+ },
+ {
+  "idArt": 2850,
+  "name_hy": "Աւետարան ըստ Մարկոսի",
+  "title_hy": "ԱՒԵՏԱՐԱՆ ԸՍՏ ՄԱՐԿՈՍԻ",
+  "num_chapters": 16,
+  "num_verses": 675,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 9: non-contiguous verses; missing [43, 45]",
+   "ch 11: non-contiguous verses; missing [26]"
+  ]
+ },
+ {
+  "idArt": 2851,
+  "name_hy": "Աւետարան ըստ Ղուկասի",
+  "title_hy": "ԱՒԵՏԱՐԱՆ ԸՍՏ ՂՈՒԿԱՍԻ",
+  "num_chapters": 24,
+  "num_verses": 1152,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2852,
+  "name_hy": "Աւետարան ըստ Յովհաննէսի",
+  "title_hy": "ԱՒԵՏԱՐԱՆ ԸՍՏ ՅՈՎՀԱՆՆԷՍԻ",
+  "num_chapters": 21,
+  "num_verses": 877,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 14: non-contiguous verses; missing [14]"
+  ]
+ },
+ {
+  "idArt": 2853,
+  "name_hy": "Գործք առաքելոց",
+  "title_hy": "ԳՈՐԾՔ ԱՌԱՔԵԼՈՑ",
+  "num_chapters": 28,
+  "num_verses": 1004,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 9: non-contiguous verses; missing [6]"
+  ]
+ },
+ {
+  "idArt": 2854,
+  "name_hy": "Պօղոս առաքեալի թուղթը հռոմէացիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԹՈՒՂԹԸ ՀՌՈՄԷԱՑԻՆԵՐԻՆ",
+  "num_chapters": 16,
+  "num_verses": 436,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2855,
+  "name_hy": "Պօղոս առաքեալի Ա թուղթը կորնթացիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԱՌԱՋԻՆ ԹՈՒՂԹԸ ԿՈՐՆԹԱՑԻՆԵՐԻՆ",
+  "num_chapters": 16,
+  "num_verses": 436,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 3: non-contiguous verses; missing [5]"
+  ]
+ },
+ {
+  "idArt": 2856,
+  "name_hy": "Պօղոս առաքեալի Բ թուղթը կորնթացիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԵՐԿՐՈՐԴ ԹՈՒՂԹԸ ԿՈՐՆԹԱՑԻՆԵՐԻՆ",
+  "num_chapters": 13,
+  "num_verses": 255,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2857,
+  "name_hy": "Պօղոս առաքեալի թուղթը գաղատացիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԹՈՒՂԹԸ ԳԱՂԱՏԱՑԻՆԵՐԻՆ",
+  "num_chapters": 6,
+  "num_verses": 149,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2858,
+  "name_hy": "Պօղոս առաքեալի թուղթը եփեսացիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԹՈՒՂԹԸ ԵՓԵՍԱՑԻՆԵՐԻՆ",
+  "num_chapters": 6,
+  "num_verses": 155,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2859,
+  "name_hy": "Պօղոս առաքեալի թուղթը փիլիպեցիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԹՈՒՂԹԸ ՓԻԼԻՊԵՑԻՆԵՐՆ",
+  "num_chapters": 4,
+  "num_verses": 105,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2860,
+  "name_hy": "Պօղոս առաքեալի թուղթը կողոսացիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԹՈՒՂԹԸ ԿՈՂՈՍԱՑԻՆԵՐԻՆ",
+  "num_chapters": 4,
+  "num_verses": 95,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2861,
+  "name_hy": "Պօղոս առաքեալի Ա թուղթը թեսաղոնիկեցիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԱՌԱՋԻՆ ԹՈՒՂԹԸ ԹԵՍԱՂՈՆԻԿԵՑԻՆԵՐԻՆ",
+  "num_chapters": 5,
+  "num_verses": 88,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2862,
+  "name_hy": "Պօղոս առաքեալի Բ թուղթը թեսաղոնիկեցիներին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԵՐԿՐՈՐԴ ԹՈՒՂԹԸ ԹԵՍԱՂՈՆԻԿԵՑԻՆԵՐԻՆ",
+  "num_chapters": 3,
+  "num_verses": 46,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2863,
+  "name_hy": "Պօղոս առաքեալի Ա թուղթը Տիմոթէոսին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԱՌԱՋԻՆ ԹՈՒՂԹԸ ՏԻՄՈԹԷՈՍԻՆ",
+  "num_chapters": 6,
+  "num_verses": 113,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2864,
+  "name_hy": "Պօղոս առաքեալի Բ թուղթը Տիմոթէոսին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԵՐԿՐՈՐԴ ԹՈՒՂԹԸ ՏԻՄՈԹԷՈՍԻՆ",
+  "num_chapters": 4,
+  "num_verses": 83,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2865,
+  "name_hy": "Պօղոս առաքեալի թուղթը Տիտոսին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԹՈՒՂԹԸ ՏԻՏՈՍԻՆ",
+  "num_chapters": 3,
+  "num_verses": 46,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2866,
+  "name_hy": "Պօղոս առաքեալի թուղթը Փիլիմոնին",
+  "title_hy": "ՊՕՂՈՍ ԱՌԱՔԵԱԼԻ ԹՈՒՂԹԸ ՓԻԼԻՄՈՆԻՆ",
+  "num_chapters": 1,
+  "num_verses": 25,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2867,
+  "name_hy": "Պօղոս առաքեալի թուղթը եբրայեցիներին",
+  "title_hy": "ԹՈՒՂԹ ԵԲՐԱՅԵՑԻՆԵՐԻՆ",
+  "num_chapters": 13,
+  "num_verses": 303,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2868,
+  "name_hy": "Յակոբոս առաքեալի ընդհանրական թուղթը",
+  "title_hy": "ՅԱԿՈԲՈՍ ԱՌԱՔԵԱԼԻ ԸՆԴՀԱՆՐԱԿԱՆ ԹՈՒՂԹԸ",
+  "num_chapters": 5,
+  "num_verses": 108,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2869,
+  "name_hy": "Պետրոս առաքեալի Ա ընդհանրական թուղթը",
+  "title_hy": "ՊԵՏՐՈՍ ԱՌԱՔԵԱԼԻ ԱՌԱՋԻՆ ԸՆԴՀԱՆՐԱԿԱՆ ԹՈՒՂԹԸ",
+  "num_chapters": 5,
+  "num_verses": 105,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2870,
+  "name_hy": "Պետրոս առաքեալի Բ ընդհանրական թուղթը",
+  "title_hy": "ՊԵՏՐՈՍ ԱՌԱՔԵԱԼԻ ԵՐԿՐՈՐԴ ԸՆԴՀԱՆՐԱԿԱՆ ԹՈՒՂԹԸ",
+  "num_chapters": 3,
+  "num_verses": 61,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2871,
+  "name_hy": "Յովհաննէս առաքեալի Ա ընդհանրական թուղթը",
+  "title_hy": "ՅՈՎՀԱՆՆԷՍ ԱՌԱՔԵԱԼԻ ԱՌԱՋԻՆ ԸՆԴՀԱՆՐԱԿԱՆ ԹՈՒՂԹԸ",
+  "num_chapters": 5,
+  "num_verses": 105,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2872,
+  "name_hy": "Յովհաննէս առաքեալի Բ ընդհանրական թուղթը",
+  "title_hy": "ՅՈՎՀԱՆՆԷՍ ԱՌԱՔԵԱԼԻ ԵՐԿՐՈՐԴ ԸՆԴՀԱՆՐԱԿԱՆ ԹՈՒՂԹԸ",
+  "num_chapters": 1,
+  "num_verses": 13,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2873,
+  "name_hy": "Յովհաննէս առաքեալի Գ ընդհանրական թուղթը",
+  "title_hy": "ՅՈՎՀԱՆՆԷՍ ԱՌԱՔԵԱԼԻ ԵՐՐՈՐԴ ԸՆԴՀԱՆՐԱԿԱՆ ԹՈՒՂԹԸ",
+  "num_chapters": 1,
+  "num_verses": 15,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2874,
+  "name_hy": "Յուդա առաքեալի ընդհանրական թուղթը",
+  "title_hy": "ՅՈՒԴԱ ԱՌԱՔԵԱԼԻ ԸՆԴՀԱՆՐԱԿԱՆ ԹՈՒՂԹԸ",
+  "num_chapters": 1,
+  "num_verses": 25,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": []
+ },
+ {
+  "idArt": 2875,
+  "name_hy": "Յովհաննէս առաքեալի յայտնութիւնը",
+  "title_hy": "ՍՈՒՐԲ ՅՈՎՀԱՆՆԷՍ ԱՌԱՔԵԱԼԻ ԵՒ ԱՍՏՈՒԱԾԱԲԱՆ ԱՒԵՏԱՐԱՆՉԻ ՅԱՅՏՆՈՒԹԻՒՆԸ",
+  "num_chapters": 22,
+  "num_verses": 404,
+  "needs_review": false,
+  "errors": [],
+  "anomalies": [
+   "ch 3: non-contiguous verses; missing [16]"
+  ]
+ }
+]
