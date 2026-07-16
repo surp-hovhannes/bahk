@@ -115,6 +115,7 @@ def parse_book(html: str, *, resolution: dict | None = None, deferred: dict | No
                 for e in entries if e["type"] == "chapter_relabel"]
     verse_relabels = [e for e in entries if e["type"] == "verse_relabel"]
     policies = {e["chapter"]: e["policy"] for e in entries if e["type"] == "collision_policy"}
+    overrides = {e["chapter"]: e["verses"] for e in entries if e["type"] == "chapter_override"}
     deferred_spec = (deferred or {}).get("chapters", [])
     defer_all = deferred_spec == "all"          # whole book is known-dirty & unread
     deferred_chapters = set() if defer_all else set(deferred_spec)
@@ -160,6 +161,8 @@ def parse_book(html: str, *, resolution: dict | None = None, deferred: dict | No
     chapters: dict[int, dict[int, str]] = {}
     errors: list[str] = []
     for cnum, occ in chap_occ.items():
+        if cnum in overrides:
+            continue                # chapter text supplied explicitly below
         nums = [p[0] for p in occ]
         dups = sorted({n for n in nums if nums.count(n) > 1})
         policy = policies.get(cnum)
@@ -174,6 +177,13 @@ def parse_book(html: str, *, resolution: dict | None = None, deferred: dict | No
                 continue            # keep_first (or default): first occurrence wins
             verses[num] = text
         chapters[cnum] = verses
+
+    # ---- chapter_override: hand-corrected verse text replaces a parsed chapter #
+    # (used where source markup is too mangled to parse, e.g. a dropped chapter
+    #  number that merges verse text; verses are given verbatim in errata.json).
+    for cnum, ov_verses in overrides.items():
+        chapters[cnum] = {int(v): t for v, t in ov_verses.items()}
+        superscriptions.pop(cnum, None)   # verse 1 now holds the heading text
 
     # ---- consistency warnings (some gaps are legitimate deuterocanonical) -- #
     nums = sorted(chapters)

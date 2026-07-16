@@ -333,12 +333,11 @@
   "name_hy": "Երգ երգոց",
   "title_hy": "ԵՐԳ ԵՐԳՈՑ",
   "num_chapters": 8,
-  "num_verses": 114,
-  "needs_review": true,
+  "num_verses": 115,
+  "needs_review": false,
   "errors": [],
   "anomalies": [
-   "ch 2: non-contiguous verses; missing [1]",
-   "ch 7: non-contiguous verses; missing [1]"
+   "ch 2: non-contiguous verses; missing [1]"
   ]
  },
  {

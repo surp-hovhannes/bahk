@@ -26,32 +26,23 @@ reading occurs (found via the lectionary engine).
 | **Matthew 18** | verse relabel: 2nd `28` → `29` (v29 mislabeled) | ✅ `Matthew 18.23-35` exact match (2026-07-24) |
 | **Proverbs 24** | collision policy `keep_first` (keep canonical 24:1-5) | ✅ `Proverbs 24.1-12` exact match (2026-02-05) |
 | **Haggai 2** | chapter relabel `→2` + verse relabel 1st `2`→`1` | ✅ `Haggai 2.10` exact match (2026-07-28) |
-| **Song of Songs 7** | chapter relabel `→7` (structure only) | Chapters 6-8 → **served from daily page**, see below |
+| **Song of Songs 7** | chapter relabel `→7` + `chapter_override` (verses 1-13) | ✅ serves from corpus; 13 contiguous verses |
 
-### Song of Songs 6-8 → daily-sourced (`daily_source` in `errata.json`)
+### Song of Songs 7 — dropped chapter marker (`chapter_override`)
 
-Song 6-8 is **not** served from the corpus. Two problems make the verse-keyed
-corpus unreliable there:
+The source omitted the `7` chapter-number marker, so the parser merged Song 7's
+verse 1 into the chapter heading and left a stray bare `7` mid-text; all 13
+verses are present and correct, only the markup was broken. Resolution:
+`chapter_relabel` moves the block to chapter 7, then `chapter_override` supplies
+verses 1-13 verbatim from the **already-scraped** raw HTML (no new network call):
+verse 1 = the heading text plus the unlabelled continuation through
+`…ուլունքների:`; the stray `7` is dropped. Song 6-8 serve normally from the
+corpus (an earlier `daily_source` routing was removed).
 
-1. **Verse-division divergence:** the library page divides Song 6-8 differently
-   from the lectionary numbering (the daily page's Song 6:9 `Դուստրերը տեսան
-   նրան…` is not a discrete verse in the library text).
-2. **Discontinuous engine references:** the lectionary engine emits Song readings
-   as *spans* that the daily page serves as multiple separate pericopes — e.g.
-   engine `Song 2.8-6.12` is served as daily `2.8-16` + `5.1` + `6.8-11`, and
-   engine `6.9-11` shows as daily `6.8-11`. A contiguous corpus range would
-   include unread verses.
-
-Resolution: `errata.json` → `daily_source` marks `SNG` chapters 6-8. `load_bible_hy`
-**skips** loading them into `BibleVerse` (so the corpus never returns divergent
-text), and the serving cutover routes any Reading touching Song 6-8 to the
-existing daily-readings scrape (`hub/utils.scrape_armenian_reading_texts`).
-
-**Follow-up for the maintainer:** the discontinuous-span issue may affect Song
-readings beyond ch6-8 (any multi-pericope span). The engine's Song reference
-representation is worth a separate review; widen the `daily_source` range if
-needed. Song readings that fall within a single library chapter (1-5) still
-compose from the corpus.
+> Note: the lectionary engine emits some Song readings as *spans* that the daily
+> page splits into separate pericopes (e.g. engine `Song 2.8-6.12` ≈ daily
+> `2.8-16` + `5.1` + `6.8-11`). That is an engine reference-representation matter,
+> not a corpus-text problem, and is out of scope here.
 
 ## Deferred — defects in chapters NO lectionary reading references
 
