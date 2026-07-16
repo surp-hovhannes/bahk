@@ -2,7 +2,17 @@
 
 Human-readable companion to `errata.json`. Explains each correction the scraper
 applies to the raw sacredtradition.am library text, and records the deferred
-(not-yet-repaired) defects. See `TRIAGE.md` for how these were discovered.
+(not-yet-repaired) defects.
+
+**How these were found.** The initial scrape flagged 29 of 75 books in
+`validation_report.json` (mislabeled verses, dropped/empty chapter headings, LXX
+merges/reorders). Triaging them against the readings the lectionary actually
+serves, only a handful touch a served verse — the rest are either verses the
+source intentionally omits or damage in chapters no reading references. Because
+the store keys by verse number, a reused number would otherwise be *silently*
+overwritten (≈64 verses were at risk corpus-wide); the scraper now treats any
+unresolved within-chapter duplicate as a **hard error**, so every such case is
+either fixed by a resolution below or explicitly deferred — never lost quietly.
 
 ## How the scraper uses this
 
