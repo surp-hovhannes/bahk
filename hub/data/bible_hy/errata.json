@@ -99,6 +99,42 @@
      "note": "After relabel, ch2 opens '[2,2,...]'; the first '2' (seventh-month dateline) is verse 1. Renumber to make [1..24] collision-free. VALIDATED: Haggai 2:10 = daily-page text (2026-07-28). REVIEW: the 1:15/2:1 split leaves ch2 with 24 vs the canonical 23 verses; only 2:10 is lectionary-served and it is correct."
     }
    ]
+  },
+  "2818": {
+   "book": "EST",
+   "needs_review": false,
+   "_validation": "Esther 1: the source places a stray verse marker \"6\" before the Greek bridge clause «Այս դէպքերից յետոյ, Արտաշէսի օրօք –» (LXX Esther 1:1a, \"And it came to pass after these things in the days of Artaxerxes\") and marks the real 1:1 body \"1\" after it, so keep_first mislabeled the bridge as verse 6 and dropped the true verse 6 (the palace-decoration description). chapter_override folds the bridge into 1:1 (matching the Greek and standard translations, per user) and restores verses 2-22 verbatim from the cached raw HTML. Not lectionary-served; fixed for corpus fidelity.",
+   "entries": [
+    {
+     "type": "chapter_override",
+     "chapter": 1,
+     "note": "Fold LXX bridge clause (source stray \"6\") into 1:1; restore real v6+. Verbatim from cached raw, no network.",
+     "verses": {
+      "1": "Այս դէպքերից յետոյ, Արտաշէսի օրօք – այս Արտաշէսը տիրում էր Հնդկաստանից մինչեւ Եթովպիա՝ հարիւր քսանեօթ գաւառի –",
+      "2": "երբ նա Սուսա քաղաքում նստեց գահին,",
+      "3": "իր թագաւորութեան երրորդ տարում խնջոյքի հրաւիրեց իր սիրելիներին ու մեծամեծներին, նաեւ այլ ազգերի՝ պարսիկների ու մարերի բոլոր նախարարներին եւ իշխաններին:",
+      "4": "Նա հարիւր ութսուն օր նրանց ցոյց տուեց իր թագաւորութեան հարստութիւնը՝ իր ուրախութեան ու վայելչութեան փառքը:",
+      "5": "Երբ խնջոյքի օրերն աւարտուեցին, յաջորդ անգամ կրկին հրաման տուեց խնջոյքի կանչելու իր ռամիկ քաղաքացիներին արքունի տան գաւթում:",
+      "6": "Գաւիթը զարդարուած էր բեհեզներով ու կերպասներով, որոնք շարուած ու կապուած էին ծիրանի ու բեհեզի հիւսածոյ թելերով՝ ամրացուած ոսկէ խոյակներին: Կային նաեւ ծիրանագոյն պաստառներ գեղեցիկ սիւների ու ոսկեղէն խարիսխների վրայ: Գաւթի վարդագոյն յատակի վրայ կային մարգարիտներով ու թանկարժէք քարերով ընդելուզուած բազում ոսկէ եւ արծաթէ գահաւորակներ՝ ծածկուած նկարազարդ երփներանգ պաստառներով եւ պատուական զարդանախշերով:",
+      "7": "Այնտեղ կային թագաւորի ոսկէ ու արծաթէ սափորներ եւ գաւաթներ, որոնք ունէին երեսուն հազար քանքարի գին:",
+      "8": "Գինին առատ էր եւ արքայավայել: Բայց այս խնջոյքը չեղաւ այնպէս, ինչպէս կարգն էր, որովհետեւ թագաւորը ցանկացել էր, որ իր սպասաւորները կատարեն հիւրերի կամքը:",
+      "9": "Իսկ թագաւորի կինը՝ Ասթինէն, Արտաշէս թագաւորի ապարանքում խնջոյք արեց կանանց համար:",
+      "10": "Եօթերորդ օրը թագաւորը, որի սիրտը լցուած էր ուրախութեամբ, ասաց Ամանին, Բազանին, Թառային, Բուրազէին, Աթելթային, Բատենզային եւ Թառաբբային՝ իր եօթ ներքինիներին,",
+      "11": "որ կնոջը կանչեն արքունիք, որպէսզի թագադրի նրան եւ բոլոր իշխաններին ու ազգերին ցոյց տայ նրա գեղեցկութիւնը, որովհետեւ նա շատ գեղեցիկ էր:",
+      "12": "Իսկ Ասթինէն չուզեց լսել հրամանը՝ ներքինիների հետ գալու նրա մօտ: Թագաւորը տրտմեց, խիստ բարկացաւ",
+      "13": "եւ իր սիրելիներին պատմեց Ասթինէի վարմունքը: Թագաւորն ասաց. «Այժմ դատ ու դատաստան արէ՛ք»:",
+      "14": "Եւ նրա մօտ մտան Արքինէոսը, Առնաթեւը եւ Մալիսեարը՝ պարսիկների եւ մարերի այն իշխանները, որ արքայի մերձաւորներն ու աթոռակիցներն էին.",
+      "15": "սրանք յայտնեցին, թէ օրէնքով ինչ պէտք անել թագաւորի կին Ասթինէին, քանի որ չէր կատարել ներքինիների միջոցով իրեն տրուած արքայական հրամանը:",
+      "16": "Այն ժամանակ Մուրթքէն ասաց արքային. «Տիկնանց տիկին Ասթինէն հակառակուեց ոչ միայն արքային, այլեւ՝ արքայի բոլոր իշխաններին եւ կուսակալներին:",
+      "17": "Այսպէս անհնազանդ կլինեն նաեւ պարսիկների ու մարերի իշխանների բոլոր կանայք.",
+      "18": "երբ նրանք լսեն թագաւորի կնոջ այս արհամարհանքի մասին, համարձակ կարող են անարգել իրենց ամուսիններին:",
+      "19": "Արդ, եթէ արքան կամենայ եւ հաճելի թուայ նրան, թող այդ կինն այլեւս չմտնի արքայի մօտ, եւ թող արքան նրա տիկնութիւնը տայ այն կնոջը, որը նրանից աւելի լաւը կլինի:",
+      "20": "Եւ երբ այս օրէնքը կհրապարակես քո թագաւորութեան մէջ, կանայք՝ աղքատներից մինչեւ մեծամեծները, մեծ յարգանքով կպատուեն իրենց ամուսիններին»:",
+      "21": "Այս խօսքը հաճելի թուաց արքային եւ նրա բոլոր իշխաններին, եւ թագաւորն արեց այնպէս, ինչպէս ասաց Մուրթքէն:",
+      "22": "Նա հրովարտակ ուղարկեց իր ամբողջ թագաւորութեան բոլոր գաւառները, որ այդ հրամանը դրուի բոլոր կանանց վրայ:"
+     }
+    }
+   ]
   }
  },
  "deferred": {
@@ -141,7 +177,7 @@
    "book": "EST",
    "chapters": "all",
    "fallback": "keep_first",
-   "reason": "Greek/expanded Esther: additions inserted as duplicate chapter numbers (13, 15, ...) that merge and collide. Whole book deferred; not read by lectionary."
+   "reason": "Greek/expanded Esther (Vulgate/Jerome arrangement): the six LXX additions are APPENDED as chapters 11-16, and Addition F sits at 10:4-13. The lectionary DOES read Esther 10.4-9 (Addition F, interpretation of Mordecai's dream; St. Stephen of Ulnia ~Aug 21-27 and Joachim & Anna) — verified byte-intact vs the cached raw HTML (ch10 is numbered cleanly, so keep_first never touches it). Chapter 1 is now repaired by a chapter_override resolution (bridge folded into 1:1, real v6 restored). The remaining keep_first fallback covers only the UNREAD addition-splice chapters, whose numbering is inconsistent IN THE SOURCE ITSELF: ch4 omits vv6/9/10/11 at splice points (LXX versification, not a scrape bug); ch13 carries two different verse-8s (end of Addition B edict vs start of Addition C prayer) so keep_first drops the prayer opening; ch15 reuses the number for two passages (the ch4 dialogue filler and Addition D) so keep_first drops the Addition-D opening (15:4-6). A faithful reconstruction of these needs a reference edition; none is lectionary-served."
   },
   "2822": {
    "book": "2MA",

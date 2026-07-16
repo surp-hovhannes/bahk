@@ -27,6 +27,7 @@ reading occurs (found via the lectionary engine).
 | **Proverbs 24** | collision policy `keep_first` (keep canonical 24:1-5) | ✅ `Proverbs 24.1-12` exact match (2026-02-05) |
 | **Haggai 2** | chapter relabel `→2` + verse relabel 1st `2`→`1` | ✅ `Haggai 2.10` exact match (2026-07-28) |
 | **Song of Songs 7** | chapter relabel `→7` + `chapter_override` (verses 1-13) | ✅ serves from corpus; 13 contiguous verses |
+| **Esther 1** | `chapter_override` (fold LXX bridge into 1:1; restore v6) | ✅ 22 contiguous verses; not served but corrected for fidelity |
 
 ### Song of Songs 7 — dropped chapter marker (`chapter_override`)
 
@@ -55,11 +56,47 @@ repair. None affect served readings.
 | Judges 3 | 3 | source typo (vv16-18 → 26-28) |
 | 2 Kings 10 | 10 | source typo |
 | 2 Chronicles | 2, 11, 18 | source typos |
-| Esther | all | Greek additions → duplicate chapter numbers |
 | 2 Maccabees 4 | 4 | source typo |
 | Psalms | 9, 16, 60, 113, 150 | LXX psalter merges (Ps 9=Heb 9+10, 113=Heb 114+115) |
 | Sirach | all | dirty source: empty headings drop 13 chapter numbers |
 | Revelation 3 | 3 | source typo |
+
+### Esther — deferred, but one reading IS served (and is intact)
+
+Esther is `keep_first`-deferred for the whole book, **but unlike the rows above it
+is not free of lectionary readings.** The engine serves **`Esther 10.4-9`**
+(Greek Addition F, the interpretation of Mordecai's dream) for St. Stephen of
+Ulnia (~Aug 21-27) and the feast of Joachim & Anna. Those verses were checked
+byte-for-byte against the cached raw HTML and are **correct** — the source
+numbers chapter 10 cleanly (Addition F = 10:4-13), so the deferral does not touch
+them.
+
+This edition follows the Vulgate/Jerome arrangement: the six Greek additions are
+**appended as chapters 11-16** (Addition A / Mordecai's dream = 11:2-12:6; the
+colophon = 11:1; B-E = 13-16) rather than interleaved before chapter 1. All are
+loaded and addressable (`EST 11`-`16`), but **no reading references them.**
+
+**Chapter 1 is now repaired** (`chapter_override`, see resolutions above): the
+source stray-marked the LXX bridge clause *«Այս դէպքերից յետոյ, Արտաշէսի օրօք –»*
+(Greek 1:1a, "And it came to pass after these things in the days of Artaxerxes")
+as a verse `6` sitting *before* the real 1:1 body, so `keep_first` had mislabeled
+it and dropped the true verse 6. The override folds the bridge into 1:1 (matching
+the Greek and standard translations) and restores verses 2-22.
+
+The remaining `keep_first` fallback covers only the **unread addition-splice
+chapters, whose numbering is inconsistent in the source itself** — not a scrape
+bug we can mechanically undo:
+
+- **ch4** omits vv 6 / 9 / 10 / 11 at the points where additions splice in (LXX
+  versification; the source simply jumps 5→7 and 8→12).
+- **ch13** carries two different verse-8s — the end of Addition B (the edict) and
+  the start of Addition C (Mordecai's prayer) — so `keep_first` keeps the edict's
+  and drops the prayer's opening.
+- **ch15** reuses the chapter number for two passages (the chapter-4 dialogue
+  filler *and* Addition D), so `keep_first` drops the Addition-D opening (15:4-6).
+
+A faithful reconstruction of ch4/13/15 needs a reference edition to re-versify;
+none of it is lectionary-served, so it is documented rather than guessed.
 
 To repair one later: add a `resolutions` entry (verse relabels / collision policy),
 remove it from `deferred`, and re-run the scraper — it will hard-error if the fix
