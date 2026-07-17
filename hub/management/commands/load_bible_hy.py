@@ -67,9 +67,9 @@ class Command(BaseCommand):
             for row in json.loads(mapping_path.read_text(encoding="utf-8"))
         }
 
-        # USFM -> {chapters served from the daily page, not the corpus}.
-        # These are skipped so BibleVerse never returns divergent text; the
-        # serving layer routes such readings to the daily-readings scrape.
+        # USFM -> {chapters to omit from the corpus}. Reserved for future
+        # daily-sourced overrides; no entries are defined yet, so nothing is
+        # skipped today.
         daily_source: dict[str, set[int]] = {}
         errata_path = root / "errata.json"
         if errata_path.exists():

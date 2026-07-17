@@ -201,3 +201,6 @@ test_media/
 
 .clawpatch/*
 !.clawpatch/config.json
+
+# Generated build artifact of scripts/scrape_bible_hy.py; not a source of truth.
+hub/data/bible_hy/validation_report.json

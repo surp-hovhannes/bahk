@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('version', models.CharField(default='Նոր Էջմիածին', help_text="Translation identifier, e.g. 'Նոր Էջմիածին' (Eastern Armenian).", max_length=32)),
-                ('book', models.CharField(help_text="USFM book id, e.g. 'GEN', '1CO' (see hub.constants.BOOK_NAME_TO_USFM).", max_length=3)),
+                ('book', models.CharField(help_text="USFM book id, e.g. 'GEN', '1CO' (see hub.constants.BOOK_NAME_TO_USFM). The corpus is a superset of that map: a few unread deuterocanonical books (e.g. '1ES', '3MA') have no BOOK_NAME_TO_USFM entry.", max_length=3)),
                 ('chapter', models.PositiveSmallIntegerField()),
                 ('verse', models.PositiveSmallIntegerField(help_text='Verse number; 0 denotes a chapter superscription/title.')),
                 ('text', models.TextField()),

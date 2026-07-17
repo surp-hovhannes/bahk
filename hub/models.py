@@ -1133,7 +1133,11 @@ class BibleVerse(models.Model):
     )
     book = models.CharField(
         max_length=3,
-        help_text="USFM book id, e.g. 'GEN', '1CO' (see hub.constants.BOOK_NAME_TO_USFM).",
+        help_text=(
+            "USFM book id, e.g. 'GEN', '1CO' (see hub.constants.BOOK_NAME_TO_USFM). "
+            "The corpus is a superset of that map: a few unread deuterocanonical "
+            "books (e.g. '1ES', '3MA') have no BOOK_NAME_TO_USFM entry."
+        ),
     )
     chapter = models.PositiveSmallIntegerField()
     verse = models.PositiveSmallIntegerField(
@@ -1161,7 +1165,6 @@ class BibleVerse(models.Model):
     @classmethod
     def passage_queryset(
         cls, version, book, start_chapter, start_verse, end_chapter, end_verse,
-        *, include_superscriptions=False,
     ):
         """Return the verses of a reading range as an ordered queryset.
 
@@ -1169,6 +1172,10 @@ class BibleVerse(models.Model):
         vast majority of readings) is a plain bounded filter; multi-chapter
         ranges take the start-chapter tail, any whole middle chapters, and the
         end-chapter head.
+
+        Chapter superscriptions (``verse=0``) are excluded — readings never
+        carry them.  They remain in the corpus for a future effort that wants
+        them.
         """
         from django.db.models import Q
 
@@ -1181,25 +1188,19 @@ class BibleVerse(models.Model):
                 | Q(chapter__gt=start_chapter, chapter__lt=end_chapter)
                 | Q(chapter=end_chapter, verse__lte=end_verse)
             )
-        qs = qs.filter(rng)
-        if not include_superscriptions:
-            qs = qs.exclude(verse=0)
-        return qs.order_by("chapter", "verse")
+        return qs.filter(rng).exclude(verse=0).order_by("chapter", "verse")
 
     @classmethod
     def compose_passage(
         cls, version, book, start_chapter, start_verse, end_chapter, end_verse,
-        *, include_superscriptions=False,
     ):
         """Return the reading text with inline ``[verse]`` markers, or '' if absent.
 
         The output mirrors the historical sacredtradition.am format
-        (``[1] … [2] …``) so downstream rendering is unchanged.  A
-        superscription (``verse=0``) is emitted without a bracket.
+        (``[1] … [2] …``) so downstream rendering is unchanged.
         """
         rows = cls.passage_queryset(
             version, book, start_chapter, start_verse, end_chapter, end_verse,
-            include_superscriptions=include_superscriptions,
         )
-        parts = [f"[{r.verse}] {r.text}" if r.verse else r.text for r in rows]
+        parts = [f"[{r.verse}] {r.text}" for r in rows]
         return " ".join(parts).strip()
