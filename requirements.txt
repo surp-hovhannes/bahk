@@ -47,6 +47,8 @@ openai
 anthropic
 # Bible API
 requests
+# Armenian lectionary (offline daily-readings engine; replaces sacredtradition.am scraping)
+armenian-lectionary>=1.0.1
 # Linting
 ruff
 timezonefinder==6.5.5

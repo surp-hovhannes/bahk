@@ -5,7 +5,7 @@ import logging
 from django.core.management.base import BaseCommand
 
 import hub.models as models
-from hub.utils import scrape_readings
+from hub.services.lectionary_service import get_daily_readings
 
 
 def daterange(start_date: date, end_date: date):
@@ -36,7 +36,7 @@ class Command(BaseCommand):
         end_date = datetime.strptime(end_date_value, "%Y-%m-%d")
         for date_obj in daterange(start_date, end_date):
             day, _ = models.Day.objects.get_or_create(church=church, date=date_obj)
-            readings = scrape_readings(date_obj, church)
+            readings = get_daily_readings(date_obj, church)
             for reading in readings:
                 reading.update({"day": day})
                 # Extract and remove all book-related fields to handle them separately

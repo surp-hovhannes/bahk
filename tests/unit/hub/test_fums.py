@@ -114,7 +114,7 @@ class ReadingFumsTokenAPITests(TestCase):
             date=timezone.now().date(), church=self.church
         )
 
-    @patch("hub.views.readings.scrape_readings")
+    @patch("hub.views.readings.get_daily_readings")
     @patch("hub.views.readings.generate_reading_context_task")
     def test_readings_api_includes_fums_token(self, mock_gen_task, mock_scrape):
         """The readings API should include fumsToken in each reading."""
@@ -136,7 +136,7 @@ class ReadingFumsTokenAPITests(TestCase):
         self.assertEqual(len(readings), 1)
         self.assertEqual(readings[0]["fumsToken"], "api-fums-token-xyz")
 
-    @patch("hub.views.readings.scrape_readings")
+    @patch("hub.views.readings.get_daily_readings")
     @patch("hub.views.readings.generate_reading_context_task")
     def test_readings_api_fums_token_empty_when_not_set(self, mock_gen_task, mock_scrape):
         """fumsToken should be empty string when no FUMS token is stored."""

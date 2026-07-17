@@ -15,7 +15,7 @@ class ImportReadingsCommandTests(TestCase):
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
 
-    @patch("hub.management.commands.import_readings.scrape_readings")
+    @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_with_translations(self, mock_scrape):
         """Test that import_readings command correctly saves translations using i18n field."""
         # Mock scraped readings with translations
@@ -68,7 +68,7 @@ class ImportReadingsCommandTests(TestCase):
         self.assertEqual(psalms.book, "Psalms")
         self.assertEqual(psalms.book_hy, "Սաղմոսներ")
 
-    @patch("hub.management.commands.import_readings.scrape_readings")
+    @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_without_translations(self, mock_scrape):
         """Test that import_readings works when no translations are provided."""
         # Mock scraped readings without translations
@@ -106,7 +106,7 @@ class ImportReadingsCommandTests(TestCase):
         self.assertEqual(matthew.book, "Matthew")
         self.assertIsNone(matthew.book_hy)
 
-    @patch("hub.management.commands.import_readings.scrape_readings")
+    @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_updates_existing(self, mock_scrape):
         """Test that import_readings updates existing readings with missing translations."""
         # Create reading without translation
@@ -153,7 +153,7 @@ class ImportReadingsCommandTests(TestCase):
         reading.refresh_from_db()
         self.assertEqual(reading.book_hy, "Յովհաննէս")
 
-    @patch("hub.management.commands.import_readings.scrape_readings")
+    @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_default_dates_are_computed_at_execution(self, mock_scrape):
         """Test omitted dates use the current date when the command executes."""
         mock_scrape.return_value = []

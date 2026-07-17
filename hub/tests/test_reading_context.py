@@ -266,7 +266,7 @@ class ReadingTranslationTests(APITestCase):
             active=True
         )
 
-    @patch("hub.views.readings.scrape_readings")
+    @patch("hub.views.readings.get_daily_readings")
     @patch("hub.views.readings.generate_reading_context_task.delay")
     def test_readings_with_translations_are_saved_correctly(self, mock_task, mock_scrape):
         """Test that readings with Armenian translations are saved correctly using i18n field."""

@@ -718,7 +718,7 @@ class ViewSynchronousTextFetchTests(TestCase):
 
     @patch('hub.views.readings.fetch_all_reading_texts')
     @patch('hub.views.readings.prepare_shared_resources')
-    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
     def test_view_calls_fetch_all_for_new_readings(
         self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_all,
@@ -737,7 +737,7 @@ class ViewSynchronousTextFetchTests(TestCase):
                 "end_verse": 12,
             },
         ]
-        mock_prepare.return_value = {"service": "mock_svc", "armenian_texts": []}
+        mock_prepare.return_value = {"service": "mock_svc"}
 
         factory = APIRequestFactory()
         request = factory.get(f'/readings/?date={self.test_date}')
@@ -753,11 +753,10 @@ class ViewSynchronousTextFetchTests(TestCase):
         # The call should include the shared resources from prepare
         call_kwargs = mock_fetch_all.call_args
         self.assertEqual(call_kwargs.kwargs.get('service'), "mock_svc")
-        self.assertEqual(call_kwargs.kwargs.get('armenian_texts'), [])
 
     @patch('hub.views.readings.fetch_all_reading_texts')
     @patch('hub.views.readings.prepare_shared_resources')
-    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
     def test_view_does_not_fetch_text_for_existing_readings(
         self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_all,
@@ -789,7 +788,7 @@ class ViewSynchronousTextFetchTests(TestCase):
 
     @patch('hub.views.readings.fetch_all_reading_texts')
     @patch('hub.views.readings.prepare_shared_resources')
-    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
     def test_view_graceful_when_prepare_partial(
         self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_all,
@@ -835,7 +834,7 @@ class ReadingTextAPIResponseTests(TestCase):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 5, 1)
 
-    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
     def test_response_includes_text_fields(self, mock_context_task, mock_scrape):
         """Test that API response includes text, textCopyright, textVersion fields."""
@@ -868,7 +867,7 @@ class ReadingTextAPIResponseTests(TestCase):
         self.assertEqual(reading_data["textCopyright"], "NKJV (c) 1982 Thomas Nelson.")
         self.assertEqual(reading_data["textVersion"], "NKJV")
 
-    @patch('hub.views.readings.scrape_readings')
+    @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
     def test_response_empty_text_when_not_fetched(self, mock_context_task, mock_scrape):
         """Test that API response returns empty strings when text has not been fetched."""
