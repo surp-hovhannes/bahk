@@ -1,0 +1,527 @@
+[
+ {
+  "idArt": 2801,
+  "usfm": "GEN",
+  "english": "Genesis",
+  "name_hy": "Ծննդոց",
+  "note": ""
+ },
+ {
+  "idArt": 2802,
+  "usfm": "EXO",
+  "english": "Exodus",
+  "name_hy": "Ելք",
+  "note": ""
+ },
+ {
+  "idArt": 2803,
+  "usfm": "LEV",
+  "english": "Leviticus",
+  "name_hy": "Ղեւտական",
+  "note": ""
+ },
+ {
+  "idArt": 2804,
+  "usfm": "NUM",
+  "english": "Numbers",
+  "name_hy": "Թուեր",
+  "note": ""
+ },
+ {
+  "idArt": 2805,
+  "usfm": "DEU",
+  "english": "Deuteronomy",
+  "name_hy": "Երկրորդ օրէնք",
+  "note": ""
+ },
+ {
+  "idArt": 2806,
+  "usfm": "JOS",
+  "english": "Joshua",
+  "name_hy": "Նաւէի որդի Յեսուի գիրքը",
+  "note": ""
+ },
+ {
+  "idArt": 2807,
+  "usfm": "JDG",
+  "english": "Judges",
+  "name_hy": "Դատաւորներ",
+  "note": ""
+ },
+ {
+  "idArt": 2808,
+  "usfm": "RUT",
+  "english": "Ruth",
+  "name_hy": "Հռութ",
+  "note": ""
+ },
+ {
+  "idArt": 2809,
+  "usfm": "1SA",
+  "english": "1 Samuel",
+  "name_hy": "Ա Թագաւորութիւններ",
+  "note": "Ա Թագ. = 1 Kingdoms"
+ },
+ {
+  "idArt": 2810,
+  "usfm": "2SA",
+  "english": "2 Samuel",
+  "name_hy": "Բ Թագաւորութիւններ",
+  "note": "Բ Թագ. = 2 Kingdoms"
+ },
+ {
+  "idArt": 2811,
+  "usfm": "1KI",
+  "english": "1 Kings",
+  "name_hy": "Գ Թագաւորութիւններ",
+  "note": "Գ Թագ. = 3 Kingdoms"
+ },
+ {
+  "idArt": 2812,
+  "usfm": "2KI",
+  "english": "2 Kings",
+  "name_hy": "Դ Թագաւորութիւններ",
+  "note": "Դ Թագ. = 4 Kingdoms"
+ },
+ {
+  "idArt": 2813,
+  "usfm": "1CH",
+  "english": "1 Chronicles",
+  "name_hy": "Ա Մնացորդաց",
+  "note": ""
+ },
+ {
+  "idArt": 2814,
+  "usfm": "2CH",
+  "english": "2 Chronicles",
+  "name_hy": "Բ Մնացորդաց",
+  "note": ""
+ },
+ {
+  "idArt": 2815,
+  "usfm": "1ES",
+  "english": "1 Esdras",
+  "name_hy": "Ա Եզրաս",
+  "note": "DEUTEROCANON: Greek Esdras, NOT canonical Ezra"
+ },
+ {
+  "idArt": 2816,
+  "usfm": "EZR",
+  "english": "Ezra",
+  "name_hy": "Բ Եզրաս",
+  "note": "Բ Եզրաս = canonical Ezra"
+ },
+ {
+  "idArt": 2817,
+  "usfm": "NEH",
+  "english": "Nehemiah",
+  "name_hy": "Նէեմիի գիրքը",
+  "note": ""
+ },
+ {
+  "idArt": 2818,
+  "usfm": "EST",
+  "english": "Esther",
+  "name_hy": "Եսթերի գիրքը",
+  "note": "Armenian = Greek/expanded Esther; API.Bible id may be ESG"
+ },
+ {
+  "idArt": 2819,
+  "usfm": "JDT",
+  "english": "Judith",
+  "name_hy": "Յուդիթ",
+  "note": "deuterocanon"
+ },
+ {
+  "idArt": 2820,
+  "usfm": "TOB",
+  "english": "Tobit",
+  "name_hy": "Տոբիթ",
+  "note": "deuterocanon; real verse-number gaps"
+ },
+ {
+  "idArt": 2821,
+  "usfm": "1MA",
+  "english": "1 Maccabees",
+  "name_hy": "Ա Մակաբայեցիներ",
+  "note": "deuterocanon"
+ },
+ {
+  "idArt": 2822,
+  "usfm": "2MA",
+  "english": "2 Maccabees",
+  "name_hy": "Բ Մակաբայեցիներ",
+  "note": "deuterocanon"
+ },
+ {
+  "idArt": 2823,
+  "usfm": "3MA",
+  "english": "3 Maccabees",
+  "name_hy": "Գ Մակաբայեցիներ",
+  "note": "deuterocanon"
+ },
+ {
+  "idArt": 2824,
+  "usfm": "PSA",
+  "english": "Psalms",
+  "name_hy": "Սաղմոսներ",
+  "note": "150 chapters (no Ps 151); 76 superscriptions"
+ },
+ {
+  "idArt": 2825,
+  "usfm": "PRO",
+  "english": "Proverbs",
+  "name_hy": "Առակներ",
+  "note": ""
+ },
+ {
+  "idArt": 2826,
+  "usfm": "ECC",
+  "english": "Ecclesiastes",
+  "name_hy": "Ժողովող",
+  "note": ""
+ },
+ {
+  "idArt": 2827,
+  "usfm": "SNG",
+  "english": "Song of Solomon",
+  "name_hy": "Երգ երգոց",
+  "note": ""
+ },
+ {
+  "idArt": 2828,
+  "usfm": "WIS",
+  "english": "Wisdom of Solomon",
+  "name_hy": "Իմաստութիւն Սողոմոնի",
+  "note": "deuterocanon"
+ },
+ {
+  "idArt": 2829,
+  "usfm": "SIR",
+  "english": "Sirach",
+  "name_hy": "Սիրաքի իմաստութիւնը",
+  "note": "deuterocanon; DIRTY SOURCE (empty ch headings) — needs review"
+ },
+ {
+  "idArt": 2830,
+  "usfm": "JOB",
+  "english": "Job",
+  "name_hy": "Յոբի գիրքը",
+  "note": ""
+ },
+ {
+  "idArt": 2831,
+  "usfm": "ISA",
+  "english": "Isaiah",
+  "name_hy": "Եսայու մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2832,
+  "usfm": "HOS",
+  "english": "Hosea",
+  "name_hy": "Օսէէի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2833,
+  "usfm": "AMO",
+  "english": "Amos",
+  "name_hy": "Ամոսի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2834,
+  "usfm": "MIC",
+  "english": "Micah",
+  "name_hy": "Միքիայի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2835,
+  "usfm": "JOL",
+  "english": "Joel",
+  "name_hy": "Յովէլի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2836,
+  "usfm": "OBA",
+  "english": "Obadiah",
+  "name_hy": "Աբդիուի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2837,
+  "usfm": "JON",
+  "english": "Jonah",
+  "name_hy": "Յովնանի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2838,
+  "usfm": "NAM",
+  "english": "Nahum",
+  "name_hy": "Նաւումի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2839,
+  "usfm": "HAB",
+  "english": "Habakkuk",
+  "name_hy": "Ամբակումի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2840,
+  "usfm": "ZEP",
+  "english": "Zephaniah",
+  "name_hy": "Սոփոնիայի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2841,
+  "usfm": "HAG",
+  "english": "Haggai",
+  "name_hy": "Անգէի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2842,
+  "usfm": "ZEC",
+  "english": "Zechariah",
+  "name_hy": "Զաքարիայի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2843,
+  "usfm": "MAL",
+  "english": "Malachi",
+  "name_hy": "Մաղաքիայի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2844,
+  "usfm": "JER",
+  "english": "Jeremiah",
+  "name_hy": "Երեմիայի մարգարէութիւնը",
+  "note": ""
+ },
+ {
+  "idArt": 2845,
+  "usfm": "BAR",
+  "english": "Baruch",
+  "name_hy": "Բարուքի թուղթը",
+  "note": "Baruch proper (ch1-5), confirmed by content (1:1 'the words Baruch wrote in Babylon'; 5:1 'O Jerusalem, take off your garment of mourning'). Title 'Բարուքի թուղթը' = Baruch's writing; does NOT append the Letter of Jeremiah (LJE), which is absent from this edition."
+ },
+ {
+  "idArt": 2846,
+  "usfm": "LAM",
+  "english": "Lamentations",
+  "name_hy": "Երեմիա մարգարէի ողբը",
+  "note": ""
+ },
+ {
+  "idArt": 2847,
+  "usfm": "DAN",
+  "english": "Daniel",
+  "name_hy": "Դանիէլի մարգարէութիւնը",
+  "note": "Armenian Daniel embeds Susanna/Bel/Song of Three (SUS/BEL/S3Y)"
+ },
+ {
+  "idArt": 2848,
+  "usfm": "EZK",
+  "english": "Ezekiel",
+  "name_hy": "Եզեկիէլի մարգարէութիւնը",
+  "note": "note: Ezekiel placed AFTER Daniel in this ordering"
+ },
+ {
+  "idArt": 2849,
+  "usfm": "MAT",
+  "english": "Matthew",
+  "name_hy": "Աւետարան ըստ Մատթէոսի",
+  "note": ""
+ },
+ {
+  "idArt": 2850,
+  "usfm": "MRK",
+  "english": "Mark",
+  "name_hy": "Աւետարան ըստ Մարկոսի",
+  "note": ""
+ },
+ {
+  "idArt": 2851,
+  "usfm": "LUK",
+  "english": "Luke",
+  "name_hy": "Աւետարան ըստ Ղուկասի",
+  "note": ""
+ },
+ {
+  "idArt": 2852,
+  "usfm": "JHN",
+  "english": "John",
+  "name_hy": "Աւետարան ըստ Յովհաննէսի",
+  "note": ""
+ },
+ {
+  "idArt": 2853,
+  "usfm": "ACT",
+  "english": "Acts",
+  "name_hy": "Գործք առաքելոց",
+  "note": ""
+ },
+ {
+  "idArt": 2854,
+  "usfm": "ROM",
+  "english": "Romans",
+  "name_hy": "Պօղոս առաքեալի թուղթը հռոմէացիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2855,
+  "usfm": "1CO",
+  "english": "1 Corinthians",
+  "name_hy": "Պօղոս առաքեալի Ա թուղթը կորնթացիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2856,
+  "usfm": "2CO",
+  "english": "2 Corinthians",
+  "name_hy": "Պօղոս առաքեալի Բ թուղթը կորնթացիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2857,
+  "usfm": "GAL",
+  "english": "Galatians",
+  "name_hy": "Պօղոս առաքեալի թուղթը գաղատացիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2858,
+  "usfm": "EPH",
+  "english": "Ephesians",
+  "name_hy": "Պօղոս առաքեալի թուղթը եփեսացիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2859,
+  "usfm": "PHP",
+  "english": "Philippians",
+  "name_hy": "Պօղոս առաքեալի թուղթը փիլիպեցիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2860,
+  "usfm": "COL",
+  "english": "Colossians",
+  "name_hy": "Պօղոս առաքեալի թուղթը կողոսացիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2861,
+  "usfm": "1TH",
+  "english": "1 Thessalonians",
+  "name_hy": "Պօղոս առաքեալի Ա թուղթը թեսաղոնիկեցիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2862,
+  "usfm": "2TH",
+  "english": "2 Thessalonians",
+  "name_hy": "Պօղոս առաքեալի Բ թուղթը թեսաղոնիկեցիներին",
+  "note": ""
+ },
+ {
+  "idArt": 2863,
+  "usfm": "1TI",
+  "english": "1 Timothy",
+  "name_hy": "Պօղոս առաքեալի Ա թուղթը Տիմոթէոսին",
+  "note": ""
+ },
+ {
+  "idArt": 2864,
+  "usfm": "2TI",
+  "english": "2 Timothy",
+  "name_hy": "Պօղոս առաքեալի Բ թուղթը Տիմոթէոսին",
+  "note": ""
+ },
+ {
+  "idArt": 2865,
+  "usfm": "TIT",
+  "english": "Titus",
+  "name_hy": "Պօղոս առաքեալի թուղթը Տիտոսին",
+  "note": ""
+ },
+ {
+  "idArt": 2866,
+  "usfm": "PHM",
+  "english": "Philemon",
+  "name_hy": "Պօղոս առաքեալի թուղթը Փիլիմոնին",
+  "note": ""
+ },
+ {
+  "idArt": 2867,
+  "usfm": "HEB",
+  "english": "Hebrews",
+  "name_hy": "Պօղոս առաքեալի թուղթը եբրայեցիներին",
+  "note": "Armenian order: Hebrews before Catholic epistles"
+ },
+ {
+  "idArt": 2868,
+  "usfm": "JAS",
+  "english": "James",
+  "name_hy": "Յակոբոս առաքեալի ընդհանրական թուղթը",
+  "note": ""
+ },
+ {
+  "idArt": 2869,
+  "usfm": "1PE",
+  "english": "1 Peter",
+  "name_hy": "Պետրոս առաքեալի Ա ընդհանրական թուղթը",
+  "note": ""
+ },
+ {
+  "idArt": 2870,
+  "usfm": "2PE",
+  "english": "2 Peter",
+  "name_hy": "Պետրոս առաքեալի Բ ընդհանրական թուղթը",
+  "note": ""
+ },
+ {
+  "idArt": 2871,
+  "usfm": "1JN",
+  "english": "1 John",
+  "name_hy": "Յովհաննէս առաքեալի Ա ընդհանրական թուղթը",
+  "note": ""
+ },
+ {
+  "idArt": 2872,
+  "usfm": "2JN",
+  "english": "2 John",
+  "name_hy": "Յովհաննէս առաքեալի Բ ընդհանրական թուղթը",
+  "note": ""
+ },
+ {
+  "idArt": 2873,
+  "usfm": "3JN",
+  "english": "3 John",
+  "name_hy": "Յովհաննէս առաքեալի Գ ընդհանրական թուղթը",
+  "note": ""
+ },
+ {
+  "idArt": 2874,
+  "usfm": "JUD",
+  "english": "Jude",
+  "name_hy": "Յուդա առաքեալի ընդհանրական թուղթը",
+  "note": ""
+ },
+ {
+  "idArt": 2875,
+  "usfm": "REV",
+  "english": "Revelation",
+  "name_hy": "Յովհաննէս առաքեալի յայտնութիւնը",
+  "note": ""
+ }
+]

@@ -1107,3 +1107,100 @@ class FastIntention(models.Model):
         visibility = 'public' if self.is_public else 'private'
         status = 'active' if self.is_active else 'inactive'
         return f"Intention for {self.fast.name} by {self.user.username} ({visibility}, {status})"
+
+
+class BibleVerse(models.Model):
+    """A single Bible verse, addressable by ``(version, book, chapter, verse)``.
+
+    This is the offline corpus that replaces per-request scraping of
+    sacredtradition.am for Armenian reading text.  The corpus is derived from
+    verse-keyed, per-book JSON (git-tracked source of truth) and loaded here via
+    the ``load_bible_hy`` management command.
+
+    Verses are keyed by their *actual* number rather than by position, so
+    translations with non-contiguous versification (e.g. Tobit 1, which skips
+    verses 11/14/16/17) are represented faithfully.  Chapter superscriptions
+    (Psalm titles and the like) are stored as ``verse=0``.
+    """
+
+    #: Eastern Armenian translation served by sacredtradition.am.
+    NOR_EJMIATSIN = "Նոր Էջմիածին"
+
+    version = models.CharField(
+        max_length=32,
+        default=NOR_EJMIATSIN,
+        help_text="Translation identifier, e.g. 'Նոր Էջմիածին' (Eastern Armenian).",
+    )
+    book = models.CharField(
+        max_length=3,
+        help_text=(
+            "USFM book id, e.g. 'GEN', '1CO' (see hub.constants.BOOK_NAME_TO_USFM). "
+            "The corpus is a superset of that map: a few unread deuterocanonical "
+            "books (e.g. '1ES', '3MA') have no BOOK_NAME_TO_USFM entry."
+        ),
+    )
+    chapter = models.PositiveSmallIntegerField()
+    verse = models.PositiveSmallIntegerField(
+        help_text="Verse number; 0 denotes a chapter superscription/title.",
+    )
+    text = models.TextField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["version", "book", "chapter", "verse"],
+                name="unique_bible_verse",
+            ),
+        ]
+        # The unique constraint's composite btree index also backs the
+        # (version, book, chapter, verse) range scans used to compose a reading,
+        # so no additional index is required.
+        ordering = ["version", "book", "chapter", "verse"]
+        verbose_name = "Bible Verse"
+        verbose_name_plural = "Bible Verses"
+
+    def __str__(self):
+        return f"{self.book} {self.chapter}:{self.verse} ({self.version})"
+
+    @classmethod
+    def passage_queryset(
+        cls, version, book, start_chapter, start_verse, end_chapter, end_verse,
+    ):
+        """Return the verses of a reading range as an ordered queryset.
+
+        Expressed as a single indexed range scan.  The same-chapter case (the
+        vast majority of readings) is a plain bounded filter; multi-chapter
+        ranges take the start-chapter tail, any whole middle chapters, and the
+        end-chapter head.
+
+        Chapter superscriptions (``verse=0``) are excluded — readings never
+        carry them.  They remain in the corpus for a future effort that wants
+        them.
+        """
+        from django.db.models import Q
+
+        qs = cls.objects.filter(version=version, book=book)
+        if start_chapter == end_chapter:
+            rng = Q(chapter=start_chapter, verse__gte=start_verse, verse__lte=end_verse)
+        else:
+            rng = (
+                Q(chapter=start_chapter, verse__gte=start_verse)
+                | Q(chapter__gt=start_chapter, chapter__lt=end_chapter)
+                | Q(chapter=end_chapter, verse__lte=end_verse)
+            )
+        return qs.filter(rng).exclude(verse=0).order_by("chapter", "verse")
+
+    @classmethod
+    def compose_passage(
+        cls, version, book, start_chapter, start_verse, end_chapter, end_verse,
+    ):
+        """Return the reading text with inline ``[verse]`` markers, or '' if absent.
+
+        The output mirrors the historical sacredtradition.am format
+        (``[1] … [2] …``) so downstream rendering is unchanged.
+        """
+        rows = cls.passage_queryset(
+            version, book, start_chapter, start_verse, end_chapter, end_verse,
+        )
+        parts = [f"[{r.verse}] {r.text}" for r in rows]
+        return " ".join(parts).strip()
