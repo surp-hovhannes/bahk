@@ -398,6 +398,11 @@ class Day(models.Model):
             models.Index(fields=["church", "date"]),
         ]
         constraints = [
+            # One Day per (date, church). A church has at most one fast on any
+            # given day, so Day.fast (a single FK) fully models fast membership
+            # and there is never a need for two Day rows sharing (date, church).
+            # This also stops the readings API and the devotional admin from
+            # racing to create duplicate Days for the same calendar day.
             models.UniqueConstraint(fields=["date", "church"], name="unique_day_per_church"),
         ]
 

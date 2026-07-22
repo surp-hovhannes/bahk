@@ -1,4 +1,4 @@
-"""Tests for the Day deduplication logic in migration 0049.
+"""Tests for the Day deduplication logic in migration 0056.
 
 Verifies that remove_duplicate_days safely handles unique-constraint
 collisions on Reading, Feast, and Devotional when merging duplicate
@@ -9,7 +9,6 @@ from datetime import date
 
 from django.apps import apps as django_apps
 from django.db import connection
-from django.db.models import Count
 from django.test import TransactionTestCase
 
 from hub.models import Church, Day, Devotional, Fast, Feast, Reading
@@ -44,7 +43,7 @@ _DAY_INDEXES = [
 
 
 def _load_dedup():
-    mod = importlib.import_module("hub.migrations.0049_day_unique_date_church")
+    mod = importlib.import_module("hub.migrations.0056_day_unique_date_church")
     return mod.remove_duplicate_days
 
 
@@ -60,7 +59,7 @@ def _rebuild_day_table(create_sql):
 
 
 class RemoveDuplicateDaysTests(TransactionTestCase):
-    """Tests for migration 0049's remove_duplicate_days data migration.
+    """Tests for migration 0056's remove_duplicate_days data migration.
 
     Each test rebuilds hub_day WITHOUT the unique constraint so that
     duplicate rows can be created, then runs the dedup function and
@@ -103,8 +102,10 @@ class RemoveDuplicateDaysTests(TransactionTestCase):
         self.assertEqual(remaining.count(), 1)
         self.assertEqual(remaining.first().readings.count(), 1)
 
-    def test_feast_collision_does_not_crash(self):
-        """Duplicate Days each with a Feast must merge without error."""
+    def test_feasts_are_preserved_when_merging(self):
+        """Both Feasts survive the merge. unique_feast_per_day was removed in
+        migration 0052, so a Day may hold multiple feasts; the dedup reassigns
+        every feast to the keeper rather than dropping any."""
         day1 = Day.objects.create(date=date(2026, 6, 2), church=self.church)
         day2 = Day.objects.create(date=date(2026, 6, 2), church=self.church)
 
@@ -115,7 +116,7 @@ class RemoveDuplicateDaysTests(TransactionTestCase):
 
         remaining = Day.objects.filter(date=date(2026, 6, 2), church=self.church)
         self.assertEqual(remaining.count(), 1)
-        self.assertEqual(remaining.first().feasts.count(), 1)
+        self.assertEqual(remaining.first().feasts.count(), 2)
 
     def test_devotional_collision_does_not_crash(self):
         """Duplicate Days with same (order, language_code) Devotional must merge."""

@@ -432,6 +432,27 @@ class FastAdmin(admin.ModelAdmin):
     sortable_by = ("get_name", "participant_count")
     exclude = ("name", "description", "culmination_feast")  # Avoid duplicate with translation fields
 
+    @staticmethod
+    def _get_or_create_days_for_fast(fast, dates):
+        """Get or create Days for ``fast`` keyed by (date, church).
+
+        Enforces the one-fast-per-(date, church) invariant backed by the
+        ``unique_day_per_church`` constraint. Reuses an existing Day for the
+        date (e.g. one auto-created by the readings API with ``fast=None``)
+        and adopts it onto ``fast`` when it has no fast yet. Returns
+        ``(days, conflicts)`` where ``conflicts`` are existing Days already
+        owned by a *different* fast; callers should surface these rather than
+        silently stealing the day from its current fast.
+        """
+        days = []
+        conflicts = []
+        for date in dates:
+            day, created = Day.objects.get_or_create(date=date, church=fast.church)
+            if not created and day.fast_id and day.fast_id != fast.pk:
+                conflicts.append(day)
+            days.append(day)
+        return days, conflicts
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         queryset = queryset.annotate(participant_count=models.Count("profiles"))
@@ -503,17 +524,27 @@ class FastAdmin(admin.ModelAdmin):
         if request.method == "POST":
             form = AddDaysToFastAdminForm(request.POST)
             if form.is_valid():
-                days = [
-                    Day.objects.get_or_create(date=date, church=fast.church)[0]
-                    for date in form.cleaned_data["dates"]
-                ]
-                fast.days.add(*days)
-
-                obj_url = reverse(
-                    f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                days, conflicts = self._get_or_create_days_for_fast(
+                    fast, form.cleaned_data["dates"]
                 )
+                if conflicts:
+                    dates_str = ", ".join(
+                        d.date.strftime("%Y-%m-%d") for d in conflicts
+                    )
+                    messages.error(
+                        request,
+                        f"These dates already belong to a different fast in "
+                        f"{fast.church.name}: {dates_str}. Remove them from that "
+                        f"fast first.",
+                    )
+                else:
+                    fast.days.add(*days)
 
-                return redirect(to=obj_url)
+                    obj_url = reverse(
+                        f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                    )
+
+                    return redirect(to=obj_url)
         else:
             form = AddDaysToFastAdminForm()
 
@@ -534,28 +565,47 @@ class FastAdmin(admin.ModelAdmin):
         if request.method == "POST":
             form = CreateFastWithDatesAdminForm(request.POST)
             if form.is_valid():
-                fast = form.save()
                 data = form.cleaned_data
 
-                # create days for fast
+                # dates for the new fast
                 dates = [
                     data["first_day"] + datetime.timedelta(days=num_days)
                     for num_days in range(data["length_of_fast"])
                 ]
-                for date in dates:
-                    Day.objects.create(date=date, fast=fast, church=data["church"])
 
-                # Derive year from the first created day
-                if dates:
-                    fast.year = dates[0].year
-                fast.save(update_fields=["year"])
+                # Reuse an existing Day for each (date, church) — e.g. one the
+                # readings API already created with fast=None — instead of a raw
+                # insert that would violate unique_day_per_church. Roll the whole
+                # thing back if any date already belongs to a different fast.
+                with transaction.atomic():
+                    fast = form.save()
+                    days, conflicts = self._get_or_create_days_for_fast(fast, dates)
+                    if conflicts:
+                        transaction.set_rollback(True)
+                    else:
+                        fast.days.set(days)
+                        # Derive year from the first created day
+                        if dates:
+                            fast.year = dates[0].year
+                        fast.save(update_fields=["year"])
 
-                # go back to fast admin page
-                obj_url = reverse(
-                    f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
-                )
+                if conflicts:
+                    dates_str = ", ".join(
+                        d.date.strftime("%Y-%m-%d") for d in conflicts
+                    )
+                    messages.error(
+                        request,
+                        f"These dates already belong to a different fast in "
+                        f"{data['church'].name}: {dates_str}. Remove them from "
+                        f"that fast first.",
+                    )
+                else:
+                    # go back to fast admin page
+                    obj_url = reverse(
+                        f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                    )
 
-                return redirect(to=obj_url)
+                    return redirect(to=obj_url)
         else:
             form = CreateFastWithDatesAdminForm()
 
@@ -602,16 +652,30 @@ class FastAdmin(admin.ModelAdmin):
                     data["first_day"] + datetime.timedelta(days=num_days)
                     for num_days in range(data["length_of_fast"])
                 ]
-                days = [Day.objects.get_or_create(date=date, church=duplicate_fast.church)[0] for date in dates]
-                duplicate_fast.days.set(days)
-                duplicate_fast.save()  # run save method to ensure year is set
-
-                # go back to fast admin page
-                obj_url = reverse(
-                    f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                days, conflicts = self._get_or_create_days_for_fast(
+                    duplicate_fast, dates
                 )
+                if conflicts:
+                    dates_str = ", ".join(
+                        d.date.strftime("%Y-%m-%d") for d in conflicts
+                    )
+                    messages.error(
+                        request,
+                        f"These dates already belong to a different fast in "
+                        f"{duplicate_fast.church.name}: {dates_str}. Remove them "
+                        f"from that fast first.",
+                    )
+                    duplicate_fast.delete()  # undo the partial duplicate
+                else:
+                    duplicate_fast.days.set(days)
+                    duplicate_fast.save()  # run save method to ensure year is set
 
-                return redirect(to=obj_url)
+                    # go back to fast admin page
+                    obj_url = reverse(
+                        f"admin:{self.opts.app_label}_{self.opts.model_name}_changelist"
+                    )
+
+                    return redirect(to=obj_url)
         else:
             form = CreateFastWithDatesAdminForm(
                 initial={

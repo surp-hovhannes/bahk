@@ -4,12 +4,13 @@ import os
 from unittest.mock import patch
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import transaction
 from django.db.utils import IntegrityError
 from django.test import TestCase, TransactionTestCase
 from django.test.utils import tag
 from tests.fixtures.test_data import TestDataFactory
 
-from hub.models import Fast
+from hub.models import Day, Fast
 
 
 class ModelCreationTests(TestCase):
@@ -116,6 +117,16 @@ class ModelCreationTests(TestCase):
         self.assertIsNotNone(day2)
         self.assertEqual(day2.date, d)
         self.assertNotEqual(day1.church_id, day2.church_id)
+
+    def test_duplicate_day_for_same_church_is_rejected(self):
+        """The unique_day_per_church constraint forbids two Days for the same
+        (date, church)."""
+        d = datetime.date.today()
+        church = TestDataFactory.create_church()
+        Day.objects.create(date=d, church=church)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Day.objects.create(date=d, church=church)
 
 
 class CompleteModelTests(TestCase):
