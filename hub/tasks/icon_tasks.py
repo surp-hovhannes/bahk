@@ -6,6 +6,7 @@ import time
 
 from celery import shared_task
 from django.conf import settings
+from django.db import transaction
 
 from hub.constants import ICON_MATCH_CONFIDENCE_THRESHOLD
 from hub.models import Feast
@@ -433,8 +434,16 @@ def match_icon_to_feast_task(self, feast_id: int):
             icon_id = first_match['id']
             try:
                 icon = Icon.objects.get(pk=icon_id, church=church)
-                feast.icon = icon
-                feast.save(update_fields=['icon'])
+                with transaction.atomic():
+                    locked_feast = Feast.objects.select_for_update().get(pk=feast_id)
+                    if locked_feast.icon_id is not None:
+                        logger.info(
+                            "Feast %s received an icon while matching, skipping.",
+                            feast_id,
+                        )
+                        return
+                    locked_feast.icon = icon
+                    locked_feast.save(update_fields=['icon'])
                 logger.info(
                     "Matched icon %s (confidence: %s) to feast %s (%s)",
                     icon_id, match_confidence, feast_id, prompt

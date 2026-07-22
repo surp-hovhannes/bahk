@@ -1,6 +1,7 @@
 import logging
 
 from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
+from django.db import transaction
 from django.dispatch import receiver
 from django.core.cache import cache
 from hub.cache import invalidate_feast_api_cache_for_feast
@@ -57,7 +58,7 @@ def handle_feast_save(sender, instance, created, **kwargs):
     translations are updated immediately after creation.
     The task itself will also check and skip if designation is already set.
     """
-    invalidate_feast_api_cache_for_feast(instance)
+    transaction.on_commit(lambda: invalidate_feast_api_cache_for_feast(instance))
 
     # Only trigger designation task on creation, not on updates
     # This prevents duplicate task enqueuing when translations are set immediately after creation
