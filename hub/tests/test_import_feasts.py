@@ -15,7 +15,7 @@ class ImportFeastsCommandTests(TestCase):
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_with_translations(self, mock_scrape):
         """Test that import_feasts command correctly saves translations using i18n field."""
         # Mock scraped feast with translations
@@ -43,7 +43,7 @@ class ImportFeastsCommandTests(TestCase):
         self.assertEqual(feast.name, "Feast of the Nativity")
         self.assertEqual(feast.name_hy, "Ծննդյան տոն")
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_without_translations(self, mock_scrape):
         """Test that import_feasts works when no Armenian translation is provided."""
         # Mock scraped feast without Armenian translation
@@ -70,7 +70,7 @@ class ImportFeastsCommandTests(TestCase):
         self.assertEqual(feast.name, "Easter Sunday")
         self.assertIsNone(feast.name_hy)
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_updates_existing(self, mock_scrape):
         """Test that import_feasts updates existing feasts with missing translations."""
         # Create feast without translation
@@ -107,7 +107,7 @@ class ImportFeastsCommandTests(TestCase):
         feast.refresh_from_db()
         self.assertEqual(feast.name_hy, "Աստվածայայտնություն")
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_no_feast_found(self, mock_scrape):
         """Test that import_feasts handles dates with no feast gracefully."""
         # Mock scrape returning None (no feast found)
@@ -131,7 +131,7 @@ class ImportFeastsCommandTests(TestCase):
             Feast.objects.filter(day__date=date(2025, 3, 15), day__church=self.church).exists()
         )
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_multiple_dates(self, mock_scrape):
         """Test that import_feasts can handle multiple dates in a range."""
         # Mock scrape to return different feasts for different calls
@@ -177,7 +177,7 @@ class ImportFeastsCommandTests(TestCase):
         self.assertEqual(feast3.name, "Second Feast")
         self.assertEqual(feast3.name_hy, "Երկրորդ տոն")
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_invalid_church(self, mock_scrape):
         """Test that import_feasts handles invalid church name gracefully."""
         test_date = "2025-01-01"
@@ -199,7 +199,7 @@ class ImportFeastsCommandTests(TestCase):
         # Verify no feast was created
         self.assertEqual(Feast.objects.count(), 0)
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_no_name_in_response(self, mock_scrape):
         """Test that import_feasts skips feasts with no name."""
         # Mock scrape returning feast data with no name
@@ -225,7 +225,7 @@ class ImportFeastsCommandTests(TestCase):
             Feast.objects.filter(day__date=date(2025, 7, 1), day__church=self.church).exists()
         )
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_does_not_overwrite_existing_translations(self, mock_scrape):
         """Test that import_feasts doesn't overwrite existing translations."""
         # Create feast with translation
@@ -264,7 +264,7 @@ class ImportFeastsCommandTests(TestCase):
         feast.refresh_from_db()
         self.assertEqual(feast.name_hy, "Վերափոխում")
 
-    @patch("hub.management.commands.import_feasts.scrape_feast")
+    @patch("hub.management.commands.import_feasts.get_feast_for_date")
     def test_import_feasts_default_dates_are_computed_at_execution(self, mock_scrape):
         """Test omitted dates use the current date when the command executes."""
         mock_scrape.return_value = None

@@ -16,7 +16,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 12, 25)
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_create_feast_when_none_exists(self, mock_scrape):
         """Test creating a feast when none exists."""
         mock_scrape.return_value = {
@@ -41,7 +41,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         day = Day.objects.get(date=self.test_date, church=self.church)
         self.assertEqual(day.feasts.first(), feast_obj)
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_skip_when_feast_already_exists(self, mock_scrape):
         """Test skipping when feast already exists and no updates needed."""
         # Create existing feast with complete data
@@ -85,7 +85,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(status_dict["reason"], "fast_associated")
         self.assertEqual(status_dict["fast_name"], "Lenten Fast")
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_continue_when_fast_associated_with_check_fast_false(self, mock_scrape):
         """Test continuing feast lookup when Fast is associated but check_fast=False."""
         # Create a fast
@@ -110,7 +110,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(status_dict["status"], "success")
         mock_scrape.assert_called_once()
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_skip_when_no_feast_data(self, mock_scrape):
         """Test skipping when scrape_feast returns None."""
         mock_scrape.return_value = None
@@ -125,7 +125,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(status_dict["status"], "skipped")
         self.assertEqual(status_dict["reason"], "no_feast_data")
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_skip_when_no_feast_name(self, mock_scrape):
         """Test skipping when feast data has no name."""
         mock_scrape.return_value = {
@@ -144,7 +144,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(status_dict["status"], "skipped")
         self.assertEqual(status_dict["reason"], "no_feast_name")
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_create_feast_with_english_only(self, mock_scrape):
         """Test creating feast with only English name."""
         mock_scrape.return_value = {
@@ -163,7 +163,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(feast_obj.name, "Christmas")
         self.assertIsNone(feast_obj.name_hy)
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_update_existing_feast_with_missing_translation(self, mock_scrape):
         """Test updating existing feast with missing translation."""
         # Create existing feast without Armenian translation
@@ -190,7 +190,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         existing_feast.refresh_from_db()
         self.assertEqual(existing_feast.name_hy, "Սուրբ Ծնունդ")
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_does_not_overwrite_existing_translation(self, mock_scrape):
         """Test that existing translation is not overwritten."""
         # Create existing feast with Armenian translation
@@ -213,7 +213,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         existing_feast.refresh_from_db()
         self.assertEqual(existing_feast.name_hy, "Existing Armenian")
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_creates_day_if_not_exists(self, mock_scrape):
         """Test that Day is created if it doesn't exist."""
         mock_scrape.return_value = {
@@ -233,7 +233,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertTrue(Day.objects.filter(date=self.test_date, church=self.church).exists())
         self.assertIsNotNone(feast_obj)
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_uses_existing_day_if_exists(self, mock_scrape):
         """Test that existing Day is used if it exists."""
         # Create existing day
@@ -253,7 +253,7 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(feast_obj.day, existing_day)
         self.assertEqual(Day.objects.filter(date=self.test_date, church=self.church).count(), 1)
 
-    @patch('hub.utils.scrape_feast')
+    @patch('hub.services.feast_service.get_feast_for_date')
     def test_handles_fallback_to_name_field(self, mock_scrape):
         """Test handling when name_en is None but name field exists."""
         mock_scrape.return_value = {

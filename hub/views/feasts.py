@@ -1,6 +1,7 @@
 """Views for returning data pertaining to feast days.
 
-Currently based on the Daily Worship app's website, sacredtradition.am
+Feast names come from the offline ``armenian_lectionary`` engine (via
+``hub.services.feast_service``); the previous sacredtradition.am scraping has been retired.
 """
 
 import logging
