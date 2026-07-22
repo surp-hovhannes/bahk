@@ -4,7 +4,7 @@ from django.db import migrations
 
 
 def save_fast_fk(apps, schema):
-    Day = apps.get_model('hub', 'Day')
+    Day = apps.get_model("hub", "Day")
     for day in Day.objects.all():
         fast = day.fasts.all().first()
         day._fast = fast
@@ -14,18 +14,15 @@ def save_fast_fk(apps, schema):
 
 
 def save_fast_m2m(apps, schema):
-    Day = apps.get_model('hub', 'Day')
+    Day = apps.get_model("hub", "Day")
     for day in Day.objects.all():
         if day._fast:
             day.fasts.add(day._fast)
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('hub', '0011_add_day__fast_day_church_fk_day_date_not_unique'),
+        ("hub", "0011_add_day__fast_day_church_fk_day_date_not_unique"),
     ]
 
-    operations = [
-        migrations.RunPython(save_fast_fk, save_fast_m2m)
-    ]
+    operations = [migrations.RunPython(save_fast_fk, save_fast_m2m)]
