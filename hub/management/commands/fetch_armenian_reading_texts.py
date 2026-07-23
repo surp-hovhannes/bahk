@@ -1,4 +1,4 @@
-"""Fetch Armenian Bible text from sacredtradition.am for readings missing text_hy."""
+"""Compose Armenian Bible text from the offline BibleVerse corpus for readings missing text_hy."""
 import logging
 
 from django.core.management.base import BaseCommand
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Fetch Armenian Bible text from sacredtradition.am for readings that are missing text_hy"
+    help = "Compose Armenian Bible text from the offline BibleVerse corpus for readings missing text_hy"
 
     def add_arguments(self, parser):
         parser.add_argument(

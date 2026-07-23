@@ -1,15 +1,16 @@
 """Compute the feast/fast name of the day from the offline ``armenian_lectionary`` engine.
 
-This replaces the previous sacredtradition.am scraping (``hub.utils.scrape_feast``) with an
-in-process, offline call to :func:`armenian_lectionary.compute_armenian_lectionary`.  The engine
-returns the commemoration in its ``"Liturgical Day"`` field; as of the engine's 1.1.0 feast-name
-accuracy contract this name is locked against the same authoritative ground truth the scrape used
-(100% match across 2001-2026), so it is a near drop-in replacement for the English feast name.
+This replaces the previous sacredtradition.am scraping with an in-process, offline call to
+:func:`armenian_lectionary.compute_armenian_lectionary`.  The engine returns the commemoration in
+its ``"Liturgical Day"`` field; as of the engine's feast-name accuracy contract this name is locked
+against the same authoritative ground truth the scrape used (100% match across 2001-2026), so it is
+a drop-in replacement for the English feast name.
 
-The engine is English-only, so ``name_hy`` is ``None`` here.  Downstream persistence
-(``get_or_create_feast_for_date`` / ``import_feasts``) only fills a missing Armenian translation,
-so existing feasts keep any Armenian name they already have, and new feasts fall back to the
-English name via ``name_i18n``.
+As of ``armenian_lectionary`` 1.2, the engine also serves Armenian (``"hy"``) feast names (baked
+into the package offline), so ``name_hy`` is now populated here too — the last thing feast names
+needed the live scrape for.  The engine leaves any feast without a known Armenian form in English;
+we treat that as "no Armenian translation" (``name_hy = None``) so those names fall back to English
+via ``name_i18n`` and can be upgraded later when the engine gains the translation.
 """
 import logging
 from datetime import datetime
@@ -40,10 +41,11 @@ _NON_FEAST_MARKERS = (
 def get_feast_for_date(date_obj, church) -> dict | None:
     """Return the day's feast name, computed offline from ``armenian_lectionary``.
 
-    Drop-in replacement for ``hub.utils.scrape_feast``: returns a dict with ``"name"``,
-    ``"name_en"`` and ``"name_hy"`` keys, or ``None`` if there is no feast to record.
-    The engine is English-only, so ``name_hy`` is always ``None``.  Returns ``None`` for
-    unsupported churches or dates outside the validated year window.
+    Returns a dict with ``"name"``, ``"name_en"`` and ``"name_hy"`` keys, or ``None`` if there is
+    no feast to record.  ``name_hy`` is the engine's Armenian feast name, or ``None`` when the
+    engine has no Armenian form for it (it leaves those in English, which the API already reaches
+    via ``name_i18n`` fallback).  Returns ``None`` for unsupported churches or dates outside the
+    validated year window.
     """
     if church not in SUPPORTED_CHURCHES:
         logger.error(
@@ -63,14 +65,20 @@ def get_feast_for_date(date_obj, church) -> dict | None:
         )
         return None
 
-    result = armenian_lectionary.compute_armenian_lectionary(date_obj)
-
-    name_en = (result.get("Liturgical Day") or "").strip()
+    result_en = armenian_lectionary.compute_armenian_lectionary(date_obj, language="en")
+    name_en = (result_en.get("Liturgical Day") or "").strip()
     if not name_en or any(marker in name_en for marker in _NON_FEAST_MARKERS):
         return None
+
+    result_hy = armenian_lectionary.compute_armenian_lectionary(date_obj, language="hy")
+    name_hy = (result_hy.get("Liturgical Day") or "").strip()
+    # The engine leaves untranslated feast names in English.  Record only a genuine Armenian
+    # translation so untranslated names keep falling back to English (and can be upgraded later).
+    if not name_hy or name_hy == name_en:
+        name_hy = None
 
     return {
         "name": name_en,
         "name_en": name_en,
-        "name_hy": None,
+        "name_hy": name_hy,
     }

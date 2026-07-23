@@ -1,7 +1,8 @@
 """Tests for the offline ``get_feast_for_date`` service.
 
 Replaces the retired ``scrape_feast`` tests: feast names now come from the offline
-``armenian_lectionary`` engine (``"Liturgical Day"``) rather than sacredtradition.am.
+``armenian_lectionary`` engine (``"Liturgical Day"``, in ``en`` and ``hy``) rather than
+sacredtradition.am.
 """
 from datetime import date, datetime
 from unittest.mock import patch
@@ -12,6 +13,17 @@ from hub.models import Church
 from hub.services.feast_service import get_feast_for_date
 
 
+def _engine_stub(en_name, hy_name=None):
+    """Build a fake ``compute_armenian_lectionary`` that answers per ``language`` kwarg.
+
+    ``hy_name=None`` models a feast the engine has no Armenian form for: it leaves the
+    English name in place under ``language="hy"``.
+    """
+    def _compute(_date, language="en"):
+        return {"Liturgical Day": hy_name if (language == "hy" and hy_name) else en_name}
+    return _compute
+
+
 class GetFeastForDateTests(TestCase):
     """Tests for the ``get_feast_for_date`` service."""
 
@@ -20,27 +32,42 @@ class GetFeastForDateTests(TestCase):
         self.test_date = date(2025, 12, 25)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_returns_engine_liturgical_day(self, mock_compute):
-        """The engine's ``Liturgical Day`` is returned as the English feast name."""
-        mock_compute.return_value = {"Liturgical Day": "Nativity and Theophany of Our Lord Jesus Christ"}
+    def test_returns_english_and_armenian_names(self, mock_compute):
+        """Both the English and the Armenian ``Liturgical Day`` are returned."""
+        mock_compute.side_effect = _engine_stub(
+            "Nativity and Theophany of Our Lord Jesus Christ",
+            "ՏՕՆ ԾՆՆԴԵԱՆ",
+        )
 
         result = get_feast_for_date(self.test_date, self.church)
 
         self.assertIsNotNone(result)
         self.assertEqual(result["name"], "Nativity and Theophany of Our Lord Jesus Christ")
         self.assertEqual(result["name_en"], "Nativity and Theophany of Our Lord Jesus Christ")
-        # The engine is English-only; Armenian is left for downstream fallback.
+        self.assertEqual(result["name_hy"], "ՏՕՆ ԾՆՆԴԵԱՆ")
+        # Queried once per language.
+        self.assertEqual(mock_compute.call_count, 2)
+
+    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
+    def test_untranslated_feast_leaves_name_hy_none(self, mock_compute):
+        """When the engine has no Armenian form (hy == en), ``name_hy`` stays ``None``."""
+        mock_compute.side_effect = _engine_stub("Some Untranslated Commemoration")
+
+        result = get_feast_for_date(self.test_date, self.church)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["name_en"], "Some Untranslated Commemoration")
         self.assertIsNone(result["name_hy"])
-        mock_compute.assert_called_once_with(self.test_date)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
     def test_normalizes_datetime_to_date(self, mock_compute):
         """A ``datetime`` argument is reduced to a ``date`` before hitting the engine."""
-        mock_compute.return_value = {"Liturgical Day": "Test Feast"}
+        mock_compute.side_effect = _engine_stub("Test Feast")
 
         get_feast_for_date(datetime(2025, 12, 25, 9, 30), self.church)
 
-        mock_compute.assert_called_once_with(self.test_date)
+        for call in mock_compute.call_args_list:
+            self.assertEqual(call.args[0], self.test_date)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
     def test_placeholder_names_return_none(self, mock_compute):
@@ -53,7 +80,7 @@ class GetFeastForDateTests(TestCase):
             "   ",
         ):
             with self.subTest(placeholder=placeholder):
-                mock_compute.return_value = {"Liturgical Day": placeholder}
+                mock_compute.side_effect = _engine_stub(placeholder)
                 self.assertIsNone(get_feast_for_date(self.test_date, self.church))
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")

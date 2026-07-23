@@ -778,7 +778,7 @@ class ReadingAdmin(admin.ModelAdmin):
                 'API.Bible to track anonymized usage for rights holders and publishers.'
             ),
         }),
-        ('Armenian Text (sacredtradition.am)', {
+        ('Armenian Text (Nor Ejmiatsin corpus)', {
             'fields': ('text_hy_version', 'text_hy_copyright', 'text_hy_fetched_at', 'has_hy_fums_token'),
             'classes': ('collapse',),
         }),
