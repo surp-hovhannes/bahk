@@ -4,16 +4,19 @@ Currently based on the Daily Worship app's website, sacredtradition.am
 """
 
 import logging
+from collections.abc import Mapping
 from datetime import datetime
 
 import sentry_sdk
 from django.conf import settings
+from django.db import transaction
 from django.db.models import F
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,6 +27,7 @@ from hub.tasks.icon_tasks import match_icon_to_feast_task
 from hub.tasks.llm_tasks import is_feast_context_generation_eligible
 from hub.utils import get_user_profile_safe, get_or_create_feast_for_date
 from icons.serializers import IconSerializer
+from icons.models import Icon
 from icons.views import IsAdminOrReadOnly
 
 
@@ -261,6 +265,124 @@ class FeastMatchIconView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class FeastAssignIconView(APIView):
+    """Staff-only feast icon assignment preflight and mutation endpoint."""
+
+    permission_classes = [IsAdminUser]
+
+    @staticmethod
+    def _icon_snapshot(icon):
+        if icon is None:
+            return None
+        return {"id": icon.id, "title": icon.title}
+
+    @classmethod
+    def _feast_snapshot(cls, feast):
+        return {
+            "feast_id": feast.id,
+            "date": feast.day.date.isoformat(),
+            "church_id": feast.day.church_id,
+            "current_icon_id": feast.icon_id,
+            "current_icon": cls._icon_snapshot(feast.icon),
+        }
+
+    @staticmethod
+    def _is_positive_integer(value):
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+    def get(self, request, feast_id: int):
+        feast = get_object_or_404(
+            Feast.objects.select_related("day", "day__church", "icon"),
+            pk=feast_id,
+        )
+        return Response(self._feast_snapshot(feast), status=status.HTTP_200_OK)
+
+    def post(self, request, feast_id: int):
+        if not isinstance(request.data, Mapping):
+            return Response(
+                {"non_field_errors": ["Request body must be a JSON object."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        icon_id = request.data.get("icon_id")
+        replace = request.data.get("replace", False)
+
+        errors = {}
+        if not self._is_positive_integer(icon_id):
+            errors["icon_id"] = "Must be a positive integer."
+        if not isinstance(replace, bool):
+            errors["replace"] = "Must be a boolean."
+        if "expected_current_icon_id" not in request.data:
+            errors["expected_current_icon_id"] = "This field is required."
+        else:
+            expected_icon_id = request.data["expected_current_icon_id"]
+            if expected_icon_id is not None and not self._is_positive_integer(expected_icon_id):
+                errors["expected_current_icon_id"] = "Must be a positive integer or null."
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+        expected_icon_id = request.data["expected_current_icon_id"]
+        with transaction.atomic():
+            feast = get_object_or_404(
+                Feast.objects.select_for_update().select_related("day", "day__church"),
+                pk=feast_id,
+            )
+            icon = get_object_or_404(Icon.objects.select_for_update(), pk=icon_id)
+
+            if icon.church_id != feast.day.church_id:
+                return Response(
+                    {"icon_id": "Icon must belong to the feast's church."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if feast.icon_id != expected_icon_id:
+                return Response(
+                    {
+                        "error": "The feast icon changed after preflight.",
+                        "code": "stale_assignment",
+                        "current_icon_id": feast.icon_id,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            previous_icon_id = feast.icon_id
+            if previous_icon_id == icon.id:
+                return Response(
+                    {
+                        "status": "unchanged",
+                        "feast_id": feast.id,
+                        "previous_icon_id": previous_icon_id,
+                        "current_icon_id": icon.id,
+                        "current_icon": self._icon_snapshot(icon),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            if previous_icon_id is not None and replace is not True:
+                return Response(
+                    {
+                        "error": "The feast already has a different icon; set replace to true.",
+                        "code": "replacement_required",
+                        "current_icon_id": previous_icon_id,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            feast.icon = icon
+            feast.save(update_fields=["icon"])
+            assignment_status = "replaced" if previous_icon_id is not None else "assigned"
+            return Response(
+                {
+                    "status": assignment_status,
+                    "feast_id": feast.id,
+                    "previous_icon_id": previous_icon_id,
+                    "current_icon_id": icon.id,
+                    "current_icon": self._icon_snapshot(icon),
+                },
+                status=status.HTTP_200_OK,
+            )
 
 
 class FeastContextFeedbackView(APIView):

@@ -513,7 +513,8 @@ class FeastAPIRouteTests(TestCase):
         self.assertIsNone(first_response.json()["feast"]["icon"])
 
         feast.icon = icon
-        feast.save(update_fields=["icon"])
+        with self.captureOnCommitCallbacks(execute=True):
+            feast.save(update_fields=["icon"])
 
         second_response = self._get_cached_feast_response(feast)
         self.assertEqual(second_response.status_code, status.HTTP_200_OK)
@@ -526,9 +527,10 @@ class FeastAPIRouteTests(TestCase):
         first_response = self._get_cached_feast_response(feast)
         self.assertIsNone(first_response.json()["feast"]["icon"])
 
-        with patch("hub.tasks.icon_tasks._match_icons_with_llm") as mock_match:
-            mock_match.return_value = [{"id": icon.id, "confidence": "high"}]
-            match_icon_to_feast_task(feast.id)
+        with self.captureOnCommitCallbacks(execute=True):
+            with patch("hub.tasks.icon_tasks._match_icons_with_llm") as mock_match:
+                mock_match.return_value = [{"id": icon.id, "confidence": "high"}]
+                match_icon_to_feast_task(feast.id)
 
         feast.refresh_from_db()
         second_response = self._get_cached_feast_response(feast)
