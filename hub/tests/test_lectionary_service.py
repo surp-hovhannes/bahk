@@ -69,6 +69,21 @@ class GetDailyReadingsTests(TestCase):
             for k in ("start_chapter", "start_verse", "end_chapter", "end_verse"):
                 self.assertIsInstance(r[k], int)
 
+    def test_presentation_eve_malachi_spelling(self):
+        # Regression: armenian_lectionary <1.2.2 truncated this book to "Malach" on the
+        # Presentation-eve block (Feb 13), which downstream book-name mappings don't recognize,
+        # breaking English/offline-Armenian text lookup and Catena URLs. Require the canonical
+        # "Malachi" so persistence resolves the book correctly.
+        readings = get_daily_readings(date(2026, 2, 13), self.church)
+        malachi = [r for r in readings if r["book"] == "Malachi"]
+        self.assertTrue(malachi, f"Expected a 'Malachi' reading, got books {[r['book'] for r in readings]}")
+        self.assertNotIn("Malach", [r["book"] for r in readings])
+        r = malachi[0]
+        self.assertEqual(
+            (r["book_en"], r["start_chapter"], r["start_verse"], r["end_chapter"], r["end_verse"]),
+            ("Malachi", 3, 1, 3, 4),
+        )
+
     def test_accepts_datetime_input(self):
         # import_readings passes datetime objects (not plain dates).
         readings = get_daily_readings(datetime(2026, 4, 5), self.church)
