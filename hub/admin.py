@@ -76,6 +76,31 @@ def _get_fk_links_url(fk_queryset, fk_name, max_num_to_show=_MAX_NUM_TO_SHOW):
     return format_html(format_string, *args)
 
 
+def get_or_create_days_for_fast(fast, dates):
+    """Get or create Days for ``fast`` keyed by (date, church).
+
+    Enforces the one-fast-per-(date, church) invariant backed by the
+    ``unique_day_per_church`` constraint. Reuses an existing Day for the date
+    (e.g. one auto-created by the readings API with ``fast=None``) so callers
+    can adopt it onto ``fast`` via ``fast.days.add()``/``.set()``. Returns
+    ``(days, conflicts)`` where ``conflicts`` are existing Days already owned
+    by a *different* fast; callers should surface these rather than silently
+    stealing the day from its current fast.
+
+    Shared by every admin flow that attaches Days to a Fast (add-days,
+    create-with-dates, duplicate, and combined-devotional creation) so they
+    all honor the invariant identically.
+    """
+    days = []
+    conflicts = []
+    for date in dates:
+        day, created = Day.objects.get_or_create(date=date, church=fast.church)
+        if not created and day.fast_id and day.fast_id != fast.pk:
+            conflicts.append(day)
+        days.append(day)
+    return days, conflicts
+
+
 @admin.register(Church, site=admin.site)
 class ChurchAdmin(admin.ModelAdmin):
     list_display = (
@@ -203,44 +228,69 @@ class DevotionalAdmin(admin.ModelAdmin):
             form = CombinedDevotionalForm(request.POST, request.FILES)
             if form.is_valid():
                 data = form.cleaned_data
+                selected_languages = data['languages']
+                first_devotional = None
+                conflict = None
                 try:
                     with transaction.atomic():
-                        # 1. Get or create Day
-                        day, _ = Day.objects.get_or_create(
-                            date=data['date'],
-                            church=data['fast'].church,
-                            defaults={'fast': data['fast']},
+                        # 1. Resolve the Day for this (date, church) through the
+                        #    shared helper so this flow honors the
+                        #    unique_day_per_church invariant like the fast admin
+                        #    flows: reuse/adopt an existing fast=None Day (e.g.
+                        #    one the readings API created) rather than stealing a
+                        #    Day already owned by a different fast.
+                        days, conflicts = get_or_create_days_for_fast(
+                            data['fast'], [data['date']]
                         )
+                        if conflicts:
+                            conflict = conflicts[0]
+                            transaction.set_rollback(True)
+                        else:
+                            day = days[0]
+                            # Adopt the Day onto the fast so day.fast is set even
+                            # when an existing fast=None Day was reused —
+                            # otherwise the devotional is hidden from admin fast
+                            # filtering (list_filter=day__fast) and never
+                            # triggers DevotionalSet cache invalidation, which
+                            # short-circuits on day.fast being None.
+                            data['fast'].days.add(day)
 
-                        # 2. Create video + devotional for each selected language
-                        selected_languages = data['languages']
-                        first_devotional = None
-                        for lang in selected_languages:
-                            video = self._get_or_create_video(data, lang)
-                            devotional = Devotional.objects.create(
-                                day=day,
-                                video=video,
-                                description=data.get(f'devotional_description_{lang}') or '',
-                                order=data.get('order'),
-                                language_code=lang,
+                            # 2. Create video + devotional for each language
+                            for lang in selected_languages:
+                                video = self._get_or_create_video(data, lang)
+                                devotional = Devotional.objects.create(
+                                    day=day,
+                                    video=video,
+                                    description=data.get(f'devotional_description_{lang}') or '',
+                                    order=data.get('order'),
+                                    language_code=lang,
+                                )
+                                if first_devotional is None:
+                                    first_devotional = devotional
+
+                    if conflict is not None:
+                        messages.error(
+                            request,
+                            f"{conflict.date:%Y-%m-%d} already belongs to a "
+                            f"different fast ({conflict.fast}) in "
+                            f"{data['fast'].church.name}. Remove it from that "
+                            f"fast first.",
+                        )
+                    else:
+                        lang_names = ', '.join(
+                            name for code, name, _ in SUPPORTED_LANGUAGES
+                            if code in selected_languages
+                        )
+                        messages.success(
+                            request,
+                            f"Devotionals created successfully for: {lang_names}.",
+                        )
+                        return redirect(
+                            reverse(
+                                f"admin:{self.opts.app_label}_{self.opts.model_name}_change",
+                                args=[first_devotional.pk],
                             )
-                            if first_devotional is None:
-                                first_devotional = devotional
-
-                    lang_names = ', '.join(
-                        name for code, name, _ in SUPPORTED_LANGUAGES
-                        if code in selected_languages
-                    )
-                    messages.success(
-                        request,
-                        f"Devotionals created successfully for: {lang_names}.",
-                    )
-                    return redirect(
-                        reverse(
-                            f"admin:{self.opts.app_label}_{self.opts.model_name}_change",
-                            args=[first_devotional.pk],
                         )
-                    )
                 except Exception as e:
                     messages.error(request, f"Error creating devotionals: {e}")
         else:
@@ -432,26 +482,7 @@ class FastAdmin(admin.ModelAdmin):
     sortable_by = ("get_name", "participant_count")
     exclude = ("name", "description", "culmination_feast")  # Avoid duplicate with translation fields
 
-    @staticmethod
-    def _get_or_create_days_for_fast(fast, dates):
-        """Get or create Days for ``fast`` keyed by (date, church).
-
-        Enforces the one-fast-per-(date, church) invariant backed by the
-        ``unique_day_per_church`` constraint. Reuses an existing Day for the
-        date (e.g. one auto-created by the readings API with ``fast=None``)
-        and adopts it onto ``fast`` when it has no fast yet. Returns
-        ``(days, conflicts)`` where ``conflicts`` are existing Days already
-        owned by a *different* fast; callers should surface these rather than
-        silently stealing the day from its current fast.
-        """
-        days = []
-        conflicts = []
-        for date in dates:
-            day, created = Day.objects.get_or_create(date=date, church=fast.church)
-            if not created and day.fast_id and day.fast_id != fast.pk:
-                conflicts.append(day)
-            days.append(day)
-        return days, conflicts
+    _get_or_create_days_for_fast = staticmethod(get_or_create_days_for_fast)
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
