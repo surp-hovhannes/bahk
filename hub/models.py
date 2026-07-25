@@ -586,6 +586,11 @@ class Reading(models.Model):
     """Stores details for a Bible reading."""
 
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="readings")
+    sequence = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Position of this reading within its day's list, as returned by the "
+        "armenian_lectionary engine. Determines display order."
+    )
     book = models.CharField(max_length=64)
     start_chapter = models.IntegerField(verbose_name="Start Chapter")
     start_verse = models.IntegerField(verbose_name="Start Verse")
@@ -640,6 +645,7 @@ class Reading(models.Model):
     i18n = TranslationField(fields=('book', 'text'))
 
     class Meta:
+        ordering = ["day__date", "sequence", "id"]
         constraints = [
             constraints.UniqueConstraint(
                 fields=[

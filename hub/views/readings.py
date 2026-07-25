@@ -22,7 +22,7 @@ from hub.services.reading_text_service import (
     get_reading_text_fields,
     prepare_shared_resources,
 )
-from hub.services.lectionary_service import get_daily_readings
+from hub.services.lectionary_service import get_daily_readings, persist_readings
 from hub.tasks import generate_reading_context_task
 from hub.utils import get_user_profile_safe
 
@@ -122,34 +122,10 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         if not day.readings.exists():
             # import readings for this date into db (offline, from armenian_lectionary)
             readings = get_daily_readings(date_obj, church)
-            new_reading_objs = []
-            for reading in readings:
-                reading.update({"day": day})
-                # Extract and remove all book-related fields to handle them separately
-                book_en = reading.pop("book_en", reading.get("book"))
-                book_hy = reading.pop("book_hy", None)
-                # Remove 'book' from the dict to avoid using it in get_or_create lookup
-                reading.pop("book", None)
+            persisted = persist_readings(day, readings)
 
-                # Use explicit lookup with book_en to match the uniqueness constraint
-                # (modeltrans treats 'book' as 'book_en' in the database)
-                reading_obj, created = Reading.objects.get_or_create(
-                    day=reading["day"],
-                    book=book_en,  # This becomes book_en in the database
-                    start_chapter=reading["start_chapter"],
-                    start_verse=reading["start_verse"],
-                    end_chapter=reading["end_chapter"],
-                    end_verse=reading["end_verse"]
-                )
-
-                # Set translations if they are missing
-                if book_hy and not reading_obj.book_hy:
-                    reading_obj.book_hy = book_hy
-                    reading_obj.save(update_fields=['i18n'])
-
-                # Track newly created readings that need text fetched
-                if created:
-                    new_reading_objs.append(reading_obj)
+            # Track newly created readings that need text fetched
+            new_reading_objs = [reading_obj for reading_obj, created in persisted if created]
 
             # Fetch text for all languages synchronously so it is available in
             # the response immediately.  Shared resources (API session, scraped

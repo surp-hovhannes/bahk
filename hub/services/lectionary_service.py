@@ -12,6 +12,7 @@ from datetime import datetime
 import armenian_lectionary
 from django.conf import settings
 
+import hub.models as models
 from hub.utils import PARSER_REGEX, SUPPORTED_CHURCHES
 
 logger = logging.getLogger(__name__)
@@ -96,3 +97,47 @@ def get_daily_readings(date_obj, church) -> list[dict]:
         if parsed is not None:
             readings.append(parsed)
     return readings
+
+
+def persist_readings(day, readings: list[dict]) -> list[tuple["models.Reading", bool]]:
+    """Get-or-create a ``Reading`` row for each entry in ``readings``, in order.
+
+    ``readings`` must already be in the order the lectionary should display them (i.e. as
+    returned by :func:`get_daily_readings`). Each ``Reading.sequence`` is (re)assigned from its
+    position in this list, so display order tracks the engine's order even when the row already
+    existed (e.g. it was imported previously, possibly in a different order).
+
+    Returns a list of ``(reading_obj, created)`` tuples, in the same order as ``readings``.
+    """
+    results = []
+    for index, reading in enumerate(readings):
+        reading = dict(reading)
+        # Extract and remove all book-related fields to handle them separately
+        book_en = reading.pop("book_en", reading.get("book"))
+        book_hy = reading.pop("book_hy", None)
+        # Remove 'book' from the dict to avoid using it in get_or_create lookup
+        reading.pop("book", None)
+
+        # Use explicit lookup with book_en to match the uniqueness constraint
+        # (modeltrans treats 'book' as 'book_en' in the database)
+        reading_obj, created = models.Reading.objects.get_or_create(
+            day=day,
+            book=book_en,  # This becomes book_en in the database
+            start_chapter=reading["start_chapter"],
+            start_verse=reading["start_verse"],
+            end_chapter=reading["end_chapter"],
+            end_verse=reading["end_verse"],
+        )
+
+        update_fields = []
+        if reading_obj.sequence != index:
+            reading_obj.sequence = index
+            update_fields.append("sequence")
+        if book_hy and not reading_obj.book_hy:
+            reading_obj.book_hy = book_hy
+            update_fields.append("i18n")
+        if update_fields:
+            reading_obj.save(update_fields=update_fields)
+
+        results.append((reading_obj, created))
+    return results
