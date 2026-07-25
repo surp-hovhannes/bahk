@@ -83,6 +83,17 @@ SEND_PUSH_NOTIFICATIONS = False  # Disable push notifications
 ANTHROPIC_API_KEY = ''
 OPENAI_API_KEY = ''
 
+# Disable real API.Bible calls from the readings view during tests.
+# The view fetches expired text on demand, and several tests exercise that path without
+# patching it; a zero daily budget makes fetch_english_text return before the HTTP call.
+# The monthly ceiling is left effectively unlimited because the refresh task charges it
+# and those tests drive the task deliberately with the HTTP layer mocked.
+# Note BIBLE_API_KEY='' would NOT work here: BibleAPIService reads the key via
+# decouple.config, not django.conf.settings, so the setting is never consulted.
+# Tests that exercise budget behaviour override these explicitly.
+READING_FETCH_DAILY_BUDGET = 0
+BIBLE_API_MONTHLY_BUDGET = 1_000_000
+
 # JWT Settings for testing
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

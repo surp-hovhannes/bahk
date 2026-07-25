@@ -46,7 +46,17 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
 
 5. **Push Notifications**: Expo push notifications for mobile app integration
 
-6. **Bible Text (API.Bible)**: Fetches Scripture via the [API.Bible](https://scripture.api.bible/) REST API (NKJV; KJVAIC for Apocrypha). Service in `hub/services/bible_api_service.py`, tasks in `hub/tasks/bible_api_tasks.py`. A weekly Celery Beat task refreshes stale texts (>23 days) to meet the 30-day freshness requirement. Copyright is stored unmodified alongside text. FUMS tracking is pending before frontend exposure. Env var: `BIBLE_API_KEY`.
+6. **Bible Text (API.Bible)**: Fetches Scripture via the [API.Bible](https://scripture.api.bible/) REST API (NKJV; KJVAIC for Apocrypha). Service in `hub/services/bible_api_service.py`, language registry in `hub/services/reading_text_service.py`, tasks in `hub/tasks/bible_api_tasks.py`. Copyright is stored unmodified alongside text, and each reading gets its own call so it receives a unique FUMS token.
+
+   Spend against the plan quota (5,000 calls/month) is controlled in four places:
+   - A weekly Celery Beat task refreshes at most `READING_REFRESH_LIMIT` stale readings (>`READING_TEXT_REFRESH_DAYS`), **nearest to today first**. Readings are never deleted — pruning only caused rows to be re-created and re-fetched by the public view.
+   - `GetDailyReadingsForDate` re-fetches text older than `READING_TEXT_MAX_AGE_DAYS` on demand, capped by a per-day counter (`READING_FETCH_DAILY_BUDGET`).
+   - `BIBLE_API_MONTHLY_BUDGET` is a hard ceiling over **both** paths (`hub/services/api_budget.py`). It matters because a failed fetch never records `text_fetched_at`: without a ceiling, a run of quota rejections leaves every reading permanently stale and re-burns the quota every week.
+   - The refresh task aborts after `READING_REFRESH_MAX_CONSECUTIVE_FAILURES` consecutive English failures, so a rejecting API costs ~10 calls instead of a full run.
+
+   `get_reading_text_fields` blanks English text/version/copyright/FUMS token once it exceeds `READING_TEXT_MAX_AGE_DAYS`, so nothing past API.Bible's freshness cap is ever served. Armenian text is not API.Bible-sourced and never expires.
+
+   Env vars: `BIBLE_API_KEY`, `READING_TEXT_REFRESH_DAYS`, `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_REFRESH_MAX_CONSECUTIVE_FAILURES`, `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`.
 
 ## Development Environment
 
@@ -234,7 +244,9 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`
 - `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (for AI-generated content)
-- `BIBLE_API_KEY` (API.Bible text retrieval)
+- `BIBLE_API_KEY` (API.Bible text retrieval); see Key Features #6 for the spend-control
+  vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_FETCH_DAILY_BUDGET`,
+  `BIBLE_API_MONTHLY_BUDGET`
 - `SENTRY_DSN` (error monitoring)
 
 ### Celery Scheduled Tasks

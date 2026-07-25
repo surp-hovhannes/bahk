@@ -21,6 +21,7 @@ from hub.services.reading_text_service import (
     fetch_all_reading_texts,
     get_reading_text_fields,
     prepare_shared_resources,
+    reading_needs_text_fetch,
 )
 from hub.services.lectionary_service import get_daily_readings, persist_readings
 from hub.tasks import generate_reading_context_task
@@ -122,20 +123,24 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         if not day.readings.exists():
             # import readings for this date into db (offline, from armenian_lectionary)
             readings = get_daily_readings(date_obj, church)
-            persisted = persist_readings(day, readings)
+            persist_readings(day, readings)
 
-            # Track newly created readings that need text fetched
-            new_reading_objs = [reading_obj for reading_obj, created in persisted if created]
+        # Fetch text for all languages synchronously so it is available in the response
+        # immediately.  This covers newly created readings (no fetch timestamp yet) and
+        # existing ones whose text has passed READING_TEXT_MAX_AGE_DAYS — that text is
+        # blanked in the response below, so re-fetching is what keeps the page useful.
+        # Spend is capped by the daily and monthly budgets inside the English fetcher.
+        readings_to_fetch = [r for r in day.readings.all() if reading_needs_text_fetch(r)]
+        if readings_to_fetch:
+            # Built lazily: shared resources open an HTTP session, so requests with
+            # nothing to fetch must not pay for it.
+            shared = prepare_shared_resources(date_obj, church)
+            for reading_obj in readings_to_fetch:
+                fetch_all_reading_texts(reading_obj, **shared)
 
-            # Fetch text for all languages synchronously so it is available in
-            # the response immediately.  Shared resources (API session, scraped
-            # pages, etc.) are created once for the whole batch.
-            if new_reading_objs:
-                shared = prepare_shared_resources(date_obj, church)
-                for reading_obj in new_reading_objs:
-                    fetch_all_reading_texts(reading_obj, **shared)
-
-        # Now ensure we have up-to-date queryset
+        # Now ensure we have up-to-date queryset.  fetch_english_text writes via
+        # Reading.objects.filter(...).update(), so the instances in readings_to_fetch are
+        # stale; the loop below re-queries day.readings.all() and sees the new text.
         day.refresh_from_db()
 
         formatted_readings = []

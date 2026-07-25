@@ -122,7 +122,7 @@ Bahk retrieves Scripture text from the [API.Bible](https://scripture.api.bible/)
 
 Key compliance measures:
 
-- **Content freshness**: A weekly Celery Beat task refreshes all reading texts so none exceed 30 days old.
+- **Content freshness**: A weekly Celery Beat task refreshes reading texts, prioritising the dates nearest to today. Any text that nonetheless passes 30 days is **withheld from the API response** and re-fetched on demand the next time that date is requested, so text older than 30 days is never served.
 - **Content integrity**: Text is stored exactly as returned by the API with no modifications.
 - **Copyright citation**: The copyright string from the API response is stored and displayed alongside the text.
 - **FUMS (Fair Use Management System)**: All API.Bible requests include `fums-version=3`, and the returned `fumsToken` is stored on each `Reading` and served to the frontend via the readings API. The frontend reports tokens to `https://fums.api.bible/f3` with anonymized device, session, and user identifiers each time scripture is displayed.
