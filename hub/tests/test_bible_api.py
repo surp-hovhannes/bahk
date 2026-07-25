@@ -702,6 +702,51 @@ class RefreshAllReadingTextsTaskTests(TestCase):
 
         self.assertEqual(mock_get_passage.call_count, 3)
 
+    @override_settings(READING_REFRESH_MAX_CONSECUTIVE_FAILURES=3)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_unmappable_books_do_not_trip_the_circuit_breaker(self, mock_config, mock_get_passage):
+        """Unresolvable book names must not look like API rejection.
+
+        They fail before any HTTP request and can never succeed, so they stay stale and
+        are re-selected every run.  Once everything else is fresh a run selects *only*
+        these — the steady state — and counting them would abort the task every week.
+        """
+        mock_get_passage.return_value = self.mock_api_response
+
+        today = timezone.localdate()
+        for i in range(6):
+            day = Day.objects.create(date=today + timedelta(days=i), church=self.church)
+            _create_reading(day, book="Not A Real Book", start_ch=1, start_v=1, end_ch=1, end_v=5)
+        # A resolvable reading after them, to prove the run kept going.
+        last_day = Day.objects.create(date=today + timedelta(days=6), church=self.church)
+        good = _create_reading(last_day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+
+        refresh_all_reading_texts_task()
+
+        good.refresh_from_db()
+        self.assertEqual(good.text, "Test verse content.")
+        self.assertEqual(mock_get_passage.call_count, 1)
+
+    @override_settings(READING_REFRESH_MAX_CONSECUTIVE_FAILURES=3)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_real_api_failures_after_unmappable_books_still_abort(
+        self, mock_config, mock_resolve, mock_get_passage,
+    ):
+        """Ignoring unmappable readings must not blunt the breaker for genuine failures."""
+        mock_get_passage.side_effect = Exception("429 Too Many Requests")
+
+        today = timezone.localdate()
+        for i in range(10):
+            day = Day.objects.create(date=today + timedelta(days=i), church=self.church)
+            _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+
+        refresh_all_reading_texts_task()
+
+        self.assertEqual(mock_get_passage.call_count, 3)
+
     @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
     @patch('hub.services.bible_api_service.config', return_value="test-key")

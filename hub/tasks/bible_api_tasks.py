@@ -24,6 +24,7 @@ from hub.services.reading_text_service import (
     fetch_all_reading_texts,
     fetch_english_text,
     iter_readings_in_pk_order,
+    reading_is_mappable,
     select_nearest_stale_reading_ids,
     stale_reading_queryset,
 )
@@ -109,10 +110,20 @@ def refresh_all_reading_texts_task(self):
 
     api_calls = 0
     consecutive_failures = 0
+    unmappable = 0
     aborted = False
     failures = []
 
     for reading in iter_readings_in_pk_order(pks):
+        # Checked before the fetch so an unresolvable book name is not mistaken for the
+        # API rejecting us: it fails before any HTTP request, costs nothing, and can
+        # never succeed until BOOK_NAME_TO_USFM is extended.  Without this, a run that
+        # selects only such readings — the steady state once everything else is fresh —
+        # would trip the circuit breaker every week and cry wolf.
+        mappable = reading_is_mappable(reading)
+        if not mappable:
+            unmappable += 1
+
         results = fetch_all_reading_texts(reading, **shared)
 
         if results.get("en"):
@@ -120,7 +131,7 @@ def refresh_all_reading_texts_task(self):
             # telemetry we have for API.Bible spend.
             api_calls += 1
             consecutive_failures = 0
-        else:
+        elif mappable:
             consecutive_failures += 1
 
         if not all(results.values()):
@@ -152,6 +163,17 @@ def refresh_all_reading_texts_task(self):
         "aborted" if aborted else "complete",
         api_calls, len(failures), len(pks), stale_count,
     )
+
+    if unmappable:
+        # These can never succeed and stay stale forever, so they are re-selected every
+        # run. Surfaced separately so the fix (extend BOOK_NAME_TO_USFM) is discoverable
+        # rather than buried among transient API errors.
+        logger.warning(
+            "%d of %d selected readings have book names with no USFM mapping. They cost "
+            "no API calls but occupy refresh slots every run; add them to "
+            "BOOK_NAME_TO_USFM in hub/constants.py.",
+            unmappable, len(pks),
+        )
 
     if failures:
         failure_lines = []

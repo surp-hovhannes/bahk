@@ -74,6 +74,27 @@ def book_hy_for_book(book_en: str) -> str | None:
 #  Individual language fetchers
 # ------------------------------------------------------------------ #
 
+def reading_is_mappable(reading) -> bool:
+    """True when the reading's book resolves to a USFM id, i.e. a fetch would reach the API.
+
+    Lets callers tell "API.Bible refused us" apart from "we cannot name this book".  The
+    latter fails before any HTTP request, so it is a data problem to fix in
+    ``BOOK_NAME_TO_USFM`` — not a signal that the API is unhealthy.  Pure dict lookups,
+    no I/O, so it is cheap to call alongside a fetch.
+    """
+    try:
+        BibleAPIService.resolve_reading_passage(
+            reading.book,
+            reading.start_chapter,
+            reading.start_verse,
+            reading.end_chapter,
+            reading.end_verse,
+        )
+    except ValueError:
+        return False
+    return True
+
+
 def fetch_english_text(
     reading,
     *,
