@@ -523,5 +523,12 @@
   "english": "Revelation",
   "name_hy": "Յովհաննէս առաքեալի յայտնութիւնը",
   "note": ""
+ },
+ {
+  "idArt": 2876,
+  "usfm": "S3Y",
+  "english": "Song of the Three Young Men",
+  "name_hy": "Աղօթք Ազարիայ",
+  "note": "Prayer of Azariah / Song of the Three. No standalone book in the corpus -- derived from Daniel 3:24-90 (embedded); see scripts/derive_azariah_hy.py. HY is 67 verses vs English S3Y 68; tail numbering pending reconciliation."
  }
 ]

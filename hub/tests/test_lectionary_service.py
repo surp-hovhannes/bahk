@@ -8,7 +8,11 @@ from datetime import date, datetime
 from django.test import TestCase
 
 from hub.models import Church
-from hub.services.lectionary_service import _parse_citation, get_daily_readings
+from hub.services.lectionary_service import (
+    _parse_citation,
+    _parse_reading,
+    get_daily_readings,
+)
 
 _FIELDS = {"book", "book_en", "start_chapter", "start_verse", "end_chapter", "end_verse"}
 
@@ -40,13 +44,42 @@ class ParseCitationTests(TestCase):
             ("1 Corinthians", 5, 1, 5, 1),
         )
 
-    def test_composite_keeps_first_subreference(self):
-        p = _parse_citation("Daniel 3.1-23, Azariah 1-68")
-        self.assertEqual(p["book"], "Daniel")
-        self.assertEqual((p["start_chapter"], p["end_verse"]), (3, 23))
+    def test_composite_string_is_not_a_single_citation(self):
+        # _parse_citation handles one reference; a comma-joined composite is not parseable
+        # here -- it is split upstream by _parse_reading.
+        self.assertIsNone(_parse_citation("Daniel 3.1-23, Azariah 1-68"))
+
+    def test_strips_trailing_period_on_book(self):
+        # The engine emits a stray trailing period on some heads (e.g. "Azariah. 1-68").
+        p = _parse_citation("Azariah. 1-68")
+        self.assertEqual(
+            (p["book"], p["start_chapter"], p["start_verse"], p["end_chapter"], p["end_verse"]),
+            ("Azariah", 1, 1, 1, 68),
+        )
 
     def test_unparseable_returns_none(self):
         self.assertIsNone(_parse_citation("not a citation at all !!!"))
+
+
+class ParseReadingTests(TestCase):
+    """Unit tests for splitting a citation into its persisted sub-references."""
+
+    def test_single_reference_returns_one(self):
+        self.assertEqual([r["book"] for r in _parse_reading("John 20.1-18")], ["John"])
+
+    def test_composite_splits_into_all_subreferences(self):
+        # The only scripture composite in the engine: both halves must be persisted, not just
+        # the first (Daniel), and the Azariah head's trailing period is stripped.
+        parts = _parse_reading("Daniel 3.1-23, Azariah. 1-68")
+        self.assertEqual(
+            [(p["book"], p["start_chapter"], p["start_verse"], p["end_chapter"], p["end_verse"])
+             for p in parts],
+            [("Daniel", 3, 1, 3, 23), ("Azariah", 1, 1, 1, 68)],
+        )
+
+    def test_drops_unparseable_subreferences(self):
+        parts = _parse_reading("John 20.1-18, !!!garbage!!!")
+        self.assertEqual([p["book"] for p in parts], ["John"])
 
 
 class GetDailyReadingsTests(TestCase):
@@ -82,6 +115,22 @@ class GetDailyReadingsTests(TestCase):
         self.assertEqual(
             (r["book_en"], r["start_chapter"], r["start_verse"], r["end_chapter"], r["end_verse"]),
             ("Malachi", 3, 1, 3, 4),
+        )
+
+    def test_composite_day_persists_both_daniel_and_azariah(self):
+        # Great Saturday 2026 includes the composite "Daniel 3.1-23, Azariah. 1-68"; both halves
+        # must appear as separate readings (Azariah was previously dropped).
+        readings = get_daily_readings(date(2026, 4, 4), self.church)
+        daniel = [r for r in readings if r["book"] == "Daniel"]
+        azariah = [r for r in readings if r["book"] == "Azariah"]
+        self.assertTrue(daniel, "Expected a Daniel reading on Great Saturday")
+        self.assertTrue(azariah, "Expected the Azariah reading to be persisted, not dropped")
+        self.assertEqual(
+            (daniel[0]["start_chapter"], daniel[0]["end_verse"]), (3, 23))
+        self.assertEqual(
+            (azariah[0]["start_chapter"], azariah[0]["start_verse"],
+             azariah[0]["end_chapter"], azariah[0]["end_verse"]),
+            (1, 1, 1, 68),
         )
 
     def test_accepts_datetime_input(self):

@@ -24,15 +24,11 @@ LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", 2027)
 
 
 def _parse_citation(reading_str: str) -> dict | None:
-    """Parse an English citation string into reading components, or ``None`` if unparseable.
+    """Parse a single English citation reference into reading components, or ``None``.
 
-    Mirrors the parsing the old ``scrape_readings`` performed, including keeping only the first
-    sub-reference of a comma-joined citation (e.g. ``"Daniel 3.1-23, Azariah 1-68"``).
+    Accepts one reference (no comma). Composite citations are split by the caller
+    (:func:`_parse_reading`) so every sub-reference is persisted, not just the first.
     """
-    if "," in reading_str:
-        # Composite reading; keep the first sub-reference, matching historical scraper behavior.
-        reading_str = reading_str.split(",")[0]
-
     reading_str = reading_str.strip()
     groups = re.search(PARSER_REGEX, reading_str)
     if groups is None:
@@ -40,7 +36,9 @@ def _parse_citation(reading_str: str) -> dict | None:
         return None
 
     try:
-        book = groups.group(1).strip()
+        # Strip a trailing period the engine emits on some book heads (e.g. "Azariah. 1-68").
+        # normalize_book_name (used downstream for USFM lookup) does not remove periods.
+        book = groups.group(1).strip().rstrip(".").strip()
         # Remove decimal if start chapter provided; otherwise part of a book with 1 chapter.
         start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
         start_verse = groups.group(3)
@@ -61,6 +59,18 @@ def _parse_citation(reading_str: str) -> dict | None:
             reading_str, PARSER_REGEX, exc_info=True,
         )
         return None
+
+
+def _parse_reading(reading_str: str) -> list[dict]:
+    """Parse a citation into one dict per sub-reference (comma-joined citations split).
+
+    A composite like ``"Daniel 3.1-23, Azariah. 1-68"`` yields two readings so both are
+    persisted; each is parsed independently by :func:`_parse_citation`. Unparseable
+    sub-references are dropped (logged), so a partly-parseable composite still returns what
+    it can.
+    """
+    parsed = [_parse_citation(part) for part in reading_str.split(",")]
+    return [p for p in parsed if p is not None]
 
 
 def get_daily_readings(date_obj, church) -> list[dict]:
@@ -92,7 +102,5 @@ def get_daily_readings(date_obj, church) -> list[dict]:
 
     readings = []
     for citation in result.get("ReadingsList", []):
-        parsed = _parse_citation(citation)
-        if parsed is not None:
-            readings.append(parsed)
+        readings.extend(_parse_reading(citation))
     return readings

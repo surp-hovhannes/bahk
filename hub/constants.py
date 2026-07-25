@@ -61,6 +61,13 @@ BOOK_NAME_TO_USFM = {
     "Sirach": "SIR",
     "Epistle of Jeremiah": "LJE",
     "Baruch": "BAR",
+    # Prayer of Azariah / Song of the Three Young Men. The lectionary engine cites it as
+    # "Azariah" (the composite reading "Daniel 3.1-23, Azariah. 1-68"); English text is
+    # served standalone from KJVAIC as S3Y, while Armenian text is composed from Daniel 3
+    # (the Armenian corpus embeds it there) -- see reading_text_service.fetch_armenian_text.
+    "Azariah": "S3Y",
+    "Prayer of Azariah": "S3Y",
+    "Song of the Three Young Men": "S3Y",
     # New Testament
     "Matthew": "MAT",
     "Mark": "MRK",

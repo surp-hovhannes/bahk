@@ -109,6 +109,24 @@ class ComposeArmenianTextTests(TestCase):
         reading.refresh_from_db()
         self.assertEqual(reading.book_hy, _usfm_to_hy_book_name()[usfm])
 
+    def test_azariah_composed_from_standalone_s3y(self):
+        # The Prayer of Azariah is stored as a standalone corpus book (USFM S3Y, name_hy
+        # "Աղօթք Ազարիայ"), derived from Daniel 3:24-90 and renumbered from 1, so English
+        # (KJVAIC S3Y) and Armenian compose the same book id with aligned verse structure.
+        self.assertEqual(_usfm_for("Azariah"), "S3Y")
+        _add_verses("S3Y", 1, {1: "s3y_1", 2: "s3y_2", 67: "s3y_67"})
+        reading = _create_reading(self.day, book="Azariah", start_ch=1, start_v=1, end_ch=1, end_v=68)
+
+        self.assertTrue(fetch_armenian_text(reading))
+
+        reading.refresh_from_db()
+        self.assertIn("[1] s3y_1", reading.text_hy)
+        self.assertIn("[2] s3y_2", reading.text_hy)
+        self.assertIn("[67] s3y_67", reading.text_hy)
+        # Book label is the standalone Armenian name, and comes from the corpus mapping.
+        self.assertEqual(reading.book_hy, "Աղօթք Ազարիայ")
+        self.assertEqual(reading.book_hy, _usfm_to_hy_book_name()["S3Y"])
+
     def test_missing_verses_returns_false(self):
         """No corpus rows for the passage → returns False, text_hy stays empty."""
         reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
