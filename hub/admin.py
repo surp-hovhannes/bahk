@@ -8,7 +8,7 @@ from django.db import models
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.text import Truncator
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
@@ -35,6 +35,7 @@ from hub.models import (
     Feast,
     FeastContext,
     LLMPrompt,
+    PassageText,
     PatristicQuote,
     Profile,
     Reading,
@@ -42,7 +43,7 @@ from hub.models import (
     FastIntention,
 )
 from hub.services.bible_api_service import BibleAPIService
-from hub.services.reading_text_service import bible_api_budgets, fetch_english_text
+from hub.services.reading_text_service import bible_api_budgets, fetch_all_reading_texts
 from hub.tasks import (
     generate_reading_context_task,
     generate_feast_context_task,
@@ -740,7 +741,7 @@ class ReadingAdmin(admin.ModelAdmin):
         "book",
         "start_chapter",
         "start_verse",
-        "text_version",
+        "passage_key",
     )
     list_display_links = (
         "church_link",
@@ -759,37 +760,62 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_chapter",
         "start_verse",
     )
+    search_fields = ("passage_key",)
     actions = ["force_regenerate_context", "compare_prompts", "fetch_bible_text", "fetch_armenian_text"]
-    readonly_fields = ("text_fetched_at", "has_fums_token", "fetch_text_link", "armenian_text_links", "text_hy_fetched_at", "has_hy_fums_token")
-    exclude = ("book", "text", "fums_token", "text_hy_fums_token")  # Avoid duplicates with translation fields
+    readonly_fields = (
+        "passage_key", "passage_text_summary", "fetch_text_link", "armenian_text_links",
+    )
+    # `book` duplicates book_en; the text columns are legacy -- text now lives in
+    # PassageText, keyed by passage, and is surfaced through passage_text_summary.
+    exclude = (
+        "book", "text", "text_copyright", "text_version", "text_fetched_at", "fums_token",
+        "text_hy_version", "text_hy_copyright", "text_hy_fetched_at", "text_hy_fums_token",
+    )
 
     fieldsets = (
         (None, {
             'fields': ('day', 'start_chapter', 'start_verse', 'end_chapter', 'end_verse')
         }),
         ('Translations', {
-            'fields': ('book_en', 'book_hy', 'text_en', 'text_hy', 'armenian_text_links')
+            'fields': ('book_en', 'book_hy')
         }),
-        ('Bible Text (API.Bible)', {
-            'fields': ('text_version', 'text_copyright', 'text_fetched_at', 'has_fums_token', 'fetch_text_link'),
-            'classes': ('collapse',),
+        ('Scripture text', {
+            'fields': ('passage_key', 'passage_text_summary', 'fetch_text_link', 'armenian_text_links'),
             'description': (
-                'FUMS (Fair Use Management System) tokens are required by API.Bible\'s terms of use. '
-                'Each token is sent to the FUMS endpoint when a user views scripture, allowing '
-                'API.Bible to track anonymized usage for rights holders and publishers.'
+                'Text is stored per passage, not per reading, so every date citing this '
+                'passage shares the rows below and one retrieval serves all of them. '
+                'FUMS (Fair Use Management System) tokens are required by API.Bible\'s '
+                'terms of use: each is sent to the FUMS endpoint when a user views '
+                'scripture, letting API.Bible track anonymized usage for rights holders.'
             ),
-        }),
-        ('Armenian Text (sacredtradition.am)', {
-            'fields': ('text_hy_version', 'text_hy_copyright', 'text_hy_fetched_at', 'has_hy_fums_token'),
-            'classes': ('collapse',),
         }),
     )
 
-    def has_fums_token(self, obj):
-        return bool(obj.fums_token)
-
-    has_fums_token.short_description = "FUMS token captured"
-    has_fums_token.boolean = True
+    @admin.display(description="Stored text for this passage")
+    def passage_text_summary(self, obj):
+        """Show the PassageText rows this reading is served from."""
+        if not obj or not obj.passage_key:
+            return "-- no USFM mapping for this book, so no text can be retrieved --"
+        rows = PassageText.objects.filter(passage_key=obj.passage_key).order_by("language")
+        if not rows:
+            return "-- not yet retrieved --"
+        shared = Reading.objects.filter(passage_key=obj.passage_key).count()
+        lines = [
+            format_html(
+                "<li><b>{}</b> ({}) — {} chars, fetched {}, FUMS token: {}{}</li>",
+                row.language, row.version or "no version",
+                len(row.text or ""),
+                row.fetched_at.strftime("%Y-%m-%d %H:%M") if row.fetched_at else "never",
+                "yes" if row.fums_token else "no",
+                " — EXPIRED, withheld from responses" if row.is_expired() else "",
+            )
+            for row in rows
+        ]
+        return format_html(
+            "<ul>{}</ul><p>Shared by {} reading(s).</p>",
+            format_html_join("", "{}", ((line,) for line in lines)),
+            shared,
+        )
 
     def get_urls(self):
         """Add per-reading endpoints to fetch Bible text and Armenian text."""
@@ -812,7 +838,10 @@ class ReadingAdmin(admin.ModelAdmin):
         if not obj or not obj.pk:
             return "-"
         url = reverse("admin:hub_reading_fetch_bible_text", args=[obj.pk])
-        label = "Re-fetch Bible text" if obj.text else "Fetch Bible text"
+        already = PassageText.objects.filter(
+            passage_key=obj.passage_key, language="en",
+        ).exclude(text="").exists()
+        label = "Re-fetch Bible text" if already else "Fetch Bible text"
         return format_html('<a class="button" href="{}">{}</a>', url, label)
 
     fetch_text_link.short_description = "Fetch from API.Bible"
@@ -836,9 +865,12 @@ class ReadingAdmin(admin.ModelAdmin):
             )
             return redirect(reverse("admin:hub_reading_change", args=[pk]))
 
-        success = fetch_english_text(
-            reading, service=service, budgets=bible_api_budgets(include_daily=False),
-        )
+        success = fetch_all_reading_texts(
+            reading,
+            langs=["en"],
+            service=service,
+            budgets=bible_api_budgets(include_daily=False),
+        ).get("en", False)
         if success:
             self.message_user(
                 request,
@@ -869,7 +901,10 @@ class ReadingAdmin(admin.ModelAdmin):
         success_count = 0
         fail_count = 0
         for reading in queryset:
-            if fetch_english_text(reading, service=service, budgets=budgets):
+            fetched = fetch_all_reading_texts(
+                reading, langs=["en"], service=service, budgets=budgets,
+            )
+            if fetched.get("en", False):
                 success_count += 1
             else:
                 fail_count += 1
@@ -884,12 +919,6 @@ class ReadingAdmin(admin.ModelAdmin):
         )
 
     fetch_bible_text.short_description = "Fetch Bible text from API.Bible"
-
-    def has_hy_fums_token(self, obj):
-        return bool(obj.text_hy_fums_token)
-
-    has_hy_fums_token.short_description = "FUMS token captured"
-    has_hy_fums_token.boolean = True
 
     def compare_prompts(self, request, queryset):
         """Redirect to a page to compare different LLM prompts for selected readings."""
@@ -942,17 +971,19 @@ class ReadingAdmin(admin.ModelAdmin):
 
         try:
             fetch_armenian_reading_text_task(reading.id)
-            reading.refresh_from_db()
-            if reading.text_hy:
+            composed = PassageText.objects.filter(
+                passage_key=reading.passage_key, language="hy",
+            ).exclude(text="").exists()
+            if composed:
                 self.message_user(
                     request,
-                    f"Fetched Armenian text for reading {reading.id} ({reading}).",
+                    f"Composed Armenian text for reading {reading.id} ({reading}).",
                     level=messages.SUCCESS,
                 )
             else:
                 self.message_user(
                     request,
-                    f"No matching Armenian text found for reading {reading.id} ({reading}).",
+                    f"No Armenian text in the corpus for reading {reading.id} ({reading}).",
                     level=messages.WARNING,
                 )
         except Exception as e:
@@ -1565,3 +1596,37 @@ class BibleVerseAdmin(admin.ModelAdmin):
         return Truncator(obj.text).chars(80) if obj.text else "(empty)"
 
     verse_preview.short_description = "Text"
+
+
+@admin.register(PassageText, site=admin.site)
+class PassageTextAdmin(admin.ModelAdmin):
+    """Retrieved Scripture text, one row per (passage, language).
+
+    This is the whole retrieval cache: ~1,124 rows per language cover every date in the
+    lectionary, for every year.  If the row count here starts tracking the size of the
+    Reading table, passage keying has regressed.
+    """
+
+    list_display = (
+        "passage_key", "language", "version", "fetched_at", "expired", "readings_served",
+        "text_preview",
+    )
+    list_display_links = ("passage_key",)
+    list_filter = ("language", "version")
+    search_fields = ("passage_key", "text")
+    ordering = ("passage_key", "language")
+    readonly_fields = ("expired", "readings_served")
+    list_per_page = 50
+
+    @admin.display(boolean=True, description="Expired")
+    def expired(self, obj):
+        return obj.is_expired()
+
+    @admin.display(description="Readings served")
+    def readings_served(self, obj):
+        """How many reading rows this one retrieval covers -- the dedup factor, per row."""
+        return Reading.objects.filter(passage_key=obj.passage_key).count()
+
+    @admin.display(description="Text")
+    def text_preview(self, obj):
+        return Truncator(obj.text).chars(80) if obj.text else "(empty)"

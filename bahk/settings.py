@@ -450,23 +450,37 @@ READING_TEXT_REFRESH_DAYS = config('READING_TEXT_REFRESH_DAYS', default=23, cast
 # API.Bible's freshness cap.  Text older than this is never served (it is blanked in the
 # API response) and is re-fetched on demand by the readings view, subject to the budgets.
 READING_TEXT_MAX_AGE_DAYS = config('READING_TEXT_MAX_AGE_DAYS', default=30, cast=int)
-# Max readings refreshed per weekly run, nearest to today first.  Readings are never
-# deleted; this bounds API.Bible spend, not table size.
-READING_REFRESH_LIMIT = config('READING_REFRESH_LIMIT', default=2000, cast=int)
+# Per-language freshness caps, applied to PassageText.  A language absent from this map
+# never expires: only a licensed source imposes a clock, and locally composed corpora
+# (Armenian, from the BibleVerse table) have none.  Registering a language here is what
+# subjects it to expiry, blanking at serve time, and the refresh task.
+LANGUAGE_TEXT_MAX_AGE_DAYS = {
+    'en': READING_TEXT_MAX_AGE_DAYS,  # API.Bible terms: 30 days
+}
+# Max DISTINCT PASSAGES retrieved per refresh run -- not rows.  Text is stored per passage
+# (see hub.models.PassageText), and the lectionary resolves to ~1,124 distinct passages for
+# all years combined, so this sits above the whole corpus with headroom and is not expected
+# to bind.  Raising it does not increase steady-state spend; the passage count does.
+READING_REFRESH_LIMIT = config('READING_REFRESH_LIMIT', default=1500, cast=int)
 # Abort a refresh run after this many consecutive English fetch failures.  A failed fetch
 # never records text_fetched_at, so without this a quota rejection (429/403) makes every
 # reading permanently stale and each weekly run re-burns the whole quota against a wall.
 READING_REFRESH_MAX_CONSECUTIVE_FAILURES = config(
     'READING_REFRESH_MAX_CONSECUTIVE_FAILURES', default=10, cast=int
 )
-# Max on-demand API.Bible calls the public readings view may make per calendar day.
-READING_FETCH_DAILY_BUDGET = config('READING_FETCH_DAILY_BUDGET', default=75, cast=int)
-# Hard ceiling on ALL API.Bible calls per calendar month, across the weekly refresh task
-# and the on-demand view path.  Kept under the 5,000/month plan quota so that no failure
-# mode can exhaust it.  Budget:
-#   weekly refresh   <=2,000 per ~28-day cycle  ~= 2,170/month
-#   on-demand view   75/day                      = 2,250/month
-#                                          total ~= 4,420/month
+# Max on-demand API.Bible calls the public readings view may make per calendar day.  The
+# view only spends on passages the refresh task has not already cached, so this covers new
+# passages and requests that race the task -- not routine traffic.
+READING_FETCH_DAILY_BUDGET = config('READING_FETCH_DAILY_BUDGET', default=25, cast=int)
+# Hard ceiling on ALL API.Bible calls per calendar month, across the refresh task and the
+# on-demand view path.  Steady-state budget, with text stored per passage:
+#   refresh   <=1,124 distinct passages per ~28-day cycle  ~= 1,270/month
+#   on-demand 25/day                                        =   750/month
+#                                                    total ~= 2,020/month
+# against a 5,000/month plan quota.  This is a safety net, not a working limit: reaching it
+# means something regressed (most likely passage_key drift splitting the dedup groups), so
+# alert on it rather than raising it.  Held at 4,500 for the first post-deploy cycle, which
+# includes the one-time corpus warm-up, then dropped to 3,000.
 BIBLE_API_MONTHLY_BUDGET = config('BIBLE_API_MONTHLY_BUDGET', default=4500, cast=int)
 
 # Test settings
