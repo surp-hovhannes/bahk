@@ -1563,3 +1563,38 @@ class WarmPassageTextsCommandTests(TestCase):
 
         with self.assertRaises(CommandError):
             call_command("warm_passage_texts", "--language", "xx", stdout=StringIO())
+
+
+class ViewPassageTextQueryTests(TestCase):
+    """Serving a day must cost one passage-text query, not one per reading."""
+
+    def setUp(self):
+        cache.clear()
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2026, 4, 1), church=self.church)
+
+    @patch('hub.views.readings.get_daily_readings', return_value=[])
+    @patch('hub.views.readings.generate_reading_context_task')
+    def test_passage_texts_loaded_in_one_query(self, mock_ctx, mock_scrape):
+        from rest_framework.test import APIRequestFactory
+        from hub.views.readings import GetDailyReadingsForDate
+
+        for verse in range(1, 7):
+            reading = _create_reading(
+                self.day, book="Genesis", start_ch=1, start_v=verse, end_ch=1, end_v=verse,
+            )
+            _store_text(reading)
+            _store_text(reading, language="hy", text="hy text")
+
+        with CaptureQueriesContext(connection) as ctx:
+            response = GetDailyReadingsForDate.as_view()(
+                APIRequestFactory().get(f'/readings/?date={self.day.date}')
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["readings"]), 6)
+        passage_queries = [q for q in ctx.captured_queries if "hub_passagetext" in q["sql"]]
+        self.assertEqual(
+            len(passage_queries), 1,
+            f"expected one passagetext query, got {len(passage_queries)}",
+        )

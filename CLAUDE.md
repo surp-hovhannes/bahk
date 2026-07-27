@@ -46,15 +46,23 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
 
 5. **Push Notifications**: Expo push notifications for mobile app integration
 
-6. **Bible Text (API.Bible)**: Fetches Scripture via the [API.Bible](https://scripture.api.bible/) REST API (NKJV; KJVAIC for Apocrypha). Service in `hub/services/bible_api_service.py`, language registry in `hub/services/reading_text_service.py`, tasks in `hub/tasks/bible_api_tasks.py`. Copyright is stored unmodified alongside text, and each reading gets its own call so it receives a unique FUMS token.
+6. **Scripture Text**: English from the [API.Bible](https://scripture.api.bible/) REST API (NKJV; KJVAIC for Apocrypha); Armenian composed offline from the `BibleVerse` corpus. Client in `hub/services/bible_api_service.py`, language registry in `hub/services/reading_text_service.py`, tasks in `hub/tasks/bible_api_tasks.py`.
 
-   Spend against the plan quota (5,000 calls/month) is controlled in four places:
-   - A weekly Celery Beat task refreshes at most `READING_REFRESH_LIMIT` stale readings (>`READING_TEXT_REFRESH_DAYS`), **nearest to today first**. Readings are never deleted — pruning only caused rows to be re-created and re-fetched by the public view.
-   - `GetDailyReadingsForDate` re-fetches text older than `READING_TEXT_MAX_AGE_DAYS` on demand, capped by a per-day counter (`READING_FETCH_DAILY_BUDGET`).
-   - `BIBLE_API_MONTHLY_BUDGET` is a hard ceiling over **both** paths (`hub/services/api_budget.py`). It matters because a failed fetch never records `text_fetched_at`: without a ceiling, a run of quota rejections leaves every reading permanently stale and re-burns the quota every week.
-   - The refresh task aborts after `READING_REFRESH_MAX_CONSECUTIVE_FAILURES` consecutive English failures, so a rejecting API costs ~10 calls instead of a full run.
+   **Text is stored per passage, not per reading.** `Reading.passage_key` (`"{USFM}.{ch}.{v}-{ch}.{v}"`, derived in `save()` via `hub.constants.passage_key`) identifies the passage; `PassageText` holds one row per `(passage_key, language)`. The lectionary emits ~1,500 readings a year forever but resolves to only ~1,124 distinct passages across all years, so retrieval cost is a constant instead of growing with the table. Never key text by date — that is the bug this design exists to prevent.
 
-   `get_reading_text_fields` blanks English text/version/copyright/FUMS token once it exceeds `READING_TEXT_MAX_AGE_DAYS`, so nothing past API.Bible's freshness cap is ever served. Armenian text is not API.Bible-sourced and never expires.
+   Book *names* are normalised onto USFM, so spelling variants share a key. Per-edition versification is deliberately **not**: KJVAIC splits Greek Esther into `ESG 1-7` while the Armenian corpus keeps it inline as `EST 10-16`, so each fetcher applies its own and the shared key stays the citation as written.
+
+   Adding a language is two steps — write a `fetch_<lang>` returning `{text, version, copyright, fums_token}` or `None`, and register it in `TEXT_FETCHERS`. Optionally add a resource preparer to `RESOURCE_PREPARERS`, and an entry in `LANGUAGE_TEXT_MAX_AGE_DAYS` if its licence caps how old served text may be (absent = never expires). No new columns, no modeltrans registration. `store_passage_text` is the single writer for every language.
+
+   Spend against the plan quota (5,000/month) is bounded in four places:
+   - The weekly Celery Beat task re-retrieves at most `READING_REFRESH_LIMIT` **distinct passages** (not readings) that are stale beyond `READING_TEXT_REFRESH_DAYS`. It logs a dedup ratio each run — if that drifts toward 1.0, passage keying has regressed and spend is scaling with the table again.
+   - `GetDailyReadingsForDate` retrieves missing or expired `(passage, language)` pairs on demand, capped per day by `READING_FETCH_DAILY_BUDGET`. A date never requested before costs nothing if its passages are already stored.
+   - `BIBLE_API_MONTHLY_BUDGET` is a hard ceiling over **both** paths (`hub/services/api_budget.py`). Post-change it should never be reached; alert on it rather than raising it.
+   - The refresh task aborts after `READING_REFRESH_MAX_CONSECUTIVE_FAILURES` consecutive failures on metered languages, so a rejecting API costs ~10 calls instead of a full run.
+
+   `get_reading_text_fields` blanks text/version/copyright/FUMS token once it exceeds that language's cap, so nothing past API.Bible's freshness window is ever served. Armenian is locally composed and never expires.
+
+   Commands: `warm_passage_texts` (enumerate the whole corpus once, then no date is ever cold; run `--dry-run` first), `backfill_reading_passage_keys` (`--all` after any change to the key derivation), `fetch_reading_texts`, `fetch_armenian_reading_texts`.
 
    Env vars: `BIBLE_API_KEY`, `READING_TEXT_REFRESH_DAYS`, `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_REFRESH_MAX_CONSECUTIVE_FAILURES`, `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`.
 
@@ -245,8 +253,8 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 - `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (for AI-generated content)
 - `BIBLE_API_KEY` (API.Bible text retrieval); see Key Features #6 for the spend-control
-  vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_FETCH_DAILY_BUDGET`,
-  `BIBLE_API_MONTHLY_BUDGET`
+  vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT` (distinct passages, not
+  readings), `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`
 - `SENTRY_DSN` (error monitoring)
 
 ### Celery Scheduled Tasks
