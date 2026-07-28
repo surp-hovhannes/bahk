@@ -286,6 +286,43 @@ class BibleAPIServiceResolveReadingPassageTests(TestCase):
             ("EST", 10, 1, 10, 3),
         )
 
+    def test_esther_addition_spanning_chapters(self):
+        """Addition C (Esther 13:8-14:19) maps across two ESG chapters.
+
+        Chapters 11-16 are additions in full, so both ends shift by the same offset and
+        the verse numbers are untouched.  Without this the fetcher would ask for EST 13,
+        which does not exist in either NKJV or KJVAIC -- canonical Esther ends at 10.
+        """
+        self.assertEqual(
+            BibleAPIService.resolve_reading_passage("Esther", 13, 8, 14, 19),
+            ("ESG", 4, 8, 5, 19),
+        )
+
+    def test_esther_last_addition_chapter(self):
+        """EST 16, the final addition chapter, maps to the last ESG chapter."""
+        self.assertEqual(
+            BibleAPIService.resolve_reading_passage("Esther", 16, 1, 16, 24),
+            ("ESG", 7, 1, 7, 24),
+        )
+
+    def test_esther_range_straddling_additions_stays_canonical(self):
+        """A range crossing from canonical Esther into the additions is left on EST.
+
+        KJVAIC splits those into separate books, so no single passage covers the range.
+        It degrades to the canonical part and warns rather than raising, so a citation
+        like this appearing in the lectionary is loud but not fatal.
+        """
+        with self.assertLogs("hub.services.bible_api_service", level="WARNING") as logs:
+            resolved = BibleAPIService.resolve_reading_passage("Esther", 10, 1, 10, 13)
+        self.assertEqual(resolved, ("EST", 10, 1, 10, 13))
+        self.assertIn("straddles", logs.output[0])
+
+    def test_canonical_esther_range_does_not_warn(self):
+        """A wholly canonical Esther range resolves quietly, with no straddle warning."""
+        with self.assertNoLogs("hub.services.bible_api_service", level="WARNING"):
+            resolved = BibleAPIService.resolve_reading_passage("Esther", 9, 1, 10, 3)
+        self.assertEqual(resolved, ("EST", 9, 1, 10, 3))
+
 
 class BibleAPIServiceBibleIdSelectionTests(TestCase):
     """Tests for BibleAPIService._bible_id_for_book."""
