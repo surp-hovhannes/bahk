@@ -13,6 +13,7 @@ import armenian_lectionary
 from django.conf import settings
 
 import hub.models as models
+from hub.services.reading_text_service import book_hy_for_book
 from hub.utils import PARSER_REGEX, SUPPORTED_CHURCHES
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,10 @@ def persist_readings(day, readings: list[dict]) -> list[tuple["models.Reading", 
         reading = dict(reading)
         # Extract and remove all book-related fields to handle them separately
         book_en = reading.pop("book_en", reading.get("book"))
-        book_hy = reading.pop("book_hy", None)
+        # get_daily_readings() never returns "book_hy" (it's not part of the engine's output
+        # shape); resolve it ourselves from the same usfm_mapping.json that fetch_armenian_text()
+        # uses, so it's populated at persistence time (see PR #461 review).
+        book_hy = book_hy_for_book(book_en)
         # Remove 'book' from the dict to avoid using it in get_or_create lookup
         reading.pop("book", None)
 

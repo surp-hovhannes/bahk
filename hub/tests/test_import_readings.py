@@ -17,13 +17,16 @@ class ImportReadingsCommandTests(TestCase):
 
     @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_with_translations(self, mock_scrape):
-        """Test that import_readings command correctly saves translations using i18n field."""
-        # Mock scraped readings with translations
+        """Test that import_readings resolves book_hy from usfm_mapping.json at import time.
+
+        Mocked with the real ``get_daily_readings()`` output shape (no ``book_hy`` key --
+        the lectionary engine never returns one), so this exercises the actual production
+        code path rather than masking it. See PR #461 review.
+        """
         mock_scrape.return_value = [
             {
                 "book": "Genesis",
                 "book_en": "Genesis",
-                "book_hy": "Ծննդոց",
                 "start_chapter": 1,
                 "start_verse": 1,
                 "end_chapter": 1,
@@ -32,7 +35,6 @@ class ImportReadingsCommandTests(TestCase):
             {
                 "book": "Psalms",
                 "book_en": "Psalms",
-                "book_hy": "Սաղմոսներ",
                 "start_chapter": 23,
                 "start_verse": 1,
                 "end_chapter": 23,
@@ -70,23 +72,27 @@ class ImportReadingsCommandTests(TestCase):
 
     @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_without_translations(self, mock_scrape):
-        """Test that import_readings works when no translations are provided."""
-        # Mock scraped readings without translations
+        """Test that import_readings leaves book_hy unset for a book absent from usfm_mapping.json.
+
+        "Azariah" (the Daniel-composite deuterocanonical addition) has no entry in
+        ``BOOK_NAME_TO_USFM``, so ``book_hy_for_book`` legitimately returns ``None`` here --
+        unlike canonical books such as Matthew, which now resolve automatically.
+        """
         mock_scrape.return_value = [
             {
-                "book": "Matthew",
-                "book_en": "Matthew",
-                "start_chapter": 5,
+                "book": "Azariah",
+                "book_en": "Azariah",
+                "start_chapter": 1,
                 "start_verse": 1,
-                "end_chapter": 5,
-                "end_verse": 12,
+                "end_chapter": 1,
+                "end_verse": 20,
             }
         ]
 
         test_date = "2025-11-08"
         end_date = "2025-11-09"  # daterange doesn't include end_date, so use next day
         out = StringIO()
-        
+
         # Run the command
         call_command(
             "import_readings",
@@ -102,9 +108,9 @@ class ImportReadingsCommandTests(TestCase):
         self.assertEqual(readings.count(), 1)
 
         # Check reading has no Armenian translation
-        matthew = readings.first()
-        self.assertEqual(matthew.book, "Matthew")
-        self.assertIsNone(matthew.book_hy)
+        azariah = readings.first()
+        self.assertEqual(azariah.book, "Azariah")
+        self.assertIsNone(azariah.book_hy)
 
     @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_updates_existing(self, mock_scrape):
@@ -125,12 +131,11 @@ class ImportReadingsCommandTests(TestCase):
         # Verify no translation initially
         self.assertIsNone(reading.book_hy)
 
-        # Mock scrape to return the same reading with translation
+        # Mock the lectionary engine's real output shape (no book_hy key)
         mock_scrape.return_value = [
             {
                 "book": "John",
                 "book_en": "John",
-                "book_hy": "Յովհաննէս",
                 "start_chapter": 3,
                 "start_verse": 16,
                 "end_chapter": 3,
@@ -139,7 +144,7 @@ class ImportReadingsCommandTests(TestCase):
         ]
 
         out = StringIO()
-        
+
         # Run the command
         call_command(
             "import_readings",
@@ -149,9 +154,9 @@ class ImportReadingsCommandTests(TestCase):
             stdout=out
         )
 
-        # Verify translation was added
+        # Verify translation was resolved from usfm_mapping.json and added
         reading.refresh_from_db()
-        self.assertEqual(reading.book_hy, "Յովհաննէս")
+        self.assertEqual(reading.book_hy, "Աւետարան ըստ Յովհաննէսի")
 
     @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_default_dates_are_computed_at_execution(self, mock_scrape):
