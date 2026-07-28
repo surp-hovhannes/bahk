@@ -32,7 +32,7 @@ ARMENIAN_TEXT_VERSION = "\u0546\u0578\u0580 \u0537\u057b\u0574\u056b\u0561\u056e
 
 
 @lru_cache(maxsize=1)
-def _usfm_to_hy_book_name() -> dict[str, str]:
+def usfm_to_hy_book_name() -> dict[str, str]:
     """USFM book id -> Armenian (Nor Ejmiatsin) book display name, from the corpus mapping.
 
     Loaded once from the version-controlled ``usfm_mapping.json`` so we can keep populating
@@ -45,6 +45,20 @@ def _usfm_to_hy_book_name() -> dict[str, str]:
         logger.warning("Could not read Armenian book-name mapping at %s", path, exc_info=True)
         return {}
     return {row["usfm"]: row["name_hy"] for row in rows if row.get("usfm") and row.get("name_hy")}
+
+
+def book_hy_for_book(book_en: str) -> str | None:
+    """Resolve the Armenian (Nor Ejmiatsin) display name for an English book name.
+
+    Used at persistence time (``import_readings``, ``GetDailyReadingsForDate``) so
+    ``Reading.book_hy`` is populated immediately from the same version-controlled mapping
+    ``fetch_armenian_text`` uses, rather than depending on a ``book_hy`` key that
+    ``get_daily_readings`` never produces (see PR #461 review).
+    """
+    usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(book_en))
+    if not usfm:
+        return None
+    return usfm_to_hy_book_name().get(usfm)
 
 
 # ------------------------------------------------------------------ #
@@ -153,7 +167,7 @@ def fetch_armenian_text(reading, **_kwargs) -> bool:
     reading.text_hy_version = ARMENIAN_TEXT_VERSION
     reading.text_hy_fetched_at = timezone.now()
 
-    hy_book = _usfm_to_hy_book_name().get(usfm)
+    hy_book = usfm_to_hy_book_name().get(usfm)
     if hy_book and reading.book_hy != hy_book:
         reading.book_hy = hy_book
 

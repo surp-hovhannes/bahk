@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand
 
 import hub.models as models
 from hub.services.lectionary_service import get_daily_readings
+from hub.services.reading_text_service import book_hy_for_book
 
 
 def daterange(start_date: date, end_date: date):
@@ -41,7 +42,11 @@ class Command(BaseCommand):
                 reading.update({"day": day})
                 # Extract and remove all book-related fields to handle them separately
                 book_en = reading.pop("book_en", reading.get("book"))
-                book_hy = reading.pop("book_hy", None)
+                # get_daily_readings() never returns "book_hy" (it's not part of the engine's
+                # output shape); resolve it ourselves from the same usfm_mapping.json that
+                # fetch_armenian_text() uses, so it's populated at import time rather than
+                # left empty until a later text-fetch backfill (see PR #461 review).
+                book_hy = book_hy_for_book(book_en)
                 # Remove 'book' from the dict to avoid using it in get_or_create lookup
                 reading.pop("book", None)
 

@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.services.reading_text_service import (
+    book_hy_for_book,
     fetch_all_reading_texts,
     get_reading_text_fields,
     prepare_shared_resources,
@@ -127,7 +128,9 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                 reading.update({"day": day})
                 # Extract and remove all book-related fields to handle them separately
                 book_en = reading.pop("book_en", reading.get("book"))
-                book_hy = reading.pop("book_hy", None)
+                # get_daily_readings() never returns "book_hy"; resolve it from the same
+                # usfm_mapping.json fetch_armenian_text() uses (see PR #461 review).
+                book_hy = book_hy_for_book(book_en)
                 # Remove 'book' from the dict to avoid using it in get_or_create lookup
                 reading.pop("book", None)
 

@@ -15,7 +15,7 @@ from hub.constants import BOOK_NAME_TO_USFM_NORMALIZED, normalize_book_name
 from hub.models import BibleVerse, Church, Day, Reading
 from hub.services.reading_text_service import (
     ARMENIAN_TEXT_VERSION,
-    _usfm_to_hy_book_name,
+    usfm_to_hy_book_name,
     fetch_armenian_text,
 )
 from hub.tasks.armenian_text_tasks import fetch_armenian_reading_text_task
@@ -107,7 +107,7 @@ class ComposeArmenianTextTests(TestCase):
         self.assertTrue(fetch_armenian_text(reading))
 
         reading.refresh_from_db()
-        self.assertEqual(reading.book_hy, _usfm_to_hy_book_name()[usfm])
+        self.assertEqual(reading.book_hy, usfm_to_hy_book_name()[usfm])
 
     def test_missing_verses_returns_false(self):
         """No corpus rows for the passage → returns False, text_hy stays empty."""
