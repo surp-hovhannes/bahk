@@ -89,16 +89,14 @@ def fetch_english_text(reading, *, service: BibleAPIService | None = None, **_kw
             return False
 
     try:
-        passage = BibleAPIService.resolve_reading_passage(
+        segments = BibleAPIService.resolve_reading_segments(
             reading.book,
             reading.start_chapter,
             reading.start_verse,
             reading.end_chapter,
             reading.end_verse,
         )
-        result = service.get_passage(
-            *passage,
-        )
+        result = service.get_composite_passage(segments)
 
         ReadingModel.objects.filter(pk=reading.pk).update(
             text=result["content"],

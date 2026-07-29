@@ -22,6 +22,15 @@ BASE_URL = "https://rest.api.bible/v1"
 NKJV_BIBLE_ID = "63097d2a0a2f7db3-01"
 KJVAIC_BIBLE_ID = "a6aee10bb058511c-01"  # KJV with Apocrypha, American Edition
 
+# The Armenian liturgical tradition numbers the closing doxology of Romans as part
+# of chapter 14 (verses 24-26). NKJV -- like most Western Bibles -- ends chapter 14
+# at verse 23 and places the same doxology at 16:25-27. Citations that reach past
+# 14:23 are split into two segments (main text + doxology) and stitched back
+# together; see resolve_reading_segments / get_composite_passage.
+ROMANS_CH14_LAST_VERSE = 23
+ROMANS_DOXOLOGY_CHAPTER = 16
+ROMANS_DOXOLOGY_START_VERSE = 25
+
 
 class BibleAPIService:
     """Client for extracting verses from API.Bible.
@@ -97,6 +106,38 @@ class BibleAPIService:
             "fums_token": fums_token,
         }
 
+    def get_composite_passage(
+        self, segments: list[tuple[str, int, int, int, int]]
+    ) -> dict:
+        """Fetch one or more passage segments and stitch them into a single result.
+
+        The common case is a single segment, returned unchanged from ``get_passage``.
+        Multiple segments (e.g. the Romans doxology split produced by
+        ``resolve_reading_segments``) are concatenated in citation order. The first
+        segment's FUMS token, version, and copyright are used for the combined
+        result -- API.Bible issues one token per call, and the primary segment is
+        the bulk of what a viewer reads.
+
+        Args:
+            segments: One or more ``(usfm_book_id, start_chapter, start_verse,
+                       end_chapter, end_verse)`` tuples, in reading order.
+
+        Returns:
+            Same shape as ``get_passage``: "reference", "content", "copyright",
+            "version", "fums_token".
+        """
+        results = [self.get_passage(*segment) for segment in segments]
+        if len(results) == 1:
+            return results[0]
+
+        return {
+            "reference": " / ".join(r["reference"] for r in results),
+            "content": " ".join(r["content"] for r in results),
+            "copyright": results[0]["copyright"],
+            "version": results[0]["version"],
+            "fums_token": results[0]["fums_token"],
+        }
+
     @staticmethod
     def resolve_book_name(book_name: str) -> str:
         """Resolve a book name (as stored in Reading.book) to its 3-letter USFM ID.
@@ -145,6 +186,46 @@ class BibleAPIService:
         ):
             return "ESG", 1, start_verse, 1, end_verse
         return usfm_id, start_chapter, start_verse, end_chapter, end_verse
+
+    @staticmethod
+    def resolve_reading_segments(
+        book_name: str,
+        start_chapter: int,
+        start_verse: int,
+        end_chapter: int,
+        end_verse: int,
+    ) -> list[tuple[str, int, int, int, int]]:
+        """Resolve a Reading reference into one or more API.Bible passage segments.
+
+        Almost every reading is a single contiguous segment, so this defers to
+        ``resolve_reading_passage`` (which also handles the Esther/ESG remap).
+        Romans citations that follow the Armenian liturgical tradition's
+        versification of the closing doxology (numbered as part of chapter 14,
+        e.g. "13.11-14.26") don't exist in NKJV: its chapter 14 ends at verse 23,
+        and the same doxology is at 16:25-27. Those readings are split into a
+        main-text segment and a doxology segment here, to be stitched back
+        together by ``get_composite_passage``.
+        """
+        usfm_id = BibleAPIService.resolve_book_name(book_name)
+        if usfm_id == "ROM" and end_chapter == 14 and end_verse > ROMANS_CH14_LAST_VERSE:
+            segments = []
+            if start_chapter < 14 or start_verse <= ROMANS_CH14_LAST_VERSE:
+                segments.append(
+                    (usfm_id, start_chapter, start_verse, 14, ROMANS_CH14_LAST_VERSE)
+                )
+            doxology_end_verse = ROMANS_DOXOLOGY_START_VERSE + (
+                end_verse - (ROMANS_CH14_LAST_VERSE + 1)
+            )
+            segments.append((
+                usfm_id, ROMANS_DOXOLOGY_CHAPTER, ROMANS_DOXOLOGY_START_VERSE,
+                ROMANS_DOXOLOGY_CHAPTER, doxology_end_verse,
+            ))
+            return segments
+        return [
+            BibleAPIService.resolve_reading_passage(
+                book_name, start_chapter, start_verse, end_chapter, end_verse,
+            )
+        ]
 
     @staticmethod
     def _bible_id_for_book(usfm_book_id: str) -> tuple[str, str]:
@@ -207,16 +288,14 @@ def fetch_text_for_reading(reading, service: BibleAPIService | None = None) -> b
             return False
 
     try:
-        passage = BibleAPIService.resolve_reading_passage(
+        segments = BibleAPIService.resolve_reading_segments(
             reading.book,
             reading.start_chapter,
             reading.start_verse,
             reading.end_chapter,
             reading.end_verse,
         )
-        result = service.get_passage(
-            *passage,
-        )
+        result = service.get_composite_passage(segments)
 
         ReadingModel.objects.filter(pk=reading.pk).update(
             text=result["content"],
