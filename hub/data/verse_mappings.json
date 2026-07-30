@@ -1,0 +1,44 @@
+{
+  "_description": "Cross-language verse-numbering alignment between the Armenian (Nor Ejmiatsin) corpus and English (NKJV/KJVAIC via API.Bible). Consumed by hub/services/verse_mapping.py. Distinct from hub/data/bible_hy/errata.json, which corrects Armenian *scrape* fidelity against the Armenian source itself -- this file aligns Armenian versification against English versification.",
+  "_kinds": {
+    "relocation": "A sub-range of a reading lives at a different chapter/book location in `language`. `mode: whole_range` remaps the entire triggered range 1:1 to a different book/chapter (e.g. Esther's Greek additions -> ESG). `mode: tail_split` keeps everything up to `split_after` in place and relocates only the tail past it (e.g. the Romans doxology).",
+    "composite": "Verses of `usfm` are embedded inside another book's chapter in `language` only (not standalone there). The embedding is resolved offline, once, by a corpus-derivation script (see scripts/derive_azariah_hy.py) -- at runtime this rule only reports a `gap` when a request touches verses the two languages don't reconcile on, instead of silently under-returning.",
+    "no_equivalent": "Verses exist in the OTHER language with no counterpart in `language` at all. Requests get truncated to `truncate_to`, and the excluded tail is reported as a gap rather than silently dropped."
+  },
+  "rules": [
+    {
+      "id": "rom-doxology",
+      "kind": "relocation",
+      "mode": "tail_split",
+      "usfm": "ROM",
+      "language": "en",
+      "split_after": {"chapter": 14, "verse": 23},
+      "relocate_to": {"usfm": "ROM", "chapter": 16, "start_verse": 25},
+      "note": "Armenian numbers the closing doxology as Romans 14:24-26; NKJV ends chapter 14 at verse 23 and places the same doxology at 16:25-27."
+    },
+    {
+      "id": "esther-greek-additions",
+      "kind": "relocation",
+      "mode": "whole_range",
+      "usfm": "EST",
+      "language": "en",
+      "trigger": {"chapter": 10, "min_verse": 4, "max_verse": 13},
+      "relocate_to": {"usfm": "ESG", "chapter": 1},
+      "note": "KJVAIC stores the Greek Esther additions as standalone ESG 1-7; the liturgical source refers to the first addition as Esther 10:4-13, which maps to ESG 1:4-13. Armenian keeps the additions as native Esther chapters 10-16 (Vulgate arrangement), so no 'hy' rule is needed."
+    },
+    {
+      "id": "azariah-in-daniel",
+      "kind": "composite",
+      "usfm": "S3Y",
+      "language": "hy",
+      "host": {"usfm": "DAN", "chapter": 3, "start_verse": 24, "end_verse": 90},
+      "verse_offset": -23,
+      "verse_count": {"hy": 67, "en": 68},
+      "gap": {
+        "start_chapter": 1, "start_verse": 68, "end_chapter": 1, "end_verse": 68,
+        "needs_review": true,
+        "note": "KJV/KJVAIC splits a doxology verse the Armenian keeps whole; exact split point unconfirmed (live API.Bible access blocked until 2026-08-04 -- see PR #465)."
+      }
+    }
+  ]
+}

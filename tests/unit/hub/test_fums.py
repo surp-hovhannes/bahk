@@ -195,7 +195,7 @@ class FetchTextForReadingFumsTests(TestCase):
     def test_fetch_text_for_reading_stores_fums_token(self, mock_resolve):
         """fetch_text_for_reading should store the FUMS token on the reading."""
         mock_service = Mock(spec=BibleAPIService)
-        mock_service.get_passage.return_value = {
+        mock_service.get_composite_passage.return_value = {
             "reference": "Genesis 1:1-5",
             "content": "In the beginning...",
             "copyright": "Copyright NKJV",

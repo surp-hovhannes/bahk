@@ -242,22 +242,76 @@ class BibleAPIServiceResolveBookNameTests(TestCase):
         self.assertIn("Nonexistent Book", str(ctx.exception))
 
 
-class BibleAPIServiceResolveReadingPassageTests(TestCase):
-    """Tests for Reading reference resolution into API.Bible passage IDs."""
+class BibleAPIServiceResolveReadingSegmentsTests(TestCase):
+    """Tests for Reading reference resolution into API.Bible passage segments."""
 
     def test_esther_greek_addition_uses_esg_numbering(self):
         """Esther 10:4-9 maps to the KJVAIC Esther Additions book."""
         self.assertEqual(
-            BibleAPIService.resolve_reading_passage("Esther", 10, 4, 10, 9),
-            ("ESG", 1, 4, 1, 9),
+            BibleAPIService.resolve_reading_segments("Esther", 10, 4, 10, 9),
+            [("ESG", 1, 4, 1, 9)],
         )
 
     def test_regular_esther_stays_canonical(self):
         """Canonical Esther references should continue to use EST."""
         self.assertEqual(
-            BibleAPIService.resolve_reading_passage("Esther", 10, 1, 10, 3),
-            ("EST", 10, 1, 10, 3),
+            BibleAPIService.resolve_reading_segments("Esther", 10, 1, 10, 3),
+            [("EST", 10, 1, 10, 3)],
         )
+
+    def test_romans_doxology_splits_into_two_segments(self):
+        """Romans 13.11-14.26 (Armenian numbering) splits at NKJV's 14:23 boundary."""
+        self.assertEqual(
+            BibleAPIService.resolve_reading_segments(
+                "St. Paul's Epistle to the Romans", 13, 11, 14, 26,
+            ),
+            [("ROM", 13, 11, 14, 23), ("ROM", 16, 25, 16, 27)],
+        )
+
+    def test_romans_within_range_stays_single_segment(self):
+        """A Romans reading that never reaches the doxology isn't split."""
+        self.assertEqual(
+            BibleAPIService.resolve_reading_segments("Romans", 13, 1, 13, 10),
+            [("ROM", 13, 1, 13, 10)],
+        )
+
+
+class GetCompositePassageTests(TestCase):
+    """Tests for BibleAPIService.get_composite_passage (multi-segment stitching)."""
+
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_single_segment_passthrough(self, mock_config):
+        service = BibleAPIService()
+        with patch.object(service, "get_passage") as mock_get_passage:
+            mock_get_passage.return_value = {
+                "content": "[1] In the beginning...",
+                "copyright": "NKJV copyright",
+                "version": "NKJV",
+                "reference": "Genesis 1:1",
+                "fums_token": "tok-1",
+            }
+            result = service.get_composite_passage([("GEN", 1, 1, 1, 1)])
+        self.assertEqual(result["content"], "[1] In the beginning...")
+        self.assertEqual(result["fums_token"], "tok-1")
+        mock_get_passage.assert_called_once_with("GEN", 1, 1, 1, 1)
+
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_multi_segment_concatenates_and_keeps_first_metadata(self, mock_config):
+        service = BibleAPIService()
+        with patch.object(service, "get_passage") as mock_get_passage:
+            mock_get_passage.side_effect = [
+                {"content": "[11]...[23]", "copyright": "NKJV copyright", "version": "NKJV",
+                 "reference": "Romans 13:11-14:23", "fums_token": "tok-main"},
+                {"content": "[25]...[27]", "copyright": "NKJV copyright", "version": "NKJV",
+                 "reference": "Romans 16:25-27", "fums_token": "tok-doxology"},
+            ]
+            result = service.get_composite_passage(
+                [("ROM", 13, 11, 14, 23), ("ROM", 16, 25, 16, 27)],
+            )
+        self.assertEqual(result["content"], "[11]...[23] [25]...[27]")
+        # First segment's FUMS token/version/copyright are kept.
+        self.assertEqual(result["fums_token"], "tok-main")
+        self.assertEqual(mock_get_passage.call_count, 2)
 
 
 class BibleAPIServiceBibleIdSelectionTests(TestCase):
@@ -694,6 +748,33 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         reading.refresh_from_db()
         self.assertEqual(reading.text, "Then Mordecai said...")
         self.assertEqual(reading.text_version, "KJVAIC")
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_refresh_stitches_romans_doxology(self, mock_config, mock_get_passage):
+        """Romans 13.11-14.26 (Armenian numbering) stitches NKJV's relocated doxology."""
+        mock_get_passage.side_effect = [
+            {"content": "[11] ... [23] ...", "copyright": "NKJV copyright", "version": "NKJV",
+             "reference": "Romans 13:11-14:23", "fums_token": "tok-main"},
+            {"content": "[25] ... [27] ...", "copyright": "NKJV copyright", "version": "NKJV",
+             "reference": "Romans 16:25-27", "fums_token": "tok-doxology"},
+        ]
+
+        day = Day.objects.create(date=date(2025, 3, 15), church=self.church)
+        reading = _create_reading(
+            day, book="St. Paul's Epistle to the Romans",
+            start_ch=13, start_v=11, end_ch=14, end_v=26,
+        )
+
+        refresh_all_reading_texts_task()
+
+        self.assertEqual(mock_get_passage.call_count, 2)
+        mock_get_passage.assert_any_call("ROM", 13, 11, 14, 23)
+        mock_get_passage.assert_any_call("ROM", 16, 25, 16, 27)
+        reading.refresh_from_db()
+        self.assertEqual(reading.text, "[11] ... [23] ... [25] ... [27] ...")
+        self.assertEqual(reading.text_version, "NKJV")
+        self.assertEqual(reading.fums_token, "tok-main")
 
     @patch('hub.services.bible_api_service.config', return_value="")
     def test_no_api_key_aborts_refresh(self, mock_config):

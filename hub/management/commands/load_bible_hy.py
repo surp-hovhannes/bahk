@@ -29,7 +29,7 @@ from hub.models import BibleVerse
 
 DEFAULT_DIR = Path(settings.BASE_DIR) / "hub" / "data" / "bible_hy"
 BATCH_SIZE = 2000
-EXPECTED_BOOKS = 75
+EXPECTED_BOOKS = 76  # 75 scraped books + synthetic S3Y (Prayer of Azariah, see derive_azariah_hy.py)
 
 
 class Command(BaseCommand):

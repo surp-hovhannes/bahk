@@ -19,34 +19,38 @@ class ParseCitationTests(TestCase):
     def test_simple_same_chapter(self):
         self.assertEqual(
             _parse_citation("John 20.1-18"),
-            {"book": "John", "book_en": "John", "start_chapter": 20,
-             "start_verse": 1, "end_chapter": 20, "end_verse": 18},
+            [{"book": "John", "book_en": "John", "start_chapter": 20,
+              "start_verse": 1, "end_chapter": 20, "end_verse": 18}],
         )
 
     def test_cross_chapter(self):
-        p = _parse_citation("Mark 15.42-16.1")
+        [p] = _parse_citation("Mark 15.42-16.1")
         self.assertEqual((p["start_chapter"], p["start_verse"], p["end_chapter"], p["end_verse"]),
                          (15, 42, 16, 1))
 
     def test_multiword_pauline_book(self):
-        p = _parse_citation("St. Paul's Epistle to the Romans 15.30-16.2")
+        [p] = _parse_citation("St. Paul's Epistle to the Romans 15.30-16.2")
         self.assertEqual(p["book"], "St. Paul's Epistle to the Romans")
         self.assertEqual((p["start_chapter"], p["end_chapter"], p["end_verse"]), (15, 16, 2))
 
     def test_single_verse(self):
-        p = _parse_citation("1 Corinthians 5.1")
+        [p] = _parse_citation("1 Corinthians 5.1")
         self.assertEqual(
             (p["book"], p["start_chapter"], p["start_verse"], p["end_chapter"], p["end_verse"]),
             ("1 Corinthians", 5, 1, 5, 1),
         )
 
-    def test_composite_keeps_first_subreference(self):
-        p = _parse_citation("Daniel 3.1-23, Azariah 1-68")
-        self.assertEqual(p["book"], "Daniel")
-        self.assertEqual((p["start_chapter"], p["end_verse"]), (3, 23))
+    def test_composite_splits_into_all_subreferences(self):
+        """The engine's one scripture composite persists as two readings, not one."""
+        daniel, azariah = _parse_citation("Daniel 3.1-23, Azariah. 1-68")
+        self.assertEqual(daniel["book"], "Daniel")
+        self.assertEqual((daniel["start_chapter"], daniel["start_verse"], daniel["end_verse"]), (3, 1, 23))
+        # The stray trailing period on "Azariah." is stripped so the book name resolves.
+        self.assertEqual(azariah["book"], "Azariah")
+        self.assertEqual((azariah["start_chapter"], azariah["start_verse"], azariah["end_verse"]), (1, 1, 68))
 
-    def test_unparseable_returns_none(self):
-        self.assertIsNone(_parse_citation("not a citation at all !!!"))
+    def test_unparseable_returns_empty_list(self):
+        self.assertEqual(_parse_citation("not a citation at all !!!"), [])
 
 
 class GetDailyReadingsTests(TestCase):
@@ -82,6 +86,18 @@ class GetDailyReadingsTests(TestCase):
         self.assertEqual(
             (r["book_en"], r["start_chapter"], r["start_verse"], r["end_chapter"], r["end_verse"]),
             ("Malachi", 3, 1, 3, 4),
+        )
+
+    def test_great_saturday_2026_persists_both_daniel_and_azariah(self):
+        """Great Saturday's Daniel/Azariah composite persists as two readings, not one."""
+        readings = get_daily_readings(date(2026, 4, 4), self.church)
+        books = [r["book"] for r in readings]
+        self.assertIn("Daniel", books)
+        self.assertIn("Azariah", books)
+        azariah = next(r for r in readings if r["book"] == "Azariah")
+        self.assertEqual(
+            (azariah["start_chapter"], azariah["start_verse"], azariah["end_chapter"], azariah["end_verse"]),
+            (1, 1, 1, 68),
         )
 
     def test_accepts_datetime_input(self):

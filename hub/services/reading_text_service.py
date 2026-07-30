@@ -89,16 +89,20 @@ def fetch_english_text(reading, *, service: BibleAPIService | None = None, **_kw
             return False
 
     try:
-        passage = BibleAPIService.resolve_reading_passage(
+        segments = BibleAPIService.resolve_reading_segments(
             reading.book,
             reading.start_chapter,
             reading.start_verse,
             reading.end_chapter,
             reading.end_verse,
         )
-        result = service.get_passage(
-            *passage,
-        )
+        if not segments:
+            logger.warning(
+                "No English text available for Reading %s (%s); nothing to fetch.",
+                reading.pk, reading.passage_reference,
+            )
+            return False
+        result = service.get_composite_passage(segments)
 
         ReadingModel.objects.filter(pk=reading.pk).update(
             text=result["content"],
@@ -140,6 +144,7 @@ def fetch_armenian_text(reading, **_kwargs) -> bool:
         True if text was composed and saved, False otherwise.
     """
     from hub.models import BibleVerse
+    from hub.services.verse_mapping import resolve_segments
 
     usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(reading.book))
     if not usfm:
@@ -149,11 +154,29 @@ def fetch_armenian_text(reading, **_kwargs) -> bool:
         )
         return False
 
-    text = BibleVerse.compose_passage(
-        BibleVerse.NOR_EJMIATSIN, usfm,
+    resolved = resolve_segments(
+        "hy", usfm,
         reading.start_chapter, reading.start_verse,
         reading.end_chapter, reading.end_verse,
     )
+    for gap in resolved.gaps:
+        logger.warning(
+            "Reading %s (%s) touches a known Armenian/English verse-numbering gap "
+            "(rule=%s, %s %d:%d-%d:%d): %s",
+            reading.pk, reading.passage_reference, gap.rule_id,
+            usfm, gap.start_chapter, gap.start_verse, gap.end_chapter, gap.end_verse,
+            gap.note,
+        )
+
+    parts = [
+        BibleVerse.compose_passage(
+            BibleVerse.NOR_EJMIATSIN, segment.usfm,
+            segment.start_chapter, segment.start_verse,
+            segment.end_chapter, segment.end_verse,
+        )
+        for segment in resolved.segments
+    ]
+    text = " ".join(part for part in parts if part).strip()
     if not text:
         logger.warning(
             "No Armenian text in corpus for Reading %s (%s).",

@@ -74,14 +74,15 @@ class ImportReadingsCommandTests(TestCase):
     def test_import_readings_without_translations(self, mock_scrape):
         """Test that import_readings leaves book_hy unset for a book absent from usfm_mapping.json.
 
-        "Azariah" (the Daniel-composite deuterocanonical addition) has no entry in
-        ``BOOK_NAME_TO_USFM``, so ``book_hy_for_book`` legitimately returns ``None`` here --
-        unlike canonical books such as Matthew, which now resolve automatically.
+        Uses a made-up book name with no ``BOOK_NAME_TO_USFM`` entry, so ``book_hy_for_book``
+        legitimately returns ``None`` here -- unlike canonical books such as Matthew, which now
+        resolve automatically. (Azariah -- the Daniel-composite deuterocanonical addition --
+        used to serve as this example, but now has a real mapping; see test_lectionary_service.)
         """
         mock_scrape.return_value = [
             {
-                "book": "Azariah",
-                "book_en": "Azariah",
+                "book": "Totally Made Up Book",
+                "book_en": "Totally Made Up Book",
                 "start_chapter": 1,
                 "start_verse": 1,
                 "end_chapter": 1,
@@ -108,9 +109,9 @@ class ImportReadingsCommandTests(TestCase):
         self.assertEqual(readings.count(), 1)
 
         # Check reading has no Armenian translation
-        azariah = readings.first()
-        self.assertEqual(azariah.book, "Azariah")
-        self.assertIsNone(azariah.book_hy)
+        reading = readings.first()
+        self.assertEqual(reading.book, "Totally Made Up Book")
+        self.assertIsNone(reading.book_hy)
 
     @patch("hub.management.commands.import_readings.get_daily_readings")
     def test_import_readings_updates_existing(self, mock_scrape):

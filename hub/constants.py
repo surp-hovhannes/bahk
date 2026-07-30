@@ -61,6 +61,9 @@ BOOK_NAME_TO_USFM = {
     "Sirach": "SIR",
     "Epistle of Jeremiah": "LJE",
     "Baruch": "BAR",
+    "Azariah": "S3Y",
+    "Prayer of Azariah": "S3Y",
+    "Song of the Three Young Men": "S3Y",
     # New Testament
     "Matthew": "MAT",
     "Mark": "MRK",

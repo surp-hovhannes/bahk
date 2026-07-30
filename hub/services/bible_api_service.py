@@ -122,29 +122,55 @@ class BibleAPIService:
         return usfm_id
 
     @staticmethod
-    def resolve_reading_passage(
+    def resolve_reading_segments(
         book_name: str,
         start_chapter: int,
         start_verse: int,
         end_chapter: int,
         end_verse: int,
-    ) -> tuple[str, int, int, int, int]:
-        """Resolve a Reading reference to the API.Bible book/range.
+    ) -> list[tuple[str, int, int, int, int]]:
+        """Resolve a Reading reference to one or more API.Bible passage segments.
 
-        KJVAIC stores the Greek additions to Esther as ESG 1-7. The liturgical
-        source may refer to the first addition as Esther 10:4-13, which maps to
-        API.Bible's ESG 1:4-13.
+        Delegates to ``verse_mapping.resolve_segments`` for known Armenian/English
+        versification discrepancies -- e.g. Esther's Greek additions (KJVAIC stores them as
+        standalone ESG 1-7; the liturgical source cites the first as Esther 10:4-13) or the
+        Romans doxology (Armenian numbers it as 14:24-26; NKJV places it at 16:25-27). Most
+        readings resolve to a single segment.
         """
+        from hub.services.verse_mapping import resolve_segments
+
         usfm_id = BibleAPIService.resolve_book_name(book_name)
-        if (
-            usfm_id == "EST"
-            and start_chapter == 10
-            and end_chapter == 10
-            and start_verse >= 4
-            and end_verse <= 13
-        ):
-            return "ESG", 1, start_verse, 1, end_verse
-        return usfm_id, start_chapter, start_verse, end_chapter, end_verse
+        resolved = resolve_segments("en", usfm_id, start_chapter, start_verse, end_chapter, end_verse)
+        for gap in resolved.gaps:
+            logger.warning(
+                "Reading %s %d:%d-%d:%d touches a known verse-numbering gap (rule=%s): %s",
+                usfm_id, start_chapter, start_verse, end_chapter, end_verse,
+                gap.rule_id, gap.note,
+            )
+        return [segment.as_tuple() for segment in resolved.segments]
+
+    def get_composite_passage(
+        self, segments: list[tuple[str, int, int, int, int]],
+    ) -> dict:
+        """Fetch and concatenate one or more passage segments into a single result.
+
+        Used for readings that resolve to more than one API.Bible passage (e.g. the Romans
+        doxology, relocated to a different chapter). Keeps the first segment's FUMS token,
+        version, and copyright -- API.Bible issues one token per call, and the first segment
+        is the bulk of what's read.
+        """
+        parts = []
+        first_result = None
+        for segment in segments:
+            result = self.get_passage(*segment)
+            if first_result is None:
+                first_result = result
+            content = result.get("content", "").strip()
+            if content:
+                parts.append(content)
+        if first_result is None:
+            return {"reference": "", "content": "", "copyright": "", "version": "", "fums_token": ""}
+        return {**first_result, "content": " ".join(parts).strip()}
 
     @staticmethod
     def _bible_id_for_book(usfm_book_id: str) -> tuple[str, str]:
@@ -207,16 +233,20 @@ def fetch_text_for_reading(reading, service: BibleAPIService | None = None) -> b
             return False
 
     try:
-        passage = BibleAPIService.resolve_reading_passage(
+        segments = BibleAPIService.resolve_reading_segments(
             reading.book,
             reading.start_chapter,
             reading.start_verse,
             reading.end_chapter,
             reading.end_verse,
         )
-        result = service.get_passage(
-            *passage,
-        )
+        if not segments:
+            logger.warning(
+                "No English text available for Reading %s (%s); nothing to fetch.",
+                reading.pk, reading.passage_reference,
+            )
+            return False
+        result = service.get_composite_passage(segments)
 
         ReadingModel.objects.filter(pk=reading.pk).update(
             text=result["content"],

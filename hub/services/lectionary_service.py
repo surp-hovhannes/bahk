@@ -25,44 +25,47 @@ LECTIONARY_MIN_YEAR = getattr(settings, "LECTIONARY_MIN_YEAR", 2001)
 LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", 2027)
 
 
-def _parse_citation(reading_str: str) -> dict | None:
-    """Parse an English citation string into reading components, or ``None`` if unparseable.
+def _parse_citation(reading_str: str) -> list[dict]:
+    """Parse an English citation string into one or more reading component dicts.
 
-    Mirrors the parsing the old ``scrape_readings`` performed, including keeping only the first
-    sub-reference of a comma-joined citation (e.g. ``"Daniel 3.1-23, Azariah 1-68"``).
+    Composite citations join multiple sub-references with a comma -- the only one the engine
+    emits is ``"Daniel 3.1-23, Azariah. 1-68"`` -- and each sub-reference is parsed and returned
+    as its own dict, so both persist as separate readings. A stray trailing period the engine
+    emits on some composite sub-reference book names (e.g. ``"Azariah."``) is stripped from the
+    parsed book name so it resolves via ``BOOK_NAME_TO_USFM`` (``normalize_book_name`` does not
+    strip periods). Returns ``[]`` if no sub-reference parses.
     """
-    if "," in reading_str:
-        # Composite reading; keep the first sub-reference, matching historical scraper behavior.
-        reading_str = reading_str.split(",")[0]
-
-    reading_str = reading_str.strip()
-    groups = re.search(PARSER_REGEX, reading_str)
-    if groups is None:
-        logger.error("Could not parse reading %r with regex %s", reading_str, PARSER_REGEX)
-        return None
-
-    try:
-        book = groups.group(1).strip()
-        # Remove decimal if start chapter provided; otherwise part of a book with 1 chapter.
-        start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
-        start_verse = groups.group(3)
-        # Remove decimal if end chapter provided; otherwise it matches the start chapter.
-        end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter
-        end_verse = groups.group(5) if groups.group(5) is not None else start_verse
-        return {
-            "book": book,
-            "book_en": book,
-            "start_chapter": int(start_chapter),
-            "start_verse": int(start_verse),
-            "end_chapter": int(end_chapter),
-            "end_verse": int(end_verse),
-        }
-    except Exception:
-        logger.error(
-            "Could not parse reading %r with regex %s. Skipping.",
-            reading_str, PARSER_REGEX, exc_info=True,
-        )
-        return None
+    parsed = []
+    for part in reading_str.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        groups = re.search(PARSER_REGEX, part)
+        if groups is None:
+            logger.error("Could not parse reading %r with regex %s", part, PARSER_REGEX)
+            continue
+        try:
+            book = groups.group(1).strip().rstrip(".")
+            # Remove decimal if start chapter provided; otherwise part of a book with 1 chapter.
+            start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
+            start_verse = groups.group(3)
+            # Remove decimal if end chapter provided; otherwise it matches the start chapter.
+            end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter
+            end_verse = groups.group(5) if groups.group(5) is not None else start_verse
+            parsed.append({
+                "book": book,
+                "book_en": book,
+                "start_chapter": int(start_chapter),
+                "start_verse": int(start_verse),
+                "end_chapter": int(end_chapter),
+                "end_verse": int(end_verse),
+            })
+        except Exception:
+            logger.error(
+                "Could not parse reading %r with regex %s. Skipping.",
+                part, PARSER_REGEX, exc_info=True,
+            )
+    return parsed
 
 
 def get_daily_readings(date_obj, church) -> list[dict]:
@@ -94,9 +97,7 @@ def get_daily_readings(date_obj, church) -> list[dict]:
 
     readings = []
     for citation in result.get("ReadingsList", []):
-        parsed = _parse_citation(citation)
-        if parsed is not None:
-            readings.append(parsed)
+        readings.extend(_parse_citation(citation))
     return readings
 
 

@@ -129,6 +129,47 @@ class ComposeArmenianTextTests(TestCase):
 
 
 # ------------------------------------------------------------------ #
+#  Azariah composite (embedded in Armenian Daniel 3) Tests
+# ------------------------------------------------------------------ #
+
+class AzariahCompositeTests(TestCase):
+    """Azariah composes from the standalone S3Y corpus rows derived by
+    scripts/derive_azariah_hy.py, with gap-awareness for the unreconciled EN/HY tail
+    (Armenian 67 verses vs English KJVAIC S3Y's 68)."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2026, 4, 4), church=self.church)
+        self.usfm = _usfm_for("Azariah")
+        _add_verses(self.usfm, 1, {v: f"az{v}" for v in range(1, 68)})
+
+    def test_composes_from_standalone_s3y_corpus(self):
+        reading = _create_reading(self.day, book="Azariah", start_ch=1, start_v=1, end_ch=1, end_v=67)
+
+        self.assertTrue(fetch_armenian_text(reading))
+
+        reading.refresh_from_db()
+        self.assertIn("[1] az1", reading.text_hy)
+        self.assertIn("[67] az67", reading.text_hy)
+        self.assertEqual(reading.book_hy, usfm_to_hy_book_name()[self.usfm])
+
+    def test_range_touching_verse_68_logs_gap_warning(self):
+        """A request reaching the unreconciled tail (verse 68) still composes what exists,
+        but logs a structured warning instead of silently returning short."""
+        reading = _create_reading(self.day, book="Azariah", start_ch=1, start_v=1, end_ch=1, end_v=68)
+
+        with self.assertLogs("hub.services.reading_text_service", level="WARNING") as log:
+            result = fetch_armenian_text(reading)
+
+        self.assertTrue(result)
+        reading.refresh_from_db()
+        self.assertIn("[67] az67", reading.text_hy)
+        log_output = "\n".join(log.output)
+        self.assertIn("azariah-in-daniel", log_output)
+        self.assertIn("verse-numbering gap", log_output)
+
+
+# ------------------------------------------------------------------ #
 #  fetch_armenian_reading_text_task Tests
 # ------------------------------------------------------------------ #
 
