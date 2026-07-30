@@ -100,6 +100,7 @@ def fetch_english_text(
     *,
     service: BibleAPIService | None = None,
     budgets: list[APIBudget] | None = None,
+    stats: dict[str, int] | None = None,
     **_kwargs,
 ) -> bool:
     """Fetch English Bible text from API.Bible for a single Reading.
@@ -115,6 +116,11 @@ def fetch_english_text(
                  consumed only once the passage has resolved and immediately before
                  the call, so an unmappable book name never burns a token.  If any
                  budget refuses, no call is made and this returns False.
+        stats: Optional shared counter dict.  ``stats["attempted"]`` is incremented
+               once per call that actually reaches API.Bible — i.e. after an unmappable
+               book or an exhausted budget has already returned, so callers can tell
+               "we tried and it failed" apart from "we never tried" using only the
+               boolean return value.
 
     Returns:
         True if text was successfully fetched, False otherwise.
@@ -152,6 +158,9 @@ def fetch_english_text(
                 budget.period, budget.limit, reading.pk, reading.passage_reference,
             )
             return False
+
+    if stats is not None:
+        stats["attempted"] = stats.get("attempted", 0) + 1
 
     try:
         result = service.get_passage(

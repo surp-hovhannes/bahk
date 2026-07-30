@@ -7,8 +7,8 @@ from django.utils import timezone
 
 from hub.admin import ReadingAdmin
 from hub.models import Church, Day, Fast, Reading
-from hub.services.bible_api_service import BibleAPIService, fetch_text_for_reading
-from hub.services.reading_text_service import get_reading_text_fields
+from hub.services.bible_api_service import BibleAPIService
+from hub.services.reading_text_service import fetch_english_text, get_reading_text_fields
 
 
 def _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5, **kwargs):
@@ -184,8 +184,8 @@ class ReadingAdminFumsTests(TestCase):
         self.assertFalse(self.admin.has_fums_token(reading))
 
 
-class FetchTextForReadingFumsTests(TestCase):
-    """Tests for FUMS token storage via fetch_text_for_reading."""
+class FetchEnglishTextFumsTests(TestCase):
+    """Tests for FUMS token storage via fetch_english_text."""
 
     def setUp(self):
         self.church = Church.objects.create(name="Task Test Church")
@@ -197,8 +197,8 @@ class FetchTextForReadingFumsTests(TestCase):
         )
 
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
-    def test_fetch_text_for_reading_stores_fums_token(self, mock_resolve):
-        """fetch_text_for_reading should store the FUMS token on the reading."""
+    def test_fetch_english_text_stores_fums_token(self, mock_resolve):
+        """fetch_english_text should store the FUMS token on the reading."""
         mock_service = Mock(spec=BibleAPIService)
         mock_service.get_passage.return_value = {
             "reference": "Genesis 1:1-5",
@@ -210,7 +210,7 @@ class FetchTextForReadingFumsTests(TestCase):
 
         reading = _create_reading(day=self.day)
 
-        result = fetch_text_for_reading(reading, service=mock_service)
+        result = fetch_english_text(reading, service=mock_service)
 
         self.assertTrue(result)
         reading.refresh_from_db()
@@ -247,7 +247,7 @@ class FetchTextForReadingFumsTests(TestCase):
         )
         new_reading = _create_reading(day=day2)
 
-        result = fetch_text_for_reading(new_reading)
+        result = fetch_english_text(new_reading)
 
         self.assertTrue(result)
         new_reading.refresh_from_db()
@@ -334,7 +334,7 @@ class ReadingTextExpiryTests(TestCase):
         self.assertEqual(get_reading_text_fields(reading, "fr")["text"], "")
 
     @patch("hub.views.readings.fetch_all_reading_texts")
-    @patch("hub.views.readings.scrape_readings", return_value=[])
+    @patch("hub.views.readings.get_daily_readings", return_value=[])
     @patch("hub.views.readings.generate_reading_context_task")
     def test_readings_api_blanks_expired_text(self, mock_gen_task, mock_scrape, mock_fetch):
         self._reading(text_fetched_at=timezone.now() - datetime.timedelta(days=31))

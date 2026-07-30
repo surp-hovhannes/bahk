@@ -2,7 +2,7 @@
 
 Tests cover:
     - BibleAPIService (book name resolution, bible ID selection)
-    - fetch_text_for_reading (synchronous single-reading fetch, unique FUMS token)
+    - fetch_english_text (synchronous single-reading fetch, unique FUMS token)
     - fetch_reading_text_task (Celery wrapper, used for management commands)
     - refresh_all_reading_texts_task (nearest-first refresh, spend limits, error summary)
     - Synchronous text fetch in GetDailyReadingsForDate view
@@ -12,11 +12,16 @@ from datetime import date, timedelta
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
+from django.contrib.admin.sites import AdminSite
+from django.contrib.auth import get_user_model
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
+from hub.admin import ReadingAdmin
 from hub.constants import (
     BOOK_NAME_TO_USFM,
     APOCRYPHA_USFM_IDS,
@@ -26,10 +31,8 @@ from hub.constants import (
     CATENA_HOME_PAGE_URL,
 )
 from hub.models import Church, Day, Reading
-from hub.services.bible_api_service import (
-    BibleAPIService,
-    fetch_text_for_reading,
-)
+from hub.services.bible_api_service import BibleAPIService
+from hub.services.reading_text_service import bible_api_budgets, fetch_english_text
 from hub.tasks.bible_api_tasks import (
     fetch_reading_text_task,
     refresh_all_reading_texts_task,
@@ -319,11 +322,11 @@ class BibleAPIServiceInitTests(TestCase):
 
 
 # ------------------------------------------------------------------ #
-#  fetch_text_for_reading (synchronous) Tests
+#  fetch_english_text (synchronous) Tests
 # ------------------------------------------------------------------ #
 
-class FetchTextForReadingTests(TestCase):
-    """Tests for the fetch_text_for_reading synchronous helper."""
+class FetchEnglishTextTests(TestCase):
+    """Tests for the fetch_english_text synchronous helper."""
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
@@ -345,7 +348,7 @@ class FetchTextForReadingTests(TestCase):
 
         reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
-        result = fetch_text_for_reading(reading)
+        result = fetch_english_text(reading)
 
         self.assertTrue(result)
         reading.refresh_from_db()
@@ -367,7 +370,7 @@ class FetchTextForReadingTests(TestCase):
         reading1 = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
         reading2 = _create_reading(day2, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
-        fetch_text_for_reading(reading1)
+        fetch_english_text(reading1)
 
         # Only the target reading should have text
         reading1.refresh_from_db()
@@ -396,7 +399,7 @@ class FetchTextForReadingTests(TestCase):
         )
         reading_new = _create_reading(day2, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
 
-        result = fetch_text_for_reading(reading_new)
+        result = fetch_english_text(reading_new)
 
         self.assertTrue(result)
         reading_new.refresh_from_db()
@@ -410,7 +413,7 @@ class FetchTextForReadingTests(TestCase):
         """Test that fetch returns False when API key is not configured."""
         reading = _create_reading(self.day)
 
-        result = fetch_text_for_reading(reading)
+        result = fetch_english_text(reading)
 
         self.assertFalse(result)
         reading.refresh_from_db()
@@ -426,7 +429,7 @@ class FetchTextForReadingTests(TestCase):
         reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
         service = BibleAPIService()
 
-        result = fetch_text_for_reading(reading, service=service)
+        result = fetch_english_text(reading, service=service)
 
         self.assertTrue(result)
         reading.refresh_from_db()
@@ -437,7 +440,7 @@ class FetchTextForReadingTests(TestCase):
         reading = _create_reading(self.day, book="Nonexistent Book")
         service = MagicMock(spec=BibleAPIService)
 
-        result = fetch_text_for_reading(reading, service=service)
+        result = fetch_english_text(reading, service=service)
 
         self.assertFalse(result)
 
@@ -465,8 +468,8 @@ class FetchReadingTextTaskTests(TestCase):
     @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
     @patch('hub.services.bible_api_service.config', return_value="test-key")
-    def test_task_delegates_to_fetch_text_for_reading(self, mock_config, mock_resolve, mock_get_passage):
-        """Test that the Celery task delegates to fetch_text_for_reading."""
+    def test_task_delegates_to_fetch_english_text(self, mock_config, mock_resolve, mock_get_passage):
+        """Test that the Celery task delegates to fetch_english_text."""
         mock_get_passage.return_value = {
             "content": "Test content.",
             "copyright": "Test copyright.",
@@ -746,6 +749,57 @@ class RefreshAllReadingTextsTaskTests(TestCase):
         refresh_all_reading_texts_task()
 
         self.assertEqual(mock_get_passage.call_count, 3)
+
+    @override_settings(READING_REFRESH_MAX_CONSECUTIVE_FAILURES=3)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_breaker_trip_reports_attempts_not_zero(self, mock_config, mock_resolve, mock_get_passage):
+        """A circuit-breaker trip must report the attempts that reached API.Bible.
+
+        Counting only successes made a rejection spiral log "0 API calls," hiding the
+        exact event the telemetry exists to surface.
+        """
+        mock_get_passage.side_effect = Exception("429 Too Many Requests")
+
+        today = timezone.localdate()
+        for i in range(10):
+            day = Day.objects.create(date=today + timedelta(days=i), church=self.church)
+            _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+
+        with self.assertLogs("hub.tasks.bible_api_tasks", level="ERROR") as log:
+            refresh_all_reading_texts_task()
+
+        abort_messages = [m for m in log.output if "Aborting refresh" in m]
+        self.assertEqual(len(abort_messages), 1)
+        self.assertIn("3 English API attempts", abort_messages[0])
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_readings_processed_does_not_double_count_partial_language_failure(
+        self, mock_config, mock_resolve, mock_get_passage,
+    ):
+        """A reading whose English fetch succeeds but Armenian fetch fails must count
+        once in readings processed, not twice — the old ``api_calls + len(failures)``
+        expression double-counted exactly this case.
+
+        No BibleVerse rows are seeded for this passage, so the Armenian composer
+        naturally returns no text without needing to mock anything.
+        """
+        mock_get_passage.return_value = self.mock_api_response
+
+        day = Day.objects.create(date=date(2025, 3, 15), church=self.church)
+        _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+
+        with self.assertLogs("hub.tasks.bible_api_tasks", level="INFO") as log:
+            refresh_all_reading_texts_task()
+
+        summary = [m for m in log.output if "Refresh complete" in m][0]
+        self.assertIn("1 readings processed", summary)
+        self.assertIn("1 English API attempts", summary)
+        self.assertIn("1 successes", summary)
+        self.assertIn("{'hy': 1}", summary)
 
     @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
@@ -1050,7 +1104,7 @@ class ViewOnDemandRefetchTests(TestCase):
 
     @patch('hub.views.readings.fetch_all_reading_texts')
     @patch('hub.views.readings.prepare_shared_resources', return_value={})
-    @patch('hub.views.readings.scrape_readings', return_value=[])
+    @patch('hub.views.readings.get_daily_readings', return_value=[])
     @patch('hub.views.readings.generate_reading_context_task')
     def test_refetches_expired_reading(self, mock_ctx, mock_scrape, mock_prepare, mock_fetch):
         _create_reading(
@@ -1065,7 +1119,7 @@ class ViewOnDemandRefetchTests(TestCase):
 
     @patch('hub.views.readings.fetch_all_reading_texts')
     @patch('hub.views.readings.prepare_shared_resources', return_value={})
-    @patch('hub.views.readings.scrape_readings', return_value=[])
+    @patch('hub.views.readings.get_daily_readings', return_value=[])
     @patch('hub.views.readings.generate_reading_context_task')
     def test_does_not_refetch_just_inside_max_age(self, mock_ctx, mock_scrape, mock_prepare, mock_fetch):
         _create_reading(
@@ -1080,7 +1134,7 @@ class ViewOnDemandRefetchTests(TestCase):
 
     @patch('hub.views.readings.fetch_all_reading_texts')
     @patch('hub.views.readings.prepare_shared_resources', return_value={})
-    @patch('hub.views.readings.scrape_readings', return_value=[])
+    @patch('hub.views.readings.get_daily_readings', return_value=[])
     @patch('hub.views.readings.generate_reading_context_task')
     def test_prepares_shared_resources_once_for_many_expired(self, mock_ctx, mock_scrape, mock_prepare, mock_fetch):
         """Shared resources open an HTTP session and scrape a page; build them once."""
@@ -1167,7 +1221,7 @@ class ReadingFetchBudgetTests(TestCase):
         from rest_framework.test import APIRequestFactory
         from hub.views.readings import GetDailyReadingsForDate
 
-        with patch('hub.views.readings.scrape_readings') as mock_scrape, \
+        with patch('hub.views.readings.get_daily_readings') as mock_scrape, \
                 patch('hub.views.readings.generate_reading_context_task'):
             mock_scrape.return_value = [{
                 "book": "Genesis", "book_en": "Genesis",
@@ -1208,3 +1262,76 @@ class ReadingFetchBudgetTests(TestCase):
         from hub.services.api_budget import APIBudget
 
         self.assertFalse(APIBudget("bible_api_test", 0).consume())
+
+
+# ------------------------------------------------------------------ #
+#  Admin fetch actions respect the monthly budget too
+# ------------------------------------------------------------------ #
+
+class AdminFetchBudgetTests(TestCase):
+    """hub.admin.ReadingAdmin used to call fetch_text_for_reading, a separate helper
+    with no budget awareness — an admin bulk action could burn a whole month's
+    API.Bible quota outside the ceiling this module otherwise enforces everywhere else.
+    It now goes through fetch_english_text with budgets, same as the refresh task and
+    the public view.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2025, 6, 15), church=self.church)
+        self.admin_user = get_user_model().objects.create_superuser(
+            username="bible-admin", email="bible-admin@example.com", password="password",
+        )
+        self.mock_api_response = {
+            "content": "Test verse content.",
+            "copyright": "Test copyright.",
+            "version": "NKJV",
+            "reference": "Genesis 1:1-5",
+            "fums_token": "test-fums-token",
+        }
+
+    def _admin_request(self):
+        """A RequestFactory request wired with session + message storage, matching
+        what admin views/actions expect."""
+        request = RequestFactory().get("/admin/")
+        request.user = self.admin_user
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        setattr(request, "_messages", FallbackStorage(request))
+        return request
+
+    @override_settings(BIBLE_API_MONTHLY_BUDGET=2)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_bulk_fetch_action_stops_at_monthly_budget(self, mock_config, mock_resolve, mock_get_passage):
+        mock_get_passage.return_value = self.mock_api_response
+        readings = [
+            _create_reading(self.day, book="Genesis", start_ch=1, start_v=v, end_ch=1, end_v=v)
+            for v in range(1, 4)
+        ]
+        reading_admin = ReadingAdmin(Reading, AdminSite())
+
+        reading_admin.fetch_bible_text(
+            self._admin_request(), Reading.objects.filter(pk__in=[r.pk for r in readings]),
+        )
+
+        self.assertEqual(mock_get_passage.call_count, 2)
+        self.assertEqual(Reading.objects.filter(text_fetched_at__isnull=False).count(), 2)
+
+    @override_settings(BIBLE_API_MONTHLY_BUDGET=0)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_single_fetch_view_refuses_when_monthly_budget_exhausted(
+        self, mock_config, mock_resolve, mock_get_passage,
+    ):
+        reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+        reading_admin = ReadingAdmin(Reading, AdminSite())
+
+        reading_admin.fetch_bible_text_view(self._admin_request(), reading.pk)
+
+        mock_get_passage.assert_not_called()
+        reading.refresh_from_db()
+        self.assertIsNone(reading.text_fetched_at)

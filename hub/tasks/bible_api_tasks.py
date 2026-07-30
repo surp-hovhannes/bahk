@@ -49,7 +49,7 @@ def fetch_reading_text_task(self, reading_id: int):
         logger.error("Reading with id %s not found.", reading_id)
         return
 
-    success = fetch_english_text(reading)
+    success = fetch_english_text(reading, budgets=bible_api_budgets(include_daily=False))
     if not success:
         logger.warning(
             "Could not fetch English text for Reading %s (%s).",
@@ -102,19 +102,24 @@ def refresh_all_reading_texts_task(self):
     )
 
     # --- Step 3: Fetch each reading (all languages) ---
-    shared: dict = {"budgets": bible_api_budgets(include_daily=False)}
+    stats = {"attempted": 0}
+    shared: dict = {"budgets": bible_api_budgets(include_daily=False), "stats": stats}
     try:
         shared["service"] = BibleAPIService()
     except ValueError as exc:
         logger.error("Cannot initialize BibleAPIService: %s. English text will be skipped.", exc)
 
-    api_calls = 0
+    readings_processed = 0
+    successes = 0
     consecutive_failures = 0
     unmappable = 0
     aborted = False
     failures = []
+    failures_by_lang: dict[str, int] = {}
 
     for reading in iter_readings_in_pk_order(pks):
+        readings_processed += 1
+
         # Checked before the fetch so an unresolvable book name is not mistaken for the
         # API rejecting us: it fails before any HTTP request, costs nothing, and can
         # never succeed until BOOK_NAME_TO_USFM is extended.  Without this, a run that
@@ -127,15 +132,15 @@ def refresh_all_reading_texts_task(self):
         results = fetch_all_reading_texts(reading, **shared)
 
         if results.get("en"):
-            # Count English calls, not all-languages-succeeded: this is the only
-            # telemetry we have for API.Bible spend.
-            api_calls += 1
+            successes += 1
             consecutive_failures = 0
         elif mappable:
             consecutive_failures += 1
 
-        if not all(results.values()):
-            failed_langs = [lang for lang, ok in results.items() if not ok]
+        failed_langs = [lang for lang, ok in results.items() if not ok]
+        if failed_langs:
+            for lang in failed_langs:
+                failures_by_lang[lang] = failures_by_lang.get(lang, 0) + 1
             failures.append({
                 "reading_id": reading.pk,
                 "passage": reading.passage_reference,
@@ -146,10 +151,10 @@ def refresh_all_reading_texts_task(self):
             aborted = True
             logger.error(
                 "Aborting refresh after %d consecutive English fetch failures "
-                "(%d/%d readings attempted). API.Bible is likely rejecting calls "
-                "(quota or credentials); continuing would burn the remaining quota "
-                "without recording any text.",
-                consecutive_failures, api_calls + len(failures), len(pks),
+                "(%d/%d readings processed, %d English API attempts). API.Bible is "
+                "likely rejecting calls (quota or credentials); continuing would burn "
+                "the remaining quota without recording any text.",
+                consecutive_failures, readings_processed, len(pks), stats["attempted"],
             )
             break
 
@@ -158,10 +163,11 @@ def refresh_all_reading_texts_task(self):
 
     # --- Step 4: Error summary ---
     logger.info(
-        "Refresh %s: %d API.Bible calls, %d readings with failures "
-        "(%d of %d stale readings selected).",
+        "Refresh %s: %d readings processed, %d English API attempts, %d successes, "
+        "failures by language: %s (%d of %d stale readings selected).",
         "aborted" if aborted else "complete",
-        api_calls, len(failures), len(pks), stale_count,
+        readings_processed, stats["attempted"], successes, failures_by_lang,
+        len(pks), stale_count,
     )
 
     if unmappable:
