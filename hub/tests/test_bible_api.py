@@ -1170,8 +1170,6 @@ class ReadingFetchBudgetTests(TestCase):
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
     @patch('hub.services.bible_api_service.config', return_value="test-key")
     def test_daily_budget_caps_fetches(self, mock_config, mock_resolve, mock_get_passage):
-        from hub.services.reading_text_service import bible_api_budgets, fetch_english_text
-
         mock_get_passage.return_value = self.mock_api_response
         budgets = bible_api_budgets()
         readings = [
@@ -1196,8 +1194,6 @@ class ReadingFetchBudgetTests(TestCase):
         the top of the fetcher: a day of unmappable book names would otherwise drain the
         whole allowance without a single call being made.
         """
-        from hub.services.reading_text_service import bible_api_budgets, fetch_english_text
-
         mock_get_passage.return_value = self.mock_api_response
         budgets = bible_api_budgets()
         bad = _create_reading(self.day, book="Not A Real Book", start_ch=1, start_v=1, end_ch=1, end_v=1)
