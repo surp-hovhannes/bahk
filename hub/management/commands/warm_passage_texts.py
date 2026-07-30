@@ -129,6 +129,7 @@ class Command(BaseCommand):
         # database; a large "read but not enumerated" count means the two have diverged.
         in_db = set(
             Reading.objects.exclude(passage_key="")
+            .order_by()  # clear Reading.Meta.ordering; it would defeat the DISTINCT
             .values_list("passage_key", flat=True).distinct()
         )
         self.stdout.write(

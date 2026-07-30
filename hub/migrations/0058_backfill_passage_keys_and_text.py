@@ -24,8 +24,11 @@ def backfill(apps, schema_editor):
     PassageText = apps.get_model("hub", "PassageText")
 
     # --- 1. Reading.passage_key, one UPDATE per distinct citation ---
+    # order_by() clears Reading.Meta.ordering, which Django would otherwise append to the
+    # SELECT DISTINCT and thereby group per row instead of per citation.
     citations = (
         Reading.objects.filter(passage_key="")
+        .order_by()
         .values_list("book", "start_chapter", "start_verse", "end_chapter", "end_verse")
         .distinct()
     )
@@ -102,7 +105,7 @@ def backfill(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("hub", "0056_passage_text_and_reading_passage_key"),
+        ("hub", "0057_passage_text_and_reading_passage_key"),
     ]
 
     operations = [

@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0055_sync_day_church_and_fastintention_indexes'),
+        ('hub', '0056_alter_reading_options_reading_sequence'),
     ]
 
     operations = [

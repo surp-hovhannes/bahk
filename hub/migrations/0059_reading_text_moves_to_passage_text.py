@@ -7,7 +7,7 @@ import modeltrans.fields
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0057_backfill_passage_keys_and_text'),
+        ('hub', '0058_backfill_passage_keys_and_text'),
     ]
 
     operations = [

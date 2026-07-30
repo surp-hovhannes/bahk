@@ -107,6 +107,7 @@ def _repair_missing_passage_keys() -> int:
     repaired = 0
     citations = (
         Reading.objects.filter(passage_key="")
+        .order_by()  # clear Reading.Meta.ordering; it would defeat the DISTINCT
         .values_list("book", "start_chapter", "start_verse", "end_chapter", "end_verse")
         .distinct()
     )
@@ -129,6 +130,7 @@ def _report_unmappable() -> None:
 
     books = list(
         Reading.objects.filter(passage_key="")
+        .order_by()  # clear Reading.Meta.ordering; it would defeat the DISTINCT
         .values_list("book", flat=True)
         .distinct()[:20]
     )
@@ -164,6 +166,7 @@ def refresh_all_reading_texts_task(self):
 
     keys_in_use = set(
         Reading.objects.exclude(passage_key="")
+        .order_by()  # clear Reading.Meta.ordering; it would defeat the DISTINCT
         .values_list("passage_key", flat=True)
         .distinct()
     )

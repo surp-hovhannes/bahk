@@ -39,7 +39,10 @@ class Command(BaseCommand):
 
         # Grouped by citation: there are ~1,124 distinct passages no matter how many
         # reading rows exist, so this is bounded by the corpus rather than the table.
-        citations = qs.values_list(
+        # order_by() is required, not cosmetic: Reading.Meta.ordering would otherwise be
+        # appended to the SELECT DISTINCT, making every row its own group and putting the
+        # cost back on the table size.
+        citations = qs.order_by().values_list(
             "book", "start_chapter", "start_verse", "end_chapter", "end_verse",
         ).distinct()
 

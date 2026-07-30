@@ -764,24 +764,25 @@ class RefreshAllReadingTextsTaskTests(TestCase):
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
     @patch('hub.services.bible_api_service.config', return_value="test-key")
     def test_breaker_trip_reports_attempts_not_zero(self, mock_config, mock_resolve, mock_get_passage):
-        """A circuit-breaker trip must report the attempts that reached API.Bible.
+        """A circuit-breaker trip must report the calls that reached API.Bible.
 
         Counting only successes made a rejection spiral log "0 API calls," hiding the
-        exact event the telemetry exists to surface.
+        exact event the telemetry exists to surface.  Passages processed is not the same
+        number: a refused budget or an unmappable book never reaches the API.
         """
         mock_get_passage.side_effect = Exception("429 Too Many Requests")
 
-        today = timezone.localdate()
+        # Distinct passages: ten readings of *one* passage is a single retrieval now, so
+        # they could never trip a breaker set at three.
         for i in range(10):
-            day = Day.objects.create(date=today + timedelta(days=i), church=self.church)
-            _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+            self._reading_on(i, end_v=i + 1)
 
         with self.assertLogs("hub.tasks.bible_api_tasks", level="ERROR") as log:
             refresh_all_reading_texts_task()
 
-        abort_messages = [m for m in log.output if "Aborting refresh" in m]
+        abort_messages = [m for m in log.output if "Aborting en refresh" in m]
         self.assertEqual(len(abort_messages), 1)
-        self.assertIn("3 English API attempts", abort_messages[0])
+        self.assertIn("3 API calls made", abort_messages[0])
 
     @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
@@ -789,26 +790,30 @@ class RefreshAllReadingTextsTaskTests(TestCase):
     def test_readings_processed_does_not_double_count_partial_language_failure(
         self, mock_config, mock_resolve, mock_get_passage,
     ):
-        """A reading whose English fetch succeeds but Armenian fetch fails must count
-        once in readings processed, not twice — the old ``api_calls + len(failures)``
-        expression double-counted exactly this case.
+        """A passage whose English fetch succeeds but Armenian fetch fails must not be
+        counted twice — the old ``api_calls + len(failures)`` expression double-counted
+        exactly this case.  Per-language summaries make the two independent by
+        construction; this guards the property rather than the old expression.
 
         No BibleVerse rows are seeded for this passage, so the Armenian composer
         naturally returns no text without needing to mock anything.
         """
         mock_get_passage.return_value = self.mock_api_response
 
-        day = Day.objects.create(date=date(2025, 3, 15), church=self.church)
-        _create_reading(day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+        self._reading_on(0)
 
         with self.assertLogs("hub.tasks.bible_api_tasks", level="INFO") as log:
             refresh_all_reading_texts_task()
 
-        summary = [m for m in log.output if "Refresh complete" in m][0]
-        self.assertIn("1 readings processed", summary)
-        self.assertIn("1 English API attempts", summary)
-        self.assertIn("1 successes", summary)
-        self.assertIn("{'hy': 1}", summary)
+        english = [m for m in log.output if "en refresh complete" in m][0]
+        self.assertIn("1 passages retrieved, 0 failed (of 1 selected)", english)
+        self.assertIn("1 API call(s) made", english)
+
+        # The same passage failing in Armenian is counted only against Armenian, and it
+        # costs no API call: the composer is local.
+        armenian = [m for m in log.output if "hy refresh complete" in m][0]
+        self.assertIn("0 passages retrieved, 1 failed (of 1 selected)", armenian)
+        self.assertIn("0 API call(s) made", armenian)
 
     @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
     @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")

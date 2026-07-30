@@ -430,7 +430,7 @@ def ensure_book_hy(reading) -> bool:
     usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(reading.book))
     if not usfm:
         return False
-    hy_book = _usfm_to_hy_book_name().get(usfm)
+    hy_book = usfm_to_hy_book_name().get(usfm)
     if not hy_book or reading.book_hy == hy_book:
         return False
     reading.book_hy = hy_book
