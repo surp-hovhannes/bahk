@@ -1,6 +1,7 @@
 """Views for returning data pertaining to daily readings.
 
-Currently based on the Daily Worship app's website, sacredtradition.am
+Reading references come from the offline ``armenian_lectionary`` engine; Armenian verse text is
+served from the local ``BibleVerse`` corpus.  (Feast names still use sacredtradition.am.)
 """
 
 import logging
@@ -17,12 +18,14 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.services.reading_text_service import (
+    book_hy_for_book,
     fetch_all_reading_texts,
     get_reading_text_fields,
     prepare_shared_resources,
 )
+from hub.services.lectionary_service import get_daily_readings
 from hub.tasks import generate_reading_context_task
-from hub.utils import get_user_profile_safe, scrape_readings
+from hub.utils import get_user_profile_safe
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -116,16 +119,18 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
 
         day, _ = Day.objects.get_or_create(date=date_obj, church=church)
 
-        # If no readings exist for the requested day/church, scrape and persist them
+        # If no readings exist for the requested day/church, compute and persist them
         if not day.readings.exists():
-            # import readings for this date into db
-            readings = scrape_readings(date_obj, church)
+            # import readings for this date into db (offline, from armenian_lectionary)
+            readings = get_daily_readings(date_obj, church)
             new_reading_objs = []
             for reading in readings:
                 reading.update({"day": day})
                 # Extract and remove all book-related fields to handle them separately
                 book_en = reading.pop("book_en", reading.get("book"))
-                book_hy = reading.pop("book_hy", None)
+                # get_daily_readings() never returns "book_hy"; resolve it from the same
+                # usfm_mapping.json fetch_armenian_text() uses (see PR #461 review).
+                book_hy = book_hy_for_book(book_en)
                 # Remove 'book' from the dict to avoid using it in get_or_create lookup
                 reading.pop("book", None)
 

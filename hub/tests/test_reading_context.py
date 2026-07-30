@@ -266,16 +266,19 @@ class ReadingTranslationTests(APITestCase):
             active=True
         )
 
-    @patch("hub.views.readings.scrape_readings")
+    @patch("hub.views.readings.get_daily_readings")
     @patch("hub.views.readings.generate_reading_context_task.delay")
     def test_readings_with_translations_are_saved_correctly(self, mock_task, mock_scrape):
-        """Test that readings with Armenian translations are saved correctly using i18n field."""
-        # Mock scraped readings with translations
+        """Test that book_hy is resolved from usfm_mapping.json and saved using the i18n field.
+
+        Mocked with the real ``get_daily_readings()`` output shape (no ``book_hy`` key -- the
+        lectionary engine never returns one), so this exercises the actual production code
+        path rather than masking it. See PR #461 review.
+        """
         mock_scrape.return_value = [
             {
                 "book": "Genesis",
                 "book_en": "Genesis",
-                "book_hy": "Ծննդոց",
                 "start_chapter": 1,
                 "start_verse": 1,
                 "end_chapter": 1,
@@ -284,7 +287,6 @@ class ReadingTranslationTests(APITestCase):
             {
                 "book": "Matthew",
                 "book_en": "Matthew",
-                "book_hy": "Մատթէոս",
                 "start_chapter": 5,
                 "start_verse": 1,
                 "end_chapter": 5,
@@ -315,7 +317,7 @@ class ReadingTranslationTests(APITestCase):
         # Check second reading
         matthew = readings.get(book="Matthew")
         self.assertEqual(matthew.book, "Matthew")
-        self.assertEqual(matthew.book_hy, "Մատթէոս")
+        self.assertEqual(matthew.book_hy, "Աւետարան ըստ Մատթէոսի")
         
         # Verify translations can be retrieved
         self.assertEqual(genesis.book_i18n, "Genesis")  # Default language

@@ -1,4 +1,4 @@
-"""Celery tasks for fetching Armenian Bible verse text from sacredtradition.am.
+"""Celery tasks for composing Armenian Bible verse text from the offline ``BibleVerse`` corpus.
 
 Provides:
     - fetch_armenian_reading_text_task: Fetch Armenian text for a single Reading.
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, name='hub.tasks.fetch_armenian_reading_text_task')
 def fetch_armenian_reading_text_task(self, reading_id: int):
-    """Fetch Armenian Bible text for a single Reading from sacredtradition.am.
+    """Compose Armenian Bible text for a single Reading from the offline BibleVerse corpus.
 
     Delegates to :func:`hub.services.reading_text_service.fetch_armenian_text`.
 

@@ -269,3 +269,10 @@ CATENA_ABBREV_FOR_BOOK_NORMALIZED: dict[str, str] = {
     normalize_book_name(k): v
     for k, v in CATENA_ABBREV_FOR_BOOK.items()
 }
+
+# Normalized English-book-name -> USFM lookup, built once at import time.
+# Absorbs smart-quote/whitespace variants in book names coming from the lectionary engine.
+BOOK_NAME_TO_USFM_NORMALIZED: dict[str, str] = {
+    normalize_book_name(k): v
+    for k, v in BOOK_NAME_TO_USFM.items()
+}

@@ -14,17 +14,51 @@ The view calls ``prepare_shared_resources`` once per batch, then
 resolves model fields for the API response without hard-coding language names.
 """
 
+import json
 import logging
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
+from django.conf import settings
 from django.utils import timezone
 
-from hub.constants import normalize_book_name
+from hub.constants import BOOK_NAME_TO_USFM_NORMALIZED, normalize_book_name
 from hub.services.bible_api_service import BibleAPIService
 
 logger = logging.getLogger(__name__)
 
 ARMENIAN_TEXT_VERSION = "\u0546\u0578\u0580 \u0537\u057b\u0574\u056b\u0561\u056e\u056b\u0576"
+
+
+@lru_cache(maxsize=1)
+def usfm_to_hy_book_name() -> dict[str, str]:
+    """USFM book id -> Armenian (Nor Ejmiatsin) book display name, from the corpus mapping.
+
+    Loaded once from the version-controlled ``usfm_mapping.json`` so we can keep populating
+    ``Reading.book_hy`` after retiring the Armenian scrape.  Returns ``{}`` if unavailable.
+    """
+    path = Path(settings.BASE_DIR) / "hub" / "data" / "bible_hy" / "usfm_mapping.json"
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        logger.warning("Could not read Armenian book-name mapping at %s", path, exc_info=True)
+        return {}
+    return {row["usfm"]: row["name_hy"] for row in rows if row.get("usfm") and row.get("name_hy")}
+
+
+def book_hy_for_book(book_en: str) -> str | None:
+    """Resolve the Armenian (Nor Ejmiatsin) display name for an English book name.
+
+    Used at persistence time (``import_readings``, ``GetDailyReadingsForDate``) so
+    ``Reading.book_hy`` is populated immediately from the same version-controlled mapping
+    ``fetch_armenian_text`` uses, rather than depending on a ``book_hy`` key that
+    ``get_daily_readings`` never produces (see PR #461 review).
+    """
+    usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(book_en))
+    if not usfm:
+        return None
+    return usfm_to_hy_book_name().get(usfm)
 
 
 # ------------------------------------------------------------------ #
@@ -92,95 +126,55 @@ def fetch_english_text(reading, *, service: BibleAPIService | None = None, **_kw
         return False
 
 
-def fetch_armenian_text(
-    reading,
-    *,
-    armenian_texts: list[dict[str, Any]] | None = None,
-    **_kwargs,
-) -> bool:
-    """Fetch Armenian Bible text from sacredtradition.am for a single Reading.
+def fetch_armenian_text(reading, **_kwargs) -> bool:
+    """Compose Armenian Bible text for a single Reading from the offline ``BibleVerse`` corpus.
+
+    Maps the reading's (English) book name to a USFM id and composes the passage text — with
+    inline ``[verse]`` markers, matching the historical format — from the local ``BibleVerse``
+    table.  Fully offline; no network access.  Also refreshes ``book_hy`` from the corpus mapping.
 
     Args:
-        reading: A saved Reading model instance (must have ``day`` with a date).
-        armenian_texts: Optional pre-fetched list of scraped Armenian texts for
-                        the reading's date.  When processing a batch of readings
-                        for the same date, pass the same list to avoid scraping
-                        the page repeatedly.
+        reading: A saved Reading model instance.
 
     Returns:
-        True if text was successfully matched and saved, False otherwise.
+        True if text was composed and saved, False otherwise.
     """
-    from hub.utils import scrape_armenian_reading_texts
+    from hub.models import BibleVerse
 
-    if not reading.day or not reading.day.date:
-        logger.error("Reading %s has no associated day/date.", reading.pk)
-        return False
-
-    if armenian_texts is None:
-        try:
-            armenian_texts = scrape_armenian_reading_texts(
-                reading.day.date,
-                reading.day.church,
-            )
-        except Exception as exc:
-            logger.error(
-                "Failed to scrape Armenian texts for Reading %s (date %s): %s",
-                reading.pk, reading.day.date, exc,
-            )
-            return False
-
-    if not armenian_texts:
+    usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(reading.book))
+    if not usfm:
         logger.warning(
-            "No Armenian texts found for date %s (Reading %s).",
-            reading.day.date, reading.pk,
+            "No USFM mapping for book %r (Reading %s); skipping Armenian text.",
+            reading.book, reading.pk,
         )
         return False
 
-    reading_books = {
-        normalized_book
-        for normalized_book in (
-            normalize_book_name(getattr(reading, "book", None)),
-            normalize_book_name(getattr(reading, "book_hy", None)),
-        )
-        if normalized_book
-    }
-
-    range_matches = [
-        entry for entry in armenian_texts
-        if (
-            entry["start_chapter"] == reading.start_chapter
-            and entry["start_verse"] == reading.start_verse
-            and entry["end_chapter"] == reading.end_chapter
-            and entry["end_verse"] == reading.end_verse
-        )
-    ]
-
-    book_matches = [
-        entry for entry in range_matches
-        if normalize_book_name(entry.get("book")) in reading_books
-    ]
-
-    matched_entry = book_matches[0] if book_matches else (
-        range_matches[0] if len(range_matches) == 1 else None
+    text = BibleVerse.compose_passage(
+        BibleVerse.NOR_EJMIATSIN, usfm,
+        reading.start_chapter, reading.start_verse,
+        reading.end_chapter, reading.end_verse,
     )
-
-    if not matched_entry:
+    if not text:
         logger.warning(
-            "No matching Armenian text found for Reading %s (%s).",
+            "No Armenian text in corpus for Reading %s (%s).",
             reading.pk, reading.passage_reference,
         )
         return False
 
-    matched_text = matched_entry["text_hy"]
-    reading.text_hy = matched_text
+    # text_hy and book_hy are modeltrans virtual fields; the concrete ``i18n`` JSON column stores
+    # both, so a single save with ``i18n`` in update_fields persists them together.
+    reading.text_hy = text
     reading.text_hy_version = ARMENIAN_TEXT_VERSION
     reading.text_hy_fetched_at = timezone.now()
-    # text_hy is a modeltrans virtual field; i18n is the concrete JSON field
-    # that stores the translated text.
+
+    hy_book = usfm_to_hy_book_name().get(usfm)
+    if hy_book and reading.book_hy != hy_book:
+        reading.book_hy = hy_book
+
     reading.save(update_fields=["i18n", "text_hy_version", "text_hy_fetched_at"])
 
     logger.info(
-        "Fetched HY text for Reading %s (%s).",
+        "Composed HY text for Reading %s (%s).",
         reading.pk, reading.passage_reference,
     )
     return True
@@ -209,24 +203,10 @@ def _prepare_english_resources(**_kwargs) -> dict[str, Any]:
         return {}
 
 
-def _prepare_armenian_resources(*, date_obj, church, **_kwargs) -> dict[str, Any]:
-    """Pre-scrape the Armenian readings page once for the whole batch."""
-    from hub.utils import scrape_armenian_reading_texts
-
-    try:
-        return {"armenian_texts": scrape_armenian_reading_texts(date_obj, church)}
-    except Exception:
-        logger.warning(
-            "Failed to scrape Armenian texts for %s; Armenian text will be skipped.",
-            date_obj,
-            exc_info=True,
-        )
-        return {}
-
-
+# Armenian text is composed from the local BibleVerse corpus per-reading (indexed range scans),
+# so no batch-level shared resource is needed for "hy".
 RESOURCE_PREPARERS: dict[str, callable] = {
     "en": _prepare_english_resources,
-    "hy": _prepare_armenian_resources,
 }
 
 
@@ -243,8 +223,7 @@ def prepare_shared_resources(date_obj, church) -> dict[str, Any]:
         church: The Church instance.
 
     Returns:
-        Dict of shared resources, e.g.
-        ``{"service": <BibleAPIService>, "armenian_texts": [...]}``.
+        Dict of shared resources, e.g. ``{"service": <BibleAPIService>}``.
     """
     shared: dict[str, Any] = {}
     for lang, preparer in RESOURCE_PREPARERS.items():
