@@ -443,13 +443,31 @@ ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY')
 
 # API.BIBLE SETTINGS
 BIBLE_API_KEY = config('BIBLE_API_KEY', default='')
-# Number of days after which a reading's text is considered stale and needs refresh.
-# Set to 30 - (refresh interval in days) to ensure content never exceeds the 30-day
-# freshness requirement. Default: 23 (= 30 - 7, for a weekly refresh).
+# Number of days after which a reading's text is considered stale and is queued for the
+# weekly refresh.  Must stay <= READING_TEXT_MAX_AGE_DAYS, or text expires before the
+# refresh task can reach it.  Default: 23 (= 30 - 7, for a weekly refresh).
 READING_TEXT_REFRESH_DAYS = config('READING_TEXT_REFRESH_DAYS', default=23, cast=int)
-# Maximum number of readings to keep in the database.  Oldest readings are
-# pruned during the weekly refresh to stay within the API calls/month budget.
-MAX_READINGS = config('MAX_READINGS', default=2000, cast=int)
+# API.Bible's freshness cap.  Text older than this is never served (it is blanked in the
+# API response) and is re-fetched on demand by the readings view, subject to the budgets.
+READING_TEXT_MAX_AGE_DAYS = config('READING_TEXT_MAX_AGE_DAYS', default=30, cast=int)
+# Max readings refreshed per weekly run, nearest to today first.  Readings are never
+# deleted; this bounds API.Bible spend, not table size.
+READING_REFRESH_LIMIT = config('READING_REFRESH_LIMIT', default=2000, cast=int)
+# Abort a refresh run after this many consecutive English fetch failures.  A failed fetch
+# never records text_fetched_at, so without this a quota rejection (429/403) makes every
+# reading permanently stale and each weekly run re-burns the whole quota against a wall.
+READING_REFRESH_MAX_CONSECUTIVE_FAILURES = config(
+    'READING_REFRESH_MAX_CONSECUTIVE_FAILURES', default=10, cast=int
+)
+# Max on-demand API.Bible calls the public readings view may make per calendar day.
+READING_FETCH_DAILY_BUDGET = config('READING_FETCH_DAILY_BUDGET', default=75, cast=int)
+# Hard ceiling on ALL API.Bible calls per calendar month, across the weekly refresh task
+# and the on-demand view path.  Kept under the 5,000/month plan quota so that no failure
+# mode can exhaust it.  Budget:
+#   weekly refresh   <=2,000 per ~28-day cycle  ~= 2,170/month
+#   on-demand view   75/day                      = 2,250/month
+#                                          total ~= 4,420/month
+BIBLE_API_MONTHLY_BUDGET = config('BIBLE_API_MONTHLY_BUDGET', default=4500, cast=int)
 
 # Test settings
 if 'test' in sys.argv:

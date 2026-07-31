@@ -3,9 +3,9 @@
 Provides:
     - fetch_reading_text_task: Fetch text for a single Reading.
       Useful for management commands or ad-hoc backfills.
-    - refresh_all_reading_texts_task: Scheduled task that refreshes stale readings
-      (>READING_TEXT_REFRESH_DAYS old) to comply with API.Bible terms of use,
-      cleans up old readings, and logs an error summary.
+    - refresh_all_reading_texts_task: Scheduled task that refreshes at most
+      READING_REFRESH_LIMIT stale readings (>READING_TEXT_REFRESH_DAYS old), nearest to
+      today first, to comply with API.Bible terms of use, and logs an error summary.
 
 Each Reading receives its own API call so that it gets a unique FUMS token,
 as required by API.Bible's Fair Use Management System terms of use.
@@ -13,18 +13,20 @@ as required by API.Bible's Fair Use Management System terms of use.
 
 import logging
 import time
-from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
-from django.db.models import Q
-from django.utils import timezone
 
 from hub.models import Reading
 from hub.services.bible_api_service import BibleAPIService
 from hub.services.reading_text_service import (
+    bible_api_budgets,
     fetch_all_reading_texts,
     fetch_english_text,
+    iter_readings_in_pk_order,
+    reading_is_mappable,
+    select_nearest_stale_reading_ids,
+    stale_reading_queryset,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,7 @@ def fetch_reading_text_task(self, reading_id: int):
         logger.error("Reading with id %s not found.", reading_id)
         return
 
-    success = fetch_english_text(reading)
+    success = fetch_english_text(reading, budgets=bible_api_budgets(include_daily=False))
     if not success:
         logger.warning(
             "Could not fetch English text for Reading %s (%s).",
@@ -57,80 +59,127 @@ def fetch_reading_text_task(self, reading_id: int):
 
 @shared_task(bind=True, max_retries=1, default_retry_delay=300, name='hub.tasks.refresh_all_reading_texts_task')
 def refresh_all_reading_texts_task(self):
-    """Refresh Bible text (all languages) for all stale readings.
+    """Refresh Bible text (all languages) for the stale readings nearest to today.
 
     Each Reading gets its own API call so that it receives a unique FUMS token,
     as required by API.Bible's Fair Use Management System terms of use.
 
     Scheduled weekly via Celery Beat. Steps:
-        1. Cleanup: Delete oldest readings if count exceeds MAX_READINGS.
-        2. Find stale readings (text_fetched_at is NULL or older than threshold).
-        3. Fetch: Call every registered language fetcher per reading.
+        1. Find stale readings (text_fetched_at is NULL or older than threshold).
+        2. Select at most READING_REFRESH_LIMIT of them, nearest to today first:
+           today's and upcoming readings ascending, then past readings descending.
+        3. Fetch: Call every registered language fetcher per reading, stopping early
+           if English fetches start failing consecutively.
         4. Log a structured error summary.
+
+    Readings are never deleted.  Pruning the table only caused rows to be re-created and
+    re-fetched by the public readings view.  Rows this run does not reach stay expired;
+    their text is blanked at serve time and re-fetched on demand within the daily budget.
+
+    Spend is bounded twice over: by READING_REFRESH_LIMIT per run, and by the monthly
+    ceiling in ``bible_api_budgets``.  The monthly budget matters because a failed fetch
+    never records text_fetched_at — so without a ceiling, a run of quota rejections would
+    leave every reading permanently stale and re-burn the whole quota every week.
     """
-    # --- Step 1: Cleanup old readings ---
-    max_readings = getattr(settings, "MAX_READINGS", 2000)
-    total_readings = Reading.objects.count()
-    if total_readings > max_readings:
-        excess = total_readings - max_readings
-        oldest_ids = list(
-            Reading.objects.order_by("day__date", "pk")
-            .values_list("pk", flat=True)[:excess]
-        )
-        deleted_count, _ = Reading.objects.filter(pk__in=oldest_ids).delete()
-        logger.info(
-            "Cleanup: deleted %d oldest readings (was %d, now %d).",
-            deleted_count, total_readings, Reading.objects.count(),
-        )
-
-    # --- Step 2: Find stale readings ---
+    # --- Step 1: Find stale readings ---
     refresh_days = getattr(settings, "READING_TEXT_REFRESH_DAYS", 23)
-    threshold = timezone.now() - timedelta(days=refresh_days)
+    limit = getattr(settings, "READING_REFRESH_LIMIT", 2000)
+    max_consecutive_failures = getattr(settings, "READING_REFRESH_MAX_CONSECUTIVE_FAILURES", 10)
 
-    stale_readings = Reading.objects.select_related("day", "day__church").filter(
-        Q(text_fetched_at__isnull=True) | Q(text_fetched_at__lt=threshold)
-    )
+    stale_readings = stale_reading_queryset(refresh_days)
     stale_count = stale_readings.count()
 
     if stale_count == 0:
         logger.info("No stale readings found. Nothing to refresh.")
         return
 
+    # --- Step 2: Select the nearest-to-today slice we can afford ---
+    pks = select_nearest_stale_reading_ids(limit, queryset=stale_readings)
+
     logger.info(
-        "Found %d stale readings (threshold: %d days). Starting refresh...",
-        stale_count, refresh_days,
+        "Found %d stale readings (threshold: %d days); refreshing the %d nearest to today...",
+        stale_count, refresh_days, len(pks),
     )
 
     # --- Step 3: Fetch each reading (all languages) ---
-    shared: dict = {}
+    stats = {"attempted": 0}
+    shared: dict = {"budgets": bible_api_budgets(include_daily=False), "stats": stats}
     try:
         shared["service"] = BibleAPIService()
     except ValueError as exc:
         logger.error("Cannot initialize BibleAPIService: %s. English text will be skipped.", exc)
 
-    api_calls = 0
+    readings_processed = 0
+    successes = 0
+    consecutive_failures = 0
+    unmappable = 0
+    aborted = False
     failures = []
+    failures_by_lang: dict[str, int] = {}
 
-    for reading in stale_readings.iterator():
+    for reading in iter_readings_in_pk_order(pks):
+        readings_processed += 1
+
+        # Checked before the fetch so an unresolvable book name is not mistaken for the
+        # API rejecting us: it fails before any HTTP request, costs nothing, and can
+        # never succeed until BOOK_NAME_TO_USFM is extended.  Without this, a run that
+        # selects only such readings — the steady state once everything else is fresh —
+        # would trip the circuit breaker every week and cry wolf.
+        mappable = reading_is_mappable(reading)
+        if not mappable:
+            unmappable += 1
+
         results = fetch_all_reading_texts(reading, **shared)
-        if all(results.values()):
-            api_calls += 1
-        else:
-            failed_langs = [lang for lang, ok in results.items() if not ok]
+
+        if results.get("en"):
+            successes += 1
+            consecutive_failures = 0
+        elif mappable:
+            consecutive_failures += 1
+
+        failed_langs = [lang for lang, ok in results.items() if not ok]
+        if failed_langs:
+            for lang in failed_langs:
+                failures_by_lang[lang] = failures_by_lang.get(lang, 0) + 1
             failures.append({
                 "reading_id": reading.pk,
                 "passage": reading.passage_reference,
                 "failed_langs": failed_langs,
             })
 
+        if consecutive_failures >= max_consecutive_failures:
+            aborted = True
+            logger.error(
+                "Aborting refresh after %d consecutive English fetch failures "
+                "(%d/%d readings processed, %d English API attempts). API.Bible is "
+                "likely rejecting calls (quota or credentials); continuing would burn "
+                "the remaining quota without recording any text.",
+                consecutive_failures, readings_processed, len(pks), stats["attempted"],
+            )
+            break
+
         # Small delay between API calls to avoid rate limiting
         time.sleep(0.5)
 
     # --- Step 4: Error summary ---
     logger.info(
-        "Refresh complete: %d fully successful, %d with failures.",
-        api_calls, len(failures),
+        "Refresh %s: %d readings processed, %d English API attempts, %d successes, "
+        "failures by language: %s (%d of %d stale readings selected).",
+        "aborted" if aborted else "complete",
+        readings_processed, stats["attempted"], successes, failures_by_lang,
+        len(pks), stale_count,
     )
+
+    if unmappable:
+        # These can never succeed and stay stale forever, so they are re-selected every
+        # run. Surfaced separately so the fix (extend BOOK_NAME_TO_USFM) is discoverable
+        # rather than buried among transient API errors.
+        logger.warning(
+            "%d of %d selected readings have book names with no USFM mapping. They cost "
+            "no API calls but occupy refresh slots every run; add them to "
+            "BOOK_NAME_TO_USFM in hub/constants.py.",
+            unmappable, len(pks),
+        )
 
     if failures:
         failure_lines = []

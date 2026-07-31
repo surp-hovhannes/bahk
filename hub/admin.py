@@ -41,7 +41,8 @@ from hub.models import (
     ReadingContext,
     FastIntention,
 )
-from hub.services.bible_api_service import BibleAPIService, fetch_text_for_reading
+from hub.services.bible_api_service import BibleAPIService
+from hub.services.reading_text_service import bible_api_budgets, fetch_english_text
 from hub.tasks import (
     generate_reading_context_task,
     generate_feast_context_task,
@@ -835,7 +836,9 @@ class ReadingAdmin(admin.ModelAdmin):
             )
             return redirect(reverse("admin:hub_reading_change", args=[pk]))
 
-        success = fetch_text_for_reading(reading, service=service)
+        success = fetch_english_text(
+            reading, service=service, budgets=bible_api_budgets(include_daily=False),
+        )
         if success:
             self.message_user(
                 request,
@@ -862,10 +865,11 @@ class ReadingAdmin(admin.ModelAdmin):
             )
             return
 
+        budgets = bible_api_budgets(include_daily=False)
         success_count = 0
         fail_count = 0
         for reading in queryset:
-            if fetch_text_for_reading(reading, service=service):
+            if fetch_english_text(reading, service=service, budgets=budgets):
                 success_count += 1
             else:
                 fail_count += 1
