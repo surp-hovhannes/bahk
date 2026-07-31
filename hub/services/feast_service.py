@@ -32,14 +32,42 @@ logger = logging.getLogger(__name__)
 LECTIONARY_MIN_YEAR = getattr(settings, "LECTIONARY_MIN_YEAR", MIN_YEAR)
 LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", MAX_YEAR)
 
-# The engine returns a concrete, source-matched name for every day.  A handful of internal
-# placeholders (e.g. "(commemoration)", "(movable ordinary-time reading)") and the pre-validated-
-# table sentinel are not real commemorations; treat them as "no feast" so we don't persist them.
+# Internal engine placeholders, not real commemorations.  As of armenian-lectionary 1.3 the
+# engine emits none of these on any supported date (its tests/test_feast_contract.py asserts
+# that across 2001-2027), so reaching this guard now means an engine regression rather than a
+# normal outcome -- hence the error-level log.  Kept as defence in depth: persisting
+# "(commemoration)" as a feast name would be worse than recording no feast.
 _NON_FEAST_MARKERS = (
     "(commemoration)",
     "(movable ordinary-time reading)",
     "day not yet in validated table",
 )
+
+
+def _fit_to_storage(name: str, date_obj) -> str:
+    """Clamp ``name`` to what ``Feast.name`` can hold, reading the limit from the model.
+
+    The column is wide enough for every name the engine produces (the longest is 289
+    characters -- the Twelve Holy Doctors, whose name enumerates all twelve), so this
+    should never fire.  It exists because the failure it prevents is disproportionate: on
+    PostgreSQL an over-long value raises ``DataError``, which makes the API degrade to "no
+    feast" for that day and aborts a range import partway through, while SQLite (the test
+    DB) accepts it silently so no test would catch the regression.
+
+    The limit is read from the field rather than hard-coded so it cannot drift away from
+    the column after a future migration.
+    """
+    from hub.models import Feast          # local import: avoids a circular import at load
+
+    max_length = Feast._meta.get_field("name").max_length
+    if len(name) <= max_length:
+        return name
+    logger.error(
+        "Lectionary feast name for %s is %d characters, over the Feast.name limit of %d; "
+        "truncating to store it. Widen the column instead -- the full name is correct.",
+        date_obj, len(name), max_length,
+    )
+    return name[:max_length]
 
 
 def get_feast_for_date(date_obj, church) -> dict | None:
@@ -71,8 +99,18 @@ def get_feast_for_date(date_obj, church) -> dict | None:
 
     result_en = armenian_lectionary.compute_armenian_lectionary(date_obj, language="en")
     name_en = (result_en.get("Liturgical Day") or "").strip()
-    if not name_en or any(marker in name_en for marker in _NON_FEAST_MARKERS):
+    if not name_en:
         return None
+    if any(marker in name_en for marker in _NON_FEAST_MARKERS):
+        logger.error(
+            "Lectionary engine returned the placeholder %r for %s; recording no feast. "
+            "The engine is contracted to serve a real name on every supported date, so "
+            "this indicates an engine regression.",
+            name_en, date_obj,
+        )
+        return None
+
+    name_en = _fit_to_storage(name_en, date_obj)
 
     result_hy = armenian_lectionary.compute_armenian_lectionary(date_obj, language="hy")
     name_hy = (result_hy.get("Liturgical Day") or "").strip()

@@ -48,6 +48,10 @@ anthropic
 # Bible API
 requests
 # Armenian lectionary (offline daily-readings engine; replaces sacredtradition.am scraping)
+# >=1.3.0: feast-name accuracy. 1.2.x served a name the source contradicts on 41 dates
+# (wrong calendar-position ordinals) and a bare placeholder on 6 more; 1.3.0 regenerates
+# the position label per civil year and contracts every supported date to a real name in
+# both languages, which is what the real-engine tests in hub/tests assert.
 armenian-lectionary>=1.3.0
 # Linting
 ruff
