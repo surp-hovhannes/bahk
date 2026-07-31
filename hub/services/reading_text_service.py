@@ -37,7 +37,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from hub.constants import BOOK_NAME_TO_USFM_NORMALIZED, normalize_book_name, passage_key
+from hub.constants import BOOK_NAME_TO_USFM_NORMALIZED, normalize_book_name
 from hub.services.api_budget import DAY, MONTH, APIBudget
 from hub.services.bible_api_service import BibleAPIService
 

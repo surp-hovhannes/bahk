@@ -886,7 +886,13 @@ class ReadingAdmin(admin.ModelAdmin):
         return redirect(reverse("admin:hub_reading_change", args=[pk]))
 
     def fetch_bible_text(self, request, queryset):
-        """Fetch Bible text from API.Bible for selected readings."""
+        """Fetch Bible text from API.Bible for the passages the selected readings cite.
+
+        Deduplicated by ``passage_key``, so selecting a whole month of readings costs one
+        call per distinct passage rather than one per row -- the same rule the refresh
+        task and the public view follow.  Readings whose book has no USFM mapping have no
+        key and cannot be addressed by any fetcher, so they are reported, not attempted.
+        """
         try:
             service = BibleAPIService()
         except ValueError:
@@ -897,10 +903,18 @@ class ReadingAdmin(admin.ModelAdmin):
             )
             return
 
+        by_passage = {}
+        unmappable = 0
+        for reading in queryset:
+            if not reading.passage_key:
+                unmappable += 1
+                continue
+            by_passage.setdefault(reading.passage_key, reading)
+
         budgets = bible_api_budgets(include_daily=False)
         success_count = 0
         fail_count = 0
-        for reading in queryset:
+        for reading in by_passage.values():
             fetched = fetch_all_reading_texts(
                 reading, langs=["en"], service=service, budgets=budgets,
             )
@@ -909,13 +923,15 @@ class ReadingAdmin(admin.ModelAdmin):
             else:
                 fail_count += 1
 
-        parts = [f"Fetched text for {success_count} reading(s)."]
+        parts = [f"Fetched text for {success_count} passage(s)."]
         if fail_count:
             parts.append(f"{fail_count} failed (check logs).")
+        if unmappable:
+            parts.append(f"{unmappable} reading(s) skipped: book has no USFM mapping.")
         self.message_user(
             request,
             " ".join(parts),
-            level=messages.SUCCESS if fail_count == 0 else messages.WARNING,
+            level=messages.SUCCESS if (fail_count or unmappable) == 0 else messages.WARNING,
         )
 
     fetch_bible_text.short_description = "Fetch Bible text from API.Bible"
@@ -995,14 +1011,21 @@ class ReadingAdmin(admin.ModelAdmin):
         return redirect(reverse("admin:hub_reading_change", args=[reading.pk]))
 
     def fetch_armenian_text(self, request, queryset):
-        """Enqueue Armenian text fetch for selected readings."""
-        count = 0
+        """Enqueue Armenian text composition for the passages the selected readings cite.
+
+        Deduplicated by ``passage_key`` like the English action: composition is local so
+        no quota is at stake, but one task per row would recompose the same passage once
+        per date that cites it.
+        """
+        by_passage = {}
         for reading in queryset:
-            fetch_armenian_reading_text_task.delay(reading.id)
-            count += 1
+            if reading.passage_key:
+                by_passage.setdefault(reading.passage_key, reading.id)
+        for reading_id in by_passage.values():
+            fetch_armenian_reading_text_task.delay(reading_id)
         self.message_user(
             request,
-            f"Enqueued Armenian text fetch for {count} readings.",
+            f"Enqueued Armenian text fetch for {len(by_passage)} passage(s).",
             level=messages.SUCCESS,
         )
 

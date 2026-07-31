@@ -1425,6 +1425,105 @@ class AdminFetchBudgetTests(TestCase):
             PassageText.objects.filter(passage_key=reading.passage_key, language="en").exists()
         )
 
+    @override_settings(BIBLE_API_MONTHLY_BUDGET=0)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_bulk_fetch_makes_zero_calls_when_budget_exhausted(
+        self, mock_config, mock_resolve, mock_get_passage,
+    ):
+        """An exhausted ceiling stops the bulk action outright, not after the first row."""
+        readings = [
+            _create_reading(self.day, book="Genesis", start_ch=1, start_v=v, end_ch=1, end_v=v)
+            for v in range(1, 4)
+        ]
+        reading_admin = ReadingAdmin(Reading, AdminSite())
+
+        reading_admin.fetch_bible_text(
+            self._admin_request(), Reading.objects.filter(pk__in=[r.pk for r in readings]),
+        )
+
+        mock_get_passage.assert_not_called()
+        self.assertEqual(PassageText.objects.filter(language="en").count(), 0)
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_bulk_fetch_makes_one_call_per_distinct_passage(
+        self, mock_config, mock_resolve, mock_get_passage,
+    ):
+        """Selecting every row that cites a passage must cost one call, not one per row.
+
+        This is the whole point of passage keying, and the admin bulk action is the path
+        most likely to be pointed at a large selection by hand.
+        """
+        mock_get_passage.return_value = self.mock_api_response
+        other_day = Day.objects.create(date=date(2025, 6, 22), church=self.church)
+        third_day = Day.objects.create(date=date(2025, 6, 29), church=self.church)
+        readings = [
+            _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5),
+            _create_reading(other_day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5),
+            _create_reading(
+                self.day, book="St. Paul’s Epistle to the Romans",
+                start_ch=1, start_v=1, end_ch=1, end_v=7,
+            ),
+            # The same passage spelled with a straight apostrophe: the key normalises the
+            # book name, so this must not open a second dedup group.
+            _create_reading(
+                third_day, book="St. Paul's Epistle to the Romans",
+                start_ch=1, start_v=1, end_ch=1, end_v=7,
+            ),
+        ]
+        reading_admin = ReadingAdmin(Reading, AdminSite())
+
+        reading_admin.fetch_bible_text(
+            self._admin_request(), Reading.objects.filter(pk__in=[r.pk for r in readings]),
+        )
+
+        self.assertEqual(mock_get_passage.call_count, 2)
+        self.assertEqual(PassageText.objects.filter(language="en").count(), 2)
+        # Every selected reading is served, including the three that shared one call.
+        for reading in readings:
+            self.assertTrue(_text_for(reading).text)
+
+    @patch('hub.admin.fetch_armenian_reading_text_task')
+    def test_bulk_armenian_fetch_enqueues_one_task_per_passage(self, mock_task):
+        """Armenian composition is local and unmetered, but repeating it per row would
+        still recompose the same passage once per date that cites it."""
+        other_day = Day.objects.create(date=date(2025, 6, 22), church=self.church)
+        readings = [
+            _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5),
+            _create_reading(other_day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5),
+            _create_reading(self.day, book="Genesis", start_ch=2, start_v=1, end_ch=2, end_v=3),
+        ]
+        reading_admin = ReadingAdmin(Reading, AdminSite())
+
+        reading_admin.fetch_armenian_text(
+            self._admin_request(), Reading.objects.filter(pk__in=[r.pk for r in readings]),
+        )
+
+        self.assertEqual(mock_task.delay.call_count, 2)
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_bulk_fetch_skips_unmappable_readings_without_calling(
+        self, mock_config, mock_resolve, mock_get_passage,
+    ):
+        """No key means no fetcher can address the passage; it must not reach the API,
+        and must not be stored under the empty key shared by every unmappable book."""
+        mock_get_passage.return_value = self.mock_api_response
+        unmappable = _create_reading(self.day, book="Book of Nowhere")
+        self.assertEqual(unmappable.passage_key, "")
+        reading_admin = ReadingAdmin(Reading, AdminSite())
+
+        reading_admin.fetch_bible_text(
+            self._admin_request(), Reading.objects.filter(pk=unmappable.pk),
+        )
+
+        mock_get_passage.assert_not_called()
+        self.assertEqual(PassageText.objects.count(), 0)
+
 
 # ------------------------------------------------------------------ #
 #  passage_key derivation
