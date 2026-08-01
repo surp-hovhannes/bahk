@@ -1,28 +1,34 @@
-"""Unified service for fetching Bible reading text in all supported languages.
+"""Retrieval and serving of Scripture text, keyed by passage rather than by reading.
 
-Provides a registry of per-language fetchers and an orchestrator that calls
-them all for a given Reading.  Adding a new language is a three-step process:
+Text lives in ``PassageText``, one row per ``(passage_key, language)``.  A ``Reading`` row
+says *which* passage is read on a date; it does not carry the text.  That split is what
+bounds retrieval cost: the lectionary emits ~1,500 readings a year forever but resolves to
+only ~1,124 distinct passages across all years, so a passage-keyed store turns spend from
+"grows with the table" into a constant.
 
-    1. Write a ``fetch_<lang>_text`` function with the standard signature.
+Adding a language is two steps:
+
+    1. Write a ``fetch_<lang>`` function with the standard signature below.
     2. Register it in ``TEXT_FETCHERS``.
-    3. (Optional) Register a resource preparer in ``RESOURCE_PREPARERS`` if the
-       fetcher benefits from batch-level shared state (e.g. a scraped page or
-       HTTP session that can be reused across multiple readings).
-    4. (Optional) Register the language in ``EXPIRING_LANGUAGES`` if its source
-       licence caps how old served text may be.
 
-The view calls ``prepare_shared_resources`` once per batch, then
-``fetch_all_reading_texts`` once per reading.  ``get_reading_text_fields``
-resolves model fields for the API response without hard-coding language names.
+Plus two optional ones: register a resource preparer in ``RESOURCE_PREPARERS`` if the
+fetcher benefits from batch-level shared state (an HTTP session, a spend budget), and add
+the language to ``settings.LANGUAGE_TEXT_MAX_AGE_DAYS`` if its source licence caps how old
+served text may be.  Nothing else — no new columns, no modeltrans registration.
 
-``prepare_shared_resources`` also carries the API.Bible spend budgets, and only the
-readings view calls it \u2014 so the budgets gate the public on-demand path and nothing else.
-The weekly refresh task builds its own shared dict and charges only the monthly budget.
+Each fetcher is *pure retrieval*: it takes a citation and returns a payload or ``None``,
+and never writes.  ``store_passage_text`` is the single writer.  Keeping those apart is
+what lets one retrieval serve every reading that cites the passage.
+
+Fetchers receive the citation as written in the lectionary and apply their own edition's
+versification.  This is deliberate: KJVAIC splits the Greek additions to Esther into a
+separate ESG book numbered 1-7, while the Armenian Nor Ejmiatsin corpus keeps them inline
+as EST chapters 10-16, so ``Esther 10:4-13`` is a different address in each.  Neither
+mapping belongs in the shared key (see ``hub.constants.passage_key``).
 """
 
 import json
 import logging
-from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -37,7 +43,7 @@ from hub.services.bible_api_service import BibleAPIService
 
 logger = logging.getLogger(__name__)
 
-ARMENIAN_TEXT_VERSION = "\u0546\u0578\u0580 \u0537\u057b\u0574\u056b\u0561\u056e\u056b\u0576"
+ARMENIAN_TEXT_VERSION = "Նոր Էջմիածին"
 
 
 @lru_cache(maxsize=1)
@@ -70,184 +76,148 @@ def book_hy_for_book(book_en: str) -> str | None:
     return usfm_to_hy_book_name().get(usfm)
 
 
+def reading_citation(reading) -> tuple:
+    """The ``(book, start_ch, start_v, end_ch, end_v)`` tuple fetchers take."""
+    return (
+        reading.book,
+        reading.start_chapter,
+        reading.start_verse,
+        reading.end_chapter,
+        reading.end_verse,
+    )
+
+
 # ------------------------------------------------------------------ #
-#  Individual language fetchers
+#  Language fetchers -- pure retrieval, no writes
 # ------------------------------------------------------------------ #
+#
+# Signature:  fetch_<lang>(book, start_ch, start_v, end_ch, end_v, **shared) -> dict | None
+# Returns {"text", "version", "copyright", "fums_token"}, or None when retrieval failed.
 
-def reading_is_mappable(reading) -> bool:
-    """True when the reading's book resolves to a USFM id, i.e. a fetch would reach the API.
-
-    Lets callers tell "API.Bible refused us" apart from "we cannot name this book".  The
-    latter fails before any HTTP request, so it is a data problem to fix in
-    ``BOOK_NAME_TO_USFM`` — not a signal that the API is unhealthy.  Pure dict lookups,
-    no I/O, so it is cheap to call alongside a fetch.
-    """
-    try:
-        BibleAPIService.resolve_reading_passage(
-            reading.book,
-            reading.start_chapter,
-            reading.start_verse,
-            reading.end_chapter,
-            reading.end_verse,
-        )
-    except ValueError:
-        return False
-    return True
-
-
-def fetch_english_text(
-    reading,
+def fetch_english(
+    book,
+    start_chapter,
+    start_verse,
+    end_chapter,
+    end_verse,
     *,
     service: BibleAPIService | None = None,
     budgets: list[APIBudget] | None = None,
     stats: dict[str, int] | None = None,
     **_kwargs,
-) -> bool:
-    """Fetch English Bible text from API.Bible for a single Reading.
+) -> dict[str, str] | None:
+    """Retrieve English text for a passage from API.Bible.
 
-    Each Reading gets its own API call so that it receives a unique FUMS
-    token, as required by API.Bible's Fair Use Management System terms.
+    Applies API.Bible's own versification (the Esther -> ESG remap) and picks the edition
+    (NKJV for canonical books, KJVAIC for the Apocrypha); both are properties of this
+    source, not of the passage, so they live here rather than in the shared key.
 
     Args:
-        reading: A saved Reading model instance.
-        service: Optional pre-initialized BibleAPIService (shares the HTTP
-                 session across a batch of readings).
-        budgets: Optional spend budgets to charge before calling the API.  They are
-                 consumed only once the passage has resolved and immediately before
-                 the call, so an unmappable book name never burns a token.  If any
-                 budget refuses, no call is made and this returns False.
-        stats: Optional shared counter dict.  ``stats["attempted"]`` is incremented
-               once per call that actually reaches API.Bible — i.e. after an unmappable
-               book or an exhausted budget has already returned, so callers can tell
-               "we tried and it failed" apart from "we never tried" using only the
-               boolean return value.
+        book, start_chapter, ...: the citation as written in the lectionary.
+        service: pre-initialized client, to share one HTTP session across a batch.
+        budgets: spend budgets charged immediately before the call, and only once the
+            passage has resolved -- so an unmappable book never burns a token.  If any
+            budget refuses, no call is made and this returns None.
+        stats: optional shared counter dict.  ``stats["attempted"]`` is incremented once
+            per call that actually reaches API.Bible -- i.e. after an unmappable book or
+            an exhausted budget has already returned, so callers can tell "we tried and
+            it failed" apart from "we never tried" from the return value alone.
 
     Returns:
-        True if text was successfully fetched, False otherwise.
+        The payload dict, or None if the book could not be resolved, a budget refused,
+        or the API call failed.
     """
-    from hub.models import Reading as ReadingModel
-
     if service is None:
         try:
             service = BibleAPIService()
         except ValueError as exc:
             logger.error("Cannot initialize BibleAPIService: %s", exc)
-            return False
+            return None
 
-    # Resolve first, outside the API try-block: a mapping failure is a data problem, not
-    # an API failure, and must not consume budget or be reported as an API error.
+    # Resolve outside the API try-block: a mapping failure is a data problem, not an API
+    # failure, and must neither consume budget nor be reported as an API error.
     try:
         passage = BibleAPIService.resolve_reading_passage(
-            reading.book,
-            reading.start_chapter,
-            reading.start_verse,
-            reading.end_chapter,
-            reading.end_verse,
+            book, start_chapter, start_verse, end_chapter, end_verse,
         )
     except ValueError as exc:
-        logger.error(
-            "Book name mapping failed for Reading %s ('%s'): %s",
-            reading.pk, reading.book, exc,
-        )
-        return False
+        logger.error("Book name mapping failed for %r: %s", book, exc)
+        return None
 
     for budget in budgets or ():
         if not budget.consume():
             logger.warning(
-                "API.Bible %s budget (%d) exhausted; skipping fetch for Reading %s (%s).",
-                budget.period, budget.limit, reading.pk, reading.passage_reference,
+                "API.Bible %s budget (%d) exhausted; skipping fetch for %s %s:%s-%s:%s.",
+                budget.period, budget.limit,
+                book, start_chapter, start_verse, end_chapter, end_verse,
             )
-            return False
+            return None
 
     if stats is not None:
         stats["attempted"] = stats.get("attempted", 0) + 1
 
     try:
-        result = service.get_passage(
-            *passage,
-        )
-
-        ReadingModel.objects.filter(pk=reading.pk).update(
-            text=result["content"],
-            text_copyright=result["copyright"],
-            text_version=result["version"],
-            text_fetched_at=timezone.now(),
-            fums_token=result.get("fums_token", ""),
-        )
-        logger.info(
-            "Fetched EN text for Reading %s (%s).",
-            reading.pk, reading.passage_reference,
-        )
-        return True
+        result = service.get_passage(*passage)
     except Exception as exc:
         logger.error(
-            "API call failed for Reading %s (%s): %s",
-            reading.pk, reading.passage_reference, exc,
+            "API call failed for %s %s:%s-%s:%s: %s",
+            book, start_chapter, start_verse, end_chapter, end_verse, exc,
         )
-        return False
+        return None
+
+    return {
+        "text": result["content"],
+        "version": result["version"],
+        "copyright": result["copyright"],
+        "fums_token": result.get("fums_token", ""),
+    }
 
 
-def fetch_armenian_text(reading, **_kwargs) -> bool:
-    """Compose Armenian Bible text for a single Reading from the offline ``BibleVerse`` corpus.
+def fetch_armenian(
+    book,
+    start_chapter,
+    start_verse,
+    end_chapter,
+    end_verse,
+    **_kwargs,
+) -> dict[str, str] | None:
+    """Compose Armenian text for a passage from the offline ``BibleVerse`` corpus.
 
-    Maps the reading's (English) book name to a USFM id and composes the passage text — with
-    inline ``[verse]`` markers, matching the historical format — from the local ``BibleVerse``
-    table.  Fully offline; no network access.  Also refreshes ``book_hy`` from the corpus mapping.
+    Fully local -- indexed range scans over the Nor Ejmiatsin corpus, no network, no
+    quota.  Uses the citation's own numbering: unlike KJVAIC, this corpus keeps the Greek
+    additions to Esther inline in EST, so no remap applies.
 
-    Args:
-        reading: A saved Reading model instance.
-
-    Returns:
-        True if text was composed and saved, False otherwise.
+    Returns None when the book has no USFM mapping or the corpus has no verses in range.
     """
     from hub.models import BibleVerse
 
-    usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(reading.book))
+    usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(book))
     if not usfm:
-        logger.warning(
-            "No USFM mapping for book %r (Reading %s); skipping Armenian text.",
-            reading.book, reading.pk,
-        )
-        return False
+        logger.warning("No USFM mapping for book %r; skipping Armenian text.", book)
+        return None
 
     text = BibleVerse.compose_passage(
         BibleVerse.NOR_EJMIATSIN, usfm,
-        reading.start_chapter, reading.start_verse,
-        reading.end_chapter, reading.end_verse,
+        start_chapter, start_verse, end_chapter, end_verse,
     )
     if not text:
         logger.warning(
-            "No Armenian text in corpus for Reading %s (%s).",
-            reading.pk, reading.passage_reference,
+            "No Armenian text in corpus for %s %s:%s-%s:%s.",
+            book, start_chapter, start_verse, end_chapter, end_verse,
         )
-        return False
+        return None
 
-    # text_hy and book_hy are modeltrans virtual fields; the concrete ``i18n`` JSON column stores
-    # both, so a single save with ``i18n`` in update_fields persists them together.
-    reading.text_hy = text
-    reading.text_hy_version = ARMENIAN_TEXT_VERSION
-    reading.text_hy_fetched_at = timezone.now()
+    return {
+        "text": text,
+        "version": ARMENIAN_TEXT_VERSION,
+        "copyright": "",
+        "fums_token": "",  # locally composed; no usage-tracking token to report
+    }
 
-    hy_book = usfm_to_hy_book_name().get(usfm)
-    if hy_book and reading.book_hy != hy_book:
-        reading.book_hy = hy_book
-
-    reading.save(update_fields=["i18n", "text_hy_version", "text_hy_fetched_at"])
-
-    logger.info(
-        "Composed HY text for Reading %s (%s).",
-        reading.pk, reading.passage_reference,
-    )
-    return True
-
-
-# ------------------------------------------------------------------ #
-#  Registry & orchestrator
-# ------------------------------------------------------------------ #
 
 TEXT_FETCHERS: dict[str, callable] = {
-    "en": fetch_english_text,
-    "hy": fetch_armenian_text,
+    "en": fetch_english,
+    "hy": fetch_armenian,
 }
 
 
@@ -258,15 +228,14 @@ TEXT_FETCHERS: dict[str, callable] = {
 def bible_api_budgets(*, include_daily: bool = True) -> list[APIBudget]:
     """Spend budgets to charge for one API.Bible call, cheapest-to-refuse first.
 
-    The monthly ceiling applies to every caller, so no failure mode — including a run of
-    quota rejections, which never record ``text_fetched_at`` and therefore retry forever —
-    can exhaust the plan quota.  The daily budget applies only to the public on-demand
-    path, so traffic there cannot spend a whole month's allowance in a day.
+    The monthly ceiling applies to every caller, so no failure mode can exhaust the plan
+    quota.  The daily budget applies only to the public on-demand path, so traffic there
+    cannot spend a whole month's allowance in a day.
     """
     budgets = []
     if include_daily:
         budgets.append(APIBudget(
-            "bible_api", getattr(settings, "READING_FETCH_DAILY_BUDGET", 75), period=DAY,
+            "bible_api", getattr(settings, "READING_FETCH_DAILY_BUDGET", 25), period=DAY,
         ))
     budgets.append(APIBudget(
         "bible_api", getattr(settings, "BIBLE_API_MONTHLY_BUDGET", 4500), period=MONTH,
@@ -279,8 +248,8 @@ def _prepare_english_resources(**_kwargs) -> dict[str, Any]:
 
     Only ``prepare_shared_resources`` reaches this, and only the readings view calls that,
     so the daily budget is scoped to the public on-demand path.  The budgets are built
-    outside the try-block: if the API key is missing we still want ``fetch_english_text``
-    to receive them rather than fall through to constructing its own unbudgeted service.
+    outside the try-block: if the API key is missing we still want ``fetch_english`` to
+    receive them rather than fall through to constructing its own unbudgeted service.
     """
     resources: dict[str, Any] = {"budgets": bible_api_budgets()}
     try:
@@ -290,27 +259,18 @@ def _prepare_english_resources(**_kwargs) -> dict[str, Any]:
     return resources
 
 
-# Armenian text is composed from the local BibleVerse corpus per-reading (indexed range scans),
+# Armenian composes from the local BibleVerse corpus per passage (indexed range scans),
 # so no batch-level shared resource is needed for "hy".
 RESOURCE_PREPARERS: dict[str, callable] = {
     "en": _prepare_english_resources,
 }
 
 
-def prepare_shared_resources(date_obj, church) -> dict[str, Any]:
-    """Build the shared-resource dict consumed by ``fetch_all_reading_texts``.
+def prepare_shared_resources(date_obj=None, church=None) -> dict[str, Any]:
+    """Build the shared-resource dict forwarded to every fetcher.
 
-    Iterates over ``RESOURCE_PREPARERS`` and merges their results into a
-    single dict.  Each preparer receives ``date_obj`` and ``church`` as
-    keyword arguments and returns a dict of key/value pairs to forward to
-    the fetchers.
-
-    Args:
-        date_obj: The date for which readings are being fetched.
-        church: The Church instance.
-
-    Returns:
-        Dict of shared resources, e.g. ``{"service": <BibleAPIService>}``.
+    ``date_obj``/``church`` are accepted and passed through for preparers that need them;
+    no current preparer does, since retrieval is now keyed by passage rather than by date.
     """
     shared: dict[str, Any] = {}
     for lang, preparer in RESOURCE_PREPARERS.items():
@@ -322,184 +282,202 @@ def prepare_shared_resources(date_obj, church) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------ #
-#  Orchestrator
+#  The single writer
 # ------------------------------------------------------------------ #
 
-def fetch_all_reading_texts(reading, **shared_resources) -> dict[str, bool]:
-    """Fetch reading text for every registered language.
+def store_passage_text(key: str, language: str, payload: dict[str, str]):
+    """Persist a fetcher payload as the text for *key* in *language*.
 
-    Iterates over ``TEXT_FETCHERS`` and calls each fetcher, forwarding any
-    ``shared_resources`` as keyword arguments.  Each fetcher accepts
-    ``**_kwargs`` so unknown keys are silently ignored.
+    One writer for every language, so a new source cannot introduce its own storage
+    convention the way the English (queryset ``.update()``) and Armenian (``save()`` into
+    the modeltrans JSON column) paths used to diverge.
+    """
+    from hub.models import PassageText
+
+    obj, _created = PassageText.objects.update_or_create(
+        passage_key=key,
+        language=language,
+        defaults={
+            "text": payload.get("text", ""),
+            "version": payload.get("version", ""),
+            "copyright": payload.get("copyright", ""),
+            "fums_token": payload.get("fums_token", ""),
+            "fetched_at": timezone.now(),
+        },
+    )
+    return obj
+
+
+def fetch_passage_text(key: str, citation: tuple, langs=None, **shared) -> dict[str, bool]:
+    """Retrieve and store text for one passage in each requested language.
 
     Args:
-        reading: A saved Reading model instance.
-        **shared_resources: Keyword arguments forwarded to every fetcher.
-            Typically produced by ``prepare_shared_resources()``.
+        key: the passage key the result is stored under.
+        citation: ``(book, start_ch, start_v, end_ch, end_v)`` as written in the lectionary.
+        langs: language codes to fetch; defaults to every registered language.
+        **shared: forwarded to each fetcher (see ``prepare_shared_resources``).
 
     Returns:
-        Dict mapping language code to success boolean, e.g.
-        ``{"en": True, "hy": False}``.
+        ``{lang: succeeded}``.  A language is False when its fetcher returned None --
+        unresolvable book, refused budget, or a failed call.
     """
-    results = {}
-    for lang, fetcher in TEXT_FETCHERS.items():
-        try:
-            results[lang] = fetcher(reading, **shared_resources)
-        except Exception:
-            logger.exception(
-                "Unhandled error fetching %s text for Reading %s",
-                lang, reading.pk,
-            )
+    if not key:
+        # No USFM mapping, so no fetcher can address this passage.  Callers exclude these
+        # up front; this guard keeps a stray one from being stored under the empty key,
+        # where it would collide with every other unmappable passage.
+        logger.warning("Refusing to fetch %r: no passage key (unmappable book).", citation)
+        return {lang: False for lang in (langs or TEXT_FETCHERS)}
+
+    results: dict[str, bool] = {}
+    for lang in (langs if langs is not None else TEXT_FETCHERS):
+        fetcher = TEXT_FETCHERS.get(lang)
+        if fetcher is None:
+            logger.error("No fetcher registered for language %r.", lang)
             results[lang] = False
+            continue
+        try:
+            payload = fetcher(*citation, **shared)
+        except Exception:
+            logger.exception("Unhandled error fetching %s text for %s", lang, key)
+            results[lang] = False
+            continue
+        if payload is None:
+            results[lang] = False
+            continue
+        store_passage_text(key, lang, payload)
+        logger.info("Stored %s text for %s.", lang, key)
+        results[lang] = True
     return results
 
 
+def fetch_all_reading_texts(reading, langs=None, **shared) -> dict[str, bool]:
+    """Fetch text for the passage *reading* cites.  Convenience wrapper for Reading callers.
+
+    The text is stored against the passage, so this also satisfies every other reading
+    citing it -- on any date, for any church.
+    """
+    return fetch_passage_text(reading.passage_key, reading_citation(reading), langs, **shared)
+
+
 # ------------------------------------------------------------------ #
-#  Stale-reading selection
+#  Lookup and freshness
 # ------------------------------------------------------------------ #
 
-def stale_reading_queryset(refresh_days: int | None = None):
-    """Readings whose English text is missing or older than the refresh threshold."""
-    from hub.models import Reading as ReadingModel
+def load_passage_texts(keys) -> dict[tuple[str, str], Any]:
+    """``{(passage_key, language): PassageText}`` for *keys*, in one query.
+
+    The readings view resolves a whole day's response through this, so it must stay a
+    single round trip regardless of how many readings the day has.
+    """
+    from hub.models import PassageText
+
+    keys = {k for k in keys if k}
+    if not keys:
+        return {}
+    return {
+        (pt.passage_key, pt.language): pt
+        for pt in PassageText.objects.filter(passage_key__in=keys)
+    }
+
+
+def languages_needing_fetch(key: str, passage_texts: dict, *, langs=None, now=None) -> list[str]:
+    """Registered languages with no servable text for *key*: missing, empty, or expired.
+
+    Per-language by construction.  English arriving from the shared store must not be read
+    as "this passage is done" and suppress Armenian, which is the failure the old
+    per-reading, English-only gate allowed.
+    """
+    if not key:
+        return []
+    needed = []
+    for lang in (langs if langs is not None else TEXT_FETCHERS):
+        existing = passage_texts.get((key, lang))
+        if existing is None or not existing.text or existing.is_expired(now=now):
+            needed.append(lang)
+    return needed
+
+
+def stale_passage_text_queryset(language: str, refresh_days: int | None = None):
+    """``PassageText`` rows for *language* due for re-retrieval.
+
+    Uses ``READING_TEXT_REFRESH_DAYS`` (23) rather than the 30-day serve-time cap, so a
+    refreshed passage has a week of margin before it would be withheld from responses.
+    """
+    from datetime import timedelta
+
+    from hub.models import PassageText
 
     if refresh_days is None:
         refresh_days = getattr(settings, "READING_TEXT_REFRESH_DAYS", 23)
     threshold = timezone.now() - timedelta(days=refresh_days)
-    return ReadingModel.objects.filter(
-        Q(text_fetched_at__isnull=True) | Q(text_fetched_at__lt=threshold)
+    return PassageText.objects.filter(language=language).filter(
+        Q(fetched_at__isnull=True) | Q(fetched_at__lt=threshold) | Q(text="")
     )
 
 
-def select_nearest_stale_reading_ids(limit: int, *, today=None, queryset=None) -> list[int]:
-    """PKs of at most *limit* stale readings, nearest to today first.
+def reading_needs_text_fetch(reading, passage_texts: dict, *, now=None) -> bool:
+    """True when any registered language lacks servable text for this reading's passage."""
+    return bool(languages_needing_fetch(reading.passage_key, passage_texts, now=now))
 
-    Today's and upcoming readings come first (ascending by date), then past readings
-    (descending), until *limit* is reached.  Nobody browses far into the past, so
-    spending the refresh allowance on the dates people actually open is what keeps
-    served text inside API.Bible's freshness window.
 
-    Uses two ordered queries rather than an ``Abs(day__date - today)`` annotation so the
-    same code runs on PostgreSQL (production) and SQLite (tests).
+def ensure_book_hy(reading) -> bool:
+    """Top up ``Reading.book_hy`` from the corpus mapping.  Returns True if it changed.
+
+    Stays on ``Reading`` rather than moving to ``PassageText``: it is the display name of
+    the book on this reading, not retrieved passage text.  Rows created from the
+    lectionary engine already carry it; this repairs older rows.
     """
-    if limit <= 0:
-        return []
-
-    qs = stale_reading_queryset() if queryset is None else queryset
-    today = today or timezone.localdate()
-
-    upcoming = list(
-        qs.filter(day__date__gte=today)
-        .order_by("day__date", "pk")
-        .values_list("pk", flat=True)[:limit]
-    )
-    remaining = limit - len(upcoming)
-    if remaining <= 0:
-        return upcoming
-
-    past = list(
-        qs.filter(day__date__lt=today)
-        .order_by("-day__date", "-pk")
-        .values_list("pk", flat=True)[:remaining]
-    )
-    return upcoming + past
-
-
-def iter_readings_in_pk_order(pks, chunk_size: int = 100):
-    """Yield Readings for *pks* in exactly that order, loading *chunk_size* at a time.
-
-    Chunked rather than one big ``list()``: a refresh run sleeps between calls and can
-    take tens of minutes, so each batch is re-read just before use instead of holding
-    thousands of rows (each carrying full verse text) in memory the whole time.
-    """
-    from hub.models import Reading as ReadingModel
-
-    pks = list(pks)
-    for start in range(0, len(pks), chunk_size):
-        chunk = pks[start:start + chunk_size]
-        by_pk = {
-            reading.pk: reading
-            for reading in ReadingModel.objects.select_related("day", "day__church").filter(pk__in=chunk)
-        }
-        for pk in chunk:
-            reading = by_pk.get(pk)
-            if reading is not None:  # skip rows deleted between selection and load
-                yield reading
+    usfm = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(reading.book))
+    if not usfm:
+        return False
+    hy_book = usfm_to_hy_book_name().get(usfm)
+    if not hy_book or reading.book_hy == hy_book:
+        return False
+    reading.book_hy = hy_book
+    reading.save(update_fields=["i18n"])
+    return True
 
 
 # ------------------------------------------------------------------ #
 #  Response field resolution
 # ------------------------------------------------------------------ #
 
-# Maps language code → (text_field, version_field, copyright_field, fums_field)
-# English uses the base field names; other languages use the <field>_<lang> convention.
-LANGUAGE_FIELD_MAP: dict[str, tuple[str, str, str, str]] = {
-    "en": ("text",    "text_version",    "text_copyright",    "fums_token"),
-    "hy": ("text_hy", "text_hy_version", "text_hy_copyright", "text_hy_fums_token"),
-}
-
-# Languages whose source licence caps how old served text may be, mapped to the model
-# field holding the last-fetch timestamp.  A language absent from this dict never
-# expires.  Registering here is the optional fourth step when adding a language.
-EXPIRING_LANGUAGES: dict[str, str] = {
-    "en": "text_fetched_at",  # API.Bible: 30-day freshness requirement
-}
-
-
-def text_is_expired(reading, lang: str, *, now=None) -> bool:
-    """True when *lang*'s text on *reading* is past its licence's freshness cap.
-
-    A missing timestamp counts as expired: we cannot show that the text is fresh enough
-    to serve, so we treat it the same as stale.
-    """
-    fetched_at_field = EXPIRING_LANGUAGES.get(lang)
-    if fetched_at_field is None:
-        return False
-    fetched_at = getattr(reading, fetched_at_field, None)
-    if fetched_at is None:
-        return True
-    max_age = getattr(settings, "READING_TEXT_MAX_AGE_DAYS", 30)
-    return fetched_at < (now or timezone.now()) - timedelta(days=max_age)
-
-
-def reading_needs_text_fetch(reading, *, now=None) -> bool:
-    """True when any freshness-limited language on *reading* has expired.
-
-    The readings view uses this to decide whether to spend an on-demand API call.
-    """
-    return any(text_is_expired(reading, lang, now=now) for lang in EXPIRING_LANGUAGES)
-
-
-def get_reading_text_fields(reading, lang: str) -> dict[str, str]:
+def get_reading_text_fields(reading, lang: str, *, passage_texts: dict) -> dict[str, str]:
     """Return the text/version/copyright/FUMS fields for *lang* as a dict.
 
-    Falls back to English if the requested language is not in the registry.  Expired text
-    is blanked rather than served: API.Bible's terms forbid displaying content cached for
-    more than ``READING_TEXT_MAX_AGE_DAYS``, and text can outlive that window whenever a
-    refresh run does not reach a reading or the spend budget is exhausted.
+    Falls back to English when the requested language is not registered.  Expired text is
+    blanked rather than served: API.Bible's terms forbid displaying content cached beyond
+    ``LANGUAGE_TEXT_MAX_AGE_DAYS['en']``, and text can outlive that window whenever a
+    refresh run does not reach a passage or the spend budget is exhausted.
 
     Args:
-        reading: A Reading model instance.
-        lang: ISO 639-1 language code (e.g. ``"en"``, ``"hy"``).
+        reading: a Reading instance.
+        lang: ISO 639-1 code, e.g. ``"en"``, ``"hy"``.
+        passage_texts: as returned by ``load_passage_texts``.
 
     Returns:
-        Dict with keys ``text``, ``textVersion``, ``textCopyright``,
-        ``fumsToken`` — ready to be merged into the API response.
+        ``text``, ``textVersion``, ``textCopyright``, ``fumsToken`` -- ready to merge into
+        the API response.
     """
-    # Resolve the language before checking expiry, so an unknown code falls back to
-    # English *and* is held to English's freshness rule rather than skipping it.
-    resolved = lang if lang in LANGUAGE_FIELD_MAP else "en"
+    blank = {"text": "", "textVersion": "", "textCopyright": "", "fumsToken": ""}
 
-    if text_is_expired(reading, resolved):
+    # Resolve the language before checking expiry, so an unknown code falls back to English
+    # *and* is held to English's freshness rule rather than skipping it.
+    resolved = lang if lang in TEXT_FETCHERS else "en"
+
+    existing = passage_texts.get((reading.passage_key, resolved))
+    if existing is None:
+        return blank
+    if existing.is_expired():
         logger.info(
-            "Suppressing expired %s text for Reading %s (fetched %s).",
-            resolved, reading.pk, getattr(reading, EXPIRING_LANGUAGES[resolved], None),
+            "Suppressing expired %s text for %s (fetched %s).",
+            resolved, reading.passage_key, existing.fetched_at,
         )
-        return {"text": "", "textVersion": "", "textCopyright": "", "fumsToken": ""}
+        return blank
 
-    text_f, version_f, copyright_f, fums_f = LANGUAGE_FIELD_MAP[resolved]
     return {
-        "text": getattr(reading, text_f, "") or "",
-        "textVersion": getattr(reading, version_f, "") or "",
-        "textCopyright": getattr(reading, copyright_f, "") or "",
-        "fumsToken": getattr(reading, fums_f, "") or "",
+        "text": existing.text or "",
+        "textVersion": existing.version or "",
+        "textCopyright": existing.copyright or "",
+        "fumsToken": existing.fums_token or "",
     }

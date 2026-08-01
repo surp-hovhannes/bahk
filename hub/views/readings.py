@@ -18,10 +18,13 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.services.reading_text_service import (
-    fetch_all_reading_texts,
+    ensure_book_hy,
+    fetch_passage_text,
     get_reading_text_fields,
+    languages_needing_fetch,
+    load_passage_texts,
     prepare_shared_resources,
-    reading_needs_text_fetch,
+    reading_citation,
 )
 from hub.services.lectionary_service import get_daily_readings, persist_readings
 from hub.tasks import generate_reading_context_task
@@ -125,26 +128,40 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             readings = get_daily_readings(date_obj, church)
             persist_readings(day, readings)
 
-        # Fetch text for all languages synchronously so it is available in the response
-        # immediately.  This covers newly created readings (no fetch timestamp yet) and
-        # existing ones whose text has passed READING_TEXT_MAX_AGE_DAYS — that text is
-        # blanked in the response below, so re-fetching is what keeps the page useful.
-        # Spend is capped by the daily and monthly budgets inside the English fetcher.
-        readings_to_fetch = [r for r in day.readings.all() if reading_needs_text_fetch(r)]
-        if readings_to_fetch:
-            # Built lazily: shared resources open an HTTP session, so requests with
-            # nothing to fetch must not pay for it.
-            shared = prepare_shared_resources(date_obj, church)
-            for reading_obj in readings_to_fetch:
-                fetch_all_reading_texts(reading_obj, **shared)
+        readings = list(day.readings.all())
 
-        # Now ensure we have up-to-date queryset.  fetch_english_text writes via
-        # Reading.objects.filter(...).update(), so the instances in readings_to_fetch are
-        # stale; the loop below re-queries day.readings.all() and sees the new text.
-        day.refresh_from_db()
+        # One query for the whole response, regardless of how many readings the day has.
+        # Text is keyed by passage, so a date never requested before still costs nothing
+        # to serve as long as its passages have been retrieved for some other date.
+        passage_keys = {r.passage_key for r in readings if r.passage_key}
+        passage_texts = load_passage_texts(passage_keys)
+
+        # Retrieve synchronously, per (passage, language), so text is in this response.
+        # Gating per language matters: English arriving from the shared store must not be
+        # read as "this passage is done" and suppress Armenian.  Spend is capped by the
+        # daily and monthly budgets inside the English fetcher.
+        missing = {}
+        for reading_obj in readings:
+            langs = languages_needing_fetch(reading_obj.passage_key, passage_texts)
+            if langs:
+                missing.setdefault(reading_obj.passage_key, (reading_citation(reading_obj), set()))
+                missing[reading_obj.passage_key][1].update(langs)
+
+        if missing:
+            # Built lazily: this opens an HTTP session, so requests with nothing to
+            # retrieve must not pay for it.
+            shared = prepare_shared_resources(date_obj, church)
+            for key, (citation, langs) in missing.items():
+                fetch_passage_text(key, citation, langs=sorted(langs), **shared)
+            passage_texts = load_passage_texts(passage_keys)
+
+        # Older rows predate the lectionary engine supplying book_hy at creation.
+        for reading_obj in readings:
+            if not reading_obj.book_hy:
+                ensure_book_hy(reading_obj)
 
         formatted_readings = []
-        for reading in day.readings.all():
+        for reading in readings:
             # Get translated book name
             book_translated = getattr(reading, 'book_i18n', reading.book)
 
@@ -201,7 +218,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
-                    **get_reading_text_fields(reading, lang),
+                    **get_reading_text_fields(reading, lang, passage_texts=passage_texts),
                     **context_dict,
                 }
             )

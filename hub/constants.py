@@ -276,3 +276,45 @@ BOOK_NAME_TO_USFM_NORMALIZED: dict[str, str] = {
     normalize_book_name(k): v
     for k, v in BOOK_NAME_TO_USFM.items()
 }
+
+
+def passage_key(
+    book: str | None,
+    start_chapter: int,
+    start_verse: int,
+    end_chapter: int,
+    end_verse: int,
+) -> str:
+    """Identity of a Scripture citation, independent of language or edition.
+
+    Format ``{USFM}.{start_ch}.{start_v}-{end_ch}.{end_v}``, e.g. ``"GEN.1.1-1.5"``.
+    Two readings with this key cite the same passage, so text fetched for one is the
+    text for all of them — which is what lets a lectionary of tens of thousands of
+    reading rows be served from ~1,100 retrievals.
+
+    Book *names* are fully normalized here: ``normalize_book_name`` plus
+    ``BOOK_NAME_TO_USFM`` collapse every spelling variant (curly vs. straight
+    apostrophes, "Song of Solomon", the verbose Epistle titles) onto one USFM id.
+    That much is language-neutral by construction, since USFM is a standard.
+
+    Deliberately *not* normalized here: per-edition versification.  KJVAIC splits the
+    Greek additions to Esther into a separate ESG book numbered 1-7, while the Armenian
+    Nor Ejmiatsin corpus keeps them inline as EST chapters 10-16 — so ``Esther 10:4-13``
+    is ``ESG 1:4-13`` in one and ``EST 10:4-13`` in the other.  Baking either mapping
+    into the shared key would impose one edition's quirk on the other; each fetcher
+    applies its own (see ``BibleAPIService.resolve_reading_passage``).
+
+    Returns "" when the book has no USFM mapping, i.e. when no retrieval is possible in
+    any language.  Never raises: an unmappable book name is a data problem to fix in
+    ``BOOK_NAME_TO_USFM``, and must not be able to break a save or a request.
+    """
+    usfm_id = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(book))
+    if usfm_id is None:
+        return ""
+    try:
+        return (
+            f"{usfm_id}.{int(start_chapter)}.{int(start_verse)}"
+            f"-{int(end_chapter)}.{int(end_verse)}"
+        )
+    except (TypeError, ValueError):
+        return ""

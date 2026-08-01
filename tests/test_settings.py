@@ -85,7 +85,7 @@ OPENAI_API_KEY = ''
 
 # Disable real API.Bible calls from the readings view during tests.
 # The view fetches expired text on demand, and several tests exercise that path without
-# patching it; a zero daily budget makes fetch_english_text return before the HTTP call.
+# patching it; a zero daily budget makes the English fetch return before the HTTP call.
 # The monthly ceiling is left effectively unlimited because the refresh task charges it
 # and those tests drive the task deliberately with the HTTP layer mocked.
 # Note BIBLE_API_KEY='' would NOT work here: BibleAPIService reads the key via
