@@ -7,8 +7,8 @@ from datetime import date, datetime
 
 from django.test import TestCase
 
-from hub.models import Church
-from hub.services.lectionary_service import _parse_citation, get_daily_readings
+from hub.models import Church, Day, Reading
+from hub.services.lectionary_service import _parse_citation, get_daily_readings, persist_readings
 
 _FIELDS = {"book", "book_en", "start_chapter", "start_verse", "end_chapter", "end_verse"}
 
@@ -98,3 +98,82 @@ class GetDailyReadingsTests(TestCase):
     def test_unsupported_church_returns_empty(self):
         other = Church.objects.create(name="Some Other Church For Lectionary Test")
         self.assertEqual(get_daily_readings(date(2026, 4, 5), other), [])
+
+
+class PersistReadingsOrderTests(TestCase):
+    """Demonstrates the reading-order bug this module fixes, and that it's fixed.
+
+    Before ``Reading.sequence`` existed, nothing recorded the lectionary's intended reading
+    order: ``Reading`` had no ``ordering`` Meta, and callers queried ``day.readings.all()`` with
+    no explicit ``order_by``. So the order served by the API was whichever order the rows
+    happened to be stored in. That's fine only as long as rows are always created in engine
+    order and never touched again -- it breaks the moment they aren't (e.g. rows already existed
+    from an earlier import, a retry, or a race between concurrent first-read requests). That's
+    exactly what issue #324 ("readings sometimes show up out of order") reports in production.
+    """
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2026, 5, 1), church=self.church)
+        # The order the lectionary engine actually returns these readings in.
+        self.engine_order_readings = [
+            {"book": "Isaiah", "book_en": "Isaiah", "start_chapter": 1, "start_verse": 1,
+             "end_chapter": 1, "end_verse": 5},
+            {"book": "Matthew", "book_en": "Matthew", "start_chapter": 2, "start_verse": 1,
+             "end_chapter": 2, "end_verse": 12},
+            {"book": "Mark", "book_en": "Mark", "start_chapter": 16, "start_verse": 1,
+             "end_chapter": 16, "end_verse": 8},
+        ]
+
+    def _create_out_of_engine_order(self):
+        """Simulate rows that already exist in a different order than the engine's current list.
+
+        This stands in for the real-world scenario (prior import, retry, race condition) where
+        matching ``Reading`` rows are already in the database by the time ``persist_readings`` --
+        or, pre-fix, the inline ``get_or_create`` loop it replaced -- runs.
+        """
+        for reading in reversed(self.engine_order_readings):
+            Reading.objects.create(
+                day=self.day,
+                book=reading["book"],
+                start_chapter=reading["start_chapter"],
+                start_verse=reading["start_verse"],
+                end_chapter=reading["end_chapter"],
+                end_verse=reading["end_verse"],
+            )
+
+    def test_preexisting_rows_out_of_order_stay_out_of_order_without_sequence(self):
+        """Reproduces the bug: with no `sequence` to sort by, stored order is creation order."""
+        self._create_out_of_engine_order()
+
+        # No `sequence`, no `ordering` Meta to rely on: `order_by("pk")` is the only ordering
+        # signal available, i.e. creation order -- standing in for the pre-fix default queryset.
+        stored_order = [r.book for r in Reading.objects.filter(day=self.day).order_by("pk")]
+        engine_order = [r["book"] for r in self.engine_order_readings]
+
+        self.assertNotEqual(
+            stored_order, engine_order,
+            "Setup should reproduce readings stored out of engine order; if this fails, the "
+            "reproduction no longer demonstrates the bug and this test (and the sequence fix) "
+            "may no longer be needed.",
+        )
+
+    def test_persist_readings_assigns_sequence_matching_engine_order(self):
+        """The fix: persist_readings() assigns `sequence` from the engine order, so
+        `Reading`'s default ordering (`day__date`, `sequence`) serves readings correctly -- even
+        when matching rows already existed in a different order.
+        """
+        self._create_out_of_engine_order()
+
+        persist_readings(self.day, self.engine_order_readings)
+
+        # day.readings.all() relies solely on Reading.Meta.ordering (no explicit order_by), just
+        # like hub/views/readings.py and the import_readings management command do.
+        served_order = [r.book for r in self.day.readings.all()]
+        self.assertEqual(served_order, [r["book"] for r in self.engine_order_readings])
+
+    def test_persist_readings_on_fresh_day_matches_engine_order(self):
+        """Sanity check: brand-new readings (the common case) are served in engine order too."""
+        persist_readings(self.day, self.engine_order_readings)
+        served_order = [r.book for r in self.day.readings.all()]
+        self.assertEqual(served_order, [r["book"] for r in self.engine_order_readings])

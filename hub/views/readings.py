@@ -19,11 +19,15 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.services.reading_text_service import (
-    fetch_all_reading_texts,
+    ensure_book_hy,
+    fetch_passage_text,
     get_reading_text_fields,
+    languages_needing_fetch,
+    load_passage_texts,
     prepare_shared_resources,
+    reading_citation,
 )
-from hub.services.lectionary_service import get_daily_readings
+from hub.services.lectionary_service import get_daily_readings, persist_readings
 from hub.tasks import generate_reading_context_task
 from hub.utils import get_user_profile_safe
 
@@ -123,48 +127,42 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         if not day.readings.exists():
             # import readings for this date into db (offline, from armenian_lectionary)
             readings = get_daily_readings(date_obj, church)
-            new_reading_objs = []
-            for reading in readings:
-                reading.update({"day": day})
-                # Extract and remove all book-related fields to handle them separately
-                book_en = reading.pop("book_en", reading.get("book"))
-                book_hy = reading.pop("book_hy", None)
-                # Remove 'book' from the dict to avoid using it in get_or_create lookup
-                reading.pop("book", None)
+            persist_readings(day, readings)
 
-                # Use explicit lookup with book_en to match the uniqueness constraint
-                # (modeltrans treats 'book' as 'book_en' in the database)
-                reading_obj, created = Reading.objects.get_or_create(
-                    day=reading["day"],
-                    book=book_en,  # This becomes book_en in the database
-                    start_chapter=reading["start_chapter"],
-                    start_verse=reading["start_verse"],
-                    end_chapter=reading["end_chapter"],
-                    end_verse=reading["end_verse"]
-                )
+        readings = list(day.readings.all())
 
-                # Set translations if they are missing
-                if book_hy and not reading_obj.book_hy:
-                    reading_obj.book_hy = book_hy
-                    reading_obj.save(update_fields=['i18n'])
+        # One query for the whole response, regardless of how many readings the day has.
+        # Text is keyed by passage, so a date never requested before still costs nothing
+        # to serve as long as its passages have been retrieved for some other date.
+        passage_keys = {r.passage_key for r in readings if r.passage_key}
+        passage_texts = load_passage_texts(passage_keys)
 
-                # Track newly created readings that need text fetched
-                if created:
-                    new_reading_objs.append(reading_obj)
+        # Retrieve synchronously, per (passage, language), so text is in this response.
+        # Gating per language matters: English arriving from the shared store must not be
+        # read as "this passage is done" and suppress Armenian.  Spend is capped by the
+        # daily and monthly budgets inside the English fetcher.
+        missing = {}
+        for reading_obj in readings:
+            langs = languages_needing_fetch(reading_obj.passage_key, passage_texts)
+            if langs:
+                missing.setdefault(reading_obj.passage_key, (reading_citation(reading_obj), set()))
+                missing[reading_obj.passage_key][1].update(langs)
 
-            # Fetch text for all languages synchronously so it is available in
-            # the response immediately.  Shared resources (API session, scraped
-            # pages, etc.) are created once for the whole batch.
-            if new_reading_objs:
-                shared = prepare_shared_resources(date_obj, church)
-                for reading_obj in new_reading_objs:
-                    fetch_all_reading_texts(reading_obj, **shared)
+        if missing:
+            # Built lazily: this opens an HTTP session, so requests with nothing to
+            # retrieve must not pay for it.
+            shared = prepare_shared_resources(date_obj, church)
+            for key, (citation, langs) in missing.items():
+                fetch_passage_text(key, citation, langs=sorted(langs), **shared)
+            passage_texts = load_passage_texts(passage_keys)
 
-        # Now ensure we have up-to-date queryset
-        day.refresh_from_db()
+        # Older rows predate the lectionary engine supplying book_hy at creation.
+        for reading_obj in readings:
+            if not reading_obj.book_hy:
+                ensure_book_hy(reading_obj)
 
         formatted_readings = []
-        for reading in day.readings.all():
+        for reading in readings:
             # Get translated book name
             book_translated = getattr(reading, 'book_i18n', reading.book)
 
@@ -221,7 +219,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
-                    **get_reading_text_fields(reading, lang),
+                    **get_reading_text_fields(reading, lang, passage_texts=passage_texts),
                     **context_dict,
                 }
             )
