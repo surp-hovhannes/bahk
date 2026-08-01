@@ -745,13 +745,8 @@ class Feast(models.Model):
         )
 
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="feasts")
-    # 512, not 256: two feast names in the Armenian lectionary exceed 256 characters --
-    # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257), both of which
-    # enumerate their saints in the name. They recur every year, so 54 dates in 2001-2027
-    # are affected. The strings are byte-identical to what sacredtradition.am served, so
-    # the retired scrape raised the same PostgreSQL DataError on them; this is a
-    # pre-existing defect, not a regression from computing names offline. Widened rather
-    # than truncated so the names are stored in full.
+    # 512 instead of 256 because two feast names in the Armenian lectionary exceed 256 characters:
+    # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257)
     name = models.CharField(max_length=512)
     designation = models.CharField(
         max_length=256,
