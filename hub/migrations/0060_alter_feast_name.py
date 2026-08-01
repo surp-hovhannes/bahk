@@ -23,7 +23,7 @@ ROLLBACK
     down-path is to truncate first, then reverse:
 
         UPDATE hub_feast SET name = LEFT(name, 256) WHERE LENGTH(name) > 256;
-        python manage.py migrate hub 0056
+        python manage.py migrate hub 0059
 
     That truncation is lossy and irreversible, so capture the affected rows first:
 
@@ -39,7 +39,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('hub', '0056_alter_reading_options_reading_sequence'),
+        ('hub', '0059_reading_text_moves_to_passage_text'),
     ]
 
     operations = [
