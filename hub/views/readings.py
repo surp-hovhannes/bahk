@@ -18,9 +18,13 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.services.reading_text_service import (
-    fetch_all_reading_texts,
+    ensure_book_hy,
+    fetch_passage_text,
     get_reading_text_fields,
+    languages_needing_fetch,
+    load_passage_texts,
     prepare_shared_resources,
+    reading_citation,
 )
 from hub.services.lectionary_service import get_daily_readings, persist_readings
 from hub.tasks import generate_reading_context_task
@@ -122,24 +126,42 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         if not day.readings.exists():
             # import readings for this date into db (offline, from armenian_lectionary)
             readings = get_daily_readings(date_obj, church)
-            persisted = persist_readings(day, readings)
+            persist_readings(day, readings)
 
-            # Track newly created readings that need text fetched
-            new_reading_objs = [reading_obj for reading_obj, created in persisted if created]
+        readings = list(day.readings.all())
 
-            # Fetch text for all languages synchronously so it is available in
-            # the response immediately.  Shared resources (API session, scraped
-            # pages, etc.) are created once for the whole batch.
-            if new_reading_objs:
-                shared = prepare_shared_resources(date_obj, church)
-                for reading_obj in new_reading_objs:
-                    fetch_all_reading_texts(reading_obj, **shared)
+        # One query for the whole response, regardless of how many readings the day has.
+        # Text is keyed by passage, so a date never requested before still costs nothing
+        # to serve as long as its passages have been retrieved for some other date.
+        passage_keys = {r.passage_key for r in readings if r.passage_key}
+        passage_texts = load_passage_texts(passage_keys)
 
-        # Now ensure we have up-to-date queryset
-        day.refresh_from_db()
+        # Retrieve synchronously, per (passage, language), so text is in this response.
+        # Gating per language matters: English arriving from the shared store must not be
+        # read as "this passage is done" and suppress Armenian.  Spend is capped by the
+        # daily and monthly budgets inside the English fetcher.
+        missing = {}
+        for reading_obj in readings:
+            langs = languages_needing_fetch(reading_obj.passage_key, passage_texts)
+            if langs:
+                missing.setdefault(reading_obj.passage_key, (reading_citation(reading_obj), set()))
+                missing[reading_obj.passage_key][1].update(langs)
+
+        if missing:
+            # Built lazily: this opens an HTTP session, so requests with nothing to
+            # retrieve must not pay for it.
+            shared = prepare_shared_resources(date_obj, church)
+            for key, (citation, langs) in missing.items():
+                fetch_passage_text(key, citation, langs=sorted(langs), **shared)
+            passage_texts = load_passage_texts(passage_keys)
+
+        # Older rows predate the lectionary engine supplying book_hy at creation.
+        for reading_obj in readings:
+            if not reading_obj.book_hy:
+                ensure_book_hy(reading_obj)
 
         formatted_readings = []
-        for reading in day.readings.all():
+        for reading in readings:
             # Get translated book name
             book_translated = getattr(reading, 'book_i18n', reading.book)
 
@@ -196,7 +218,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
                     "endChapter": reading.end_chapter,
                     "endVerse": reading.end_verse,
                     "url": reading.create_url(),
-                    **get_reading_text_fields(reading, lang),
+                    **get_reading_text_fields(reading, lang, passage_texts=passage_texts),
                     **context_dict,
                 }
             )

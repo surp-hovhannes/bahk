@@ -1,20 +1,25 @@
-"""Fetch Bible text from API.Bible for readings missing text."""
+"""Report Scripture-text coverage and run the refresh task."""
 import logging
-from datetime import timedelta
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db.models import Q
-from django.utils import timezone
 
-from hub.models import Reading
+from hub.models import PassageText, Reading
+from hub.services.reading_text_service import (
+    TEXT_FETCHERS,
+    stale_passage_text_queryset,
+)
 from hub.tasks import refresh_all_reading_texts_task
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Fetch Bible text from API.Bible for readings that are missing or stale"
+    help = (
+        "Retrieve Scripture text for passages that are missing or stale. Work is counted "
+        "in distinct passages, not readings: text is stored per passage, so one retrieval "
+        "serves every date citing it."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -26,19 +31,56 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         refresh_days = getattr(settings, "READING_TEXT_REFRESH_DAYS", 23)
-        threshold = timezone.now() - timedelta(days=refresh_days)
-        stale_filter = Q(text_fetched_at__isnull=True) | Q(text_fetched_at__lt=threshold)
+        limit = getattr(settings, "READING_REFRESH_LIMIT", 1500)
 
-        missing_count = Reading.objects.filter(text="").count()
-        stale_count = Reading.objects.filter(stale_filter).count()
-        total_count = Reading.objects.count()
+        total_readings = Reading.objects.count()
+        keys_in_use = set(
+            Reading.objects.exclude(passage_key="")
+            .values_list("passage_key", flat=True)
+            .distinct()
+        )
+        unmappable = Reading.objects.filter(passage_key="").count()
+
+        if not keys_in_use:
+            self.stdout.write(self.style.WARNING("No readings with a resolvable passage."))
+            return
 
         self.stdout.write(
-            f"Readings without text: {missing_count}/{total_count}; stale: {stale_count}/{total_count}"
+            f"{total_readings} readings resolve to {len(keys_in_use)} distinct passages "
+            f"({total_readings / len(keys_in_use):.1f}x dedup)."
         )
+        if unmappable:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"{unmappable} readings have no USFM mapping and are never retrieved."
+                )
+            )
 
-        if stale_count == 0:
-            self.stdout.write(self.style.SUCCESS("All readings already have fresh text."))
+        any_stale = False
+        for language in TEXT_FETCHERS:
+            known = set(
+                PassageText.objects.filter(language=language, passage_key__in=keys_in_use)
+                .values_list("passage_key", flat=True)
+            )
+            stale = set(
+                stale_passage_text_queryset(language, refresh_days)
+                .filter(passage_key__in=keys_in_use)
+                .values_list("passage_key", flat=True)
+            )
+            stale_keys = stale | (keys_in_use - known)
+            if not stale_keys:
+                self.stdout.write(f"  {language}: all {len(keys_in_use)} passages fresh.")
+                continue
+            any_stale = True
+            will_refresh = min(len(stale_keys), limit)
+            self.stdout.write(
+                f"  {language}: {len(stale_keys)} stale (>{refresh_days}d or never "
+                f"retrieved); this run will retrieve {will_refresh} (limit {limit})"
+                + (f", {len(stale_keys) - will_refresh} left over." if len(stale_keys) > limit else ".")
+            )
+
+        if not any_stale:
+            self.stdout.write(self.style.SUCCESS("All passages already have fresh text."))
             return
 
         if options["run_async"]:
