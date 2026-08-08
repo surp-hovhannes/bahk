@@ -147,7 +147,7 @@ urlpatterns += [
 
 # S3FileField URLs
 urlpatterns += [
-    path('api/s3-upload/', include('s3_file_field.urls')),
+    path('api/s3-upload/', include('bahk.s3_upload_urls')),
 ]
 
 # for serving media files during development

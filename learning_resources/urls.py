@@ -8,11 +8,15 @@ from .views import (
     bookmark_delete_view, bookmark_check_view,
     VideoDetailView, ArticleDetailView, RecipeDetailView
 )
+from .upload_views import CompleteUploadView, FinalizeUploadView, InitializeUploadView
 
 urlpatterns = [
     # Content listing endpoints
     path('videos/', VideoListView.as_view(), name='video-list'),
     path('videos/<int:pk>/', VideoDetailView.as_view(), name='video-detail'),
+    path('devotional-videos/uploads/initialize/', InitializeUploadView.as_view(), name='devotional-video-upload-initialize'),
+    path('devotional-videos/uploads/complete/', CompleteUploadView.as_view(), name='devotional-video-upload-complete'),
+    path('devotional-videos/uploads/finalize/', FinalizeUploadView.as_view(), name='devotional-video-upload-finalize'),
     path('articles/', ArticleListView.as_view(), name='article-list'),
     path('articles/<int:pk>/', ArticleDetailView.as_view(), name='article-detail'),
     path('recipes/', RecipeListView.as_view(), name='recipe-list'),
