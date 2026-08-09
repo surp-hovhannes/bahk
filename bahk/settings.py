@@ -482,6 +482,20 @@ READING_FETCH_DAILY_BUDGET = config('READING_FETCH_DAILY_BUDGET', default=25, ca
 # alert on it rather than raising it.  Held at 4,500 for the first post-deploy cycle, which
 # includes the one-time corpus warm-up, then dropped to 3,000.
 BIBLE_API_MONTHLY_BUDGET = config('BIBLE_API_MONTHLY_BUDGET', default=4500, cast=int)
+# Consecutive failures on one edition (NKJV or KJVAIC) before its circuit breaker opens
+# and further attempts are skipped without charging budget. Protects the shared budgets
+# above from being drained by a source that is currently rejecting every call (e.g. a
+# missing entitlement) -- without this, a stuck edition can burn READING_FETCH_DAILY_BUDGET
+# entirely on doomed retries, starving a healthy edition sharing the same day's budget.
+BIBLE_API_CIRCUIT_BREAKER_THRESHOLD = config(
+    'BIBLE_API_CIRCUIT_BREAKER_THRESHOLD', default=3, cast=int
+)
+# How long a tripped breaker stays open before allowing another attempt. Short enough that
+# a real fix (e.g. restoring an entitlement) is picked up quickly; long enough that one
+# request's worth of retries does not immediately re-trip it.
+BIBLE_API_CIRCUIT_BREAKER_COOLDOWN_SECONDS = config(
+    'BIBLE_API_CIRCUIT_BREAKER_COOLDOWN_SECONDS', default=900, cast=int
+)
 
 # Test settings
 if 'test' in sys.argv:

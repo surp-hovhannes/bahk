@@ -40,6 +40,7 @@ from django.utils import timezone
 from hub.constants import BOOK_NAME_TO_USFM_NORMALIZED, normalize_book_name
 from hub.services.api_budget import DAY, MONTH, APIBudget
 from hub.services.bible_api_service import BibleAPIService
+from hub.services.circuit_breaker import ConsecutiveFailureBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,18 @@ def fetch_english(
         logger.error("Book name mapping failed for %r: %s", book, exc)
         return None
 
+    # Keyed per edition (NKJV vs KJVAIC), not just "en" generally: NKJV and KJVAIC are
+    # unrelated entitlements on the API.Bible account, so a rejection on one (e.g. a
+    # missing licence) must not stop attempts on the other, which may be working fine.
+    _, version = BibleAPIService._bible_id_for_book(passage[0])
+    breaker = bible_api_breaker(version)
+    if breaker.is_open():
+        logger.warning(
+            "Circuit breaker open for %s; skipping fetch for %s %s:%s-%s:%s.",
+            version, book, start_chapter, start_verse, end_chapter, end_verse,
+        )
+        return None
+
     for budget in budgets or ():
         if not budget.consume():
             logger.warning(
@@ -159,12 +172,14 @@ def fetch_english(
     try:
         result = service.get_passage(*passage)
     except Exception as exc:
+        breaker.record_failure()
         logger.error(
             "API call failed for %s %s:%s-%s:%s: %s",
             book, start_chapter, start_verse, end_chapter, end_verse, exc,
         )
         return None
 
+    breaker.record_success()
     return {
         "text": result["content"],
         "version": result["version"],
@@ -241,6 +256,20 @@ def bible_api_budgets(*, include_daily: bool = True) -> list[APIBudget]:
         "bible_api", getattr(settings, "BIBLE_API_MONTHLY_BUDGET", 4500), period=MONTH,
     ))
     return budgets
+
+
+def bible_api_breaker(version: str) -> ConsecutiveFailureBreaker:
+    """Circuit breaker for one API.Bible edition, e.g. ``"NKJV"`` or ``"KJVAIC"``.
+
+    One breaker per edition, not per language: NKJV and KJVAIC are separate
+    entitlements on the API.Bible account, so a rejection on one must not stop
+    attempts on the other.
+    """
+    return ConsecutiveFailureBreaker(
+        f"bible_api:{version}",
+        threshold=getattr(settings, "BIBLE_API_CIRCUIT_BREAKER_THRESHOLD", 3),
+        cooldown_seconds=getattr(settings, "BIBLE_API_CIRCUIT_BREAKER_COOLDOWN_SECONDS", 900),
+    )
 
 
 def _prepare_english_resources(**_kwargs) -> dict[str, Any]:

@@ -59,12 +59,13 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    - `GetDailyReadingsForDate` retrieves missing or expired `(passage, language)` pairs on demand, capped per day by `READING_FETCH_DAILY_BUDGET`. A date never requested before costs nothing if its passages are already stored.
    - `BIBLE_API_MONTHLY_BUDGET` is a hard ceiling over **both** paths (`hub/services/api_budget.py`). Post-change it should never be reached; alert on it rather than raising it.
    - The refresh task aborts after `READING_REFRESH_MAX_CONSECUTIVE_FAILURES` consecutive failures on metered languages, so a rejecting API costs ~10 calls instead of a full run.
+   - A per-edition circuit breaker (`hub/services/circuit_breaker.py`) opens after `BIBLE_API_CIRCUIT_BREAKER_THRESHOLD` consecutive failures on one Bible edition (NKJV or KJVAIC) and skips further attempts — no budget charged — until `BIBLE_API_CIRCUIT_BREAKER_COOLDOWN_SECONDS` elapses. Applies everywhere `fetch_english` is called (refresh task, on-demand view, admin), so a rejected edition cannot drain the daily/monthly budget shared with a working one.
 
    `get_reading_text_fields` blanks text/version/copyright/FUMS token once it exceeds that language's cap, so nothing past API.Bible's freshness window is ever served. Armenian is locally composed and never expires.
 
    Commands: `warm_passage_texts` (enumerate the whole corpus once, then no date is ever cold; run `--dry-run` first), `backfill_reading_passage_keys` (`--all` after any change to the key derivation), `fetch_reading_texts`, `fetch_armenian_reading_texts`.
 
-   Env vars: `BIBLE_API_KEY`, `READING_TEXT_REFRESH_DAYS`, `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_REFRESH_MAX_CONSECUTIVE_FAILURES`, `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`.
+   Env vars: `BIBLE_API_KEY`, `READING_TEXT_REFRESH_DAYS`, `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_REFRESH_MAX_CONSECUTIVE_FAILURES`, `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`, `BIBLE_API_CIRCUIT_BREAKER_THRESHOLD`, `BIBLE_API_CIRCUIT_BREAKER_COOLDOWN_SECONDS`.
 
 ## Development Environment
 

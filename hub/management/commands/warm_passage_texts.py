@@ -20,6 +20,7 @@ from hub.services.lectionary_service import (
 )
 from hub.services.reading_text_service import (
     TEXT_FETCHERS,
+    bible_api_budgets,
     fetch_passage_text,
     prepare_shared_resources,
 )
@@ -171,6 +172,11 @@ class Command(BaseCommand):
                 continue
 
             shared = prepare_shared_resources()
+            # This is a deliberate, operator-run bulk backfill, not organic public
+            # traffic -- charge only the monthly ceiling, same as the refresh task
+            # (hub/tasks/bible_api_tasks.py), so it isn't throttled to
+            # READING_FETCH_DAILY_BUDGET and left to trickle in over weeks.
+            shared["budgets"] = bible_api_budgets(include_daily=False)
             retrieved = failed = 0
             for key in todo:
                 if fetch_passage_text(key, citations[key], langs=[language], **shared).get(language):

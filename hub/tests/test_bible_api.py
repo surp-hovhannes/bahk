@@ -486,6 +486,114 @@ class FetchEnglishTextTests(TestCase):
 
 
 # ------------------------------------------------------------------ #
+#  Circuit breaker: a rejected edition must not drain a shared budget
+# ------------------------------------------------------------------ #
+
+class FetchEnglishCircuitBreakerTests(TestCase):
+    """A stuck NKJV entitlement (or any persistent failure) must not exhaust the
+    budget shared with KJVAIC -- the bug behind bahk issue #474's "fetched via admin,
+    never served on the frontend" symptom for Apocrypha readings."""
+
+    def setUp(self):
+        cache.clear()
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2025, 6, 15), church=self.church)
+
+    @override_settings(BIBLE_API_CIRCUIT_BREAKER_THRESHOLD=2, READING_FETCH_DAILY_BUDGET=1000, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_breaker_opens_and_stops_charging_budget(self, mock_config, mock_get_passage):
+        import requests
+        mock_get_passage.side_effect = requests.HTTPError("403 Forbidden")
+        budgets = bible_api_budgets()
+
+        readings = [
+            _create_reading(self.day, book="Genesis", start_ch=1, start_v=v, end_ch=1, end_v=v)
+            for v in range(1, 5)
+        ]
+
+        results = [
+            fetch_all_reading_texts(r, langs=["en"], budgets=budgets).get("en")
+            for r in readings
+        ]
+
+        self.assertEqual(results, [False, False, False, False])
+        # Only the first two calls actually reach the API (threshold=2); the breaker
+        # opens after that and the rest are skipped without a call or a budget charge.
+        self.assertEqual(mock_get_passage.call_count, 2)
+        self.assertEqual(budgets[1].used(), 2)  # budgets = [daily, monthly]
+
+    @override_settings(BIBLE_API_CIRCUIT_BREAKER_THRESHOLD=2, READING_FETCH_DAILY_BUDGET=1000, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_broken_nkjv_does_not_block_kjvaic(self, mock_config, mock_get_passage):
+        """The breaker is keyed per edition, so a stuck NKJV must not stop KJVAIC --
+        this is what production issue #474 needs: KJVAIC readings kept failing on the
+        public view even though they fetched fine from the admin, because they shared
+        a daily budget with doomed NKJV attempts."""
+        import requests
+
+        def side_effect(usfm_book_id, *args, **kwargs):
+            if usfm_book_id == "TOB":
+                return {
+                    "content": "Apocrypha text.", "copyright": "", "version": "KJVAIC",
+                    "reference": "Tobit 1:1", "fums_token": "tok",
+                }
+            raise requests.HTTPError("403 Forbidden")
+
+        mock_get_passage.side_effect = side_effect
+        budgets = bible_api_budgets()
+
+        # Trip the NKJV breaker.
+        for v in range(1, 3):
+            reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=v, end_ch=1, end_v=v)
+            fetch_all_reading_texts(reading, langs=["en"], budgets=budgets)
+
+        # NKJV is now open; a further Genesis fetch is skipped without a call.
+        blocked = _create_reading(self.day, book="Genesis", start_ch=1, start_v=10, end_ch=1, end_v=10)
+        self.assertFalse(fetch_all_reading_texts(blocked, langs=["en"], budgets=budgets).get("en"))
+        calls_before_apocrypha = mock_get_passage.call_count
+
+        # KJVAIC (Tobit) must still succeed: a different edition, a different breaker.
+        apocrypha = _create_reading(self.day, book="Tobit", start_ch=1, start_v=1, end_ch=1, end_v=1)
+        self.assertTrue(fetch_all_reading_texts(apocrypha, langs=["en"], budgets=budgets).get("en"))
+        self.assertEqual(mock_get_passage.call_count, calls_before_apocrypha + 1)
+
+    @override_settings(BIBLE_API_CIRCUIT_BREAKER_THRESHOLD=2, READING_FETCH_DAILY_BUDGET=1000, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_success_resets_the_failure_streak(self, mock_config, mock_get_passage):
+        """An intervening success must reset the *consecutive* count, not just delay it.
+
+        threshold=2: fail, succeed, fail should leave the breaker closed, because the
+        second failure is not consecutive with the first -- a transient blip must not
+        combine with an unrelated later one to trip the breaker.
+        """
+        import requests
+
+        mock_api_response = {
+            "content": "Text.", "copyright": "", "version": "NKJV",
+            "reference": "Genesis 1:1", "fums_token": "tok",
+        }
+        mock_get_passage.side_effect = [
+            requests.HTTPError("403 Forbidden"),
+            mock_api_response,
+            requests.HTTPError("403 Forbidden"),
+        ]
+        budgets = bible_api_budgets()
+
+        for start_v in (1, 2, 3):
+            reading = _create_reading(
+                self.day, book="Genesis", start_ch=1, start_v=start_v, end_ch=1, end_v=start_v,
+            )
+            fetch_all_reading_texts(reading, langs=["en"], budgets=budgets)
+
+        from hub.services.reading_text_service import bible_api_breaker
+        self.assertFalse(bible_api_breaker("NKJV").is_open())
+        self.assertEqual(mock_get_passage.call_count, 3)
+
+
+# ------------------------------------------------------------------ #
 #  fetch_reading_text_task (Celery wrapper) Tests
 # ------------------------------------------------------------------ #
 
