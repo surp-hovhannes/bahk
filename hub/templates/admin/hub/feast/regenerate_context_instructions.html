@@ -20,8 +20,8 @@
 {% for feast in feasts %}
     <li style="margin: 5px 0;">
         <strong>{{ feast.name }}</strong>
-        {% if feast.day %}
-            ({{ feast.day.date }})
+        {% if feast.church %}
+            ({{ feast.church.name }})
         {% endif %}
     </li>
 {% endfor %}

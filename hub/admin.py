@@ -1192,46 +1192,24 @@ class ReadingContextAdmin(admin.ModelAdmin):
     text_preview.short_description = "Text Preview"
 
 
-class FeastYearFilter(admin.SimpleListFilter):
-    """Custom filter to filter feasts by year."""
-
-    title = "Year"
-    parameter_name = "year"
-
-    def lookups(self, request, model_admin):
-        """Return years that have feasts."""
-        years = Feast.objects.dates("day__date", "year", order="DESC")
-        return [(year.year, year.year) for year in years]
-
-    def queryset(self, request, queryset):
-        """Filter queryset by year."""
-        if self.value():
-            return queryset.filter(
-                day__date__year=self.value()
-            )
-
-
 @admin.register(Feast, site=admin.site)
 class FeastAdmin(admin.ModelAdmin):
     list_display = (
         "church_link",
-        "day",
         "__str__",
         "name",
     )
     list_display_links = (
         "church_link",
-        "day",
         "__str__",
     )
     list_filter = (
-        FeastYearFilter,
-        "day__church",
+        "church",
         "designation",
     )
     search_fields = ("name", "name_en", "name_hy")
-    ordering = ("day",)
-    raw_id_fields = ("day", "icon")
+    ordering = ("church", "name")
+    raw_id_fields = ("icon",)
     actions = [
         "force_rematch_icon",
         "match_icon_if_missing",
@@ -1243,7 +1221,7 @@ class FeastAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {
-            'fields': ('day',)
+            'fields': ('church',)
         }),
         ('Classification', {
             'fields': ('designation',)
@@ -1318,7 +1296,7 @@ class FeastAdmin(admin.ModelAdmin):
 
     def rematch_icon_force_view(self, request, pk: int):
         try:
-            feast = Feast.objects.select_related("day", "day__church").get(pk=pk)
+            feast = Feast.objects.select_related("church").get(pk=pk)
         except Feast.DoesNotExist as exc:
             raise Http404 from exc
         if not self.has_change_permission(request, obj=feast):
@@ -1334,7 +1312,7 @@ class FeastAdmin(admin.ModelAdmin):
 
     def rematch_icon_if_missing_view(self, request, pk: int):
         try:
-            feast = Feast.objects.select_related("day", "day__church").get(pk=pk)
+            feast = Feast.objects.select_related("church").get(pk=pk)
         except Feast.DoesNotExist as exc:
             raise Http404 from exc
         if not self.has_change_permission(request, obj=feast):
@@ -1427,7 +1405,7 @@ class FeastAdmin(admin.ModelAdmin):
             return redirect(reverse('admin:hub_feast_changelist'))
 
         feast_ids = [int(pk) for pk in ids_param.split(',') if pk.strip()]
-        feasts = Feast.objects.filter(pk__in=feast_ids).select_related('day')
+        feasts = Feast.objects.filter(pk__in=feast_ids).select_related('church')
 
         if not feasts.exists():
             self.message_user(
@@ -1475,10 +1453,10 @@ class FeastAdmin(admin.ModelAdmin):
         )
 
     def church_link(self, feast):
-        if not feast.day or not feast.day.church:
+        if not feast.church:
             return ""
-        url = reverse("admin:hub_church_change", args=[feast.day.church.pk])
-        return format_html('<a href="{}">{}</a>', url, feast.day.church.name)
+        url = reverse("admin:hub_church_change", args=[feast.church.pk])
+        return format_html('<a href="{}">{}</a>', url, feast.church.name)
 
     church_link.short_description = "Church"
 
@@ -1499,7 +1477,7 @@ class FeastContextAdmin(admin.ModelAdmin):
         "feast",
         "prompt",
     )
-    list_filter = ("active", "prompt__model", "feast__day__date")
+    list_filter = ("active", "prompt__model", "feast__church")
     search_fields = ("text", "short_text", "feast__name")
     ordering = ("-time_of_generation",)
     raw_id_fields = ("feast", "prompt")

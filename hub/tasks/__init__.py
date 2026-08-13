@@ -8,7 +8,6 @@ from .mapping_tasks import generate_participant_map, update_current_fast_maps
 from .geocoding_tasks import batch_geocode_profiles, geocode_profile_location
 from .llm_tasks import generate_reading_context_task, generate_feast_context_task
 from .icon_tasks import match_icon_to_feast_task
-from .feast_tasks import create_feast_date_task
 from .bible_api_tasks import fetch_reading_text_task, refresh_all_reading_texts_task
 from .armenian_text_tasks import fetch_armenian_reading_text_task
 from celery import shared_task
@@ -28,7 +27,6 @@ __all__ = [
     'generate_reading_context_task',
     'generate_feast_context_task',
     'match_icon_to_feast_task',
-    'create_feast_date_task',
     'fetch_reading_text_task',
     'refresh_all_reading_texts_task',
     'fetch_armenian_reading_text_task',

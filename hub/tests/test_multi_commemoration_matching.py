@@ -27,7 +27,7 @@ class FindAllMatchingFeastsTests(TestCase):
     def test_returns_empty_list_when_no_matches(self, mock_file, mock_exists):
         """Test returns empty list when no matches found."""
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="NonExistent Feast",
         )
 
@@ -50,7 +50,7 @@ class FindAllMatchingFeastsTests(TestCase):
 
         with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
             feast = Feast.objects.create(
-                day=self.day,
+                church=self.day.church,
                 name="St. Gregory the Illuminator",
             )
 
@@ -85,7 +85,7 @@ class FindAllMatchingFeastsTests(TestCase):
 
         with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
             feast = Feast.objects.create(
-                day=self.day,
+                church=self.day.church,
                 name="Saint Gregory",
             )
 
@@ -122,7 +122,7 @@ class FindAllMatchingFeastsTests(TestCase):
 
         with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
             feast = Feast.objects.create(
-                day=self.day,
+                church=self.day.church,
                 name="Saint Gregory the Illuminator",
             )
 
@@ -148,7 +148,7 @@ class FindAllMatchingFeastsTests(TestCase):
 
         with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
             feast = Feast.objects.create(
-                day=self.day,
+                church=self.day.church,
                 name="Saint Gregory",
             )
 
@@ -177,7 +177,7 @@ class FindAllMatchingFeastsTests(TestCase):
 
         with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
             feast = Feast.objects.create(
-                day=self.day,
+                church=self.day.church,
                 name="Saint Gregory",
             )
 
@@ -227,7 +227,7 @@ class FindAllMatchingFeastsTests(TestCase):
 
         with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
             feast = Feast.objects.create(
-                day=self.day,
+                church=self.day.church,
                 name="Saint Gregory the Illuminator",
             )
             feast.name_hy = "Սուրբ Գրիգոր Լուսավորիչ"
@@ -259,7 +259,7 @@ class FindAllMatchingFeastsTests(TestCase):
 
         with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
             feast = Feast.objects.create(
-                day=self.day,
+                church=self.day.church,
                 name="Saint Gregory",
             )
 
@@ -273,7 +273,7 @@ class FindAllMatchingFeastsTests(TestCase):
     def test_handles_missing_feasts_file(self, mock_exists):
         """Test handles missing feasts.json file gracefully."""
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="Test Feast",
         )
 
@@ -286,7 +286,7 @@ class FindAllMatchingFeastsTests(TestCase):
     def test_handles_file_read_error(self, mock_file, mock_exists):
         """Test handles file read errors gracefully."""
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="Test Feast",
         )
 

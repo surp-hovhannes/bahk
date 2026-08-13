@@ -66,6 +66,29 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
 
    Env vars: `BIBLE_API_KEY`, `READING_TEXT_REFRESH_DAYS`, `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_REFRESH_MAX_CONSECUTIVE_FAILURES`, `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`.
 
+7. **Feast Names**: The commemoration of the day comes from the offline `armenian_lectionary`
+   engine (`hub/services/feast_service.py`), recomputed per request. Nothing is imported ahead of
+   time and there is no daily task.
+
+   **Feasts are keyed by commemoration, not by date.** `Feast` is unique on `(church, name)`; it
+   does not hang off `Day`. It exists to hold the parts the engine has no notion of — the AI
+   `designation`, the matched `icon`, and the generated `FeastContext`s — and those are properties
+   of the commemoration, not of the day it lands on. The engine emits ~424 distinct names across
+   its whole supported range, so one row serves every recurrence and the LLM context and icon
+   match behind it run **once**, not once a year. Same rule as `PassageText`: never key by date.
+
+   Because a feast has no date, two things go through the engine instead:
+   - `dates_for_feast_name` / `representative_date_for_feast_name` (cached range sweep) supply a
+     date where one is genuinely needed — the `feasts.json` reference matcher in `llm_service`.
+   - Feast API cache invalidation bumps a **per-church generation** folded into the cache key
+     (`hub/cache.py`) rather than deleting per-date keys, which would mean enumerating thousands
+     of days. O(1), and correct on every cache backend rather than only where `delete_pattern`
+     exists.
+
+   `audit_feast_duplicates` reports stored names the engine no longer emits: those are unreachable
+   (nothing will look them up again) while their enrichment sits in the database. Run it after any
+   engine upgrade that might rename a feast — the failure is silent otherwise.
+
 ## Development Environment
 
 This project runs in a **Docker development container**. All Python/Django commands must be executed inside the container using `docker exec`.
@@ -182,9 +205,9 @@ docker exec bahk_devcontainer-app-1 python manage.py cleanup_activity_feeds
 docker exec bahk_devcontainer-app-1 python manage.py engagement_report
 
 # Fast and feast management
-docker exec bahk_devcontainer-app-1 python manage.py import_feasts
 docker exec bahk_devcontainer-app-1 python manage.py import_readings
 docker exec bahk_devcontainer-app-1 python manage.py regenerate_feast_contexts
+docker exec bahk_devcontainer-app-1 python manage.py audit_feast_duplicates
 docker exec bahk_devcontainer-app-1 python manage.py regenerate_map
 
 # Notifications
@@ -261,7 +284,6 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 
 Defined in `bahk/celery.py`. Daily tasks include:
 - Fast reminder notifications (midnight)
-- Feast date creation (12:05 AM)
 - Map updates (1 AM)
 - Activity feed cleanup (2 AM)
 - Milestone checks (various times)

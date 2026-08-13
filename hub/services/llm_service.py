@@ -11,6 +11,7 @@ from django.conf import settings
 from django.core.mail import mail_admins
 
 from hub.models import LLMPrompt, Reading, Feast
+from hub.services.feast_service import representative_date_for_feast_name
 
 logger = logging.getLogger(__name__)
 
@@ -199,15 +200,15 @@ def _find_all_matching_feasts(feast) -> list[dict]:
     feast_day = None
     has_date = False
 
-    if hasattr(feast, 'day') and feast.day and hasattr(feast.day, 'date') and feast.day.date:
-        try:
-            feast_date = feast.day.date
-            feast_month = feast_date.strftime("%B")  # Full month name (e.g., "January")
-            feast_day = feast_date.strftime("%d")    # Day with leading zero (e.g., "06")
-            has_date = True
-            logger.debug(f"Searching for feast references: {feast.name} on {feast_month} {feast_day}")
-        except (AttributeError, ValueError) as e:
-            logger.debug(f"Could not extract date from feast {feast.id}: {e}")
+    # A feast is keyed by commemoration, not by date, so ask the engine for a date it falls on.
+    # Fixed feasts -- the only ones data/feasts.json carries a month/day for -- recur on the same
+    # month and day, so any occurrence serves the boost below equally well.
+    feast_date = representative_date_for_feast_name(feast.name)
+    if feast_date:
+        feast_month = feast_date.strftime("%B")  # Full month name (e.g., "January")
+        feast_day = feast_date.strftime("%d")    # Day with leading zero (e.g., "06")
+        has_date = True
+        logger.debug(f"Searching for feast references: {feast.name} on {feast_month} {feast_day}")
     else:
         logger.debug(f"Searching for feast references: {feast.name} (no date available)")
 
@@ -256,12 +257,7 @@ def _find_all_matching_feasts(feast) -> list[dict]:
         # Notify admins about missing feast reference
         try:
             feast_date = (
-                feast.day.date.strftime("%B %d, %Y")
-                if hasattr(feast, 'day')
-                and feast.day
-                and hasattr(feast.day, 'date')
-                and feast.day.date
-                else "Unknown date"
+                feast_date.strftime("%B %d, %Y") if feast_date else "Unknown date"
             )
             mail_admins(
                 subject=f"Missing Feast Reference: {feast.name}",

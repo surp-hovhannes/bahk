@@ -77,7 +77,7 @@ class FeastViewCacheTests(TestCase):
         from hub.views.feasts import GetFeastForDate
 
         day = Day.objects.create(date=self.test_date, church=self.church)
-        feast = Feast.objects.create(day=day, name="Christmas")
+        feast = Feast.objects.create(church=day.church, name="Christmas")
         mock_get_or_create.return_value = (feast, False, {"status": "success"})
 
         factory = APIRequestFactory()
@@ -104,13 +104,13 @@ class FeastViewCacheTests(TestCase):
         from hub.views.feasts import GetFeastForDate
 
         day1 = Day.objects.create(date=self.test_date, church=self.church)
-        feast1 = Feast.objects.create(day=day1, name="Christmas")
+        feast1 = Feast.objects.create(church=day1.church, name="Christmas")
         other_date = date(2025, 1, 6)
         day2 = Day.objects.create(date=other_date, church=self.church)
-        feast2 = Feast.objects.create(day=day2, name="Epiphany")
+        feast2 = Feast.objects.create(church=day2.church, name="Epiphany")
         other_church = Church.objects.create(name="Other Test Church")
         other_day = Day.objects.create(date=self.test_date, church=other_church)
-        other_feast = Feast.objects.create(day=other_day, name="Other Christmas")
+        other_feast = Feast.objects.create(church=other_day.church, name="Other Christmas")
         user = TestDataFactory.create_user(username="cache-user")
         other_user = TestDataFactory.create_user(username="other-cache-user")
         TestDataFactory.create_profile(user=user, church=self.church)
@@ -179,7 +179,7 @@ class FeastAPIRouteTests(TestCase):
         with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
             "hub.signals.determine_feast_designation_task.delay"
         ):
-            return Feast.objects.create(day=day, **kwargs)
+            return Feast.objects.create(church=day.church, **kwargs)
 
     def _create_icon(self, title="Nativity Icon"):
         return Icon.objects.create(
@@ -224,7 +224,7 @@ class FeastAPIRouteTests(TestCase):
     ):
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
@@ -285,7 +285,6 @@ class FeastAPIRouteTests(TestCase):
         )
         day = Day.objects.create(date=self.test_date, church=self.church, fast=fast)
         feast = self._create_feast(
-            day=day,
             name=(
                 "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
                 "Patriarch, and his three disciples"
@@ -425,7 +424,7 @@ class FeastAPIRouteTests(TestCase):
     ):
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
@@ -638,7 +637,7 @@ class FeastContextFeedbackAPITests(TestCase):
         with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
             "hub.signals.determine_feast_designation_task.delay"
         ):
-            self.feast = Feast.objects.create(day=self.day, name="Christmas")
+            self.feast = Feast.objects.create(church=self.day.church, name="Christmas")
         self.context = FeastContext.objects.create(
             feast=self.feast,
             text="Existing feast context",

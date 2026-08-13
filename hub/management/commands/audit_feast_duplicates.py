@@ -1,32 +1,27 @@
-"""Report what re-keying Feast from (day, name) to (church, name) would do to real data.
+"""Audit the feast table against the names the engine actually emits.
 
-``Feast`` rows are keyed to a ``Day``, so the same commemoration gets a fresh row -- and a fresh
-LLM-generated context, icon match and designation -- on every recurrence.  The engine emits only a
-few hundred distinct names over its whole supported range, so those rows are overwhelmingly
-duplicates of each other.
+Before the re-key this command was a dry run of the merge that collapsed ``Feast`` from
+``(day, name)`` onto ``(church, name)``: it reported how far the table would shrink and which
+contexts the merge would retire.  That reporting is gone because the schema now makes it
+impossible -- a unique constraint on ``(church, name)`` means there is no such thing as a
+duplicate row to collapse.  The merge rule itself lives on in ``hub.services.feast_merge``, which
+the migration applies.
 
-This command is read-only.  It exists to be run against production *before* the migration that
-collapses them, because the merge has to pick a single survivor per commemoration and the cost of
-picking wrong is losing curated content.  It reports:
+What survives is the half that stays useful indefinitely.  Feast names come from the engine and
+are recomputed per request, so a stored name the engine no longer emits is unreachable: its
+designation, icon and generated contexts are still in the database but no date lookup will ever
+find them again.  That happens whenever an engine upgrade corrects a name -- exactly the sort of
+change armenian-lectionary ships regularly -- and it is silent, because nothing errors.
 
-  * how far the table would shrink, per church;
-  * which contexts survive and which are deactivated, under the same rule the migration uses
-    (newest active context wins, thumbs are summed, first non-null icon/designation);
-  * conflicts a human should look at -- duplicate names carrying *different* icons or
-    designations, where the merge has to discard one;
-  * names in the database the engine no longer emits, which would keep their enrichment but never
-    be reached again by a date lookup.
-
-Nothing is written.  Run ``--verbose`` for the per-name detail, ``--church`` to scope it.
+Read-only.  ``--church`` scopes it; ``--verbose`` lists every stored name, not just the orphans.
 """
-import collections
 import datetime
 
 from django.core.management.base import BaseCommand, CommandError
 
 import armenian_lectionary
 
-from hub.models import Church, Feast
+from hub.models import Church
 from hub.services.feast_service import LECTIONARY_MAX_YEAR, LECTIONARY_MIN_YEAR
 
 
@@ -51,62 +46,17 @@ def engine_names(min_year=None, max_year=None):
     return names
 
 
-def survivor(feasts):
-    """Pick the row a group of same-named feasts collapses onto, and describe the merge.
-
-    Mirrors the migration's rule exactly, so this report is a dry run of it rather than an
-    independent guess:
-
-      * the surviving *context* is the newest active one across the group (falling back to the
-        newest of any state), so the most recently generated text is what readers keep seeing;
-      * thumbs are summed across every context in the group, so feedback is never dropped;
-      * icon and designation are the first non-null in ``id`` order, which is the oldest row --
-        the one an admin is most likely to have curated by hand.
-
-    Returns a dict describing the merge; it does not touch the database.
-    """
-    feasts = sorted(feasts, key=lambda f: f.id)
-    contexts = [ctx for feast in feasts for ctx in feast.contexts.all()]
-
-    active = [c for c in contexts if c.active]
-    pool = active or contexts
-    # time_of_generation is nullable (auto_now_add was added after the model), so fall back to id
-    # ordering for rows written before it existed rather than letting None sort unpredictably.
-    keeper = max(pool, key=lambda c: (c.time_of_generation is not None,
-                                      c.time_of_generation or datetime.datetime.min, c.id),
-                 default=None)
-
-    icons = [f.icon_id for f in feasts if f.icon_id]
-    designations = [f.designation for f in feasts if f.designation]
-
-    return {
-        "keep": feasts[0],
-        "absorbed": feasts[1:],
-        "context_kept": keeper,
-        "contexts_deactivated": [c for c in contexts if keeper and c.id != keeper.id],
-        "thumbs_up": sum(c.thumbs_up for c in contexts),
-        "thumbs_down": sum(c.thumbs_down for c in contexts),
-        "icon_id": icons[0] if icons else None,
-        "icon_conflict": len(set(icons)) > 1,
-        "designation": designations[0] if designations else None,
-        "designation_conflict": len(set(designations)) > 1,
-    }
-
-
 class Command(BaseCommand):
     help = (
-        "Read-only: report what collapsing Feast rows onto (church, name) would do. Run this "
-        "against production before the re-key migration; it writes nothing."
+        "Read-only: report stored feast names the lectionary engine no longer emits, whose "
+        "enrichment is therefore unreachable by a date lookup."
     )
 
     def add_arguments(self, parser):
         parser.add_argument("--church", default=None,
                             help="Limit the report to one church, by name (default: all).")
         parser.add_argument("--verbose", action="store_true",
-                            help="List every duplicated name, not just the totals.")
-        parser.add_argument("--skip-engine", action="store_true",
-                            help="Skip the reachability check, which sweeps the whole supported "
-                                 "range and takes a few seconds.")
+                            help="List every stored name, not just the unreachable ones.")
 
     def handle(self, *args, **options):
         churches = Church.objects.all()
@@ -115,89 +65,53 @@ class Command(BaseCommand):
             if not churches.exists():
                 raise CommandError(f"No church named {options['church']!r}.")
 
-        reachable = None
-        if not options["skip_engine"]:
-            self.stdout.write(
-                f"Enumerating engine names for {LECTIONARY_MIN_YEAR}-{LECTIONARY_MAX_YEAR}..."
-            )
-            reachable = engine_names()
-            self.stdout.write(f"  engine emits {len(reachable)} distinct names.\n")
+        self.stdout.write(
+            f"Enumerating engine names for {LECTIONARY_MIN_YEAR}-{LECTIONARY_MAX_YEAR}..."
+        )
+        reachable = engine_names()
+        self.stdout.write(f"  engine emits {len(reachable)} distinct names.\n")
 
         for church in churches:
             self._report_church(church, reachable, options["verbose"])
 
     def _report_church(self, church, reachable, verbose):
-        feasts = list(
-            Feast.objects.filter(day__church=church)
-            .select_related("day")
-            .prefetch_related("contexts")
-        )
+        feasts = list(church.feasts.prefetch_related("contexts"))
         if not feasts:
             self.stdout.write(f"\n{church.name}: no feasts.")
             return
 
-        by_name = collections.defaultdict(list)
-        for feast in feasts:
-            by_name[feast.name].append(feast)
-
-        duplicated = {name: group for name, group in by_name.items() if len(group) > 1}
-        merges = {name: survivor(group) for name, group in by_name.items()}
-
-        removed = sum(len(m["absorbed"]) for m in merges.values())
-        deactivated = sum(len(m["contexts_deactivated"]) for m in merges.values())
-        icon_conflicts = {n: m for n, m in merges.items() if m["icon_conflict"]}
-        desig_conflicts = {n: m for n, m in merges.items() if m["designation_conflict"]}
+        by_name = {feast.name: feast for feast in feasts}
+        unreachable = sorted(set(by_name) - reachable)
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"\n{church.name}"))
-        self.stdout.write(
-            f"  {len(feasts)} rows -> {len(by_name)} commemorations "
-            f"({removed} absorbed, {len(duplicated)} names duplicated)"
-        )
-        self.stdout.write(f"  contexts deactivated by the merge: {deactivated}")
+        self.stdout.write(f"  {len(feasts)} commemorations stored")
 
-        if icon_conflicts:
+        if unreachable:
             self.stdout.write(self.style.WARNING(
-                f"  {len(icon_conflicts)} name(s) carry more than one icon; the merge keeps the "
-                f"oldest row's and discards the rest:"
+                f"  {len(unreachable)} name(s) the engine never emits, so no date lookup reaches "
+                f"them; their enrichment is stranded:"
             ))
-            for name in sorted(icon_conflicts)[:10]:
-                icons = sorted({f.icon_id for f in by_name[name] if f.icon_id})
-                self.stdout.write(f"      {name!r}: icons {icons} -> {icons[0]}")
-
-        if desig_conflicts:
-            self.stdout.write(self.style.WARNING(
-                f"  {len(desig_conflicts)} name(s) carry more than one designation; the merge "
-                f"keeps the oldest row's:"
-            ))
-            for name in sorted(desig_conflicts)[:10]:
-                values = sorted({f.designation for f in by_name[name] if f.designation})
-                self.stdout.write(f"      {name!r}: {values}")
-
-        if reachable is not None:
-            unreachable = sorted(set(by_name) - reachable)
-            if unreachable:
-                self.stdout.write(self.style.WARNING(
-                    f"  {len(unreachable)} stored name(s) the engine never emits, so a date "
-                    f"lookup will not reach them after the re-key:"
-                ))
-                for name in unreachable[:15]:
-                    dates = sorted(f.day.date for f in by_name[name])
-                    self.stdout.write(
-                        f"      {name!r} ({len(dates)} row(s), {dates[0]}..{dates[-1]})"
-                    )
-                if len(unreachable) > 15:
-                    self.stdout.write(f"      ... and {len(unreachable) - 15} more")
-            else:
-                self.stdout.write("  every stored name is one the engine still emits.")
-
-        if verbose and duplicated:
-            self.stdout.write("\n  duplicated names:")
-            for name in sorted(duplicated, key=lambda n: -len(duplicated[n])):
-                merge = merges[name]
-                kept = merge["context_kept"]
+            for name in unreachable:
+                feast = by_name[name]
+                # Say what would be lost if it were deleted, so the reader can judge whether to
+                # rename it onto a current engine name or drop it.
+                held = []
+                if feast.designation:
+                    held.append(f"designation={feast.designation!r}")
+                if feast.icon_id:
+                    held.append(f"icon=#{feast.icon_id}")
+                contexts = list(feast.contexts.all())
+                if contexts:
+                    held.append(f"{len(contexts)} context(s)")
                 self.stdout.write(
-                    f"    {len(duplicated[name]):4d}x {name!r}"
-                    f" -> feast #{merge['keep'].id}"
-                    f", context #{kept.id if kept else None}"
-                    f", thumbs +{merge['thumbs_up']}/-{merge['thumbs_down']}"
+                    f"      #{feast.id} {name!r}"
+                    + (f" -- {', '.join(held)}" if held else " -- no enrichment")
                 )
+        else:
+            self.stdout.write("  every stored name is one the engine still emits.")
+
+        if verbose:
+            self.stdout.write("\n  all stored names:")
+            for name in sorted(by_name):
+                mark = " " if name in reachable else "!"
+                self.stdout.write(f"    {mark} {name!r}")
