@@ -19,6 +19,7 @@ Two things make the sweep able to catch what the mocked tests could not:
 
 import datetime
 
+import armenian_lectionary
 from django.test import TestCase
 
 from hub.models import Church, Feast
@@ -90,6 +91,12 @@ class FeastServiceRealEngineTests(TestCase):
 
         Covers 2027, which no ground-truth test can reach -- sacredtradition.am publishes
         nothing for it, so the engine's own oracle tests stop at 2026.
+
+        The overflow check reads the engine's raw ``Liturgical Day`` directly rather than
+        ``result["name"]``: the service already clamps that to ``max_length`` via
+        ``_fit_to_storage``, so checking the clamped value could never observe an overflow --
+        it would always pass even if the engine started emitting a name longer than the
+        column, silently swallowing the exact regression this test exists to catch.
         """
         max_length = Feast._meta.get_field("name").max_length
         missing, no_armenian, too_long = [], [], []
@@ -105,8 +112,12 @@ class FeastServiceRealEngineTests(TestCase):
             else:
                 if result["name_hy"] is None:
                     no_armenian.append(date_obj.isoformat())
-                if len(result["name"]) > max_length:
-                    too_long.append((date_obj.isoformat(), len(result["name"])))
+                raw_name_en = (
+                    armenian_lectionary.compute_armenian_lectionary(date_obj, language="en")
+                    .get("Liturgical Day") or ""
+                ).strip()
+                if len(raw_name_en) > max_length:
+                    too_long.append((date_obj.isoformat(), len(raw_name_en)))
             date_obj += datetime.timedelta(days=1)
 
         self.assertGreater(checked, 9800, "the supported window should be ~27 years")

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from hub.models import Church
+from hub.models import Church, Feast
 from hub.services.feast_service import get_feast_for_date
 
 
@@ -57,6 +57,26 @@ class GetFeastForDateTests(TestCase):
 
         self.assertIsNotNone(result)
         self.assertEqual(result["name_en"], "Some Untranslated Commemoration")
+        self.assertIsNone(result["name_hy"])
+
+    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
+    def test_untranslated_overlong_name_stays_untranslated_after_clamping(self, mock_compute):
+        """Truncation must not make an untranslated name look like an Armenian translation.
+
+        The engine leaves an untranslated feast's ``hy`` name equal to its full, unclamped
+        ``en`` name. If the equality check ran against the already-clamped ``name_en``, that
+        comparison would fail once the name is over ``max_length`` -- and the untranslated
+        name would be recorded as ``name_hy`` instead of falling back to ``None``.
+        """
+        max_length = Feast._meta.get_field("name").max_length
+        overlong_name = "X" * (max_length + 1)
+        mock_compute.side_effect = _engine_stub(overlong_name)
+
+        result = get_feast_for_date(self.test_date, self.church)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["name_en"]), max_length)
+        self.assertEqual(result["name_en"], overlong_name[:max_length])
         self.assertIsNone(result["name_hy"])
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")

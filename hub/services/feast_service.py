@@ -98,26 +98,29 @@ def get_feast_for_date(date_obj, church) -> dict | None:
         return None
 
     result_en = armenian_lectionary.compute_armenian_lectionary(date_obj, language="en")
-    name_en = (result_en.get("Liturgical Day") or "").strip()
-    if not name_en:
+    raw_name_en = (result_en.get("Liturgical Day") or "").strip()
+    if not raw_name_en:
         return None
-    if any(marker in name_en for marker in _NON_FEAST_MARKERS):
+    if any(marker in raw_name_en for marker in _NON_FEAST_MARKERS):
         logger.error(
             "Lectionary engine returned the placeholder %r for %s; recording no feast. "
             "The engine is contracted to serve a real name on every supported date, so "
             "this indicates an engine regression.",
-            name_en, date_obj,
+            raw_name_en, date_obj,
         )
         return None
 
-    name_en = _fit_to_storage(name_en, date_obj)
-
     result_hy = armenian_lectionary.compute_armenian_lectionary(date_obj, language="hy")
     name_hy = (result_hy.get("Liturgical Day") or "").strip()
-    # The engine leaves untranslated feast names in English.  Record only a genuine Armenian
-    # translation so untranslated names keep falling back to English (and can be upgraded later).
-    if not name_hy or name_hy == name_en:
+    # The engine leaves untranslated feast names in English.  Compare against the raw
+    # (unclamped) English name, before truncation can make an untranslated name look
+    # like a genuine Armenian translation just because they no longer match character
+    # for character.  Record only a genuine Armenian translation so untranslated names
+    # keep falling back to English (and can be upgraded later).
+    if not name_hy or name_hy == raw_name_en:
         name_hy = None
+
+    name_en = _fit_to_storage(raw_name_en, date_obj)
 
     return {
         "name": name_en,
