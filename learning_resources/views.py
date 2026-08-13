@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, status
+from rest_framework import generics, mixins, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -8,12 +8,13 @@ from django.db.models import Q
 import logging
 from .models import Video, Article, Recipe, Bookmark
 from .serializers import (
-    VideoSerializer, ArticleSerializer, RecipeSerializer, 
+    VideoSerializer, DevotionalVideoWriteSerializer, ArticleSerializer, RecipeSerializer,
     DevotionalSetSerializer, BookmarkSerializer, BookmarkCreateSerializer
 )
 from .cache import BookmarkCacheManager
 from hub.models import DevotionalSet
 from django.utils.translation import activate, get_language_from_request
+from icons.views import IsAdminOrReadOnly
 
 
 def _get_bookmark_content_type(content_type):
@@ -95,13 +96,15 @@ class BookmarkOptimizedMixin:
         return obj
 
 
-class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
+class VideoListView(BookmarkOptimizedMixin, mixins.ListModelMixin,
+                    mixins.CreateModelMixin, generics.GenericAPIView):
     """
     API endpoint that allows videos to be viewed.
 
     Permissions:
         - GET: Any user can view videos
-        - POST/PUT/PATCH/DELETE: Not supported
+        - POST: Authenticated staff can create devotional videos
+        - PUT/PATCH/DELETE: Not supported
 
     Query Parameters:
         - search (str): Optional. Filter videos by matching text in title or description.
@@ -137,8 +140,20 @@ class VideoListView(BookmarkOptimizedMixin, generics.ListAPIView):
         GET /api/learning-resources/videos/?search=prayer
         GET /api/learning-resources/videos/?category=tutorial
     """
-    serializer_class = VideoSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_serializer_class(self):
+        return DevotionalVideoWriteSerializer if self.request.method == "POST" else VideoSerializer
+
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        video = serializer.save()
+        return Response(VideoSerializer(video, context=self.get_serializer_context()).data,
+                        status=status.HTTP_201_CREATED)
     
     def get_queryset(self):
         # Activate requested language for _i18n virtual fields
@@ -272,13 +287,15 @@ class RecipeListView(BookmarkOptimizedMixin, generics.ListAPIView):
         return queryset.order_by('-created_at')
 
 
-class VideoDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
+class VideoDetailView(BookmarkOptimizedMixin, mixins.RetrieveModelMixin,
+                      generics.GenericAPIView):
     """
     API endpoint that allows a single video to be viewed.
 
     Permissions:
         - GET: Any user can view video details
-        - POST/PUT/PATCH/DELETE: Not supported
+        - PATCH: Authenticated staff can edit devotional videos
+        - POST/PUT/DELETE: Not supported
 
     Returns:
         A JSON response with the video details:
@@ -298,9 +315,21 @@ class VideoDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
     Example Requests:
         GET /api/learning-resources/videos/1/
     """
-    serializer_class = VideoSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = Video.objects.all()
+
+    def get_serializer_class(self):
+        return DevotionalVideoWriteSerializer if self.request.method == "PATCH" else VideoSerializer
+
+    def get(self, request, *args, **kwargs):
+        return self.retrieve(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        video = get_object_or_404(Video, pk=kwargs["pk"], category="devotional")
+        serializer = self.get_serializer(video, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        video = serializer.save()
+        return Response(VideoSerializer(video, context=self.get_serializer_context()).data)
 
 
 class ArticleDetailView(BookmarkOptimizedMixin, generics.RetrieveAPIView):
