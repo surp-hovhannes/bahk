@@ -16,17 +16,20 @@ import logging
 from datetime import datetime
 
 import armenian_lectionary
+from armenian_lectionary import MAX_YEAR, MIN_YEAR
 from django.conf import settings
 
 from hub.utils import SUPPORTED_CHURCHES
 
 logger = logging.getLogger(__name__)
 
-# The engine computes any date, but readings/names are only validated for 2001-2027 (the range
-# guard lives in armenian_lectionary/app.py).  Mirror the lectionary service's window so feast
-# names are only served where they are validated.  Overridable via settings.
-LECTIONARY_MIN_YEAR = getattr(settings, "LECTIONARY_MIN_YEAR", 2001)
-LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", 2027)
+# Feast names are validated only over the engine's supported range.  As of armenian-lectionary
+# 1.3.0 that guard lives in the engine itself, which raises ValueError outside the range rather
+# than returning the placeholder text this module would otherwise have to recognise -- so check
+# before calling.  Default to the engine's own bounds so the two cannot drift; the settings
+# override still allows narrowing the window (or widening it alongside a new engine release).
+LECTIONARY_MIN_YEAR = getattr(settings, "LECTIONARY_MIN_YEAR", MIN_YEAR)
+LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", MAX_YEAR)
 
 # The engine returns a concrete, source-matched name for every day.  A handful of internal
 # placeholders (e.g. "(commemoration)", "(movable ordinary-time reading)") and the pre-validated-
