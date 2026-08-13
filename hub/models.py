@@ -775,7 +775,9 @@ class Feast(models.Model):
         )
 
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="feasts")
-    name = models.CharField(max_length=256)
+    # 512 instead of 256 because two feast names in the Armenian lectionary exceed 256 characters:
+    # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257)
+    name = models.CharField(max_length=512)
     designation = models.CharField(
         max_length=256,
         choices=Designation.choices,

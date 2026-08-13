@@ -15,3 +15,7 @@ class CombinedDevotionalFormTest(SimpleTestCase):
             self.assertIsInstance(field.widget, S3FileInput)
             self.assertEqual(field.widget.attrs["data-field-id"], expected_field_id)
             self.assertEqual(field.widget.attrs["accept"], "video/*")
+            self.assertIn("500 MiB", field.help_text)
+
+    def test_model_video_help_text_matches_publishing_limit(self):
+        self.assertIn("500 MiB", Video._meta.get_field("video").help_text)

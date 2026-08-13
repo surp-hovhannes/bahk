@@ -1,6 +1,7 @@
 """Serializers for handling API requests."""
 import logging
 import pytz
+from django.conf import settings
 from django.utils import timezone  # Add missing timezone import
 
 from better_profanity import profanity
@@ -600,6 +601,51 @@ class DevotionalSerializer(serializers.ModelSerializer):
         if obj.video:
             return getattr(obj.video, 'description_i18n', obj.video.description)
         return None
+
+
+class DevotionalWriteSerializer(serializers.ModelSerializer):
+    """Strict input contract for staff devotional create and partial update."""
+
+    day = serializers.PrimaryKeyRelatedField(queryset=models.Day.objects.all())
+    video = serializers.PrimaryKeyRelatedField(queryset=models.Video.objects.all())
+    language_code = serializers.ChoiceField(
+        choices=tuple(
+            dict.fromkeys(
+                [
+                    *getattr(settings, "MODELTRANS_AVAILABLE_LANGUAGES", []),
+                    *(code for code, _name in getattr(settings, "LANGUAGES", [])),
+                ]
+            )
+        ),
+        required=True,
+    )
+    order = serializers.IntegerField(
+        min_value=0,
+        required=True,
+        allow_null=False,
+    )
+
+    class Meta:
+        model = models.Devotional
+        fields = ["day", "video", "language_code", "description", "order"]
+        extra_kwargs = {
+            "description": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        unknown = set(self.initial_data) - set(self.fields)
+        if unknown:
+            raise serializers.ValidationError(
+                {name: "Unknown field." for name in sorted(unknown)}
+            )
+        if self.partial and not self.initial_data:
+            raise serializers.ValidationError("PATCH body must contain at least one field.")
+        return super().validate(attrs)
+
 
 class FastParticipantMapSerializer(serializers.ModelSerializer):
     """Serializer for the FastParticipantMap model."""
