@@ -7,7 +7,6 @@ It is silent, because nothing errors, which is why it is worth a command.
 
 The merge rule the command used to dry-run now lives in ``hub/tests/test_feast_merge.py``.
 """
-import datetime
 from io import StringIO
 
 from django.core.management import call_command
