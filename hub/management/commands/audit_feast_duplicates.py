@@ -25,9 +25,9 @@ import datetime
 from django.core.management.base import BaseCommand, CommandError
 
 import armenian_lectionary
+from armenian_lectionary import MAX_YEAR, MIN_YEAR
 
 from hub.models import Church, Feast
-from hub.services.feast_service import LECTIONARY_MAX_YEAR, LECTIONARY_MIN_YEAR
 
 
 def engine_names(min_year=None, max_year=None):
@@ -37,8 +37,8 @@ def engine_names(min_year=None, max_year=None):
     looked up by the name the engine computes for the requested date, so a stored name outside
     this set is unreachable no matter what enrichment hangs off it.
     """
-    min_year = LECTIONARY_MIN_YEAR if min_year is None else min_year
-    max_year = LECTIONARY_MAX_YEAR if max_year is None else max_year
+    min_year = MIN_YEAR if min_year is None else min_year
+    max_year = MAX_YEAR if max_year is None else max_year
     names = set()
     day = datetime.date(min_year, 1, 1)
     end = datetime.date(max_year, 12, 31)
@@ -118,7 +118,7 @@ class Command(BaseCommand):
         reachable = None
         if not options["skip_engine"]:
             self.stdout.write(
-                f"Enumerating engine names for {LECTIONARY_MIN_YEAR}-{LECTIONARY_MAX_YEAR}..."
+                f"Enumerating engine names for {MIN_YEAR}-{MAX_YEAR}..."
             )
             reachable = engine_names()
             self.stdout.write(f"  engine emits {len(reachable)} distinct names.\n")
