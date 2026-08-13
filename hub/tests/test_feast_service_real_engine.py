@@ -20,12 +20,11 @@ Two things make the sweep able to catch what the mocked tests could not:
 import datetime
 
 import armenian_lectionary
+from armenian_lectionary import MAX_YEAR, MIN_YEAR
 from django.test import TestCase
 
 from hub.models import Church, Feast
-from hub.services.feast_service import (
-    LECTIONARY_MAX_YEAR, LECTIONARY_MIN_YEAR, get_feast_for_date,
-)
+from hub.services.feast_service import get_feast_for_date
 
 # Dates the PR #462 review flagged, with the names armenian-lectionary >=1.3 serves.
 # 2011 and 2022 are the latest-Easter winters, whose long post-Theophany stretch is where
@@ -101,8 +100,8 @@ class FeastServiceRealEngineTests(TestCase):
         max_length = Feast._meta.get_field("name").max_length
         missing, no_armenian, too_long = [], [], []
 
-        date_obj = datetime.date(LECTIONARY_MIN_YEAR, 1, 1)
-        end = datetime.date(LECTIONARY_MAX_YEAR, 12, 31)
+        date_obj = datetime.date(MIN_YEAR, 1, 1)
+        end = datetime.date(MAX_YEAR, 12, 31)
         checked = 0
         while date_obj <= end:
             result = get_feast_for_date(date_obj, self.church)
@@ -133,7 +132,7 @@ class FeastServiceRealEngineTests(TestCase):
             "limit; PostgreSQL raises DataError on these")
 
     def test_dates_outside_the_window_are_declined(self):
-        for date_obj in (datetime.date(LECTIONARY_MIN_YEAR - 1, 6, 1),
-                         datetime.date(LECTIONARY_MAX_YEAR + 1, 6, 1)):
+        for date_obj in (datetime.date(MIN_YEAR - 1, 6, 1),
+                         datetime.date(MAX_YEAR + 1, 6, 1)):
             with self.subTest(date=date_obj):
                 self.assertIsNone(get_feast_for_date(date_obj, self.church))

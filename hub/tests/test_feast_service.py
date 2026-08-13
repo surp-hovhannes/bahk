@@ -16,8 +16,7 @@ from hub.services.feast_service import get_feast_for_date
 def _engine_stub(en_name, hy_name=None):
     """Build a fake ``compute_armenian_lectionary`` that answers per ``language`` kwarg.
 
-    ``hy_name=None`` models a feast the engine has no Armenian form for: it leaves the
-    English name in place under ``language="hy"``.
+    ``hy_name`` defaults to ``en_name`` for tests that don't care about the Armenian value.
     """
     def _compute(_date, language="en"):
         return {"Liturgical Day": hy_name if (language == "hy" and hy_name) else en_name}
@@ -49,35 +48,23 @@ class GetFeastForDateTests(TestCase):
         self.assertEqual(mock_compute.call_count, 2)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_untranslated_feast_leaves_name_hy_none(self, mock_compute):
-        """When the engine has no Armenian form (hy == en), ``name_hy`` stays ``None``."""
-        mock_compute.side_effect = _engine_stub("Some Untranslated Commemoration")
+    def test_overlong_name_is_clamped_to_storage(self, mock_compute):
+        """``name_en``/``name`` are clamped to what ``Feast.name`` can hold.
 
-        result = get_feast_for_date(self.test_date, self.church)
-
-        self.assertIsNotNone(result)
-        self.assertEqual(result["name_en"], "Some Untranslated Commemoration")
-        self.assertIsNone(result["name_hy"])
-
-    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_untranslated_overlong_name_stays_untranslated_after_clamping(self, mock_compute):
-        """Truncation must not make an untranslated name look like an Armenian translation.
-
-        The engine leaves an untranslated feast's ``hy`` name equal to its full, unclamped
-        ``en`` name. If the equality check ran against the already-clamped ``name_en``, that
-        comparison would fail once the name is over ``max_length`` -- and the untranslated
-        name would be recorded as ``name_hy`` instead of falling back to ``None``.
+        Every name the engine actually produces fits (the longest is 289 characters), so this
+        exercises the defensive clamp in ``_fit_to_storage`` rather than a real engine output.
         """
         max_length = Feast._meta.get_field("name").max_length
         overlong_name = "X" * (max_length + 1)
-        mock_compute.side_effect = _engine_stub(overlong_name)
+        mock_compute.side_effect = _engine_stub(overlong_name, "ՏՕՆ ԾՆՆԴԵԱՆ")
 
         result = get_feast_for_date(self.test_date, self.church)
 
         self.assertIsNotNone(result)
         self.assertEqual(len(result["name_en"]), max_length)
         self.assertEqual(result["name_en"], overlong_name[:max_length])
-        self.assertIsNone(result["name_hy"])
+        self.assertEqual(result["name"], result["name_en"])
+        self.assertEqual(result["name_hy"], "ՏՕՆ ԾՆՆԴԵԱՆ")
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
     def test_normalizes_datetime_to_date(self, mock_compute):
@@ -90,17 +77,16 @@ class GetFeastForDateTests(TestCase):
             self.assertEqual(call.args[0], self.test_date)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_placeholder_names_return_none(self, mock_compute):
-        """Engine placeholders (not real commemorations) are treated as no feast."""
-        for placeholder in (
-            "(commemoration)",
-            "(movable ordinary-time reading)",
-            "Pentecost (day not yet in validated table)",
-            "",
-            "   ",
-        ):
-            with self.subTest(placeholder=placeholder):
-                mock_compute.side_effect = _engine_stub(placeholder)
+    def test_blank_names_return_none(self, mock_compute):
+        """An empty or whitespace-only ``Liturgical Day`` is treated as no feast.
+
+        The engine itself guarantees no placeholder marker (e.g. "(commemoration)") ever
+        reaches a caller for a date in its validated range -- see
+        ``armenian_lectionary``'s ``test_feast_contract.py::test_no_placeholder_reaches_callers``.
+        """
+        for blank in ("", "   "):
+            with self.subTest(blank=blank):
+                mock_compute.side_effect = _engine_stub(blank)
                 self.assertIsNone(get_feast_for_date(self.test_date, self.church))
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
