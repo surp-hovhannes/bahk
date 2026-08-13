@@ -1,52 +1,86 @@
 """Tests for hub.services.lectionary_service.get_daily_readings.
 
-Reading references are computed offline by the ``armenian_lectionary`` engine and parsed into the
-component dict shape the persistence layer expects.
+Reading references come from the ``armenian_lectionary`` engine already structured, as
+``ReadingsRefs``; this module maps them onto the component dict shape the persistence layer
+expects.  The unit tests below therefore cover that mapping and the engine's own reference data,
+not a local citation parser -- there is no longer one to test.
 """
 from datetime import date, datetime
 
+import armenian_lectionary
 from django.test import TestCase
 
+from hub.constants import BOOK_NAME_TO_USFM
 from hub.models import Church, Day, Reading
-from hub.services.lectionary_service import _parse_citation, get_daily_readings, persist_readings
+from hub.services.lectionary_service import (
+    get_daily_readings,
+    persist_readings,
+    readings_from_refs,
+)
 
 _FIELDS = {"book", "book_en", "start_chapter", "start_verse", "end_chapter", "end_verse"}
 
 
-class ParseCitationTests(TestCase):
-    """Unit tests for parsing engine citation strings."""
+class ReadingsFromRefsTests(TestCase):
+    """Unit tests for the ReadingsRefs -> reading-dict mapping."""
 
-    def test_simple_same_chapter(self):
+    def test_maps_span_and_mirrors_book_onto_book_en(self):
         self.assertEqual(
-            _parse_citation("John 20.1-18"),
-            {"book": "John", "book_en": "John", "start_chapter": 20,
-             "start_verse": 1, "end_chapter": 20, "end_verse": 18},
+            readings_from_refs([
+                {"book": "John", "start_chapter": 20, "start_verse": 1,
+                 "end_chapter": 20, "end_verse": 18, "citation": "John 20.1-18"},
+            ]),
+            [{"book": "John", "book_en": "John", "start_chapter": 20,
+              "start_verse": 1, "end_chapter": 20, "end_verse": 18}],
         )
 
-    def test_cross_chapter(self):
-        p = _parse_citation("Mark 15.42-16.1")
-        self.assertEqual((p["start_chapter"], p["start_verse"], p["end_chapter"], p["end_verse"]),
-                         (15, 42, 16, 1))
+    def test_drops_the_citation_backpointer(self):
+        """``citation`` is display metadata; Reading rows are keyed by their verse span."""
+        [reading] = readings_from_refs([
+            {"book": "Mark", "start_chapter": 15, "start_verse": 42,
+             "end_chapter": 16, "end_verse": 1, "citation": "Mark 15.42-16.1"},
+        ])
+        self.assertEqual(set(reading), _FIELDS)
 
-    def test_multiword_pauline_book(self):
-        p = _parse_citation("St. Paul's Epistle to the Romans 15.30-16.2")
-        self.assertEqual(p["book"], "St. Paul's Epistle to the Romans")
-        self.assertEqual((p["start_chapter"], p["end_chapter"], p["end_verse"]), (15, 16, 2))
+    def test_empty_and_missing_refs(self):
+        self.assertEqual(readings_from_refs([]), [])
+        self.assertEqual(readings_from_refs(None), [])
 
-    def test_single_verse(self):
-        p = _parse_citation("1 Corinthians 5.1")
+
+class EngineCitationContractTests(TestCase):
+    """The engine's reference data, which this module now trusts instead of re-parsing."""
+
+    COMPOSITE_DATE = date(2026, 1, 5)  # Eve of the Nativity: the corpus's only composite citation
+
+    def test_composite_citation_arrives_pre_split(self):
+        """Both halves persist. The old regex parser kept only the first sub-reference."""
+        result = armenian_lectionary.compute_armenian_lectionary(self.COMPOSITE_DATE)
+        composite = "Daniel 3.1-23, Azariah. 1-68"
+        self.assertIn(composite, result["ReadingsList"])
+
+        halves = [r for r in result["ReadingsRefs"] if r["citation"] == composite]
         self.assertEqual(
-            (p["book"], p["start_chapter"], p["start_verse"], p["end_chapter"], p["end_verse"]),
-            ("1 Corinthians", 5, 1, 5, 1),
+            [(r["book"], r["start_chapter"], r["start_verse"], r["end_chapter"], r["end_verse"])
+             for r in halves],
+            [("Daniel", 3, 1, 3, 23), ("Azariah", 1, 1, 1, 68)],
         )
 
-    def test_composite_keeps_first_subreference(self):
-        p = _parse_citation("Daniel 3.1-23, Azariah 1-68")
-        self.assertEqual(p["book"], "Daniel")
-        self.assertEqual((p["start_chapter"], p["end_verse"]), (3, 23))
+    def test_azariah_book_name_needs_no_local_cleanup(self):
+        """The engine resolves the sub-reference head to "Azariah", period already stripped, so it
+        maps straight through BOOK_NAME_TO_USFM without the rstrip(".") the parser once needed."""
+        self.assertEqual(BOOK_NAME_TO_USFM["Azariah"], "S3Y")
 
-    def test_unparseable_returns_none(self):
-        self.assertIsNone(_parse_citation("not a citation at all !!!"))
+    def test_every_book_the_engine_emits_maps_to_usfm(self):
+        """An unmapped book silently loses its passage text, so hold the whole corpus to the
+        mapping. Samples one date per month across the supported range to stay quick."""
+        unmapped = set()
+        for year in range(armenian_lectionary.MIN_YEAR, armenian_lectionary.MAX_YEAR + 1):
+            for month in range(1, 13):
+                result = armenian_lectionary.compute_armenian_lectionary(date(year, month, 1))
+                for ref in result["ReadingsRefs"]:
+                    if ref["book"] not in BOOK_NAME_TO_USFM:
+                        unmapped.add(ref["book"])
+        self.assertEqual(unmapped, set())
 
 
 class GetDailyReadingsTests(TestCase):
