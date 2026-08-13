@@ -1,16 +1,7 @@
 """Compute the feast/fast name of the day from the offline ``armenian_lectionary`` engine.
 
-This replaces the previous sacredtradition.am scraping with an in-process, offline call to
-:func:`armenian_lectionary.compute_armenian_lectionary`.  The engine returns the commemoration in
-its ``"Liturgical Day"`` field; as of the engine's feast-name accuracy contract this name is locked
-against the same authoritative ground truth the scrape used (100% match across 2001-2026), so it is
-a drop-in replacement for the English feast name.
-
-As of ``armenian_lectionary`` 1.2, the engine also serves Armenian (``"hy"``) feast names (baked
-into the package offline), so ``name_hy`` is now populated here too — the last thing feast names
-needed the live scrape for.  The engine leaves any feast without a known Armenian form in English;
-we treat that as "no Armenian translation" (``name_hy = None``) so those names fall back to English
-via ``name_i18n`` and can be upgraded later when the engine gains the translation.
+Reads the engine's ``"Liturgical Day"`` field in ``en`` and ``hy``. ``name_hy`` is left ``None``
+when the engine has no Armenian form, so callers fall back to English via ``name_i18n``.
 """
 import logging
 from datetime import datetime
@@ -30,15 +21,6 @@ logger = logging.getLogger(__name__)
 # override still allows narrowing the window (or widening it alongside a new engine release).
 LECTIONARY_MIN_YEAR = getattr(settings, "LECTIONARY_MIN_YEAR", MIN_YEAR)
 LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", MAX_YEAR)
-
-# The engine returns a concrete, source-matched name for every day.  A handful of internal
-# placeholders (e.g. "(commemoration)", "(movable ordinary-time reading)") and the pre-validated-
-# table sentinel are not real commemorations; treat them as "no feast" so we don't persist them.
-_NON_FEAST_MARKERS = (
-    "(commemoration)",
-    "(movable ordinary-time reading)",
-    "day not yet in validated table",
-)
 
 
 def get_feast_for_date(date_obj, church) -> dict | None:
@@ -70,7 +52,7 @@ def get_feast_for_date(date_obj, church) -> dict | None:
 
     result_en = armenian_lectionary.compute_armenian_lectionary(date_obj, language="en")
     name_en = (result_en.get("Liturgical Day") or "").strip()
-    if not name_en or any(marker in name_en for marker in _NON_FEAST_MARKERS):
+    if not name_en:
         return None
 
     result_hy = armenian_lectionary.compute_armenian_lectionary(date_obj, language="hy")

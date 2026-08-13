@@ -70,17 +70,16 @@ class GetFeastForDateTests(TestCase):
             self.assertEqual(call.args[0], self.test_date)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_placeholder_names_return_none(self, mock_compute):
-        """Engine placeholders (not real commemorations) are treated as no feast."""
-        for placeholder in (
-            "(commemoration)",
-            "(movable ordinary-time reading)",
-            "Pentecost (day not yet in validated table)",
-            "",
-            "   ",
-        ):
-            with self.subTest(placeholder=placeholder):
-                mock_compute.side_effect = _engine_stub(placeholder)
+    def test_blank_names_return_none(self, mock_compute):
+        """An empty or whitespace-only ``Liturgical Day`` is treated as no feast.
+
+        The engine itself guarantees no placeholder marker (e.g. "(commemoration)") ever
+        reaches a caller for a date in its validated range -- see
+        ``armenian_lectionary``'s ``test_feast_contract.py::test_no_placeholder_reaches_callers``.
+        """
+        for blank in ("", "   "):
+            with self.subTest(blank=blank):
+                mock_compute.side_effect = _engine_stub(blank)
                 self.assertIsNone(get_feast_for_date(self.test_date, self.church))
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
