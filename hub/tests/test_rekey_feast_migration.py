@@ -18,8 +18,8 @@ from django.test import TransactionTestCase
 class RekeyFeastMigrationTests(TransactionTestCase):
     """Runs the real migration over rows built in the pre-migration shape."""
 
-    migrate_from = ("hub", "0059_reading_text_moves_to_passage_text")
-    migrate_to = ("hub", "0060_rekey_feast_to_commemoration")
+    migrate_from = ("hub", "0060_alter_feast_name")
+    migrate_to = ("hub", "0061_rekey_feast_to_commemoration")
 
     def _migrate(self, target):
         executor = MigrationExecutor(connection)

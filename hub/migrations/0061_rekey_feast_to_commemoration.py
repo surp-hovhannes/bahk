@@ -94,7 +94,9 @@ def unmerge(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("hub", "0059_reading_text_moves_to_passage_text"),
+        # 0060 widened Feast.name to 512 (#471); this depends on it so the two stay one chain
+        # rather than two leaves off 0059.
+        ("hub", "0060_alter_feast_name"),
     ]
 
     operations = [
