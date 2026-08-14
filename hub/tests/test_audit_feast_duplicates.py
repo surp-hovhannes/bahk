@@ -9,11 +9,13 @@ from io import StringIO
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
 from hub.management.commands.audit_feast_duplicates import engine_names, survivor
 from hub.models import Church, Day, Feast, FeastContext
+from icons.models import Icon
 
 
 class SurvivorTests(TestCase):
@@ -128,6 +130,17 @@ class AuditCommandTests(TestCase):
         call_command("audit_feast_duplicates", stdout=out, skip_engine=True, **kwargs)
         return out.getvalue()
 
+    def _create_icon(self, title):
+        return Icon.objects.create(
+            title=title,
+            church=self.church,
+            image=SimpleUploadedFile(
+                name=f"{title.lower().replace(' ', '-')}.jpg",
+                content=b"fake image content",
+                content_type="image/jpeg",
+            ),
+        )
+
     def test_reports_the_collapse(self):
         output = self._run()
         self.assertIn("3 rows -> 1 commemorations", output)
@@ -144,3 +157,47 @@ class AuditCommandTests(TestCase):
 
     def test_verbose_lists_the_duplicated_name(self):
         self.assertIn("Feast of the Holy Cross", self._run(verbose=True))
+
+    def test_conflicts_report_the_first_populated_values_in_feast_order(self):
+        lower_id_icon = self._create_icon("Lower ID Icon")
+        higher_id_icon = self._create_icon("Higher ID Icon")
+        oldest, first_populated, newest = Feast.objects.filter(
+            name="Feast of the Holy Cross",
+            day__church=self.church,
+        ).order_by("id")
+
+        first_designation = Feast.Designation.SUNDAYS_DOMINICAL.value
+        later_designation = Feast.Designation.MARTYRS.value
+        Feast.objects.filter(pk=first_populated.pk).update(
+            icon_id=higher_id_icon.id,
+            designation=first_designation,
+        )
+        Feast.objects.filter(pk=newest.pk).update(
+            icon_id=lower_id_icon.id,
+            designation=later_designation,
+        )
+
+        self.assertIsNone(oldest.icon_id)
+        self.assertIsNone(oldest.designation)
+
+        output = self._run()
+        icon_candidates = sorted([lower_id_icon.id, higher_id_icon.id])
+        designation_candidates = sorted([first_designation, later_designation])
+
+        self.assertIn("oldest populated row's", output)
+        self.assertIn(
+            f"icons {icon_candidates} -> {higher_id_icon.id}",
+            output,
+        )
+        self.assertNotIn(
+            f"icons {icon_candidates} -> {lower_id_icon.id}",
+            output,
+        )
+        self.assertIn(
+            f"{designation_candidates} -> {first_designation!r}",
+            output,
+        )
+        self.assertNotIn(
+            f"{designation_candidates} -> {later_designation!r}",
+            output,
+        )

@@ -60,8 +60,8 @@ def survivor(feasts):
       * the surviving *context* is the newest active one across the group (falling back to the
         newest of any state), so the most recently generated text is what readers keep seeing;
       * thumbs are summed across every context in the group, so feedback is never dropped;
-      * icon and designation are the first non-null in ``id`` order, which is the oldest row --
-        the one an admin is most likely to have curated by hand.
+      * icon and designation are the first non-null in ``id`` order, which is the oldest
+        populated row -- the one an admin is most likely to have curated by hand.
 
     Returns a dict describing the merge; it does not touch the database.
     """
@@ -158,20 +158,24 @@ class Command(BaseCommand):
         if icon_conflicts:
             self.stdout.write(self.style.WARNING(
                 f"  {len(icon_conflicts)} name(s) carry more than one icon; the merge keeps the "
-                f"oldest row's and discards the rest:"
+                f"oldest populated row's and discards the rest:"
             ))
             for name in sorted(icon_conflicts)[:10]:
+                merge = icon_conflicts[name]
                 icons = sorted({f.icon_id for f in by_name[name] if f.icon_id})
-                self.stdout.write(f"      {name!r}: icons {icons} -> {icons[0]}")
+                self.stdout.write(f"      {name!r}: icons {icons} -> {merge['icon_id']}")
 
         if desig_conflicts:
             self.stdout.write(self.style.WARNING(
                 f"  {len(desig_conflicts)} name(s) carry more than one designation; the merge "
-                f"keeps the oldest row's:"
+                f"keeps the oldest populated row's:"
             ))
             for name in sorted(desig_conflicts)[:10]:
+                merge = desig_conflicts[name]
                 values = sorted({f.designation for f in by_name[name] if f.designation})
-                self.stdout.write(f"      {name!r}: {values}")
+                self.stdout.write(
+                    f"      {name!r}: {values} -> {merge['designation']!r}"
+                )
 
         if reachable is not None:
             unreachable = sorted(set(by_name) - reachable)
