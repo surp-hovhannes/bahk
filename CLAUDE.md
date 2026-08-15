@@ -91,12 +91,13 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    one date the engine gave the row its name, recorded at creation — is what makes that
    recoverable: recompute the name for that date and the row can be moved onto it.
 
-   After any `armenian-lectionary` bump, run `remap_feast_names` (dry run, then `--apply`) and
-   confirm with `audit_feast_duplicates`. The rule is `hub/services/feast_rename.py`, shared
-   verbatim by the command and migration `0065` so the two cannot drift, and it merges collisions
-   through `feast_merge.survivor`. Rows written before `sample_date` existed — the retired
-   sacredtradition.am scrape's and engines 1.1.x/1.2.x's — are bridged by the one-time
-   `hub/data/feast_name_map.json`. Full procedure: `docs/FEAST_NAME_MIGRATION.md`.
+   **After any `armenian-lectionary` bump**, run `remap_feast_names` (dry run, then `--apply`) and
+   confirm with `audit_feast_duplicates`. Nothing does this automatically — migration `0065`
+   applied the one-time repair and, like every migration, runs once. The rule is
+   `hub/services/feast_rename.py`, shared verbatim by the command and `0065` so the two cannot
+   drift, and it merges collisions through `feast_merge.survivor`. Rows written before
+   `sample_date` existed — the retired sacredtradition.am scrape's and engines 1.1.x/1.2.x's —
+   are bridged by the one-time `hub/data/feast_name_map.json`.
 
 ## Development Environment
 
