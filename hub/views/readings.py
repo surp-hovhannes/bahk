@@ -1,7 +1,7 @@
 """Views for returning data pertaining to daily readings.
 
 Reading references come from the offline ``armenian_lectionary`` engine; Armenian verse text is
-served from the local ``BibleVerse`` corpus.  (Feast names still use sacredtradition.am.)
+served from the local ``BibleVerse`` corpus.
 """
 
 import logging

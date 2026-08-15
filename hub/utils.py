@@ -1,11 +1,6 @@
 """Utilities for supporting backend."""
 from datetime import datetime, timedelta
 import logging
-import urllib
-import urllib.parse
-import hashlib
-
-import sentry_sdk
 
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
@@ -24,90 +19,6 @@ logger = logging.getLogger(__name__)
 
 PARSER_REGEX = r"^([\w\u0531-\u058A\u0400-\u04FF1-4\'\.\s]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
 SUPPORTED_CHURCHES = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME)
-
-# Circuit breaker state: key = "circuit_breaker:{url_hash}" (store in cache)
-# After 3 consecutive failures in 15 min, block further attempts for 15 min
-SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT = 900  # 15 min
-SCRAPE_CIRCUIT_BREAKER_MAX_FAILURES = 3
-SCRAPE_CACHE_TIMEOUT = 21600  # 6 hours
-
-
-def _stable_url_key(url: str) -> str:
-    """Stable hash for URL cache keys (unlike Python's salted hash())."""
-    return hashlib.md5(url.encode()).hexdigest()[:16]
-
-
-def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
-    """Fetch a sacredtradition.am page with retries, circuit breaker, and caching.
-    
-    Args:
-        url: Full URL to fetch
-        timeout: Request timeout in seconds
-        
-    Returns:
-        Decoded HTML string, or None on failure (with cached data if avail)
-    """
-    # URL validation
-    parsed = urllib.parse.urlparse(url)
-    if not parsed.netloc or parsed.netloc != "sacredtradition.am":
-        logger.error("Invalid URL for sacredtradition.am scrape: %s", url)
-        return None
-    
-    url_key = _stable_url_key(url)
-    
-    # Check circuit breaker
-    circuit_key = f"circuit_breaker:{url_key}"
-    circuit_open = cache.get(circuit_key)
-    if circuit_open:
-        logger.warning("Circuit breaker open for %s, skipping scrape", url)
-        # Try cache fallback anyway
-        cached = cache.get(f"scrape_result:{url_key}")
-        if cached:
-            return cached
-        return None
-    
-    # Get any cached result to use as stale fallback
-    cache_key = f"scrape_result:{url_key}"
-    cached = cache.get(cache_key)
-    
-    # Fetch with retries
-    last_error = None
-    for attempt in range(3):
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; BahkBot/1.0)'})
-            response = urllib.request.urlopen(req, timeout=timeout)
-            if response.status == 200:
-                data = response.read().decode("utf-8")
-                # Cache successful result
-                cache.set(cache_key, data, SCRAPE_CACHE_TIMEOUT)
-                # Reset circuit breaker + failure counter on success
-                cache.delete(circuit_key)
-                cache.delete(circuit_key + ":failures")
-                return data
-            else:
-                last_error = f"HTTP {response.status}"
-                logger.error("sacredtradition.am returned status %d for %s", response.status, url)
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
-            last_error = str(e)
-            logger.warning("Attempt %d/3 failed for %s: %s", attempt + 1, url, last_error)
-            if attempt < 2:
-                import time
-                time.sleep(1 * (attempt + 1))  # 1s, 2s backoff
-    
-    # All attempts failed — trip circuit breaker
-    failure_count = cache.get(circuit_key + ":failures", 0)
-    failure_count += 1
-    cache.set(circuit_key + ":failures", failure_count, SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT)
-    if failure_count >= SCRAPE_CIRCUIT_BREAKER_MAX_FAILURES:
-        cache.set(circuit_key, True, SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT)
-        sentry_sdk.capture_exception(Exception(f"Circuit breaker tripped for {url}"))
-    
-    # Log the final failure
-    if last_error:
-        sentry_sdk.capture_exception(Exception(f"Scrape failed for {url} after 3 attempts: {last_error}"))
-    
-    # Return stale cached data as fallback (or None if never cached)
-    return cached
 
 
 def get_user_profile_safe(user):
@@ -220,82 +131,6 @@ def send_fast_reminders():
             logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {earliest_fast.name}')
 
 
-def scrape_feast(date_obj, church, date_format="%Y%m%d"):
-    """Scrapes feast name from sacredtradition.am in both English and Armenian.
-    
-    Args:
-        date_obj: datetime.date object for the date to scrape
-        church: Church object
-        date_format: Format string for date in URL
-        
-    Returns:
-        Dict with 'name', 'name_en', 'name_hy' keys or None if no feast found
-    """
-    if church not in SUPPORTED_CHURCHES:
-        logging.error("Web-scraping for feasts only set up for the following churches: %r. %s not supported.",
-                      SUPPORTED_CHURCHES, church)
-        return None
-
-    date_str = date_obj.strftime(date_format)
-    
-    def scrape_feast_for_language(language_code):
-        """Helper function to scrape feast for a specific language.
-        
-        Args:
-            language_code: 2 for English, 3 for Armenian
-        """
-        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
-        html_content = _fetch_sacredtradition(url)
-        if html_content is None:
-            return None
-
-        # Look for elements with class="dname" or class=dname (with or without quotes)
-        # Match various HTML tags with class dname
-        import re
-        
-        # First, find the opening tag with class=dname (handles both quoted and unquoted)
-        opening_pattern = r'<([a-z]+)[^>]*class=["\']?dname["\']?[^>]*>'
-        opening_match = re.search(opening_pattern, html_content, re.DOTALL | re.IGNORECASE)
-        
-        if not opening_match:
-            return None
-        
-        tag_name = opening_match.group(1)
-        start_pos = opening_match.end()
-        
-        # Find the corresponding closing tag
-        closing_pattern = f'</{tag_name}>'
-        closing_match = re.search(closing_pattern, html_content[start_pos:], re.IGNORECASE)
-        
-        if not closing_match:
-            return None
-        
-        # Extract content between opening and closing tags
-        feast_html = html_content[start_pos:start_pos + closing_match.start()]
-        
-        # Remove any nested HTML tags
-        feast_name = re.sub(r'<[^>]+>', '', feast_html).strip()
-        
-        return feast_name if feast_name else None
-    
-    # Scrape both English and Armenian
-    name_en = scrape_feast_for_language(2)  # English
-    name_hy = scrape_feast_for_language(3)  # Armenian
-    
-    # If no feast found in either language, return None
-    if not name_en and not name_hy:
-        return None
-    
-    # Use English as default, fallback to Armenian if English not available
-    default_name = name_en if name_en else name_hy
-    
-    return {
-        "name": default_name,
-        "name_en": name_en,
-        "name_hy": name_hy,
-    }
-
-
 def get_or_create_feast_for_date(date_obj, church, check_fast=True):
     """
     Get or create a Feast for a given date and church.
@@ -352,8 +187,10 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
             }
         )
 
-    # Scrape feast data only if feast doesn't exist or is missing translations
-    feast_data = scrape_feast(date_obj, church)
+    # Compute feast data offline only if feast doesn't exist or is missing translations.
+    # Imported lazily to avoid a circular import (feast_service imports SUPPORTED_CHURCHES from here).
+    from hub.services.feast_service import get_feast_for_date
+    feast_data = get_feast_for_date(date_obj, church)
     
     if not feast_data:
         # If no feast data and feast already exists, return existing feast

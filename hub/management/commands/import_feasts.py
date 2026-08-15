@@ -5,7 +5,7 @@ import logging
 from django.core.management.base import BaseCommand
 
 import hub.models as models
-from hub.utils import scrape_feast
+from hub.services.feast_service import get_feast_for_date
 
 
 def daterange(start_date: date, end_date: date):
@@ -39,7 +39,7 @@ class Command(BaseCommand):
         
         for date_obj in daterange(start_date, end_date):
             day, _ = models.Day.objects.get_or_create(church=church, date=date_obj)
-            feast_data = scrape_feast(date_obj, church)
+            feast_data = get_feast_for_date(date_obj, church)
             
             if feast_data:
                 # Extract name fields
