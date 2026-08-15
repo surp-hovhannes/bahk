@@ -1,149 +1,63 @@
-"""Tests for the ``audit_feast_duplicates`` command and its merge rule.
+"""Tests for the ``audit_feast_duplicates`` command.
 
-The rule tested here is the one the re-key migration will apply, so these tests are what stop the
-report and the migration drifting apart -- the report is only worth running against production if
-it predicts what the migration actually does.
+Since the re-key the command reports one thing: stored feast names the engine no longer emits.
+Those are unreachable -- names come from the engine per request, so nothing will ever look them
+up again -- while their designation, icon and generated contexts sit in the database untouched.
+It is silent, because nothing errors, which is why it is worth a command.
+
+The merge rule the command used to dry-run now lives in ``hub/tests/test_feast_merge.py``.
 """
-import datetime
 from io import StringIO
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
-from django.utils import timezone
 
-from hub.management.commands.audit_feast_duplicates import engine_names, survivor
-from hub.models import Church, Day, Feast, FeastContext
-from icons.models import Icon
-
-
-class SurvivorTests(TestCase):
-    """The merge rule: newest active context wins, thumbs sum, oldest row's icon/designation."""
-
-    def setUp(self):
-        self.church = Church.objects.get(pk=Church.get_default_pk())
-
-    def _feast(self, date_obj, name="Feast of the Holy Cross", **kwargs):
-        day, _ = Day.objects.get_or_create(date=date_obj, church=self.church)
-        return Feast.objects.create(day=day, name=name, **kwargs)
-
-    def _context(self, feast, text, active=True, when=None, up=0, down=0):
-        ctx = FeastContext.objects.create(
-            feast=feast, text=text, short_text=text[:20], active=active,
-            thumbs_up=up, thumbs_down=down,
-        )
-        if when is not None:
-            # auto_now_add ignores an assigned value, so set it after the fact.
-            FeastContext.objects.filter(pk=ctx.pk).update(time_of_generation=when)
-            ctx.refresh_from_db()
-        return ctx
-
-    def test_keeps_the_oldest_row_and_absorbs_the_rest(self):
-        first = self._feast(datetime.date(2025, 9, 14))
-        second = self._feast(datetime.date(2026, 9, 13))
-        merge = survivor([second, first])  # order of input must not matter
-        self.assertEqual(merge["keep"], first)
-        self.assertEqual(merge["absorbed"], [second])
-
-    def test_newest_active_context_survives(self):
-        older = self._feast(datetime.date(2025, 9, 14))
-        newer = self._feast(datetime.date(2026, 9, 13))
-        now = timezone.now()
-        self._context(older, "old text", when=now - datetime.timedelta(days=400))
-        keeper = self._context(newer, "new text", when=now)
-
-        merge = survivor([older, newer])
-        self.assertEqual(merge["context_kept"], keeper)
-        self.assertEqual([c.text for c in merge["contexts_deactivated"]], ["old text"])
-
-    def test_an_inactive_newer_context_does_not_beat_an_active_one(self):
-        """FeastContext.save() deactivates siblings per feast, but across merged feasts the
-        active flag is the editorial signal -- an inactive row was deliberately retired."""
-        older = self._feast(datetime.date(2025, 9, 14))
-        newer = self._feast(datetime.date(2026, 9, 13))
-        now = timezone.now()
-        active = self._context(older, "active", active=True,
-                               when=now - datetime.timedelta(days=400))
-        self._context(newer, "retired", active=False, when=now)
-
-        self.assertEqual(survivor([older, newer])["context_kept"], active)
-
-    def test_thumbs_are_summed_across_the_group(self):
-        a = self._feast(datetime.date(2025, 9, 14))
-        b = self._feast(datetime.date(2026, 9, 13))
-        self._context(a, "a", up=12, down=1)
-        self._context(b, "b", up=3, down=2)
-
-        merge = survivor([a, b])
-        self.assertEqual((merge["thumbs_up"], merge["thumbs_down"]), (15, 3))
-
-    def test_first_non_null_icon_and_designation_win_and_conflicts_are_flagged(self):
-        a = self._feast(datetime.date(2025, 9, 14))  # no designation
-        b = self._feast(datetime.date(2026, 9, 13),
-                        designation=Feast.Designation.MARTYRS)
-        c = self._feast(datetime.date(2027, 9, 12),
-                        designation=Feast.Designation.SUNDAYS_DOMINICAL)
-
-        merge = survivor([a, b, c])
-        self.assertEqual(merge["designation"], Feast.Designation.MARTYRS)
-        self.assertTrue(merge["designation_conflict"])
-
-    def test_no_conflict_when_the_group_agrees(self):
-        a = self._feast(datetime.date(2025, 9, 14), designation=Feast.Designation.MARTYRS)
-        b = self._feast(datetime.date(2026, 9, 13), designation=Feast.Designation.MARTYRS)
-        merge = survivor([a, b])
-        self.assertFalse(merge["designation_conflict"])
-        self.assertFalse(merge["icon_conflict"])
-
-    def test_group_without_contexts_survives_cleanly(self):
-        a = self._feast(datetime.date(2025, 9, 14))
-        merge = survivor([a])
-        self.assertIsNone(merge["context_kept"])
-        self.assertEqual(merge["contexts_deactivated"], [])
-        self.assertEqual((merge["thumbs_up"], merge["thumbs_down"]), (0, 0))
+from hub.management.commands.audit_feast_duplicates import engine_names
+from hub.models import Church, Feast
 
 
 class EngineNamesTests(TestCase):
-    """The reachability set the report checks stored names against."""
+    """The reachability set stored names are checked against."""
 
     def test_covers_a_known_name_and_stays_bounded(self):
         names = engine_names(2026, 2026)
         self.assertIn("Fast day", names)
-        # A single year emits far fewer names than it has days; that compression is the whole
-        # argument for re-keying, so assert it rather than just non-emptiness.
+        # A year emits far fewer names than it has days; that compression is the whole argument
+        # for keying feasts by commemoration, so assert it rather than mere non-emptiness.
         self.assertLess(len(names), 365)
+
+    def test_a_name_the_engine_never_emits_is_absent(self):
+        self.assertNotIn("Presentation of Jesus at the Temple", engine_names(2026, 2026))
 
 
 class AuditCommandTests(TestCase):
-    """The command itself: read-only, and reports the shrink."""
+    """The command itself: read-only, and it names what would be stranded."""
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
-        for year in (2025, 2026, 2027):
-            day, _ = Day.objects.get_or_create(
-                date=datetime.date(year, 9, 14), church=self.church)
-            Feast.objects.create(day=day, name="Feast of the Holy Cross")
+        # One name the engine really emits, and one invented -- the seed fixtures are full of the
+        # latter, which is how this check earned its place.
+        Feast.objects.create(church=self.church, name="Fast day")
+        self.stranded = Feast.objects.create(
+            church=self.church,
+            name="Presentation of Jesus at the Temple",
+            designation=Feast.Designation.MARTYRS,
+        )
 
     def _run(self, **kwargs):
         out = StringIO()
-        call_command("audit_feast_duplicates", stdout=out, skip_engine=True, **kwargs)
+        call_command("audit_feast_duplicates", stdout=out, **kwargs)
         return out.getvalue()
 
-    def _create_icon(self, title):
-        return Icon.objects.create(
-            title=title,
-            church=self.church,
-            image=SimpleUploadedFile(
-                name=f"{title.lower().replace(' ', '-')}.jpg",
-                content=b"fake image content",
-                content_type="image/jpeg",
-            ),
-        )
-
-    def test_reports_the_collapse(self):
+    def test_flags_the_unreachable_name_and_not_the_reachable_one(self):
         output = self._run()
-        self.assertIn("3 rows -> 1 commemorations", output)
+        self.assertIn("Presentation of Jesus at the Temple", output)
+        self.assertIn("1 name(s) the engine never emits", output)
+
+    def test_reports_what_the_stranded_row_is_holding(self):
+        """So a reader can judge whether to rename it onto a live name or drop it."""
+        self.assertIn(f"designation={str(Feast.Designation.MARTYRS)!r}", self._run())
 
     def test_writes_nothing(self):
         before = list(Feast.objects.values_list("id", "name", "designation", "icon_id"))
@@ -151,53 +65,13 @@ class AuditCommandTests(TestCase):
         self.assertEqual(
             list(Feast.objects.values_list("id", "name", "designation", "icon_id")), before)
 
+    def test_verbose_lists_reachable_names_too(self):
+        self.assertIn("Fast day", self._run(verbose=True))
+
     def test_unknown_church_is_an_error(self):
         with self.assertRaises(CommandError):
             call_command("audit_feast_duplicates", church="Nonesuch", stdout=StringIO())
 
-    def test_verbose_lists_the_duplicated_name(self):
-        self.assertIn("Feast of the Holy Cross", self._run(verbose=True))
-
-    def test_conflicts_report_the_first_populated_values_in_feast_order(self):
-        lower_id_icon = self._create_icon("Lower ID Icon")
-        higher_id_icon = self._create_icon("Higher ID Icon")
-        oldest, first_populated, newest = Feast.objects.filter(
-            name="Feast of the Holy Cross",
-            day__church=self.church,
-        ).order_by("id")
-
-        first_designation = Feast.Designation.SUNDAYS_DOMINICAL.value
-        later_designation = Feast.Designation.MARTYRS.value
-        Feast.objects.filter(pk=first_populated.pk).update(
-            icon_id=higher_id_icon.id,
-            designation=first_designation,
-        )
-        Feast.objects.filter(pk=newest.pk).update(
-            icon_id=lower_id_icon.id,
-            designation=later_designation,
-        )
-
-        self.assertIsNone(oldest.icon_id)
-        self.assertIsNone(oldest.designation)
-
-        output = self._run()
-        icon_candidates = sorted([lower_id_icon.id, higher_id_icon.id])
-        designation_candidates = sorted([first_designation, later_designation])
-
-        self.assertIn("oldest populated row's", output)
-        self.assertIn(
-            f"icons {icon_candidates} -> {higher_id_icon.id}",
-            output,
-        )
-        self.assertNotIn(
-            f"icons {icon_candidates} -> {lower_id_icon.id}",
-            output,
-        )
-        self.assertIn(
-            f"{designation_candidates} -> {first_designation!r}",
-            output,
-        )
-        self.assertNotIn(
-            f"{designation_candidates} -> {later_designation!r}",
-            output,
-        )
+    def test_a_church_with_no_feasts_is_reported_not_skipped(self):
+        empty = Church.objects.create(name="Empty Church")
+        self.assertIn(f"{empty.name}: no feasts", self._run())

@@ -2,8 +2,9 @@
 
 Reads the engine's ``"Liturgical Day"`` field in both ``en`` and ``hy``.
 """
+import functools
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 import armenian_lectionary
 from armenian_lectionary import MAX_YEAR, MIN_YEAR
@@ -54,3 +55,49 @@ def get_feast_for_date(date_obj, church) -> dict | None:
         "name_en": name_en,
         "name_hy": name_hy,
     }
+
+
+@functools.lru_cache(maxsize=1)
+def _dates_by_name():
+    """Map each English feast name to every date in the supported range the engine gives it.
+
+    Feasts are keyed by commemoration rather than by date, so a Feast row has no date of its own.
+    Two things still need dates:
+
+      * cache invalidation, which has to clear the API entries for every day a feast is served on;
+      * the reference-data matcher in ``llm_service``, which boosts its confidence when a
+        candidate in ``data/feasts.json`` falls on the same month and day.
+
+    Cached: it sweeps the engine's whole supported range, which costs a couple of seconds, and
+    that result is fixed for a given engine version. Sweeping is affordable precisely because it
+    happens at most once per process.
+    """
+    dates = {}
+    day = date(MIN_YEAR, 1, 1)
+    end = date(MAX_YEAR, 12, 31)
+    while day <= end:
+        name = (armenian_lectionary.compute_armenian_lectionary(day)
+                .get("Liturgical Day") or "").strip()
+        if name:
+            dates.setdefault(name, []).append(day)
+        day += timedelta(days=1)
+    return dates
+
+
+def dates_for_feast_name(name):
+    """Return every date in the supported range the engine gives this feast name."""
+    if not name:
+        return []
+    return _dates_by_name().get(name.strip(), [])
+
+
+def representative_date_for_feast_name(name):
+    """Return one date the engine gives this feast name, or ``None`` if it never does.
+
+    For a fixed feast every occurrence shares a month and day, so the earliest is as good as any.
+    For a movable one the date shifts with Easter and no single date is right -- but those never
+    matched a fixed month/day entry in the reference file anyway, so callers relying on the
+    month/day were never getting work out of them.
+    """
+    occurrences = dates_for_feast_name(name)
+    return occurrences[0] if occurrences else None

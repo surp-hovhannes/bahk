@@ -68,12 +68,12 @@ class FeastAdminIconActionsTests(TestCase):
         # Avoid enqueuing icon matching from Feast post_save signal during setup.
         with patch("hub.signals.match_icon_to_feast_task.delay"):
             self.feast_with_icon = Feast.objects.create(
-                day=self.day_with_icon,
+                church=self.day_with_icon.church,
                 name="Christmas",
                 icon=self.icon,
             )
             self.feast_without_icon = Feast.objects.create(
-                day=self.day_without_icon,
+                church=self.day_without_icon.church,
                 name="Feast Without Icon",
             )
 

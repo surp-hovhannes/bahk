@@ -386,7 +386,7 @@ def match_icon_to_feast_task(self, feast_id: int):
         feast_id: ID of the Feast to match an icon for
     """
     try:
-        feast = Feast.objects.select_related('day', 'day__church').get(pk=feast_id)
+        feast = Feast.objects.select_related('church').get(pk=feast_id)
     except Feast.DoesNotExist:
         logger.error("Feast with id %s not found.", feast_id)
         return
@@ -396,8 +396,8 @@ def match_icon_to_feast_task(self, feast_id: int):
         logger.info("Feast %s already has an icon assigned, skipping.", feast_id)
         return
     
-    # Get the church from the feast's day
-    church = feast.day.church
+    # Icons are scoped per church, which is now the feast's own key rather than its day's
+    church = feast.church
     if not church:
         logger.warning("Feast %s has no associated church, cannot match icons.", feast_id)
         return

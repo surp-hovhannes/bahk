@@ -22,7 +22,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from hub.cache import feast_api_cache_key, invalidate_feast_api_cache_for_feast
-from hub.models import Church, Day, Feast, FeastContext
+from hub.models import Church, Feast, FeastContext
 from hub.tasks import generate_feast_context_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
 from hub.tasks.llm_tasks import is_feast_context_generation_eligible
@@ -91,16 +91,12 @@ class GetFeastForDate(generics.GenericAPIView):
             return Response(cached_result)
 
         try:
-            # Use the shared utility function to get or create feast
-            # Note: check_fast=False because the view should still return feasts even if a Fast exists
-            feast_obj, _, _ = get_or_create_feast_for_date(date_obj, church, check_fast=False)
-            
-            # Get the day for the date (needed for the rest of the view logic)
-            day = Day.objects.get(date=date_obj, church=church)
+            # Resolve the commemoration for this date and get the row holding its enrichment.
+            # check_fast=False because the view should still return feasts even if a Fast exists.
+            # There is no Day fallback any more: the engine names every date in its supported
+            # range, so either it resolved a feast or there is genuinely none to show.
+            feast, _, _ = get_or_create_feast_for_date(date_obj, church, check_fast=False)
 
-            # Use the feast from the utility function, or get it from the day if None
-            feast = feast_obj if feast_obj else day.feasts.first()
-            
             if feast is None:
                 # No feast on this day
                 response_data = {
@@ -283,8 +279,10 @@ class FeastAssignIconView(APIView):
     def _feast_snapshot(cls, feast):
         return {
             "feast_id": feast.id,
-            "date": feast.day.date.isoformat(),
-            "church_id": feast.day.church_id,
+            # No "date": a feast is a commemoration now, served on every day the engine names it,
+            # so there is no single date this snapshot could report.
+            "name": feast.name,
+            "church_id": feast.church_id,
             "current_icon_id": feast.icon_id,
             "current_icon": cls._icon_snapshot(feast.icon),
         }
@@ -295,7 +293,7 @@ class FeastAssignIconView(APIView):
 
     def get(self, request, feast_id: int):
         feast = get_object_or_404(
-            Feast.objects.select_related("day", "day__church", "icon"),
+            Feast.objects.select_related("church", "icon"),
             pk=feast_id,
         )
         return Response(self._feast_snapshot(feast), status=status.HTTP_200_OK)
@@ -327,12 +325,12 @@ class FeastAssignIconView(APIView):
         expected_icon_id = request.data["expected_current_icon_id"]
         with transaction.atomic():
             feast = get_object_or_404(
-                Feast.objects.select_for_update().select_related("day", "day__church"),
+                Feast.objects.select_for_update().select_related("church"),
                 pk=feast_id,
             )
             icon = get_object_or_404(Icon.objects.select_for_update(), pk=icon_id)
 
-            if icon.church_id != feast.day.church_id:
+            if icon.church_id != feast.church_id:
                 return Response(
                     {"icon_id": "Icon must belong to the feast's church."},
                     status=status.HTTP_400_BAD_REQUEST,

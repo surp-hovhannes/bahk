@@ -44,7 +44,7 @@ class FeastIconMatchingTaskTests(TestCase):
         day = Day.objects.create(date=self.test_date, church=self.church)
 
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 
@@ -65,7 +65,7 @@ class FeastIconMatchingTaskTests(TestCase):
             image=test_image
         )
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Christmas",
             icon=icon,
         )
@@ -90,7 +90,7 @@ class FeastIconMatchingTaskTests(TestCase):
         """Test that task handles case when no icons exist for church."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 
@@ -116,7 +116,7 @@ class FeastIconMatchingTaskTests(TestCase):
             image=test_image
         )
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Nativity of Christ",
         )
 
@@ -144,7 +144,7 @@ class FeastIconMatchingTaskTests(TestCase):
             image=test_image
         )
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 
@@ -173,7 +173,7 @@ class FeastIconMatchingTaskTests(TestCase):
             image=test_image
         )
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 
@@ -202,7 +202,7 @@ class FeastIconMatchingTaskTests(TestCase):
             image=test_image
         )
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 
@@ -278,7 +278,7 @@ class FeastIconMatchingScopeTests(TestCase):
         """Task must not assign a matched icon outside the feast church."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = self._create_feast_without_signal(
-            day=day,
+            church=day.church,
             name="Nativity of Christ",
         )
         Icon.objects.create(
@@ -355,7 +355,7 @@ class FeastIconMatchingSignalTests(TestCase):
         post_save.disconnect(handle_feast_save, sender=Feast)
         
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -381,7 +381,7 @@ class FeastIconMatchingSignalTests(TestCase):
         post_save.disconnect(handle_feast_save, sender=Feast)
         
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -411,7 +411,7 @@ class FeastIconModelTests(TestCase):
         """Test that icon field exists on Feast model."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 
@@ -432,7 +432,7 @@ class FeastIconModelTests(TestCase):
             image=test_image
         )
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             icon=icon,
         )
@@ -449,7 +449,7 @@ class FeastIconModelTests(TestCase):
             image="nativity.jpg"
         )
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             icon=icon,
         )
@@ -474,7 +474,7 @@ class FeastIconModelTests(TestCase):
             image=test_image
         )
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             icon=icon,
         )
@@ -500,7 +500,7 @@ class FeastIconModelTests(TestCase):
             image=test_image
         )
         feast1 = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             icon=icon,
         )
@@ -535,9 +535,12 @@ class FeastIconAPITests(TestCase):
             church=self.church,
             image=test_image
         )
+        # Seed under the name the engine gives this date: the view resolves the commemoration
+        # through the engine, so an invented name would simply not be the row it looks up.
+        from hub.services.feast_service import get_feast_for_date
         feast = Feast.objects.create(
-            day=day,
-            name="Christmas",
+            church=self.church,
+            name=get_feast_for_date(self.test_date, self.church)["name_en"],
             icon=icon,
         )
 
@@ -559,7 +562,7 @@ class FeastIconAPITests(TestCase):
 
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 

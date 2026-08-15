@@ -132,165 +132,92 @@ def send_fast_reminders():
 
 
 def get_or_create_feast_for_date(date_obj, church, check_fast=True):
-    """
-    Get or create a Feast for a given date and church.
-    
-    This function handles the common logic for creating feasts:
-    1. Gets or creates a Day for the date and church
-    2. Optionally checks if a Fast is associated (skips feast lookup if so)
-    3. Checks if a Feast already exists
-    4. If not, scrapes and creates the feast
-    
+    """Resolve the commemoration for a date, and return its Feast row.
+
+    The name of the day comes from the ``armenian_lectionary`` engine, recomputed per call, so
+    nothing has to be imported ahead of time for a date to resolve.  The Feast row this returns is
+    keyed by ``(church, name)``, not by date: it is where the app keeps the parts the engine has
+    no notion of -- designation, icon, generated contexts -- and one row serves every recurrence
+    of that commemoration.
+
+    ``created`` therefore means "this commemoration was seen for the first time", not "a row was
+    made for this date".  After the first year of a full cycle it is almost always ``False``, and
+    that is the point: the LLM context and icon match behind it run once, not once a year.
+
     Args:
-        date_obj: datetime.date object for the date
+        date_obj: datetime.date for the date
         church: Church object
-        check_fast: If True, skip feast lookup if Day has a Fast associated
-        
+        check_fast: If True, return no feast when a Fast is associated with the day
+
     Returns:
         Tuple of (feast_obj, created, status_dict) where:
-        - feast_obj: Feast instance or None if no feast found/created
-        - created: Boolean indicating if feast was created (False if existed or skipped)
+        - feast_obj: Feast instance, or None if there is no feast to record
+        - created: True only when the commemoration had no row in this church yet
         - status_dict: Dict with status information (status, reason, etc.)
     """
-    # Get or create Day for the date
-    day, day_created = Day.objects.get_or_create(
-        date=date_obj,
-        church=church,
-        defaults={}
-    )
-    
-    # Check if a Fast is associated with this day - if so, skip feast lookup
-    if check_fast and day.fast:
-        return (
-            None,
-            False,
-            {
-                "status": "skipped",
-                "reason": "fast_associated",
-                "fast_name": day.fast.name,
-                "date": str(date_obj)
-            }
-        )
-    
-    # Check if feast already exists for this day
-    existing_feast = day.feasts.first() if day.feasts.exists() else None
+    # A Fast on the day outranks the feast in the UI. Look the Day up without creating one --
+    # resolving a feast name should not mint calendar rows as a side effect.
+    if check_fast:
+        day = Day.objects.filter(date=date_obj, church=church).select_related("fast").first()
+        if day and day.fast:
+            return (
+                None,
+                False,
+                {
+                    "status": "skipped",
+                    "reason": "fast_associated",
+                    "fast_name": day.fast.name,
+                    "date": str(date_obj),
+                }
+            )
 
-    # If feast exists and has all translations, return it immediately (no scrape needed)
-    if existing_feast and existing_feast.name and existing_feast.name_hy:
-        return (
-            existing_feast,
-            False,
-            {
-                "status": "skipped",
-                "reason": "feast_already_exists",
-                "date": str(date_obj)
-            }
-        )
-
-    # Compute feast data offline only if feast doesn't exist or is missing translations.
-    # Imported lazily to avoid a circular import (feast_service imports SUPPORTED_CHURCHES from here).
+    # Imported lazily to avoid a circular import (feast_service imports SUPPORTED_CHURCHES here).
     from hub.services.feast_service import get_feast_for_date
+
     feast_data = get_feast_for_date(date_obj, church)
-    
     if not feast_data:
-        # If no feast data and feast already exists, return existing feast
-        if existing_feast:
-            return (
-                existing_feast,
-                False,
-                {
-                    "status": "skipped",
-                    "reason": "feast_already_exists",
-                    "date": str(date_obj)
-                }
-            )
         return (
             None,
             False,
-            {
-                "status": "skipped",
-                "reason": "no_feast_data",
-                "date": str(date_obj)
-            }
+            {"status": "skipped", "reason": "no_feast_data", "date": str(date_obj)}
         )
-    
-    # Extract name fields
-    name_en = feast_data.get("name_en", feast_data.get("name"))
-    name_hy = feast_data.get("name_hy", None)
-    
+
+    name_en = feast_data.get("name_en") or feast_data.get("name")
     if not name_en:
-        # If no English name, try to use name field directly
-        name_en = feast_data.get("name")
-    
-    if not name_en:
-        # If no feast name and feast already exists, return existing feast
-        if existing_feast:
-            return (
-                existing_feast,
-                False,
-                {
-                    "status": "skipped",
-                    "reason": "feast_already_exists",
-                    "date": str(date_obj)
-                }
-            )
         return (
             None,
             False,
-            {
-                "status": "skipped",
-                "reason": "no_feast_name",
-                "date": str(date_obj)
-            }
+            {"status": "skipped", "reason": "no_feast_name", "date": str(date_obj)}
         )
-    
-    # Get or create feast with English name
-    feast_obj, feast_created = Feast.objects.get_or_create(
-        day=day,
-        defaults={"name": name_en}
-    )
-    
-    # Set translation if available and missing
-    # For new feasts, set it immediately after creation to avoid second save
-    # For existing feasts, only update if translation is missing
+
+    feast_obj, feast_created = Feast.objects.get_or_create(church=church, name=name_en)
+
+    # Fill in the Armenian name if the engine has one and this row does not. Engine releases add
+    # translations over time, so an existing row can still be upgraded.
+    name_hy = feast_data.get("name_hy")
     translation_updated = False
     if name_hy and not feast_obj.name_hy:
         feast_obj.name_hy = name_hy
         translation_updated = True
-        # Only save if feast was just created (to set translation) 
-        # or if it existed and needs translation update
-        if feast_created:
-            # For new feasts, save immediately after setting translation
-            # This triggers post_save once with both name and translation set
-            feast_obj.save()
-        else:
-            # For existing feasts, save with update_fields to only update i18n
-            feast_obj.save(update_fields=['i18n'])
-    
-    # Determine action: created, updated (with translation), or skipped (no changes)
+        # A freshly created row saves in full so post_save sees the name and its translation
+        # together; an existing one touches only the translation column.
+        feast_obj.save(**({} if feast_created else {"update_fields": ["i18n"]}))
+
     if feast_created:
         action = "created"
-        status = "success"
     elif translation_updated:
         action = "updated"
-        status = "success"
     else:
-        # Feast existed and no updates were made
-        # feast_created=False means the feast already existed
-        action = "skipped"
-        status = "skipped"
-    
-    if status == "skipped":
         return (
             feast_obj,
             False,
             {
                 "status": "skipped",
                 "reason": "feast_already_exists",
-                "date": str(date_obj)
+                "date": str(date_obj),
             }
         )
-    
+
     return (
         feast_obj,
         feast_created,
@@ -299,10 +226,9 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
             "action": action,
             "feast_id": feast_obj.id,
             "feast_name": feast_obj.name,
-            "date": str(date_obj)
+            "date": str(date_obj),
         }
     )
-
 
 def test_email():
     try:

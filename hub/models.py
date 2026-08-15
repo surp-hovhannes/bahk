@@ -746,7 +746,19 @@ class Reading(models.Model):
 
 
 class Feast(models.Model):
-    """Stores details for a feast day."""
+    """A commemoration, and the enrichment the app keeps for it.
+
+    Keyed by ``(church, name)``, not by date.  The name of the day comes from the
+    ``armenian_lectionary`` engine and is recomputed per request, so nothing here needs to be
+    pre-populated for a date to resolve; what this row exists to hold is the part the engine has
+    no notion of -- the AI ``designation``, the matched ``icon``, and the generated ``contexts``.
+
+    Those are properties of the commemoration, not of the day it lands on.  This model used to
+    hang off ``Day``, which meant the same feast earned a new row, a new LLM context and a new
+    icon match every year it recurred; the engine emits a few hundred distinct names across its
+    whole supported range, so the table was almost entirely duplicates.  Same reasoning as
+    ``PassageText``: key by the thing, never by the date.
+    """
 
     class Designation(models.TextChoices):
         SUNDAYS_DOMINICAL = (
@@ -774,7 +786,7 @@ class Feast(models.Model):
             'Fast'
         )
 
-    day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="feasts")
+    church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="feasts")
     # 512 instead of 256 because two feast names in the Armenian lectionary exceed 256 characters:
     # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257)
     name = models.CharField(max_length=512)
@@ -798,7 +810,14 @@ class Feast(models.Model):
     i18n = TranslationField(fields=('name',))
 
     class Meta:
-        pass
+        constraints = [
+            # One row per commemoration per church: the invariant the whole re-key exists to
+            # establish, enforced in the database so a race between two requests for the same
+            # date cannot recreate the per-occurrence duplication.
+            models.UniqueConstraint(
+                fields=["church", "name"], name="unique_feast_per_church"
+            ),
+        ]
 
     @property
     def active_context(self):
@@ -806,7 +825,7 @@ class Feast(models.Model):
         return self.contexts.filter(active=True).first()
 
     def __str__(self):
-        return f"{self.name} ({self.day.date.strftime('%Y-%m-%d')})"
+        return f"{self.name} ({self.church.name})"
 
 
 class FastParticipantMap(models.Model):
