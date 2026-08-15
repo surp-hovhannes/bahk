@@ -19,7 +19,8 @@ class RekeyFeastMigrationTests(TransactionTestCase):
     """Runs the real migration over rows built in the pre-migration shape."""
 
     migrate_from = ("hub", "0060_alter_feast_name")
-    migrate_to = ("hub", "0061_rekey_feast_to_commemoration")
+    migrate_data_to = ("hub", "0062_merge_feasts_by_commemoration")
+    migrate_to = ("hub", "0063_finalize_feast_rekey")
 
     def _migrate(self, target):
         executor = MigrationExecutor(connection)
@@ -127,3 +128,28 @@ class RekeyFeastMigrationTests(TransactionTestCase):
         self.assertFalse(Feast.objects.filter(church_id__isnull=True).exists())
         self.assertEqual(
             Feast.objects.get(church_id=other_church.id).name, "Feast of the Holy Cross")
+
+    def test_data_merge_commits_before_schema_finalization(self):
+        """Keep a transaction boundary between trigger-producing writes and ALTER TABLE."""
+        church, _ = self._seed()
+
+        interim_apps = self._migrate(self.migrate_data_to)
+        InterimFeast = interim_apps.get_model("hub", "Feast")
+        field_names = {field.name for field in InterimFeast._meta.get_fields()}
+
+        # The merge is complete, but the old application's date relation remains usable until
+        # the next migration starts its separate transaction.
+        self.assertEqual(
+            InterimFeast.objects.filter(
+                church_id=church.id, name="Feast of the Holy Cross"
+            ).count(),
+            1,
+        )
+        self.assertIn("day", field_names)
+        self.assertIn("church", field_names)
+
+        final_apps = self._migrate(self.migrate_to)
+        FinalFeast = final_apps.get_model("hub", "Feast")
+        final_field_names = {field.name for field in FinalFeast._meta.get_fields()}
+        self.assertNotIn("day", final_field_names)
+        self.assertFalse(FinalFeast._meta.get_field("church").null)
