@@ -190,18 +190,30 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
             {"status": "skipped", "reason": "no_feast_name", "date": str(date_obj)}
         )
 
-    feast_obj, feast_created = Feast.objects.get_or_create(church=church, name=name_en)
+    # sample_date records a date the engine gave this name, so a later engine release that renames
+    # the feast can be followed from the row itself -- see hub/services/feast_rename.py. It is set
+    # once, at creation: any date the engine names this way will do, and rewriting it on every
+    # lookup would mean a write on every request.
+    feast_obj, feast_created = Feast.objects.get_or_create(
+        church=church, name=name_en, defaults={"sample_date": date_obj}
+    )
 
-    # Fill in the Armenian name if the engine has one and this row does not. Engine releases add
-    # translations over time, so an existing row can still be upgraded.
+    # Take the Armenian name from the engine whenever it differs from what is stored. The engine
+    # is the authority on both languages -- it adds translations across releases and corrects
+    # them -- so an existing row is upgraded rather than left on whatever it was created with.
     name_hy = feast_data.get("name_hy")
     translation_updated = False
-    if name_hy and not feast_obj.name_hy:
+    if name_hy and feast_obj.name_hy != name_hy:
         feast_obj.name_hy = name_hy
         translation_updated = True
         # A freshly created row saves in full so post_save sees the name and its translation
         # together; an existing one touches only the translation column.
         feast_obj.save(**({} if feast_created else {"update_fields": ["i18n"]}))
+
+    # Backfill the date on rows that predate the column rather than leaving them un-remappable.
+    if not feast_created and feast_obj.sample_date is None:
+        feast_obj.sample_date = date_obj
+        feast_obj.save(update_fields=["sample_date"])
 
     if feast_created:
         action = "created"

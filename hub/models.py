@@ -805,6 +805,16 @@ class Feast(models.Model):
         related_name='feasts',
         help_text="Matched icon for this feast"
     )
+    sample_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "One date the lectionary engine gave this feast its name, recorded when the row was "
+            "created. Not the feast's date -- a commemoration recurs and has no single date. It "
+            "exists so an engine upgrade that renames a feast can be followed: recompute the "
+            "name for this date and the row can be moved onto it. See remap_feast_names."
+        ),
+    )
 
     # Translations for user-facing fields
     i18n = TranslationField(fields=('name',))

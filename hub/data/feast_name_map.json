@@ -1,0 +1,4554 @@
+{
+  "target_engine_version": "1.3.0",
+  "sources": [
+    "1.1.0",
+    "1.1.1",
+    "1.2.0",
+    "1.2.1",
+    "1.2.2",
+    "1.2.3",
+    "sacredtradition-cache"
+  ],
+  "generated_by": "scripts/build_feast_name_map.py",
+  "entries": [
+    {
+      "key": "commemorationof200fathersoftheholycouncilofephesusad341",
+      "old": "Commemoration of 200 Fathers of the Holy Council of Ephesus (AD 341)",
+      "new": "Commemoration of 200 Fathers of the Holy Council of Ephesus (AD 431)",
+      "sample_date": "2001-08-04",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Commemoration of 200 Fathers of the Holy Council of Ephesus (AD 341)"
+      ]
+    },
+    {
+      "key": "discoveryofrelicsofstgregoristhecatholicosofaghvankandtheholyfatherstatoulvarusandthomasantonandcronidesandthesevenherbivoroushermits",
+      "old": "Discovery of Relics of St. Gregoris the Catholicos of Aghvank, and the Holy Fathers Tatoul, Varus and Thomas, Anton and Cronides, and the Seven Herbivorous Hermits",
+      "new": "Discovery of Relics of St. Grigoris the Catholicos of Aghvank, and the Holy Fathers Tatoul, Varus and Thomas, Anton and Cronides, and the Seven Herbivorous Hermits",
+      "sample_date": "2001-10-15",
+      "dates": 81,
+      "sources": [
+        "1.2.1",
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Discovery of Relics of St. Gregoris the Catholicos of Aghvank, and the Holy Fathers Tatoul, Varus and Thomas, Anton and Cronides, and the Seven Herbivorous Hermits"
+      ]
+    },
+    {
+      "key": "discoveryofrelicsofstgregoristhecatholicosofaghvankandtheholyfatherstatulvarusandthomasantonandcronidesandthesevenherbivoroushermits",
+      "old": "Discovery of Relics of St. Gregoris the Catholicos of Aghvank, and the Holy Fathers Tatоul, Varus and Thomas, Anton and Cronides, and the Seven Herbivorous Hermits",
+      "new": "Discovery of Relics of St. Grigoris the Catholicos of Aghvank, and the Holy Fathers Tatoul, Varus and Thomas, Anton and Cronides, and the Seven Herbivorous Hermits",
+      "sample_date": "2001-10-15",
+      "dates": 107,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Discovery of Relics of St. Gregoris the Catholicos of Aghvank, and the Holy Fathers Tatоul, Varus and Thomas, Anton and Cronides, and the Seven Herbivorous Hermits"
+      ]
+    },
+    {
+      "key": "eleventhdayofeastertideannunciationtothevirginmary",
+      "old": "Eleventh day of EastertideAnnunciation to the Virgin Mary",
+      "new": "Eleventh day of Eastertide — Annunciation to the Virgin Mary",
+      "sample_date": "2027-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Eleventh day of EastertideAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "eleventhsundayaftertheholycrosseveoffastofadvent",
+      "old": "Eleventh Sunday after the Holy CrossEve of Fast of Advent",
+      "new": "Eleventh Sunday after the Holy Cross — Eve of Fast of Advent",
+      "sample_date": "2005-11-20",
+      "dates": 4,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Eleventh Sunday after the Holy CrossEve of Fast of Advent"
+      ]
+    },
+    {
+      "key": "eveofgreatlentpresentationofourlordtothetemple",
+      "old": "Eve of Great Lent — PRESENTATION OF OUR LORD TO THE TEMPLE",
+      "new": "PRESENTATION OF OUR LORD TO THE TEMPLE — Eve of Great Lent",
+      "sample_date": "2010-02-14",
+      "dates": 2,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Eve of Great Lent — PRESENTATION OF OUR LORD TO THE TEMPLE"
+      ]
+    },
+    {
+      "key": "eveofthepresentationofthelord",
+      "old": "Eve of the Presentation of the Lord",
+      "new": "Fifth Sunday after Nativity — Eve of Fast of Catechumens",
+      "sample_date": "2011-02-13",
+      "dates": 6,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Eve of the Presentation of the Lord"
+      ]
+    },
+    {
+      "key": "fastdayeveoffastofnativity",
+      "old": "Fast dayEve of Fast of Nativity",
+      "new": "Fast day — Eve of Fast of Nativity",
+      "sample_date": "2004-12-29",
+      "dates": 7,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast dayEve of Fast of Nativity"
+      ]
+    },
+    {
+      "key": "fastdayfeastoftheholychurch",
+      "old": "Fast dayFeast of the Holy Church",
+      "new": "Fast day — Feast of the Holy Church",
+      "sample_date": "2001-09-19",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast dayFeast of the Holy Church"
+      ]
+    },
+    {
+      "key": "fastdayfeastoftheholycross",
+      "old": "Fast dayFeast of the Holy Cross",
+      "new": "Fast day — Feast of the Holy Cross",
+      "sample_date": "2001-09-21",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast dayFeast of the Holy Cross"
+      ]
+    },
+    {
+      "key": "fastdaysaintpatriarchsbarlaamanthimusandirenaeus",
+      "old": "Fast day — Saint Patriarchs Barlaam, Anthimus and Irenaeus",
+      "new": "Fast day — Sts. Patriarchs Barlaam, Anthimus and Irenaeus",
+      "sample_date": "2001-09-27",
+      "dates": 194,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saint Patriarchs Barlaam, Anthimus and Irenaeus",
+        "Fast daySaint Patriarchs Barlaam, Anthimus and Irenaeus"
+      ]
+    },
+    {
+      "key": "fastdaysaintsconstantinetheemperorandhismotherhelen",
+      "old": "Fast day — Saints Constantine the Emperor and his mother Helen",
+      "new": "Fast day — Sts. Constantine the Emperor and his mother Helen",
+      "sample_date": "2001-06-26",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Constantine the Emperor and his mother Helen",
+        "Fast daySaints Constantine the Emperor and his mother Helen"
+      ]
+    },
+    {
+      "key": "fastdaysaintscorneliusthecenturionsimeonmartyredinjerusalempolycarpthebishopofsmyrnaandthemartyrsthatperishedintheeast",
+      "old": "Fast day — Saints Cornelius the Centurion, Simeon, martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs that perished in the East",
+      "new": "Fast day — Sts. Cornelius the Centurion, Simeon, martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs that perished in the East",
+      "sample_date": "2001-12-11",
+      "dates": 160,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Cornelius the Centurion, Simeon, martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs that perished in the East",
+        "Fast daySaints Cornelius the Centurion, Simeon, martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs that perished in the East"
+      ]
+    },
+    {
+      "key": "fastdaysaintsepiphaniusbishopofcyprusbabylasthepatriarchandhisthreedisciples",
+      "old": "Fast day — Saints Epiphanius Bishop of Cyprus, Babylas the Patriarch, and his three disciples",
+      "new": "Fast day — Sts. Epiphanius Bishop of Cyprus, Babylas the Patriarch, and his three disciples",
+      "sample_date": "2001-06-25",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Epiphanius Bishop of Cyprus, Babylas the Patriarch, and his three disciples",
+        "Fast daySaints Epiphanius Bishop of Cyprus, Babylas the Patriarch, and his three disciples"
+      ]
+    },
+    {
+      "key": "fastdaysaintseustratiusauxentiuseugeniusorestesandmardariusthemartyrsofsebastia",
+      "old": "Fast day — Saints Eustratius, Auxentius, Eugenius, Orestes and Mardarius, the Martyrs of Sebastia",
+      "new": "Fast day — Sts. Eustratius, Auxentius, Eugenius, Orestes and Mardarius, the Martyrs of Sebastia",
+      "sample_date": "2001-12-13",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Eustratius, Auxentius, Eugenius, Orestes and Mardarius, the Martyrs of Sebastia",
+        "Fast daySaints Eustratius, Auxentius, Eugenius, Orestes and Mardarius, the Martyrs of Sebastia"
+      ]
+    },
+    {
+      "key": "fastdaysaintsmamasphilomenosandsimeonthestylite",
+      "old": "Fast day — Saints Mamas, Philomenos and Simeon the Stylite",
+      "new": "Fast day — Sts. Mamas, Philomenos and Simeon the Stylite",
+      "sample_date": "2001-09-24",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Mamas, Philomenos and Simeon the Stylite",
+        "Fast daySaints Mamas, Philomenos and Simeon the Stylite"
+      ]
+    },
+    {
+      "key": "fastdaysaintsmenashermogeneseugraphusandthepoormansjohnandalexis",
+      "old": "Fast day — Saints Menas, Hermogenes, Eugraphus and the poor mans John and Alexis",
+      "new": "Fast day — Sts. Menas, Hermogenes, Eugraphus and the poor men John and Alexis",
+      "sample_date": "2001-12-10",
+      "dates": 160,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Menas, Hermogenes, Eugraphus and the poor mans John and Alexis",
+        "Fast daySaints Menas, Hermogenes, Eugraphus and the poor mans John and Alexis"
+      ]
+    },
+    {
+      "key": "fastdaysaintstheodotusofgalatiaandthalelausthephysicianandthesevenmartyredvirginsofancyra",
+      "old": "Fast day — Saints Theodotus of Galatia, and Thalelaus the Physician, and the Seven Martyred Virgins of Ancyra",
+      "new": "Fast day — Sts. Theodotus of Galatia, and Thalelaus the Physician, and the Seven Martyred Virgins of Ancyra",
+      "sample_date": "2001-06-28",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Theodotus of Galatia, and Thalelaus the Physician, and the Seven Martyred Virgins of Ancyra",
+        "Fast daySaints Theodotus of Galatia, and Thalelaus the Physician, and the Seven Martyred Virgins of Ancyra"
+      ]
+    },
+    {
+      "key": "fastdaysaintsvirginsfebroniamarinaandshoushanthedaughterofgreatvardan",
+      "old": "Fast day — Saints Virgins Febronia, Marina and Shoushan the Daughter of Great Vardan",
+      "new": "Fast day — Sts. Virgins Febronia, Mariana and Shoushan the Daughter of Great Vardan",
+      "sample_date": "2001-09-25",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fast day — Saints Virgins Febronia, Marina and Shoushan the Daughter of Great Vardan",
+        "Fast daySaints Virgins Febronia, Marina and Shoushan the Daughter of Great Vardan"
+      ]
+    },
+    {
+      "key": "feastdayfiestoftheconceptionoftheholyvirginmarybyanna",
+      "old": "Feast day — Fiest of the Conception of the Holy Virgin Mary by Anna",
+      "new": "Fast day — Feast of the Conception of the Holy Virgin Mary by Anna",
+      "sample_date": "2002-12-09",
+      "dates": 16,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Feast day — Fiest of the Conception of the Holy Virgin Mary by Anna"
+      ]
+    },
+    {
+      "key": "feastofallsaintstheoldandthenewtheknownandtheunknown",
+      "old": "Feast of All Saints, the old and the new, the known and the unknown",
+      "new": "Feast of All Sts., the old and the new, the known and the unknown",
+      "sample_date": "2001-11-03",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Feast of All Saints, the old and the new, the known and the unknown"
+      ]
+    },
+    {
+      "key": "feastofdiscoveryofsaintgregorysrelics",
+      "old": "Feast of Discovery of Saint Gregory's Relics",
+      "new": "Feast of Discovery of St. Gregory's Relics",
+      "sample_date": "2001-06-30",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Feast of Discovery of Saint Gregory's Relics"
+      ]
+    },
+    {
+      "key": "feastofnamingofourlordjesuschrist",
+      "old": "Feast of Naming of Our Lord Jesus Christ",
+      "new": "Eighth day of Nativity — Feast of Naming of Our Lord Jesus Christ — Eve of Fast of Catechumens",
+      "sample_date": "2008-01-13",
+      "dates": 6,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Feast of Naming of Our Lord Jesus Christ"
+      ]
+    },
+    {
+      "key": "feastoftheholycrossremembranceofthedead",
+      "old": "Feast of the Holy CrossRemembrance of the Dead",
+      "new": "Feast of the Holy Cross — Remembrance of the Dead",
+      "sample_date": "2001-09-17",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Feast of the Holy CrossRemembrance of the Dead"
+      ]
+    },
+    {
+      "key": "fiestoftheconceptionoftheholyvirginmarybyanna",
+      "old": "Fiest of the Conception of the Holy Virgin Mary by Anna",
+      "new": "Feast of the Conception of the Holy Virgin Mary by Anna",
+      "sample_date": "2004-12-09",
+      "dates": 6,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fiest of the Conception of the Holy Virgin Mary by Anna"
+      ]
+    },
+    {
+      "key": "fifthdayofadventpresentationoftheholymotherofgodtothetemple",
+      "old": "Fifth day of Advent — PRESENTATION of the Holy Mother of God to the Temple",
+      "new": "Fifth day of Advent — Presentation of the Holy Mother of God to the Temple",
+      "sample_date": "2003-11-21",
+      "dates": 4,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth day of Advent — PRESENTATION of the Holy Mother of God to the Temple"
+      ]
+    },
+    {
+      "key": "fifthdayofeasterremembranceofthearmeniangenocide1915",
+      "old": "Fifth day of EasterRemembrance of the Armenian Genocide (1915)",
+      "new": "Fifth day of Easter — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2003-04-24",
+      "dates": 3,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth day of EasterRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "fifthdayofpentecostfastday",
+      "old": "Fifth day of PentecostFast day",
+      "new": "Fifth day of Pentecost — Fast day",
+      "sample_date": "2001-06-07",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth day of PentecostFast day"
+      ]
+    },
+    {
+      "key": "fifthdayofthefastofnativitysaintsbasilthegreatandhisbrotherstgregoryofnyssasylvesterthepatriarchofromeandephremthesyrian",
+      "old": "Fifth day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "new": "Fifth day of the Fast of Nativity — Sts. Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "sample_date": "2004-01-03",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+        "Fifth day of the Fast of NativitySaints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian"
+      ]
+    },
+    {
+      "key": "fifthdayofthefastofthecatechumensremembranceoftheprophetjonah",
+      "old": "Fifth day of the Fast of the CatechumensRemembrance of the Prophet Jonah",
+      "new": "Fifth day of the Fast of the Catechumens — Remembrance of the Prophet Jonah",
+      "sample_date": "2001-02-09",
+      "dates": 24,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth day of the Fast of the CatechumensRemembrance of the Prophet Jonah"
+      ]
+    },
+    {
+      "key": "fifthdayofthefastofthetransifiguration",
+      "old": "Fifth day of the Fast of the Transifiguration",
+      "new": "Fifth day of the Fast of the Transfiguration",
+      "sample_date": "2001-07-20",
+      "dates": 134,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth day of the Fast of the Transifiguration"
+      ]
+    },
+    {
+      "key": "fifthsundayafterpentecostfeastofthediscoveryofstmarysbox",
+      "old": "Fifth Sunday after Pentecost — Feast of the Discovery of St. Mary’s Box",
+      "new": "Fifth Sunday after Pentecost — Feast of the Discovery of St. Mary's Box",
+      "sample_date": "2001-07-08",
+      "dates": 107,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth Sunday after Pentecost — Feast of the Discovery of St. Mary’s Box",
+        "Fifth Sunday after PentecostFeast of the Discovery of St. Mary’s Box"
+      ]
+    },
+    {
+      "key": "fifthsundayappearanceoftheholycross",
+      "old": "Fifth SundayAppearance of the Holy Cross",
+      "new": "Fifth Sunday — Appearance of the Holy Cross",
+      "sample_date": "2001-05-13",
+      "dates": 25,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth SundayAppearance of the Holy Cross"
+      ]
+    },
+    {
+      "key": "fifthsundayappearanceoftheholycrossremembranceofthearmeniangenocide1915",
+      "old": "Fifth SundayAppearance of the Holy CrossRemembrance of the Armenian Genocide (1915)",
+      "new": "Fifth Sunday — Appearance of the Holy Cross — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2005-04-24",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fifth SundayAppearance of the Holy CrossRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "firstdayofadventpresentationoftheholymotherofgodtothetemple",
+      "old": "First day of Advent — PRESENTATION of the Holy Mother of God to the Temple",
+      "new": "First day of Advent — Presentation of the Holy Mother of God to the Temple",
+      "sample_date": "2005-11-21",
+      "dates": 4,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "First day of Advent — PRESENTATION of the Holy Mother of God to the Temple"
+      ]
+    },
+    {
+      "key": "firstdayofthefastofnativitysaintsbasilthegreatandhisbrotherstgregoryofnyssasylvesterthepatriarchofromeandephremthesyrian",
+      "old": "First day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "new": "First day of the Fast of Nativity — Sts. Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "sample_date": "2006-12-30",
+      "dates": 21,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "First day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+        "First day of the Fast of NativitySaints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian"
+      ]
+    },
+    {
+      "key": "firstsundayafternativityeveoffastofcatechumens",
+      "old": "First Sunday after NativityEve of Fast of Catechumens",
+      "new": "First Sunday after Nativity — Eve of Fast of Catechumens",
+      "sample_date": "2002-01-20",
+      "dates": 5,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "First Sunday after NativityEve of Fast of Catechumens"
+      ]
+    },
+    {
+      "key": "fortiethdayofeastertideascensionofourlordjesuschrist",
+      "old": "Fortieth day of EastertideASCENSION OF OUR LORD JESUS CHRIST",
+      "new": "Fortieth day of Eastertide — ASCENSION OF OUR LORD JESUS CHRIST",
+      "sample_date": "2001-05-24",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fortieth day of EastertideASCENSION OF OUR LORD JESUS CHRIST"
+      ]
+    },
+    {
+      "key": "fortiethdayofgreatlentannunciationtothevirginmary",
+      "old": "Fortieth day of Great LentAnnunciation to the Virgin Mary",
+      "new": "Fortieth day of Great Lent — Annunciation to the Virgin Mary",
+      "sample_date": "2006-04-07",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fortieth day of Great LentAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "fortyeighthdayofeastertidefastday",
+      "old": "Forty Eighth day of EastertideFast day",
+      "new": "Forty Eighth day of Eastertide — Fast day",
+      "sample_date": "2001-06-01",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Forty Eighth day of EastertideFast day"
+      ]
+    },
+    {
+      "key": "fortyfirstdayofeastertidebeginingofthefast",
+      "old": "Forty First day of Eastertide — Begining of the Fast",
+      "new": "Forty First day of Eastertide — Beginning of the Fast",
+      "sample_date": "2001-05-25",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Forty First day of Eastertide — Begining of the Fast",
+        "Forty First day of EastertideBegining of the Fast"
+      ]
+    },
+    {
+      "key": "fortyfirstdayofgreatlentremembranceoftheraisingoflazarus",
+      "old": "Forty First day of Great LentRemembrance of the Raising of Lazarus",
+      "new": "Forty First day of Great Lent — Remembrance of the Raising of Lazarus",
+      "sample_date": "2002-03-23",
+      "dates": 26,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Forty First day of Great LentRemembrance of the Raising of Lazarus"
+      ]
+    },
+    {
+      "key": "fortyfirstdayofgreatlentremembranceoftheraisingoflazarusannunciationtothevirginmary",
+      "old": "Forty First day of Great LentRemembrance of the Raising of LazarusAnnunciation to the Virgin Mary",
+      "new": "Forty First day of Great Lent — Remembrance of the Raising of Lazarus — Annunciation to the Virgin Mary",
+      "sample_date": "2001-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Forty First day of Great LentRemembrance of the Raising of LazarusAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "fortysixthdayofeastertidefastday",
+      "old": "Forty Sixth day of EastertideFast day",
+      "new": "Forty Sixth day of Eastertide — Fast day",
+      "sample_date": "2001-05-30",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Forty Sixth day of EastertideFast day"
+      ]
+    },
+    {
+      "key": "fourteenthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Fourteenth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Fourteenth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2004-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourteenth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "fourthdayofadventpresentationoftheholymotherofgodtothetemple",
+      "old": "Fourth day of Advent — PRESENTATION of the Holy Mother of God to the Temple",
+      "new": "Fourth day of Advent — Presentation of the Holy Mother of God to the Temple",
+      "sample_date": "2002-11-21",
+      "dates": 4,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth day of Advent — PRESENTATION of the Holy Mother of God to the Temple"
+      ]
+    },
+    {
+      "key": "fourthdayofeasterannunciationtothevirginmary",
+      "old": "Fourth day of EasterAnnunciation to the Virgin Mary",
+      "new": "Fourth day of Easter — Annunciation to the Virgin Mary",
+      "sample_date": "2010-04-07",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth day of EasterAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "fourthdayofeasterremembranceofthearmeniangenocide1915",
+      "old": "Fourth day of EasterRemembrance of the Armenian Genocide (1915)",
+      "new": "Fourth day of Easter — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2019-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth day of EasterRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "fourthdayofpentecostfastday",
+      "old": "Fourth day of PentecostFast day",
+      "new": "Fourth day of Pentecost — Fast day",
+      "sample_date": "2001-06-06",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth day of PentecostFast day"
+      ]
+    },
+    {
+      "key": "fourthdayoftheassumptionfastday",
+      "old": "Fourth day of the AssumptionFast day",
+      "new": "Fourth day of the Assumption — Fast day",
+      "sample_date": "2001-08-15",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth day of the AssumptionFast day"
+      ]
+    },
+    {
+      "key": "fourthdayofthefastofnativitysaintsbasilthegreatandhisbrotherstgregoryofnyssasylvesterthepatriarchofromeandephremthesyrian",
+      "old": "Fourth day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "new": "Fourth day of the Fast of Nativity — Sts. Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "sample_date": "2010-01-02",
+      "dates": 27,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+        "Fourth day of the Fast of NativitySaints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian"
+      ]
+    },
+    {
+      "key": "fourthdayofthefastofthecatechumensremembranceoftheprophetjonah",
+      "old": "Fourth day of the Fast of the CatechumensRemembrance of the Prophet Jonah",
+      "new": "Fourth day of the Fast of the Catechumens — Remembrance of the Prophet Jonah",
+      "sample_date": "2003-02-13",
+      "dates": 3,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth day of the Fast of the CatechumensRemembrance of the Prophet Jonah"
+      ]
+    },
+    {
+      "key": "fourthsundayafterassumptioneveoffastofexaltationofholycross",
+      "old": "Fourth Sunday after AssumptionEve of Fast of Exaltation of Holy Cross",
+      "new": "Fourth Sunday after Assumption — Eve of Fast of Exaltation of Holy Cross",
+      "sample_date": "2003-09-07",
+      "dates": 23,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": true,
+      "rejected": [
+        "Fifth Sunday after the Assumption — Eve of Fast of Exaltation of Holy Cross"
+      ],
+      "variants": [
+        "Fourth Sunday after AssumptionEve of Fast of Exaltation of Holy Cross"
+      ]
+    },
+    {
+      "key": "fourthsundayafternativityeveoffastofcatechumens",
+      "old": "Fourth Sunday after NativityEve of Fast of Catechumens",
+      "new": "Fourth Sunday after Nativity — Eve of Fast of Catechumens",
+      "sample_date": "2001-02-04",
+      "dates": 8,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Fourth Sunday after NativityEve of Fast of Catechumens"
+      ]
+    },
+    {
+      "key": "greatfridayfastdayremembranceofthepassioncrucifixionandburialofourlordjesuschrist",
+      "old": "Great FridayFast dayRemembrance of the Passion, Crucifixion, and Burial of our Lord Jesus Christ",
+      "new": "Great Friday — Fast day — Remembrance of the Passion, Crucifixion, and Burial of our Lord Jesus Christ",
+      "sample_date": "2001-04-13",
+      "dates": 26,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great FridayFast dayRemembrance of the Passion, Crucifixion, and Burial of our Lord Jesus Christ"
+      ]
+    },
+    {
+      "key": "greatfridayfastdayremembranceofthepassioncrucifixionandburialofourlordjesuschristannunciationtothevirginmary",
+      "old": "Great FridayFast dayRemembrance of the Passion, Crucifixion, and Burial of our Lord Jesus ChristAnnunciation to the Virgin Mary",
+      "new": "Great Friday — Fast day — Remembrance of the Passion, Crucifixion, and Burial of our Lord Jesus Christ — Annunciation to the Virgin Mary",
+      "sample_date": "2023-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great FridayFast dayRemembrance of the Passion, Crucifixion, and Burial of our Lord Jesus ChristAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "greatmondayfastday",
+      "old": "Great MondayFast day",
+      "new": "Great Monday — Fast day",
+      "sample_date": "2001-04-09",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great MondayFast day"
+      ]
+    },
+    {
+      "key": "greatsaturdayfastdayeveoftheresurrectionofourlordjesuschrist",
+      "old": "Great SaturdayFast dayEve of the Resurrection of our Lord Jesus Christ",
+      "new": "Great Saturday — Fast day — Eve of the Resurrection of our Lord Jesus Christ",
+      "sample_date": "2001-04-14",
+      "dates": 25,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great SaturdayFast dayEve of the Resurrection of our Lord Jesus Christ"
+      ]
+    },
+    {
+      "key": "greatsaturdayfastdayeveoftheresurrectionofourlordjesuschristannunciationtothevirginmary",
+      "old": "Great SaturdayFast dayEve of the Resurrection of our Lord Jesus ChristAnnunciation to the Virgin Mary",
+      "new": "Great Saturday — Fast day — Eve of the Resurrection of our Lord Jesus Christ — Annunciation to the Virgin Mary",
+      "sample_date": "2007-04-07",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great SaturdayFast dayEve of the Resurrection of our Lord Jesus ChristAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "greatthursdayfastdayremembranceofthelastsupper",
+      "old": "Great ThursdayFast dayRemembrance of the Last Supper",
+      "new": "Great Thursday — Fast day — Remembrance of the Last Supper",
+      "sample_date": "2001-04-12",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great ThursdayFast dayRemembrance of the Last Supper"
+      ]
+    },
+    {
+      "key": "greattuesdayfastdayremembranceofthetenvirgins",
+      "old": "Great TuesdayFast dayRemembrance of the Ten Virgins",
+      "new": "Great Tuesday — Fast day — Remembrance of the Ten Virgins",
+      "sample_date": "2001-04-10",
+      "dates": 25,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great TuesdayFast dayRemembrance of the Ten Virgins"
+      ]
+    },
+    {
+      "key": "greattuesdayfastdayremembranceofthetenvirginsannunciationtothevirginmary",
+      "old": "Great Tuesday — Fast day, Remembrance of the Ten Virgins — Annunciation to the Virgin Mary",
+      "new": "Great Tuesday — Fast day — Remembrance of the Ten Virgins — Annunciation to the Virgin Mary",
+      "sample_date": "2009-04-07",
+      "dates": 14,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great Tuesday — Fast day, Remembrance of the Ten Virgins — Annunciation to the Virgin Mary",
+        "Great TuesdayFast day, Remembrance of the Ten VirginsAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "greatwednesdayfastday",
+      "old": "Great WednesdayFast day",
+      "new": "Great Wednesday — Fast day",
+      "sample_date": "2001-04-11",
+      "dates": 26,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great WednesdayFast day"
+      ]
+    },
+    {
+      "key": "greatwednesdayfastdayannunciationtothevirginmary",
+      "old": "Great WednesdayFast dayAnnunciation to the Virgin Mary",
+      "new": "Great Wednesday — Fast day — Annunciation to the Virgin Mary",
+      "sample_date": "2004-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Great WednesdayFast dayAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "holyfatherssaintsathanasiusandcyrilofalexandria",
+      "old": "Holy Fathers Saints Athanasius and Cyril of Alexandria",
+      "new": "Holy Fathers Sts. Athanasius and Cyril of Alexandria",
+      "sample_date": "2002-07-27",
+      "dates": 138,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Holy Fathers Saints Athanasius and Cyril of Alexandria"
+      ]
+    },
+    {
+      "key": "holyfatherssaintsathanasiusandcyrilofalexandriaandgregoryoftheologian",
+      "old": "Holy Fathers Saints Athanasius and Cyril of Alexandria and Gregory of Theologian",
+      "new": "Holy Fathers Sts. Athanasius and Cyril of Alexandria and Gregory the Theologian",
+      "sample_date": "2001-01-27",
+      "dates": 44,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": true,
+      "rejected": [
+        "Holy Fathers Sts. Athanasius and Cyril of Alexandria"
+      ],
+      "variants": [
+        "Holy Fathers Saints Athanasius and Cyril of Alexandria and Gregory of Theologian"
+      ]
+    },
+    {
+      "key": "holytranslatorssaintssahakandmesrop",
+      "old": "Holy Translators Saints Sahak and Mesrop",
+      "new": "Holy Translators Sts. Sahak and Mesrop",
+      "sample_date": "2001-07-05",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Holy Translators Saints Sahak and Mesrop"
+      ]
+    },
+    {
+      "key": "ighthdayofnativityfeastofnamingofourlordjesuschrist",
+      "old": "Еighth day of Nativity — Feast of Naming of Our Lord Jesus Christ",
+      "new": "Eighth day of Nativity — Feast of Naming of Our Lord Jesus Christ",
+      "sample_date": "2001-01-13",
+      "dates": 103,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Еighth day of Nativity — Feast of Naming of Our Lord Jesus Christ",
+        "Еighth day of NativityFeast of Naming of Our Lord Jesus Christ"
+      ]
+    },
+    {
+      "key": "ighthdayofnativityfeastofnamingofourlordjesuschristeveoffastofcatechumens",
+      "old": "Еighth day of Nativity — Feast of Naming of Our Lord Jesus Christ — Eve of Fast of Catechumens",
+      "new": "Eighth day of Nativity — Feast of Naming of Our Lord Jesus Christ — Eve of Fast of Catechumens",
+      "sample_date": "2008-01-13",
+      "dates": 1,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Еighth day of Nativity — Feast of Naming of Our Lord Jesus Christ — Eve of Fast of Catechumens"
+      ]
+    },
+    {
+      "key": "ninthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Ninth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Ninth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2006-04-24",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Ninth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "octaveofeasternewsundayannunciationtothevirginmary",
+      "old": "Octave of Easter (New Sunday)Annunciation to the Virgin Mary",
+      "new": "Octave of Easter (New Sunday) — Annunciation to the Virgin Mary",
+      "sample_date": "2002-04-07",
+      "dates": 3,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Octave of Easter (New Sunday)Annunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "octaveofeasternewsundayremembranceofthearmeniangenocide1915",
+      "old": "Octave of Easter (New Sunday)Remembrance of the Armenian Genocide (1915)",
+      "new": "Octave of Easter (New Sunday) — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2022-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Octave of Easter (New Sunday)Remembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "palmsundayfastday",
+      "old": "Palm SundayFast day",
+      "new": "Palm Sunday — Fast day",
+      "sample_date": "2001-04-08",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Palm SundayFast day"
+      ]
+    },
+    {
+      "key": "pentecostfifteenthdayofeastertideeveoffastofprophetelijah",
+      "old": "PENTECOST (Fifteenth day of Eastertide) — Eve of Fast of Prophet Elijah",
+      "new": "PENTECOST (Fiftieth day of Eastertide) — Eve of Fast of Prophet Elijah",
+      "sample_date": "2001-06-03",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "PENTECOST (Fifteenth day of Eastertide) — Eve of Fast of Prophet Elijah",
+        "PENTECOST (Fifteenth day of Eastertide)Eve of Fast of Prophet Elijah"
+      ]
+    },
+    {
+      "key": "resurrectionofourlordjesuschristeastersundayremembranceofthearmeniangenocide1915",
+      "old": "RESURRECTION OF OUR LORD JESUS CHRIST (Easter Sunday)Remembrance of the Armenian Genocide (1915)",
+      "new": "RESURRECTION OF OUR LORD JESUS CHRIST (Easter Sunday) — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2011-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "RESURRECTION OF OUR LORD JESUS CHRIST (Easter Sunday)Remembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "saintabgarthewitnessandthefirstchristianking",
+      "old": "Saint Abgar the Witness and the First Christian King",
+      "new": "St. Abgar the Witness and the First Christian King",
+      "sample_date": "2001-12-04",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Abgar the Witness and the First Christian King"
+      ]
+    },
+    {
+      "key": "saintelishatheprophet",
+      "old": "Saint Elisha the Prophet",
+      "new": "St. Elisha the Prophet",
+      "sample_date": "2001-07-12",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Elisha the Prophet"
+      ]
+    },
+    {
+      "key": "saintgregoryoftheologian",
+      "old": "Saint Gregory of Theologian",
+      "new": "St. Gregory the Theologian",
+      "sample_date": "2002-08-03",
+      "dates": 126,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Gregory of Theologian"
+      ]
+    },
+    {
+      "key": "saintgregorytheilluminatorscomingoutofpit",
+      "old": "Saint Gregory the Illuminator's coming out of Pit",
+      "new": "St. Gregory the Illuminator's coming out of Pit",
+      "sample_date": "2001-06-16",
+      "dates": 54,
+      "sources": [
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Gregory the Illuminator's coming out of Pit"
+      ]
+    },
+    {
+      "key": "saintgregorytheilluminatorssonsandgrandsonssaintsaristakesvrtaneshousikgrigorisanddaniel",
+      "old": "Saint Gregory the Illuminator's Sons and Grandsons: Saints Aristakes, Vrtanes, Housik, Grigoris and Daniel",
+      "new": "St. Gregory the Illuminator's Sons and Grandsons: Sts. Aristakes, Vrtanes, Housik, Grigoris and Daniel",
+      "sample_date": "2001-02-03",
+      "dates": 54,
+      "sources": [
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Gregory the Illuminator's Sons and Grandsons: Saints Aristakes, Vrtanes, Housik, Grigoris and Daniel"
+      ]
+    },
+    {
+      "key": "saintgregorytheilluminatorssonsandgrandsonssaintsaristakesvrtaneshousikgrogorisanddaniel",
+      "old": "Saint Gregory the Illuminator's Sons and Grandsons: Saints Aristakes, Vrtanes, Housik, Grogoris and Daniel",
+      "new": "St. Gregory the Illuminator's Sons and Grandsons: Sts. Aristakes, Vrtanes, Housik, Grigoris and Daniel",
+      "sample_date": "2001-02-03",
+      "dates": 134,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Gregory the Illuminator's Sons and Grandsons: Saints Aristakes, Vrtanes, Housik, Grogoris and Daniel"
+      ]
+    },
+    {
+      "key": "saintisaiahtheprophet",
+      "old": "Saint Isaiah the Prophet",
+      "new": "St. Isaiah the Prophet",
+      "sample_date": "2001-07-26",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Isaiah the Prophet"
+      ]
+    },
+    {
+      "key": "saintjamestheapostleandhisbrotherjohntheevangelist",
+      "old": "Saint James the Apostle and His Brother John the Evangelist",
+      "new": "St. James the Apostle and His Brother John the Evangelist",
+      "sample_date": "2002-12-28",
+      "dates": 76,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint James the Apostle and His Brother John the Evangelist"
+      ]
+    },
+    {
+      "key": "saintjamestheapostleandhisbrotherjohntheevangelisteveoffastofnativity",
+      "old": "Saint James the Apostle and His Brother John the Evangelist — Eve of Fast of Nativity",
+      "new": "St. James the Apostle and His Brother John the Evangelist — Eve of Fast of Nativity",
+      "sample_date": "2001-12-29",
+      "dates": 112,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint James the Apostle and His Brother John the Evangelist — Eve of Fast of Nativity",
+        "Saint James the Apostle and His Brother John the EvangelistEve of Fast of Nativity"
+      ]
+    },
+    {
+      "key": "saintjeremiahtheprophet",
+      "old": "Saint Jeremiah the Prophet",
+      "new": "St. Jeremiah the Prophet",
+      "sample_date": "2001-08-23",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Jeremiah the Prophet"
+      ]
+    },
+    {
+      "key": "saintjohnchrysostom",
+      "old": "Saint John Chrysostom",
+      "new": "St. John Chrysostom",
+      "sample_date": "2001-11-01",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint John Chrysostom"
+      ]
+    },
+    {
+      "key": "saintnicolaswonderworkerthebishopofmyra",
+      "old": "Saint Nicolas Wonderworker the Bishop of Myra",
+      "new": "St. Nicholas Wonderworker the Bishop of Myra",
+      "sample_date": "2001-12-08",
+      "dates": 139,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Nicolas Wonderworker the Bishop of Myra"
+      ]
+    },
+    {
+      "key": "saintpatriarchsignatiusthebishopofantioshaddaithebishopofedessaandmaruthasthebishopofmarv",
+      "old": "Saint Patriarchs Ignatius the Bishop of Antiosh, Addai the Bishop of Edessa and Maruthas the Bishop of Marv",
+      "new": "Sts. Patriarchs Ignatius the Bishop of Antioch, Addai the Bishop of Edessa and Maruthas the Bishop of Marv",
+      "sample_date": "2001-12-17",
+      "dates": 161,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Patriarchs Ignatius the Bishop of Antiosh, Addai the Bishop of Edessa and Maruthas the Bishop of Marv"
+      ]
+    },
+    {
+      "key": "saintpatriarchsignatiusthebishopofantioshaddaithebishopofedessaandmaruthasthebishopofmarvandsaintstheopemptusthebishopofnicomediaandtheonasthemartyrandthefoursoldiersbassuseusebiuseutychiusandbasilides",
+      "old": "Saint Patriarchs Ignatius the Bishop of Antiosh, Addai the Bishop of Edessa and Maruthas the Bishop of Marv, and Saints Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides",
+      "new": "Sts. Patriarchs Ignatius the Bishop of Antioch, Addai the Bishop of Edessa and Maruthas the Bishop of Marv, and Sts. Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides",
+      "sample_date": "2004-12-20",
+      "dates": 27,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Patriarchs Ignatius the Bishop of Antiosh, Addai the Bishop of Edessa and Maruthas the Bishop of Marv, and Saints Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides"
+      ]
+    },
+    {
+      "key": "saintsabrahamandkhorenmoneylessphysicianscosmasanddamian",
+      "old": "Saints Abraham and Khoren, Moneyless Physicians Cosmas and Damian",
+      "new": "Sts. Abraham and Khoren, Moneyless Physicians Cosmas and Damian",
+      "sample_date": "2009-12-21",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Abraham and Khoren, Moneyless Physicians Cosmas and Damian"
+      ]
+    },
+    {
+      "key": "saintsabrahamandkhorenmoneylessphysicianscosmasanddamianandtheodoronthemartyr",
+      "old": "Saints Abraham and Khoren, Moneyless Physicians Cosmas and Damian, and Theodoron the Martyr",
+      "new": "Sts. Abraham and Khoren, Moneyless Physicians Cosmas and Damian, and Theodoron the Martyr",
+      "sample_date": "2001-09-06",
+      "dates": 132,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Abraham and Khoren, Moneyless Physicians Cosmas and Damian, and Theodoron the Martyr"
+      ]
+    },
+    {
+      "key": "saintsadrianandhiswifenataliaandtheodorestratelatesandeleutheriusthemartyrs",
+      "old": "Saints Adrian and his wife Natalia, and Theodore Stratelates and Eleutherius the Martyrs",
+      "new": "Sts. Adrian and his wife Natalia, and Theodore Stratelates and Eleutherius the Martyrs",
+      "sample_date": "2001-09-04",
+      "dates": 54,
+      "sources": [
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Adrian and his wife Natalia, and Theodore Stratelates and Eleutherius the Martyrs"
+      ]
+    },
+    {
+      "key": "saintsadrianandhiswifenataliaandtheordorestratelatesandeleutheriusthemartyrs",
+      "old": "Saints Adrian and his wife Natalia, and Theordore Stratelates and Eleutherius the Martyrs",
+      "new": "Sts. Adrian and his wife Natalia, and Theodore Stratelates and Eleutherius the Martyrs",
+      "sample_date": "2001-09-04",
+      "dates": 134,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Adrian and his wife Natalia, and Theordore Stratelates and Eleutherius the Martyrs"
+      ]
+    },
+    {
+      "key": "saintsahakitheparthianpatriarchofarmenia",
+      "old": "Saint Sahak I the Parthian, Patriarch of Armenia",
+      "new": "St. Sahak I the Parthian, Patriarch of Armenia",
+      "sample_date": "2001-02-17",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Sahak I the Parthian, Patriarch of Armenia"
+      ]
+    },
+    {
+      "key": "saintsakepsimasthebishopjosephthepriestayethalasthedeaconandplatothemartyr",
+      "old": "Saints Akepsimas the Bishop, Joseph the Priest, Ayethalas the Deacon and Plato the Martyr",
+      "new": "Sts. Akepsimas the Bishop, Joseph the Priest, Ayethalas the Deacon and Plato the Martyr",
+      "sample_date": "2001-11-06",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Akepsimas the Bishop, Joseph the Priest, Ayethalas the Deacon and Plato the Martyr"
+      ]
+    },
+    {
+      "key": "saintsanastasiusthepriestvarusthesoldiertheodotaandhersonsandthosewhoweremartyredwithher",
+      "old": "Saints Anastasius the Priest, Varus the Soldier, Theodota and her sons, and those who were martyred with her",
+      "new": "Sts. Anastasius the Priest, Varus the Soldier, Theodota and her sons, and those who were martyred with her",
+      "sample_date": "2001-10-29",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Anastasius the Priest, Varus the Soldier, Theodota and her sons, and those who were martyred with her"
+      ]
+    },
+    {
+      "key": "saintsandrewthegeneralandhisarmyandcallinicusanddiomedesthemartyrs",
+      "old": "Saints Andrew the General and his army, and Callinicus and Diomedes the Martyrs",
+      "new": "Sts. Andrew the General and his army, and Callinicus and Diomedes the Martyrs",
+      "sample_date": "2001-09-03",
+      "dates": 181,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Andrew the General and his army, and Callinicus and Diomedes the Martyrs"
+      ]
+    },
+    {
+      "key": "saintsargisthewarriorandhissonmartirosandhisfourteensoldiers",
+      "old": "Saint Sargis the Warrior and his son Martiros and his Fourteen Soldiers",
+      "new": "St. Sargis the Warrior and his son Martiros and his Fourteen Soldiers",
+      "sample_date": "2001-02-10",
+      "dates": 187,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Sargis the Warrior and his son Martiros and his Fourteen Soldiers"
+      ]
+    },
+    {
+      "key": "saintsargisthewarriorandhissonmartirosandhisfourteensoldiersandsaintsatomandhissoldiers",
+      "old": "Saint Sargis the Warrior and his son Martiros and his Fourteen Soldiers, and Saints Atom and his soldiers",
+      "new": "St. Sargis the Warrior and his son Martiros and his Fourteen Soldiers",
+      "sample_date": "2008-01-21",
+      "dates": 1,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Sargis the Warrior and his son Martiros and his Fourteen Soldiers, and Saints Atom and his soldiers"
+      ]
+    },
+    {
+      "key": "saintsathenogenesthebishopandthetendisciplesandfivemartyrs",
+      "old": "Saints Athenogenes the Bishop and the Ten Disciples and Five Martyrs",
+      "new": "Sts. Athenogenes the Bishop and the Ten Disciples and Five Martyrs",
+      "sample_date": "2001-07-31",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Athenogenes the Bishop and the Ten Disciples and Five Martyrs"
+      ]
+    },
+    {
+      "key": "saintsatomandhissoldiers",
+      "old": "Saints Atom and his soldiers",
+      "new": "Sts. Atom and his soldiers",
+      "sample_date": "2001-02-12",
+      "dates": 164,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Atom and his soldiers"
+      ]
+    },
+    {
+      "key": "saintsatomandhissoldiersandsaintsmarkthebishoppioniusthepriestcyrilandbenjaminthedeaconsandmartyrsabdelmsehormistanandsayen",
+      "old": "Saints Atom and his soldiers, and Saints Mark the Bishop, Pionius the Priest, Cyril and Benjamin the Deacons, and Martyrs Abdelmseh, Ormistan and Sayen",
+      "new": "Sts. Atom and his soldiers",
+      "sample_date": "2012-02-06",
+      "dates": 2,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Atom and his soldiers, and Saints Mark the Bishop, Pionius the Priest, Cyril and Benjamin the Deacons, and Martyrs Abdelmseh, Ormistan and Sayen"
+      ]
+    },
+    {
+      "key": "saintsatomandhissoldiersandsaintssukiasiansthemartyrs",
+      "old": "Saints Atom and his soldiers, and Saints Sukiasians the Martyrs",
+      "new": "Sts. Atom and his soldiers, and Sts. Sukiasians the Martyrs",
+      "sample_date": "2006-02-13",
+      "dates": 15,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": true,
+      "rejected": [
+        "Sts. Atom and his soldiers"
+      ],
+      "variants": [
+        "Saints Atom and his soldiers, and Saints Sukiasians the Martyrs"
+      ]
+    },
+    {
+      "key": "saintsbasilthegreatandhisbrotherstgregoryofnyssasylvesterthepatriarchofromeandephremthesyrian",
+      "old": "Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "new": "Sts. Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "sample_date": "2001-12-22",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian"
+      ]
+    },
+    {
+      "key": "saintscallistratusandhiscompanionsandlukianosthepriest",
+      "old": "Saints Callistratus and his companions, and Lukianos the Priest",
+      "new": "Sts. Callistratus and his companions, and Lukianos the Priest",
+      "sample_date": "2001-07-09",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Callistratus and his companions, and Lukianos the Priest"
+      ]
+    },
+    {
+      "key": "saintsclementthebishopromeandpancratiusthebishopoftaormina",
+      "old": "Saints Clement the Bishop Rome and Pancratius the Bishop of Taormina",
+      "new": "Sts. Clement the Bishop of Rome and Pancratius the Bishop of Taormina",
+      "sample_date": "2001-11-29",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Clement the Bishop Rome and Pancratius the Bishop of Taormina"
+      ]
+    },
+    {
+      "key": "saintscorneliusthecenturionsimeontherelativeofchristmartyredinjerusalempolycarpthebishopofsmyrnaandthemartyrsthatperishedintheeast",
+      "old": "Saints Cornelius the Centurion, Simeon the Relative of Christ, martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs that perished in the East",
+      "new": "Sts. Cornelius the Centurion, Simeon the Relative of Christ, martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs that perished in the East",
+      "sample_date": "2003-12-02",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Cornelius the Centurion, Simeon the Relative of Christ, martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs that perished in the East"
+      ]
+    },
+    {
+      "key": "saintscyprianthebishopthefortyfivemartyrsandthevirginsjustinaeuphemiaandchristina",
+      "old": "Saints Cyprian the Bishop, the Forty-five Martyrs and the Virgins Justina, Euphemia and Christina",
+      "new": "Sts. Cyprian the Bishop, the Forty-five Martyrs and the Virgins Justina, Euphemia and Christina",
+      "sample_date": "2001-07-30",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Cyprian the Bishop, the Forty-five Martyrs and the Virgins Justina, Euphemia and Christina"
+      ]
+    },
+    {
+      "key": "saintscyricusandhismotherjulitta",
+      "old": "Saints Cyricus and His Mother Julitta",
+      "new": "Sts. Cyricus and His Mother Julitta, and Sts. Gordius, Polyeuctus and Grigoris",
+      "sample_date": "2008-07-24",
+      "dates": 3,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Cyricus and His Mother Julitta"
+      ]
+    },
+    {
+      "key": "saintscyricusandhismotherjulittaandsaintsgordiuspolyeuctusandgrigoris",
+      "old": "Saints Cyricus and His Mother Julitta, and Saints Gordius, Polyeuctus and Grigoris",
+      "new": "Sts. Cyricus and His Mother Julitta, and Sts. Gordius, Polyeuctus and Grigoris",
+      "sample_date": "2001-01-22",
+      "dates": 177,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Cyricus and His Mother Julitta, and Saints Gordius, Polyeuctus and Grigoris"
+      ]
+    },
+    {
+      "key": "saintscyricusandhismotherjulittaandsaintsvahanofgoghtngordiuspolyeuctusandgrigoris",
+      "old": "Saints Cyricus and His Mother Julitta, and Saints Vahan of Goghtn, Gordius, Polyeuctus and Grigoris",
+      "new": "Sts. Cyricus and His Mother Julitta, and Sts. Gordius, Polyeuctus and Grigoris",
+      "sample_date": "2015-01-22",
+      "dates": 2,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Cyricus and His Mother Julitta, and Saints Vahan of Goghtn, Gordius, Polyeuctus and Grigoris"
+      ]
+    },
+    {
+      "key": "saintsdavidofdvinandthemartyrseulampiusandeulampia",
+      "old": "Saints David of Dvin and the Martyrs Eulampius and Eulampia",
+      "new": "Sts. David of Dvin and the Martyrs Eulampius and Eulampia",
+      "sample_date": "2001-10-01",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints David of Dvin and the Martyrs Eulampius and Eulampia"
+      ]
+    },
+    {
+      "key": "saintsdavidtheprophetkingandjamestheapostle",
+      "old": "Saints David the Prophet-King and James the Apostle",
+      "new": "Sts. David the Prophet-King and James the Apostle",
+      "sample_date": "2001-12-24",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints David the Prophet-King and James the Apostle"
+      ]
+    },
+    {
+      "key": "saintsdemetriosthemartyrandbasilthepriest",
+      "old": "Saints Demetrios the Martyr and Basil the Priest",
+      "new": "Sts. Demetrios the Martyr and Basil the Priest",
+      "sample_date": "2001-11-13",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Demetrios the Martyr and Basil the Priest"
+      ]
+    },
+    {
+      "key": "saintsdionysiustheareopagiteandtheapostlestimothyandtitus",
+      "old": "Saints Dionysius the Areopagite and the Apostles Timothy and Titus",
+      "new": "Sts. Dionysius the Areopagite and the Apostles Timothy and Titus",
+      "sample_date": "2001-10-18",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Dionysius the Areopagite and the Apostles Timothy and Titus"
+      ]
+    },
+    {
+      "key": "saintseugeniathevirginherfatherphillipandhermotherclaudiaherbrotherssergiusandapitoniusandthetwoeunuchs",
+      "old": "Saints Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs",
+      "new": "St. Eugenia the Virgin, Her Father Philip and her mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs",
+      "sample_date": "2004-01-27",
+      "dates": 34,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs"
+      ]
+    },
+    {
+      "key": "saintseugeniathevirginherfatherphillipandhermotherclaudiaherbrotherssergiusandapitoniusandthetwoeunuchsandsaintseugeniusmacariusvaleriuscandidusandaquila",
+      "old": "Saints Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs, and Saints Eugenius, Macarius, Valerius, Candidus and Aquila",
+      "new": "Sts. Eugenia the Virgin, Her Father Philip and her mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs, and Sts. Eugenius, Macarius, Valerius, Candidus and Aquila",
+      "sample_date": "2015-08-03",
+      "dates": 4,
+      "sources": [
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs, and Saints Eugenius, Macarius, Valerius, Candidus and Aquila"
+      ]
+    },
+    {
+      "key": "saintseugeniathevirginherfatherphillipandhermotherclaudiaherbrotherssergiusandapitoniusandthetwoeunuchsandsaintseugeniusmarcariusaleriuscanditusandaquila",
+      "old": "Saints Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs, and Saints Eugenius, Marcarius, Alerius, Canditus and Aquila",
+      "new": "Sts. Eugenia the Virgin, Her Father Philip and her mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs, and Sts. Eugenius, Macarius, Valerius, Candidus and Aquila",
+      "sample_date": "2015-08-03",
+      "dates": 10,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs, and Saints Eugenius, Marcarius, Alerius, Canditus and Aquila"
+      ]
+    },
+    {
+      "key": "saintseugeniosmakariosvaleriancandidusandaquila",
+      "old": "Saints Eugenios, Makarios, Valerian, Candidus and Aquila",
+      "new": "Sts. Eugenius, Macarius, Valerius, Candidus and Aquila",
+      "sample_date": "2001-01-25",
+      "dates": 173,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Eugenios, Makarios, Valerian, Candidus and Aquila"
+      ]
+    },
+    {
+      "key": "saintseugeniusmarcariusaleriuscanditusandaquilaandsaintsandrewthegeneralandhisarmyandcallinicusanddiomedesthemartyrs",
+      "old": "Saints Eugenius, Marcarius, Alerius, Canditus and Aquila, and Saints Andrew the General and his army, and Callinicus and Diomedes the Martyrs",
+      "new": "Sts. Eugenius, Macarius, Valerius, Candidus and Aquila",
+      "sample_date": "2009-01-27",
+      "dates": 1,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Eugenius, Marcarius, Alerius, Canditus and Aquila, and Saints Andrew the General and his army, and Callinicus and Diomedes the Martyrs"
+      ]
+    },
+    {
+      "key": "saintseustachiushiswifetheopistaandtheirtwosonsandtheholyvirginshermioneandcatherine",
+      "old": "Saints Eustachius, his wife Theopista and their two sons, and the Holy Virgins Hermione and Catherine",
+      "new": "Sts. Eustachius, his wife Theopista and their two sons, and the Holy Virgins Hermione and Catherine",
+      "sample_date": "2001-10-02",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Eustachius, his wife Theopista and their two sons, and the Holy Virgins Hermione and Catherine"
+      ]
+    },
+    {
+      "key": "saintsforefathersadamabelsethenosenochnoahmelchizedechabrahamisaacjacobjosephmosesaaroneleazarjoshuasamuelsamsonjephthahbarakgideonandotherholypatriarchs",
+      "old": "Saints Forefathers: Adam, Abel, Seth, Enos, Enoch, Noah, Melchizedech, Abraham, Isaac, Jacob, Joseph, Moses, Aaron, Eleazar, Joshua, Samuel, Samson, Jephthah, Barak, Gideon and other Holy Patriarchs",
+      "new": "Sts. Forefathers: Adam, Abel, Seth, Enos, Enoch, Noah, Melchizedech, Abraham, Isaac, Jacob, Joseph, Moses, Aaron, Eleazar, Joshua, Samuel, Samson, Jephthah, Barak, Gideon and other Holy Patriarchs",
+      "sample_date": "2001-08-02",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Forefathers: Adam, Abel, Seth, Enos, Enoch, Noah, Melchizedech, Abraham, Isaac, Jacob, Joseph, Moses, Aaron, Eleazar, Joshua, Samuel, Samson, Jephthah, Barak, Gideon and other Holy Patriarchs"
+      ]
+    },
+    {
+      "key": "saintsgayianeandhercompanions",
+      "old": "Saints Gayiane and her companions",
+      "new": "Sts. Gayane and her companions",
+      "sample_date": "2001-06-12",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Gayiane and her companions"
+      ]
+    },
+    {
+      "key": "saintsgennarothebishopandmercuriusthewarrior",
+      "old": "Saints Gennaro the Bishop and Mercurius the Warrior",
+      "new": "Sts. Gennaro the Bishop and Mercurius the Warrior",
+      "sample_date": "2009-11-30",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Gennaro the Bishop and Mercurius the Warrior"
+      ]
+    },
+    {
+      "key": "saintsgennarothebishopandmercuriusthewarriorandsaintssaintsjacocandthemistocles",
+      "old": "Saints Gennaro the Bishop and Mercurius the Warrior, and Saints Saints Jacoc and Themistocles",
+      "new": "Sts. Gennaro the Bishop and Mercurius the Warrior, and Sts. Jacoc and Themistocles",
+      "sample_date": "2001-12-03",
+      "dates": 160,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Gennaro the Bishop and Mercurius the Warrior, and Saints Saints Jacoc and Themistocles"
+      ]
+    },
+    {
+      "key": "saintsgeorgethewarrioradauctusandromanusthemelodist",
+      "old": "Saints George the Warrior, Adauctus and Romanus the Melodist",
+      "new": "Sts. George the Warrior, Adauctus and Romanus the Melodist",
+      "sample_date": "2001-09-29",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints George the Warrior, Adauctus and Romanus the Melodist"
+      ]
+    },
+    {
+      "key": "saintsghevondthepriestandhiscompanions",
+      "old": "Saints Ghevond the Priest and His Companions",
+      "new": "Sts. Ghevond the Priest and His Companions",
+      "sample_date": "2001-02-20",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Ghevond the Priest and His Companions"
+      ]
+    },
+    {
+      "key": "saintsgregoryandnicholasthewonderworkersandothernicholasthebishopandmyronthebishop",
+      "old": "Saints Gregory and Nicholas the Wonderworkers, and other Nicholas the Bishop and Myron the Bishop",
+      "new": "Sts. Gregory and Nicholas the Wonderworkers, and other Nicholas the Bishop and Myron the Bishop",
+      "sample_date": "2006-11-25",
+      "dates": 49,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Gregory and Nicholas the Wonderworkers, and other Nicholas the Bishop and Myron the Bishop"
+      ]
+    },
+    {
+      "key": "saintsgregorythewonderworkernicholasthebishopandmyronthebishop",
+      "old": "Saints Gregory the Wonderworker, Nicholas the Bishop and Myron the Bishop",
+      "new": "Sts. Gregory the Wonderworker, Nicholas the Bishop and Myron the Bishop",
+      "sample_date": "2001-11-24",
+      "dates": 139,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Gregory the Wonderworker, Nicholas the Bishop and Myron the Bishop"
+      ]
+    },
+    {
+      "key": "saintsguriassamonasandhabibusabibasthedeaconmartyrsofedessaandromanusthemonkbarulatheconfessingchildandhesychiusthesoldier",
+      "old": "Saints Gurias, Samonas and Habibus (Abibas) the Deacon, Martyrs of Edessa, and Romanus the Monk, Barula the Confessing Child and Hesychius the Soldier",
+      "new": "Sts. Gurias, Samonas and Habibus (Abibas) the Deacon, Martyrs of Edessa, and Romanus the Monk, Barula the Confessing Child and Hesychius the Soldier",
+      "sample_date": "2001-11-15",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Gurias, Samonas and Habibus (Abibas) the Deacon, Martyrs of Edessa, and Romanus the Monk, Barula the Confessing Child and Hesychius the Soldier"
+      ]
+    },
+    {
+      "key": "saintshipparchusandhiscompanionswhoweremartyredinsamosata",
+      "old": "Saints Hipparchus and his Companions Who were Martyred in Samosata",
+      "new": "St. Hipparchus and his companions who were martyred in Samosata",
+      "sample_date": "2004-10-26",
+      "dates": 55,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Hipparchus and his Companions Who were Martyred in Samosata"
+      ]
+    },
+    {
+      "key": "saintshipparchusandhiscompanionswhoweremartyredinsamosataandsaintsseverianusofsebastiaandbabylasandhis84disciples",
+      "old": "Saints Hipparchus and his Companions Who were Martyred in Samosata, and Saints Severianus of Sebastia and Babylas and his 84 Disciples",
+      "new": "Sts. Hipparchus and his Companions Who were Martyred in Samosata, and Sts. Severianus of Sebastia and Babylas and his 84 Disciples",
+      "sample_date": "2001-10-30",
+      "dates": 133,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Hipparchus and his Companions Who were Martyred in Samosata, and Saints Severianus of Sebastia and Babylas and his 84 Disciples"
+      ]
+    },
+    {
+      "key": "saintshripsimeandhercompanions",
+      "old": "Saints Hripsime and her companions",
+      "new": "Sts. Hripsime and her companions",
+      "sample_date": "2001-06-11",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Hripsime and her companions"
+      ]
+    },
+    {
+      "key": "saintsjacocandthemistocles",
+      "old": "Saints Jacoc and Themistocles",
+      "new": "Sts. Jacoc and Themistocles",
+      "sample_date": "2009-12-01",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Jacoc and Themistocles"
+      ]
+    },
+    {
+      "key": "saintsjamesofnisibismaroukethehermitandmellitusthebishop",
+      "old": "Saints James of Nisibis, Marouke the Hermit and Mellitus the Bishop",
+      "new": "Sts. James of Nisibis, Marouke the Hermit and Mellitus the Bishop",
+      "sample_date": "2001-12-15",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints James of Nisibis, Marouke the Hermit and Mellitus the Bishop"
+      ]
+    },
+    {
+      "key": "saintsjoachimandannaparentsoftheholymotherofgodandofmyrophores",
+      "old": "Saints Joachim and Anna, parents of the Holy Mother of God, and of Myrophores",
+      "new": "Sts. Joachim and Anna, parents of the Holy Mother of God, and of Myrophores",
+      "sample_date": "2001-08-21",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Joachim and Anna, parents of the Holy Mother of God, and of Myrophores"
+      ]
+    },
+    {
+      "key": "saintsjohntheforerunnerbaptistandbishopatanagine",
+      "old": "Saints John the Forerunner (Baptist) and Bishop Atanagine",
+      "new": "Sts. John the Forerunner (Baptist) and Bishop Atanagine",
+      "sample_date": "2001-06-14",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints John the Forerunner (Baptist) and Bishop Atanagine"
+      ]
+    },
+    {
+      "key": "saintsjohntheforerunnerbaptistandjobtherighteous",
+      "old": "Saints John the Forerunner (Baptist) and Job the Righteous",
+      "new": "Sts. John the Forerunner (Baptist) and Job the Righteous",
+      "sample_date": "2001-08-30",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints John the Forerunner (Baptist) and Job the Righteous"
+      ]
+    },
+    {
+      "key": "saintslonginusthecenturionjosephthefatherofgodjosephofarimatheaandlazarusandhissistersmarthaandmary",
+      "old": "Saints Longinus the Centurion, Joseph the Father of God, Joseph of Arimathea and Lazarus and his sisters Martha and Mary",
+      "new": "Sts. Longinus the Centurion, Joseph the Father of God, Joseph of Arimathea and Lazarus and his sisters Martha and Mary",
+      "sample_date": "2001-10-22",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Longinus the Centurion, Joseph the Father of God, Joseph of Arimathea and Lazarus and his sisters Martha and Mary"
+      ]
+    },
+    {
+      "key": "saintslucianthepriesttarachusprobusandronicusonesimusandotherdisciplesofapostlepaul",
+      "old": "Saints Lucian the Priest, Tarachus, Probus, Andronicus, Onesimus and other Disciples of Apostle Paul",
+      "new": "Sts. Lucian the Priest, Tarachus, Probus, Andronicus, Onesimus and other Disciples of Apostle Paul",
+      "sample_date": "2001-11-27",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Lucian the Priest, Tarachus, Probus, Andronicus, Onesimus and other Disciples of Apostle Paul"
+      ]
+    },
+    {
+      "key": "saintsmaccabeeseleazarthepriestshamunaandhersevensons",
+      "old": "Saints Maccabees: Eleazar the Priest, Shamuna and Her Seven Sons",
+      "new": "Sts. Maccabees: Eleazar the Priest, Shamuna and Her Seven Sons",
+      "sample_date": "2001-01-29",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Maccabees: Eleazar the Priest, Shamuna and Her Seven Sons"
+      ]
+    },
+    {
+      "key": "saintsmarkthebishoppioniusthepriestcyrilandbenjaminthedeaconsandmartyrsabdelmsehormistanandsayen",
+      "old": "Saints Mark the Bishop, Pionius the Priest, Cyril and Benjamin the Deacons, and Martyrs Abdelmseh, Ormistan and Sayen",
+      "new": "Sts. Mark the Bishop, Pionius the Priest, Cyril and Benjamin the Deacons, and Martyrs Abdelmseh, Ormistan and Sayen",
+      "sample_date": "2001-02-19",
+      "dates": 174,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Mark the Bishop, Pionius the Priest, Cyril and Benjamin the Deacons, and Martyrs Abdelmseh, Ormistan and Sayen"
+      ]
+    },
+    {
+      "key": "saintsmartyrsantoninustheophilusanicetusandpotinus",
+      "old": "Saints martyrs Antoninus, Theophilus, Anicetus and Potinus",
+      "new": "Sts. martyrs Antoninus, Theophilus, Anicetus and Potinus",
+      "sample_date": "2001-07-02",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints martyrs Antoninus, Theophilus, Anicetus and Potinus"
+      ]
+    },
+    {
+      "key": "saintsmeletiusbishopofantiochmenasofegyptandtheothermeletiusbishopofpersiaburasthepriestandsennenthedeacon",
+      "old": "Saints Meletius Bishop of Antioch, Menas of Egypt, and the other Meletius, Bishop of Persia, Buras the Priest and Sennen the Deacon",
+      "new": "Sts. Meletius Bishop of Antioch, Menas of Egypt, and the other Meletius, Bishop of Persia, Buras the Priest and Sennen the Deacon",
+      "sample_date": "2001-11-12",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Meletius Bishop of Antioch, Menas of Egypt, and the other Meletius, Bishop of Persia, Buras the Priest and Sennen the Deacon"
+      ]
+    },
+    {
+      "key": "saintsmenashermogeneseugraphusandthepoormansjohnandalexis",
+      "old": "Saints Menas, Hermogenes, Eugraphus and the poor mans John and Alexis",
+      "new": "Sts. Menas, Hermogenes, Eugraphus and the poor men John and Alexis",
+      "sample_date": "2002-12-03",
+      "dates": 8,
+      "sources": [
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Menas, Hermogenes, Eugraphus and the poor mans John and Alexis"
+      ]
+    },
+    {
+      "key": "saintsmenashermongeneseugraphiusandthepoormansjohnandalexis",
+      "old": "Saints Menas, Hermongenes, Eugraphius and the poor mans John and Alexis",
+      "new": "Sts. Menas, Hermogenes, Eugraphus and the poor men John and Alexis",
+      "sample_date": "2002-12-03",
+      "dates": 20,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Menas, Hermongenes, Eugraphius and the poor mans John and Alexis"
+      ]
+    },
+    {
+      "key": "saintsmetrophanesalexanderandpaultheconfessorpatriarchsofconstantinopleandnotariesmarcianandmartyriusthemartyrs",
+      "old": "Saints Metrophanes, Alexander and Paul the Confessor, Patriarchs of Constantinople, and Notaries Marcian and Martyrius the Martyrs",
+      "new": "Sts. Metrophanes, Alexander and Paul the Confessor, Patriarchs of Constantinople, and Notaries Marcian and Martyrius the Martyrs",
+      "sample_date": "2001-11-08",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Metrophanes, Alexander and Paul the Confessor, Patriarchs of Constantinople, and Notaries Marcian and Martyrius the Martyrs"
+      ]
+    },
+    {
+      "key": "saintsnersesthegreatpatriarchandbishopkhad",
+      "old": "Saints Nerses the Great Patriarch and Bishop Khad",
+      "new": "Sts. Nerses the Great Patriarch and Bishop Khad",
+      "sample_date": "2001-06-23",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Nerses the Great Patriarch and Bishop Khad"
+      ]
+    },
+    {
+      "key": "saintspantaleimonthephysicianhermolausthepriestandeupraxiathevirgin",
+      "old": "Saints Pantaleimon the Physician, Hermolaus the Priest and Eupraxia the Virgin",
+      "new": "Sts. Pantaleimon the Physician, Hermolaus the Priest and Eupraxia the Virgin",
+      "sample_date": "2001-10-11",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Pantaleimon the Physician, Hermolaus the Priest and Eupraxia the Virgin"
+      ]
+    },
+    {
+      "key": "saintspeterandpaultheapostles",
+      "old": "Saints Peter and Paul the Apostles",
+      "new": "Sts. Peter and Paul the Apostles",
+      "sample_date": "2001-12-27",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Peter and Paul the Apostles"
+      ]
+    },
+    {
+      "key": "saintspeterthepatriarchblaisethebishopandabsalomthedeacon",
+      "old": "Saints Peter the Patriarch, Blaise the Bishop and Absalom the Deacon",
+      "new": "Sts. Peter the Patriarch, Blaise the Bishop and Absalom the Deacon",
+      "sample_date": "2001-01-16",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Peter the Patriarch, Blaise the Bishop and Absalom the Deacon"
+      ]
+    },
+    {
+      "key": "saintsphocasthepatriarchandirenaeusoflyonsfolloweroftheapostles",
+      "old": "Saints Phocas the Patriarch and Irenaeus of Lyons, follower of the Apostles",
+      "new": "Sts. Phocas the Patriarch and Irenaeus of Lyons, follower of the Apostles",
+      "sample_date": "2001-10-08",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Phocas the Patriarch and Irenaeus of Lyons, follower of the Apostles"
+      ]
+    },
+    {
+      "key": "saintsprincessahakandjosephandthemartyrssargiusandbacchus",
+      "old": "Saints Princes Sahak and Joseph and the Martyrs Sargius and Bacchus",
+      "new": "Sts. Princes Sahak and Joseph and the Martyrs Sergius and Bacchus",
+      "sample_date": "2001-06-21",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Princes Sahak and Joseph and the Martyrs Sargius and Bacchus"
+      ]
+    },
+    {
+      "key": "saintsprophetdanielandhiscompanionsshadrachmeshachandabednego",
+      "old": "Saints Prophet Daniel and his Companions Shadrach, Meshach and Abednego",
+      "new": "Sts. Prophet Daniel and his Companions Shadrach, Meshach and Abednego",
+      "sample_date": "2001-07-03",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Prophet Daniel and his Companions Shadrach, Meshach and Abednego"
+      ]
+    },
+    {
+      "key": "saintsseverianusofsebastiaandbabylasandhis84disciples",
+      "old": "Saints Severianus of Sebastia and Babylas and his 84 Disciples",
+      "new": "Sts. Severianus of Sebastia and Babylas and his 84 Disciples",
+      "sample_date": "2004-10-28",
+      "dates": 55,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Severianus of Sebastia and Babylas and his 84 Disciples"
+      ]
+    },
+    {
+      "key": "saintssophiaandherthreedaughterspistiselpisandagape",
+      "old": "Saints Sophia and Her Three Daughters: Pistis, Elpis, and Agape",
+      "new": "Sts. Sophia and Her Three Daughters: Pistis, Elpis, and Agape",
+      "sample_date": "2001-02-01",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Sophia and Her Three Daughters: Pistis, Elpis, and Agape"
+      ]
+    },
+    {
+      "key": "saintsstaretandhiscompanionsthemartyrsartemiusandchristopherandthewomencalliniceandaquilina",
+      "old": "Saints St. Aret and His Companions, the martyrs Artemius and Christopher and the Women Callinice and Aquilina",
+      "new": "Sts. Aret and His Companions, the martyrs Artemius and Christopher and the Women Callinice and Aquilina",
+      "sample_date": "2001-10-25",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints St. Aret and His Companions, the martyrs Artemius and Christopher and the Women Callinice and Aquilina"
+      ]
+    },
+    {
+      "key": "saintsstephenbishopofromeandthepriestsdeaconsandmanyfaithfuls",
+      "old": "Saints Stephen, Bishop of Rome and the priests, deacons and many faithfuls",
+      "new": "Sts. Stephen, Bishop of Rome and the priests, deacons and many faithful",
+      "sample_date": "2001-11-05",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Stephen, Bishop of Rome and the priests, deacons and many faithfuls"
+      ]
+    },
+    {
+      "key": "saintsstephenofoulniaandthemartyrsgoharinuszamidustuchicusandraticus",
+      "old": "Saints Stephen of Oulnia and the Martyrs Goharinus, Zamidus, Tuchicus and Raticus",
+      "new": "Sts. Stephen of Oulnia and the Martyrs Goharinus, Zamidus, Tuchicus and Raticus",
+      "sample_date": "2001-08-27",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Stephen of Oulnia and the Martyrs Goharinus, Zamidus, Tuchicus and Raticus"
+      ]
+    },
+    {
+      "key": "saintssukiasiansthemartyrs",
+      "old": "Saints Sukiasians the Martyrs",
+      "new": "Sts. Sukiasians the Martyrs",
+      "sample_date": "2001-02-13",
+      "dates": 167,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Sukiasians the Martyrs"
+      ]
+    },
+    {
+      "key": "saintstephentheprotodeaconandthefirstmartyr",
+      "old": "Saint Stephen the Proto-Deacon and the First Martyr",
+      "new": "St. Stephen the Proto-Deacon and the First Martyr",
+      "sample_date": "2001-12-25",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Stephen the Proto-Deacon and the First Martyr"
+      ]
+    },
+    {
+      "key": "saintsthaddeusapostleofarmeniaandsandoukhtthevirgin",
+      "old": "Saints Thaddeus Apostle of Armenia and Sandoukht the Virgin",
+      "new": "Sts. Thaddeus Apostle of Armenia and Sandoukht the Virgin",
+      "sample_date": "2001-07-28",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Thaddeus Apostle of Armenia and Sandoukht the Virgin"
+      ]
+    },
+    {
+      "key": "saintstheodoretthepriestofantiochzenonthesoldiermacariuseudoxiusandromulus",
+      "old": "Saints Theodoret the Priest of Antioch, Zenon the soldier, Macarius, Eudoxius and Romulus",
+      "new": "Sts. Theodoret the Priest of Antioch, Zenon the soldier, Macarius, Eudoxius and Romulus",
+      "sample_date": "2001-10-23",
+      "dates": 54,
+      "sources": [
+        "1.2.2",
+        "1.2.3"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Theodoret the Priest of Antioch, Zenon the soldier, Macarius, Eudoxius and Romulus"
+      ]
+    },
+    {
+      "key": "saintstheodoretthepriestofantiochzenonthesoldiermarcariuseudoxiusandromulus",
+      "old": "Saints Theodoret the Priest of Antioch, Zenon the soldier, Marcarius, Eudoxius and Romulus",
+      "new": "Sts. Theodoret the Priest of Antioch, Zenon the soldier, Macarius, Eudoxius and Romulus",
+      "sample_date": "2001-10-23",
+      "dates": 134,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Theodoret the Priest of Antioch, Zenon the soldier, Marcarius, Eudoxius and Romulus"
+      ]
+    },
+    {
+      "key": "saintstheodosiusandthechildrenofephesus",
+      "old": "Saints Theodosius and the Children of Ephesus",
+      "new": "Sts. Theodosius and the Children of Ephesus",
+      "sample_date": "2001-01-20",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Theodosius and the Children of Ephesus"
+      ]
+    },
+    {
+      "key": "saintstheopemptusthebishopofnicomediaandtheonasthemartyrandthefoursoldiersbassuseusebiuseutychiusandbasilides",
+      "old": "Saints Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides",
+      "new": "Sts. Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides",
+      "sample_date": "2001-12-18",
+      "dates": 161,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides"
+      ]
+    },
+    {
+      "key": "saintstiridatestrdatthekingofarmeniaqueenashkhenandprincesskhosrovidoukht",
+      "old": "Saints Tiridates (Trdat) the King of Armenia, Queen Ashkhen and Princess Khosrovidoukht",
+      "new": "Sts. Tiridates (Trdat) the King of Armenia, Queen Ashkhen and Princess Khosrovidoukht",
+      "sample_date": "2001-07-07",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Tiridates (Trdat) the King of Armenia, Queen Ashkhen and Princess Khosrovidoukht"
+      ]
+    },
+    {
+      "key": "saintstwelveprophetshoseaamosmicahjoelobadiahnahumhabakkukjonahzephaniahhaggaizechariahandmalachi",
+      "old": "Saints Twelve Prophets: Hosea, Amos, Micah, Joel, Obadiah, Nahum, Habakkuk, Jonah, Zephaniah, Haggai, Zechariah and Malachi",
+      "new": "Sts. Twelve Prophets: Hosea, Amos, Micah, Joel, Obadiah, Nahum, Habakkuk, Jonah, Zephaniah, Haggai, Zechariah and Malachi",
+      "sample_date": "2001-01-30",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Twelve Prophets: Hosea, Amos, Micah, Joel, Obadiah, Nahum, Habakkuk, Jonah, Zephaniah, Haggai, Zechariah and Malachi"
+      ]
+    },
+    {
+      "key": "saintsvahanofgoghtneugeniathevirginherfatherphillipandhermotherclaudiaherbrotherssergiusandapitoniusandthetwoeunuchs",
+      "old": "Saints Vahan of Goghtn, Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs",
+      "new": "Sts. Vahan of Goghtn, Eugenia the Virgin, Her Father Philip and her mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs",
+      "sample_date": "2001-01-23",
+      "dates": 146,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": true,
+      "rejected": [
+        "St. Vahan of Goghtn"
+      ],
+      "variants": [
+        "Saints Vahan of Goghtn, Eugenia the Virgin, Her Father Phillip and her mother Claudia, Her Brothers Sergius and Apitonius, and the Two Eunuchs"
+      ]
+    },
+    {
+      "key": "saintsvahanofgoghtngordiuspolyeuctusandgrigoris",
+      "old": "Saints Vahan of Goghtn, Gordius, Polyeuctus and Grigoris",
+      "new": "Sts. Vahan of Goghtn, Gordius, Polyeuctus and Grigoris",
+      "sample_date": "2010-08-02",
+      "dates": 15,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": true,
+      "rejected": [
+        "Sts. Vahan of Goghtn, Eugenia the Virgin, Her Father Philip and her mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs"
+      ],
+      "variants": [
+        "Saints Vahan of Goghtn, Gordius, Polyeuctus and Grigoris"
+      ]
+    },
+    {
+      "key": "saintsvardanthegeneralandhiscompanionsthe1036martyrswhodiedinthegreatbattle",
+      "old": "Saints Vardan the General and His Companions - the 1036 Martyrs who died in the Great Battle",
+      "new": "Sts. Vardan the General and His Companions - the 1036 Martyrs who died in the Great Battle",
+      "sample_date": "2001-02-22",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Vardan the General and His Companions - the 1036 Martyrs who died in the Great Battle"
+      ]
+    },
+    {
+      "key": "saintsvirginsindesanddomnaandclericusthepriestalongwiththe20000martyrsofnicomedia",
+      "old": "Saints virgins Indes and Domna, and Clericus the Priest along with the 20,000 Martyrs of Nicomedia",
+      "new": "Sts. virgins Indes and Domna, and Clericus the Priest along with the 20,000 Martyrs of Nicomedia",
+      "sample_date": "2001-12-20",
+      "dates": 161,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints virgins Indes and Domna, and Clericus the Priest along with the 20,000 Martyrs of Nicomedia"
+      ]
+    },
+    {
+      "key": "saintsvirginsnuneandmane",
+      "old": "Saints Virgins Nune and Mane",
+      "new": "Sts. Virgins Nune and Mane",
+      "sample_date": "2001-06-19",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Virgins Nune and Mane"
+      ]
+    },
+    {
+      "key": "saintsvirginstheclabarbaraandpelagia",
+      "old": "Saints Virgins Thecla, Barbara and Pelagia",
+      "new": "Sts. Virgins Thecla, Barbara and Pelagia",
+      "sample_date": "2001-10-09",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Virgins Thecla, Barbara and Pelagia"
+      ]
+    },
+    {
+      "key": "saintsvoskiansthepriests",
+      "old": "Saints Voskians the Priests",
+      "new": "Sts. Voskians the Priests",
+      "sample_date": "2001-02-15",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saints Voskians the Priests"
+      ]
+    },
+    {
+      "key": "sainttheodoronthemartyr",
+      "old": "Saint Theodoron the Martyr",
+      "new": "St. Theodoron the Martyr",
+      "sample_date": "2009-12-22",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Theodoron the Martyr"
+      ]
+    },
+    {
+      "key": "saintvahanofgoghtn",
+      "old": "Saint Vahan of Goghtn",
+      "new": "St. Vahan of Goghtn",
+      "sample_date": "2004-01-26",
+      "dates": 13,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Vahan of Goghtn"
+      ]
+    },
+    {
+      "key": "saintvirginsjulianaandbasilla",
+      "old": "Saint Virgins Juliana and Basilla",
+      "new": "Sts. Virgins Juliana and Basilla",
+      "sample_date": "2001-11-26",
+      "dates": 133,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Virgins Juliana and Basilla"
+      ]
+    },
+    {
+      "key": "saintzechariahtheprophet",
+      "old": "Saint Zechariah the Prophet",
+      "new": "St. Zechariah the Prophet",
+      "sample_date": "2001-07-10",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Saint Zechariah the Prophet"
+      ]
+    },
+    {
+      "key": "seconddayofadventpresentationoftheholymotherofgodtothetemple",
+      "old": "Second day of Advent — PRESENTATION of the Holy Mother of God to the Temple",
+      "new": "Second day of Advent — Presentation of the Holy Mother of God to the Temple",
+      "sample_date": "2006-11-21",
+      "dates": 3,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second day of Advent — PRESENTATION of the Holy Mother of God to the Temple"
+      ]
+    },
+    {
+      "key": "seconddayofeasterremembranceofthedead",
+      "old": "Second day of EasterRemembrance of the Dead",
+      "new": "Second day of Easter — Remembrance of the Dead",
+      "sample_date": "2001-04-16",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second day of EasterRemembrance of the Dead"
+      ]
+    },
+    {
+      "key": "seconddayofnativityremembranceofthedead",
+      "old": "Second day of NativityRemembrance of the Dead",
+      "new": "Second day of Nativity — Remembrance of the Dead",
+      "sample_date": "2001-01-07",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second day of NativityRemembrance of the Dead"
+      ]
+    },
+    {
+      "key": "seconddayofpentecostfastday",
+      "old": "Second day of PentecostFast day",
+      "new": "Second day of Pentecost — Fast day",
+      "sample_date": "2001-06-04",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second day of PentecostFast day"
+      ]
+    },
+    {
+      "key": "seconddayoftheassumptionremembranceofthedead",
+      "old": "Second day of the AssumptionRemembrance of the Dead",
+      "new": "Second day of the Assumption — Remembrance of the Dead",
+      "sample_date": "2001-08-13",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second day of the AssumptionRemembrance of the Dead"
+      ]
+    },
+    {
+      "key": "seconddayofthefastofnativitysaintsbasilthegreatandhisbrotherstgregoryofnyssasylvesterthepatriarchofromeandephremthesyrian",
+      "old": "Second day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "new": "Second day of the Fast of Nativity — Sts. Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "sample_date": "2005-12-31",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+        "Second day of the Fast of NativitySaints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian"
+      ]
+    },
+    {
+      "key": "seconddayoftransfigurationremembranceofthedead",
+      "old": "Second day of TransfigurationRemembrance of the Dead",
+      "new": "Second day of Transfiguration — Remembrance of the Dead",
+      "sample_date": "2001-07-23",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second day of TransfigurationRemembrance of the Dead"
+      ]
+    },
+    {
+      "key": "secondsundayafternativityeveoffastofcatechumens",
+      "old": "Second Sunday after NativityEve of Fast of Catechumens",
+      "new": "Second Sunday after Nativity — Eve of Fast of Catechumens",
+      "sample_date": "2010-01-24",
+      "dates": 6,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second Sunday after NativityEve of Fast of Catechumens"
+      ]
+    },
+    {
+      "key": "secondsundayafterpentecostfeastofholyetchmiadzin",
+      "old": "Second Sunday after PentecostFeast of Holy Etchmiadzin",
+      "new": "Second Sunday after Pentecost — Feast of Holy Etchmiadzin",
+      "sample_date": "2001-06-17",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second Sunday after PentecostFeast of Holy Etchmiadzin"
+      ]
+    },
+    {
+      "key": "secondsundayafterpentecostremembranceofprophetelijah",
+      "old": "Second Sunday after PentecostRemembrance of Prophet Elijah",
+      "new": "Second Sunday after Pentecost — Remembrance of Prophet Elijah",
+      "sample_date": "2001-06-10",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second Sunday after PentecostRemembrance of Prophet Elijah"
+      ]
+    },
+    {
+      "key": "secondsundayaftertheholycrosseveoffastoftheholycrossofvarag",
+      "old": "Second Sunday after the Holy CrossEve of Fast of the Holy Cross of Varag",
+      "new": "Second Sunday after the Holy Cross — Eve of Fast of the Holy Cross of Varag",
+      "sample_date": "2001-09-23",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second Sunday after the Holy CrossEve of Fast of the Holy Cross of Varag"
+      ]
+    },
+    {
+      "key": "secondsundayofgreatlentsundayoftheexpulsionpresentationofourlordtothetemple",
+      "old": "Second Sunday of Great Lent, Sunday of the Expulsion — PRESENTATION OF OUR LORD TO THE TEMPLE",
+      "new": "Second Sunday of Great Lent. Sunday of the Expulsion — PRESENTATION OF OUR LORD TO THE TEMPLE",
+      "sample_date": "2016-02-14",
+      "dates": 1,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Second Sunday of Great Lent, Sunday of the Expulsion — PRESENTATION OF OUR LORD TO THE TEMPLE"
+      ]
+    },
+    {
+      "key": "seventeenthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Seventeenth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Seventeenth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2007-04-24",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Seventeenth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "seventhdayofeasterannunciationtothevirginmarybeheadingofstjohntheforerunnerthebaptist",
+      "old": "Seventh day of EasterAnnunciation to the Virgin MaryBeheading of St. John the Forerunner (the Baptist)",
+      "new": "Seventh day of Easter — Annunciation to the Virgin Mary — Beheading of St. John the Forerunner (the Baptist)",
+      "sample_date": "2018-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Seventh day of EasterAnnunciation to the Virgin MaryBeheading of St. John the Forerunner (the Baptist)"
+      ]
+    },
+    {
+      "key": "seventhdayofeasterbeheadingofstjohntheforerunnerthebaptist",
+      "old": "Seventh day of EasterBeheading of St. John the Forerunner (the Baptist)",
+      "new": "Seventh day of Easter — Beheading of St. John the Forerunner (the Baptist)",
+      "sample_date": "2001-04-21",
+      "dates": 26,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Seventh day of EasterBeheading of St. John the Forerunner (the Baptist)"
+      ]
+    },
+    {
+      "key": "seventhsundayaftertheholycrossdiscoveryoftheholycross",
+      "old": "Seventh Sunday after the Holy Cross — Discovery of the Holy Cross.",
+      "new": "Seventh Sunday after the Holy Cross — Discovery of the Holy Cross",
+      "sample_date": "2001-10-28",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Seventh Sunday after the Holy Cross — Discovery of the Holy Cross.",
+        "Seventh Sunday after the Holy CrossDiscovery of the Holy Cross."
+      ]
+    },
+    {
+      "key": "sixteenthdayofeastertideannunciationtothevirginmary",
+      "old": "Sixteenth day of EastertideAnnunciation to the Virgin Mary",
+      "new": "Sixteenth day of Eastertide — Annunciation to the Virgin Mary",
+      "sample_date": "2008-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixteenth day of EastertideAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "sixteenthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Sixteenth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Sixteenth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2023-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixteenth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "sixthdayofgreatlentsainttheodorethegeneral",
+      "old": "Sixth day of Great Lent — Saint Theodore the General",
+      "new": "Sixth day of Great Lent — St. Theodore the Tyron",
+      "sample_date": "2016-02-13",
+      "dates": 1,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth day of Great Lent — Saint Theodore the General"
+      ]
+    },
+    {
+      "key": "sixthdayofgreatlentsainttheodorethetyron",
+      "old": "Sixth day of Great Lent — Saint Theodore the Tyron",
+      "new": "Sixth day of Great Lent — St. Theodore the Tyron",
+      "sample_date": "2001-03-03",
+      "dates": 187,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth day of Great Lent — Saint Theodore the Tyron",
+        "Sixth day of Great LentSaint Theodore the Tyron"
+      ]
+    },
+    {
+      "key": "sixthdayofpentecostfastday",
+      "old": "Sixth day of PentecostFast day",
+      "new": "Sixth day of Pentecost — Fast day",
+      "sample_date": "2001-06-08",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth day of PentecostFast day"
+      ]
+    },
+    {
+      "key": "sixthdayoftheassumptionfastday",
+      "old": "Sixth day of the AssumptionFast day",
+      "new": "Sixth day of the Assumption — Fast day",
+      "sample_date": "2001-08-17",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth day of the AssumptionFast day"
+      ]
+    },
+    {
+      "key": "sixthdayofthefastofnativitysaintsbasilthegreatandhisbrotherstgregoryofnyssasylvesterthepatriarchofromeandephremthesyrian",
+      "old": "Sixth day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "new": "Sixth day of the Fast of Nativity — Sts. Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "sample_date": "2003-01-04",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+        "Sixth day of the Fast of NativitySaints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian"
+      ]
+    },
+    {
+      "key": "sixthsundayafterpentecosteveoffastoftransfiguration",
+      "old": "Sixth Sunday after PentecostEve of Fast of Transfiguration",
+      "new": "Sixth Sunday after Pentecost — Eve of Fast of Transfiguration",
+      "sample_date": "2001-07-15",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth Sunday after PentecostEve of Fast of Transfiguration"
+      ]
+    },
+    {
+      "key": "sixthsundayofadventeveoffastofnativity",
+      "old": "Sixth Sunday of AdventEve of Fast of Nativity",
+      "new": "Sixth Sunday of Advent — Eve of Fast of Nativity",
+      "sample_date": "2002-12-29",
+      "dates": 4,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth Sunday of AdventEve of Fast of Nativity"
+      ]
+    },
+    {
+      "key": "sixthsundayofgreatlentsundayoftheadventannunciationtothevirginmary",
+      "old": "Sixth Sunday of Great Lent, Sunday of the Advent — Annunciation to the Virgin Mary",
+      "new": "Sixth Sunday of Great Lent. Sunday of the Advent — Annunciation to the Virgin Mary",
+      "sample_date": "2019-04-07",
+      "dates": 2,
+      "sources": [
+        "1.1.0",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Sixth Sunday of Great Lent, Sunday of the Advent — Annunciation to the Virgin Mary",
+        "Sixth Sunday of Great Lent. Sunday of the AdventAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "staintgregorytheilluminatorscomingoutofpit",
+      "old": "Staint Gregory the Illuminator's coming out of Pit",
+      "new": "St. Gregory the Illuminator's coming out of Pit",
+      "sample_date": "2001-06-16",
+      "dates": 134,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Staint Gregory the Illuminator's coming out of Pit"
+      ]
+    },
+    {
+      "key": "tenthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Tenth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Tenth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2001-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Tenth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "tenthsundayaftertheholycrosseveofthefastofadvent",
+      "old": "Tenth Sunday after the Holy CrossEve of the Fast of Advent",
+      "new": "Tenth Sunday after the Holy Cross — Eve of the Fast of Advent",
+      "sample_date": "2001-11-18",
+      "dates": 19,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Tenth Sunday after the Holy CrossEve of the Fast of Advent"
+      ]
+    },
+    {
+      "key": "thechildrenofbethlehemsaintsacaciusthemartyrmociusthepriestandcodratusthesoldier",
+      "old": "The Children of Bethlehem. Saints Acacius the Martyr, Mocius the Priest and Codratus the Soldier",
+      "new": "The Children of Bethlehem. Sts. Acacius the Martyr, Mocius the Priest and Codratus the Soldier",
+      "sample_date": "2001-06-18",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "The Children of Bethlehem. Saints Acacius the Martyr, Mocius the Priest and Codratus the Soldier"
+      ]
+    },
+    {
+      "key": "thehermitsaintsanton",
+      "old": "The Hermit Saints Anton",
+      "new": "The Hermit St. Anton",
+      "sample_date": "2005-07-25",
+      "dates": 31,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": true,
+      "rejected": [
+        "The Hermits Sts. Anton, Tryphon, Barsauma and Onuphrius"
+      ],
+      "variants": [
+        "The Hermit Saints Anton"
+      ]
+    },
+    {
+      "key": "thehermitssaintsantontriphonbarsaumaandonouphrius",
+      "old": "The Hermits Saints Anton, Triphon, Barsauma and Onouphrius",
+      "new": "The Hermits Sts. Anton, Tryphon, Barsauma and Onuphrius",
+      "sample_date": "2001-01-18",
+      "dates": 163,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "The Hermits Saints Anton, Triphon, Barsauma and Onouphrius"
+      ]
+    },
+    {
+      "key": "thehermitssaintstriphonbarsaumaandonouphrius",
+      "old": "The Hermits Saints Triphon, Barsauma and Onouphrius",
+      "new": "The Hermit Sts. Tryphon, Barsauma and Onuphrius",
+      "sample_date": "2002-08-01",
+      "dates": 55,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "The Hermits Saints Triphon, Barsauma and Onouphrius"
+      ]
+    },
+    {
+      "key": "theholyapostlesandrewandphillip",
+      "old": "The Holy Apostles Andrew and Phillip",
+      "new": "The Holy Apostles Andrew and Philip",
+      "sample_date": "2001-11-17",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "The Holy Apostles Andrew and Phillip"
+      ]
+    },
+    {
+      "key": "theholyvirginsjulianaandbasillaandsaintsabrahamandkhorenmoneylessphysicianscosmasanddamianandtheodoronthemartyr",
+      "old": "The Holy Virgins Juliana and Basilla, and Saints Abraham and Khoren, Moneyless Physicians Cosmas and Damian, and Theodoron the Martyr",
+      "new": "The Holy Virgins Juliana and Basilla, and Sts. Abraham and Khoren, Moneyless Physicians Cosmas and Damian, and Theodoron the Martyr",
+      "sample_date": "2002-11-25",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "The Holy Virgins Juliana and Basilla, and Saints Abraham and Khoren, Moneyless Physicians Cosmas and Damian, and Theodoron the Martyr"
+      ]
+    },
+    {
+      "key": "theholyvirginsjulianaandbasillaandsaintsvirginsindesanddomnaandclericusthepriestalongwiththe20000martyrsofnicomedia",
+      "old": "The Holy Virgins Juliana and Basilla, and Saints virgins Indes and Domna, and Clericus the Priest along with the 20,000 Martyrs of Nicomedia",
+      "new": "The Holy Virgins Juliana and Basilla, and Sts. virgins Indes and Domna, and Clericus the Priest along with the 20,000 Martyrs of Nicomedia",
+      "sample_date": "2004-11-29",
+      "dates": 27,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "The Holy Virgins Juliana and Basilla, and Saints virgins Indes and Domna, and Clericus the Priest along with the 20,000 Martyrs of Nicomedia"
+      ]
+    },
+    {
+      "key": "thirddayofadventpresentationoftheholymotherofgodtothetemple",
+      "old": "Third day of Advent — PRESENTATION of the Holy Mother of God to the Temple",
+      "new": "Third day of Advent — Presentation of the Holy Mother of God to the Temple",
+      "sample_date": "2001-11-21",
+      "dates": 4,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third day of Advent — PRESENTATION of the Holy Mother of God to the Temple"
+      ]
+    },
+    {
+      "key": "thirddayofeasterannunciationtothevirginmary",
+      "old": "Third day of EasterAnnunciation to the Virgin Mary",
+      "new": "Third day of Easter — Annunciation to the Virgin Mary",
+      "sample_date": "2015-04-07",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third day of EasterAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "thirddayofpentecostfastday",
+      "old": "Third day of PentecostFast day",
+      "new": "Third day of Pentecost — Fast day",
+      "sample_date": "2001-06-05",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third day of PentecostFast day"
+      ]
+    },
+    {
+      "key": "thirddayofthefastofnativity",
+      "old": "Third day of the Fast of Nativity.",
+      "new": "Third day of the Fast of Nativity",
+      "sample_date": "2002-01-01",
+      "dates": 28,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third day of the Fast of Nativity."
+      ]
+    },
+    {
+      "key": "thirddayofthefastofnativitysaintsbasilthegreatandhisbrotherstgregoryofnyssasylvesterthepatriarchofromeandephremthesyrian",
+      "old": "Third day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "new": "Third day of the Fast of Nativity — Sts. Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+      "sample_date": "2005-01-01",
+      "dates": 21,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third day of the Fast of Nativity — Saints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+        "Third day of the Fast of NativitySaints Basil the Great and his brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian"
+      ]
+    },
+    {
+      "key": "thirdsundayafterassumptionfeastdayofthediscoveryofthebeltoftheholymotherofgod",
+      "old": "Third Sunday after AssumptionFeast day of the Discovery of the Belt of the Holy Mother of God",
+      "new": "Third Sunday after Assumption — Feast day of the Discovery of the Belt of the Holy Mother of God",
+      "sample_date": "2001-08-26",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third Sunday after AssumptionFeast day of the Discovery of the Belt of the Holy Mother of God"
+      ]
+    },
+    {
+      "key": "thirdsundayafternativityeveoffastofcatechumens",
+      "old": "Third Sunday after NativityEve of Fast of Catechumens",
+      "new": "Third Sunday after Nativity — Eve of Fast of Catechumens",
+      "sample_date": "2004-02-01",
+      "dates": 6,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third Sunday after NativityEve of Fast of Catechumens"
+      ]
+    },
+    {
+      "key": "thirdsundayafterpentecosteveoffastofsaintgregorytheilluminator",
+      "old": "Third Sunday after Pentecost — Eve of Fast of Saint Gregory the Illuminator",
+      "new": "Third Sunday after Pentecost — Eve of Fast of St. Gregory the Illuminator",
+      "sample_date": "2001-06-24",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third Sunday after Pentecost — Eve of Fast of Saint Gregory the Illuminator",
+        "Third Sunday after PentecostEve of Fast of Saint Gregory the Illuminator"
+      ]
+    },
+    {
+      "key": "thirdsundayaftertheholycrossfeastoftheholycrossofvarag",
+      "old": "Third Sunday after the Holy CrossFeast of the Holy Cross of Varag",
+      "new": "Third Sunday after the Holy Cross — Feast of the Holy Cross of Varag",
+      "sample_date": "2001-09-30",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third Sunday after the Holy CrossFeast of the Holy Cross of Varag"
+      ]
+    },
+    {
+      "key": "thirdsundayaftertransfigurationeveoffastofassumptionoftheholymotherofgod",
+      "old": "Third Sunday after TransfigurationEve of Fast of Assumption of the Holy Mother of God",
+      "new": "Third Sunday after Transfiguration — Eve of Fast of Assumption of the Holy Mother of God",
+      "sample_date": "2001-08-05",
+      "dates": 27,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": true,
+      "rejected": [
+        "Fourth Sunday after Transfiguration — Eve of Fast of Assumption of the Holy Mother of God",
+        "Sixth Sunday after Transfiguration — Eve of Fast of Assumption of the Holy Mother of God",
+        "Fifth Sunday after Transfiguration — Eve of Fast of Assumption of the Holy Mother of God",
+        "Second Sunday after Transfiguration — Eve of Fast of Assumption of the Holy Mother of God",
+        "Seventh Sunday after Transfiguration — Eve of Fast of Assumption of the Holy Mother of God"
+      ],
+      "variants": [
+        "Third Sunday after TransfigurationEve of Fast of Assumption of the Holy Mother of God"
+      ]
+    },
+    {
+      "key": "thirdsundayofadventeveoffastofsaintjamesthebishopofnisibis",
+      "old": "Third Sunday of Advent — Eve of Fast of Saint James the bishop of Nisibis",
+      "new": "Third Sunday of Advent — Eve of Fast of St. James the bishop of Nisibis",
+      "sample_date": "2002-12-08",
+      "dates": 160,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third Sunday of Advent — Eve of Fast of Saint James the bishop of Nisibis",
+        "Third Sunday of AdventEve of Fast of Saint James the bishop of Nisibis"
+      ]
+    },
+    {
+      "key": "thirdsundayofadventfiestoftheconceptionoftheholyvirginmarybyannaeveoffastofsaintjamesthebishopofnisibis",
+      "old": "Third Sunday of Advent — Fiest of the Conception of the Holy Virgin Mary by Anna — Eve of Fast of Saint James the bishop of Nisibis",
+      "new": "Third Sunday of Advent — Feast of the Conception of the Holy Virgin Mary by Anna — Eve of Fast of St. James the bishop of Nisibis",
+      "sample_date": "2001-12-09",
+      "dates": 4,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Third Sunday of Advent — Fiest of the Conception of the Holy Virgin Mary by Anna — Eve of Fast of Saint James the bishop of Nisibis"
+      ]
+    },
+    {
+      "key": "thirteenthdayofeastertideannunciationtothevirginmary",
+      "old": "Thirteenth day of Eastertide — Annunciation to the Virgin Mary",
+      "new": "Sixteenth day of Eastertide — Annunciation to the Virgin Mary",
+      "sample_date": "2008-04-07",
+      "dates": 1,
+      "sources": [
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirteenth day of Eastertide — Annunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "thirteenthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Thirteenth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Thirteenth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2009-04-24",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirteenth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "thirteenthdayofgreatlentsaintscyrilofjerusalemcyrilthebishopandanna",
+      "old": "Thirteenth day of Great Lent — Saints Cyril of Jerusalem, Cyril the Bishop and Anna",
+      "new": "Thirteenth day of Great Lent — Sts. Cyril of Jerusalem, Cyril the Bishop and Anna",
+      "sample_date": "2001-03-10",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirteenth day of Great Lent — Saints Cyril of Jerusalem, Cyril the Bishop and Anna",
+        "Thirteenth day of Great LentSaints Cyril of Jerusalem, Cyril the Bishop and Anna"
+      ]
+    },
+    {
+      "key": "thirtyfourthdayofgreatlentsaintgregorytheilluminatorscommitmenttothepit",
+      "old": "Thirty Fourth day of Great Lent — Saint Gregory the Illuminator’s Commitment to the Pit",
+      "new": "Thirty Fourth day of Great Lent — St. Gregory the Illuminator's Commitment to the Pit",
+      "sample_date": "2001-03-31",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirty Fourth day of Great Lent — Saint Gregory the Illuminator's Commitment to the Pit",
+        "Thirty Fourth day of Great Lent — Saint Gregory the Illuminator’s Commitment to the Pit",
+        "Thirty Fourth day of Great LentSaint Gregory the Illuminator’s Commitment to the Pit"
+      ]
+    },
+    {
+      "key": "thirtyninthdayofgreatlentannunciationtothevirginmary",
+      "old": "Thirty Ninth day of Great LentAnnunciation to the Virgin Mary",
+      "new": "Thirty Ninth day of Great Lent — Annunciation to the Virgin Mary",
+      "sample_date": "2022-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirty Ninth day of Great LentAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "thirtyseconddayofgreatlentannunciationtothevirginmary",
+      "old": "Thirty Second day of Great LentAnnunciation to the Virgin Mary",
+      "new": "Thirty Second day of Great Lent — Annunciation to the Virgin Mary",
+      "sample_date": "2011-04-07",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirty Second day of Great LentAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "thirtysixthdayofgreatlentannunciationtothevirginmary",
+      "old": "Thirty Sixth day of Great LentAnnunciation to the Virgin Mary",
+      "new": "Thirty Sixth day of Great Lent — Annunciation to the Virgin Mary",
+      "sample_date": "2003-04-07",
+      "dates": 3,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirty Sixth day of Great LentAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "thirtythirddayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Thirty Third day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Thirty Third day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2008-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Thirty Third day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "twelfthdayofeastertideannunciationtothevirginmary",
+      "old": "Twelfth day of EastertideAnnunciation to the Virgin Mary",
+      "new": "Twelfth day of Eastertide — Annunciation to the Virgin Mary",
+      "sample_date": "2005-04-07",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twelfth day of EastertideAnnunciation to the Virgin Mary"
+      ]
+    },
+    {
+      "key": "twelveholyapostlesofchristandsaintpaulthethirteenthapostle",
+      "old": "Twelve Holy Apostles of Christ and Saint Paul, the Thirteenth Apostle",
+      "new": "Twelve Holy Apostles of Christ and St. Paul, the Thirteenth Apostle",
+      "sample_date": "2001-07-14",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twelve Holy Apostles of Christ and Saint Paul, the Thirteenth Apostle"
+      ]
+    },
+    {
+      "key": "twentiethdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Twentieth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Twentieth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2015-04-24",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twentieth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "twentiethdayofgreatlentsaintsjohnthepatriarchofjerusalemjohnofotzunthepatriarchofarmeniajohnofvorotanandgregoryoftatev",
+      "old": "Twentieth day of Great Lent — Saints John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+      "new": "Twentieth day of Great Lent — Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+      "sample_date": "2001-03-17",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twentieth day of Great Lent — Saints John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+        "Twentieth day of Great LentSaints John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev"
+      ]
+    },
+    {
+      "key": "twentyeighthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Twenty Eighth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Twenty Eighth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2027-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twenty Eighth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "twentyfifthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Twenty Fifth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Twenty Fifth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2002-04-24",
+      "dates": 3,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twenty Fifth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "twentyfirstdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Twenty First day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Twenty First day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2010-04-24",
+      "dates": 2,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twenty First day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "twentyfourthdayofeastertideremembranceofthearmeniangenocide1915",
+      "old": "Twenty Fourth day of EastertideRemembrance of the Armenian Genocide (1915)",
+      "new": "Twenty Fourth day of Eastertide — Remembrance of the Armenian Genocide (1915)",
+      "sample_date": "2018-04-24",
+      "dates": 1,
+      "sources": [
+        "1.1.0"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twenty Fourth day of EastertideRemembrance of the Armenian Genocide (1915)"
+      ]
+    },
+    {
+      "key": "twentyseventhdayofgreatlentsaintsfortymartyrsofsebastia",
+      "old": "Twenty Seventh day of Great Lent — Saints Forty Martyrs of Sebastia",
+      "new": "Twenty Seventh day of Great Lent — Sts. Forty Martyrs of Sebastia",
+      "sample_date": "2001-03-24",
+      "dates": 188,
+      "sources": [
+        "1.1.0",
+        "1.1.1",
+        "1.2.0",
+        "1.2.1",
+        "1.2.2",
+        "1.2.3",
+        "sacredtradition-cache"
+      ],
+      "ambiguous": false,
+      "rejected": [],
+      "variants": [
+        "Twenty Seventh day of Great Lent — Saints Forty Martyrs of Sebastia",
+        "Twenty Seventh day of Great LentSaints Forty Martyrs of Sebastia"
+      ]
+    }
+  ]
+}

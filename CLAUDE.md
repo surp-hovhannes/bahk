@@ -85,9 +85,18 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
      of days. O(1), and correct on every cache backend rather than only where `delete_pattern`
      exists.
 
-   `audit_feast_duplicates` reports stored names the engine no longer emits: those are unreachable
-   (nothing will look them up again) while their enrichment sits in the database. Run it after any
-   engine upgrade that might rename a feast — the failure is silent otherwise.
+   **An engine upgrade that renames a commemoration is a silent data-loss event**, because the
+   name is the key: the stored row stops being reachable while its enrichment stays in the
+   database, and the next request mints an empty row under the new name. `Feast.sample_date` —
+   one date the engine gave the row its name, recorded at creation — is what makes that
+   recoverable: recompute the name for that date and the row can be moved onto it.
+
+   After any `armenian-lectionary` bump, run `remap_feast_names` (dry run, then `--apply`) and
+   confirm with `audit_feast_duplicates`. The rule is `hub/services/feast_rename.py`, shared
+   verbatim by the command and migration `0065` so the two cannot drift, and it merges collisions
+   through `feast_merge.survivor`. Rows written before `sample_date` existed — the retired
+   sacredtradition.am scrape's and engines 1.1.x/1.2.x's — are bridged by the one-time
+   `hub/data/feast_name_map.json`. Full procedure: `docs/FEAST_NAME_MIGRATION.md`.
 
 ## Development Environment
 
