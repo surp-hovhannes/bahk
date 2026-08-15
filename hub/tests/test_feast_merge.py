@@ -103,12 +103,16 @@ class SurvivorTests(SimpleTestCase):
         self.assertEqual(merge["icon_id"], 7)
         self.assertEqual(merge["designation"], "Martyrs")
 
-    def test_conflicts_are_flagged_for_a_human(self):
+    def test_conflicts_keep_values_from_the_oldest_populated_row(self):
         merge = survivor([
-            _Feast(1, icon_id=7, designation="Martyrs"),
-            _Feast(2, icon_id=9, designation="Fast"),
+            _Feast(3, icon_id=7, designation="Martyrs"),
+            _Feast(1),
+            _Feast(2, icon_id=9, designation="Sundays and Dominical"),
         ])
-        self.assertEqual((merge["icon_id"], merge["designation"]), (7, "Martyrs"))
+        self.assertEqual(
+            (merge["icon_id"], merge["designation"]),
+            (9, "Sundays and Dominical"),
+        )
         self.assertTrue(merge["icon_conflict"])
         self.assertTrue(merge["designation_conflict"])
 

@@ -1,14 +1,8 @@
 """The rule for collapsing duplicate ``Feast`` rows onto one commemoration.
 
-Lives here, free of model imports, so the two callers can share one implementation:
-
-  * ``hub/management/commands/audit_feast_duplicates.py``, which reports what a merge would do
-    against real data before it runs;
-  * the re-key data migration, which runs against *historical* models and so cannot import
-    ``hub.models`` at all.
-
-That sharing is the point. A dry run is only worth running if it predicts what actually happens,
-and a rule written twice is a rule that will eventually be written differently twice.
+The pre-re-key audit and the data migration originally shared this implementation so the preview
+and write paths could not drift. After the re-key, the audit checks name reachability instead,
+but the migration still imports this model-free rule for use with historical model instances.
 
 Every function here takes plain model instances and reads only attributes both the real and the
 historical model expose, so it works either side of the migration.
@@ -23,8 +17,8 @@ def survivor(feasts):
         newest of any state -- an inactive context was deliberately retired, so it should not win
         on recency alone;
       * thumbs are summed across every context in the group, so feedback is never dropped;
-      * icon and designation are the first non-null in ``id`` order, which is the oldest row --
-        the one an admin is most likely to have curated by hand.
+      * icon and designation are the first non-null in ``id`` order, which is the oldest populated
+        row -- the one an admin is most likely to have curated by hand.
 
     Returns a dict describing the merge. Nothing is written; the caller applies it (or reports it).
     """
