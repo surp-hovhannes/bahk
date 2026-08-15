@@ -61,6 +61,14 @@ BOOK_NAME_TO_USFM = {
     "Sirach": "SIR",
     "Epistle of Jeremiah": "LJE",
     "Baruch": "BAR",
+    # The engine's one composite citation, "Daniel 3.1-23, Azariah. 1-68", resolves its second
+    # half to the book name "Azariah". S3Y is already in APOCRYPHA_USFM_IDS, so its English text
+    # comes from KJVAIC like the other deuterocanonical books. The Armenian corpus embeds this
+    # material inside Daniel 3 rather than carrying it as a standalone book, so hy text for S3Y
+    # arrives with the verse-mapping work (#470) -- until then Armenian falls back to empty here.
+    "Azariah": "S3Y",
+    "Prayer of Azariah": "S3Y",
+    "Song of the Three Young Men": "S3Y",
     # New Testament
     "Matthew": "MAT",
     "Mark": "MRK",

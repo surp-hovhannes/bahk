@@ -1,75 +1,66 @@
 """Compute daily lectionary readings from the offline ``armenian_lectionary`` engine.
 
-This replaces the previous sacredtradition.am scraping (``hub.utils.scrape_readings``) with an
-in-process, offline call to :func:`armenian_lectionary.compute_armenian_lectionary`.  The engine
-returns English citation strings (e.g. ``"Mark 15.42-16.1"``); we parse them into the same dict
-shape the old scraper produced, so downstream persistence is unchanged.
+This replaces the previous sacredtradition.am scraping with an in-process, offline call to
+:func:`armenian_lectionary.compute_armenian_lectionary`.
+
+The engine's ``"ReadingsRefs"`` (new in armenian-lectionary 1.3.0) already gives every reading as
+``{book, start_chapter, start_verse, end_chapter, end_verse, citation}``, so this module no longer
+parses the citation strings in ``"ReadingsList"`` back apart itself.  ``book`` is the canonical
+English head regardless of ``language``, and a composite citation -- the corpus contains exactly
+one, ``"Daniel 3.1-23, Azariah. 1-68"`` -- arrives pre-split into one ref per sub-reference, each
+carrying the unsplit ``citation`` as a back-pointer to their shared ``ReadingsList`` entry.
+
+Letting the engine do the splitting is what retires the local regex: it also removes the need to
+strip a trailing period off a sub-reference book name (``"Azariah."``), and it means an
+unrecognised book or an unparseable verse range is a hard ``ValueError`` at the engine's own
+citation-book list rather than a silently dropped reading here.
 """
 import logging
-import re
 from datetime import datetime
 
 import armenian_lectionary
+from armenian_lectionary import MAX_YEAR, MIN_YEAR
 from django.conf import settings
 
 import hub.models as models
 from hub.services.reading_text_service import book_hy_for_book
-from hub.utils import PARSER_REGEX, SUPPORTED_CHURCHES
+from hub.utils import SUPPORTED_CHURCHES
 
 logger = logging.getLogger(__name__)
 
-# The engine validates readings for 2001-2027 (the range guard lives in armenian_lectionary/app.py,
-# not the engine, which will compute any date).  We only serve readings inside that validated
-# window.  Overridable via settings so the range can widen without a code change.
-LECTIONARY_MIN_YEAR = getattr(settings, "LECTIONARY_MIN_YEAR", 2001)
-LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", 2027)
+# Readings are validated only for the engine's supported range, and as of 1.3.0 the engine itself
+# raises ValueError outside it instead of returning placeholder text.  Default to the engine's own
+# bounds so the two cannot drift; keep the settings override so the window can be narrowed (or
+# widened alongside a new engine release) without a code change.
+LECTIONARY_MIN_YEAR = getattr(settings, "LECTIONARY_MIN_YEAR", MIN_YEAR)
+LECTIONARY_MAX_YEAR = getattr(settings, "LECTIONARY_MAX_YEAR", MAX_YEAR)
+
+# The span fields taken from each engine ref.  "citation" is deliberately not among them: Reading
+# rows are keyed by their (book, chapter, verse) span, and the two halves of the one composite
+# citation must persist as two distinct readings rather than share a display string.
+_REF_SPAN_FIELDS = ("start_chapter", "start_verse", "end_chapter", "end_verse")
 
 
-def _parse_citation(reading_str: str) -> dict | None:
-    """Parse an English citation string into reading components, or ``None`` if unparseable.
+def readings_from_refs(refs) -> list[dict]:
+    """Map the engine's ``ReadingsRefs`` onto the reading dicts the rest of the app persists.
 
-    Mirrors the parsing the old ``scrape_readings`` performed, including keeping only the first
-    sub-reference of a comma-joined citation (e.g. ``"Daniel 3.1-23, Azariah 1-68"``).
+    Split out so callers that already hold an engine result (e.g. the ``warm_passage_texts``
+    corpus sweep) share one definition of that mapping with :func:`get_daily_readings`.
     """
-    if "," in reading_str:
-        # Composite reading; keep the first sub-reference, matching historical scraper behavior.
-        reading_str = reading_str.split(",")[0]
-
-    reading_str = reading_str.strip()
-    groups = re.search(PARSER_REGEX, reading_str)
-    if groups is None:
-        logger.error("Could not parse reading %r with regex %s", reading_str, PARSER_REGEX)
-        return None
-
-    try:
-        book = groups.group(1).strip()
-        # Remove decimal if start chapter provided; otherwise part of a book with 1 chapter.
-        start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
-        start_verse = groups.group(3)
-        # Remove decimal if end chapter provided; otherwise it matches the start chapter.
-        end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter
-        end_verse = groups.group(5) if groups.group(5) is not None else start_verse
-        return {
-            "book": book,
-            "book_en": book,
-            "start_chapter": int(start_chapter),
-            "start_verse": int(start_verse),
-            "end_chapter": int(end_chapter),
-            "end_verse": int(end_verse),
-        }
-    except Exception:
-        logger.error(
-            "Could not parse reading %r with regex %s. Skipping.",
-            reading_str, PARSER_REGEX, exc_info=True,
-        )
-        return None
+    return [
+        {"book": ref["book"], "book_en": ref["book"],
+         **{field: ref[field] for field in _REF_SPAN_FIELDS}}
+        for ref in refs or []
+    ]
 
 
 def get_daily_readings(date_obj, church) -> list[dict]:
     """Return the day's readings as dicts, computed offline from ``armenian_lectionary``.
 
-    Drop-in replacement for ``hub.utils.scrape_readings``: returns a list of
-    ``{"book", "book_en", "start_chapter", "start_verse", "end_chapter", "end_verse"}`` dicts.
+    Returns a list of
+    ``{"book", "book_en", "start_chapter", "start_verse", "end_chapter", "end_verse"}`` dicts in
+    the order the lectionary should display them, one per sub-reference -- so the single composite
+    citation yields two readings, Daniel and Azariah, where the old parser dropped the second.
     Returns ``[]`` for unsupported churches or dates outside the validated year window.
     """
     if church not in SUPPORTED_CHURCHES:
@@ -92,12 +83,7 @@ def get_daily_readings(date_obj, church) -> list[dict]:
 
     result = armenian_lectionary.compute_armenian_lectionary(date_obj)
 
-    readings = []
-    for citation in result.get("ReadingsList", []):
-        parsed = _parse_citation(citation)
-        if parsed is not None:
-            readings.append(parsed)
-    return readings
+    return readings_from_refs(result.get("ReadingsRefs"))
 
 
 def persist_readings(day, readings: list[dict]) -> list[tuple["models.Reading", bool]]:

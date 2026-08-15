@@ -16,7 +16,7 @@ from hub.models import PassageText, Reading
 from hub.services.lectionary_service import (
     LECTIONARY_MAX_YEAR,
     LECTIONARY_MIN_YEAR,
-    _parse_citation,
+    readings_from_refs,
 )
 from hub.services.reading_text_service import (
     TEXT_FETCHERS,
@@ -81,20 +81,17 @@ class Command(BaseCommand):
         self.stdout.write(f"Enumerating passages from {start} to {end}...")
 
         citations: dict[str, tuple] = {}
-        unparsed: set[str] = set()
         unmappable: set[str] = set()
         instances = 0
         day = start
         while day <= end:
             result = armenian_lectionary.compute_armenian_lectionary(day)
-            for citation_str in result.get("ReadingsList") or []:
-                parsed = _parse_citation(citation_str)
-                if parsed is None:
-                    unparsed.add(citation_str)
-                    continue
+            # The engine parses its own citations now, and raises rather than emitting a ref it
+            # could not read -- so there is no "did not parse" bucket to report here any more.
+            for parsed in readings_from_refs(result.get("ReadingsRefs")):
                 instances += 1
                 citation = (
-                    parsed.get("book_en") or parsed.get("book"),
+                    parsed["book_en"],
                     parsed["start_chapter"], parsed["start_verse"],
                     parsed["end_chapter"], parsed["end_verse"],
                 )
@@ -112,11 +109,6 @@ class Command(BaseCommand):
             f"{instances} reading instances resolve to {len(citations)} distinct passages "
             f"({instances / len(citations):.1f}x dedup)."
         )
-        if unparsed:
-            self.stdout.write(
-                self.style.WARNING(f"{len(unparsed)} citation(s) did not parse: "
-                                   + ", ".join(sorted(unparsed)[:5]))
-            )
         if unmappable:
             self.stdout.write(
                 self.style.WARNING(
