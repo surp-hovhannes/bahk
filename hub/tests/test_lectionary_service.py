@@ -5,7 +5,7 @@ Reading references come from the ``armenian_lectionary`` engine already structur
 expects.  The unit tests below therefore cover that mapping and the engine's own reference data,
 not a local citation parser -- there is no longer one to test.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import armenian_lectionary
 from django.test import TestCase
@@ -72,15 +72,19 @@ class EngineCitationContractTests(TestCase):
 
     def test_every_book_the_engine_emits_maps_to_usfm(self):
         """An unmapped book silently loses its passage text, so hold the whole corpus to the
-        mapping. Samples one date per month across the supported range to stay quick."""
-        unmapped = set()
-        for year in range(armenian_lectionary.MIN_YEAR, armenian_lectionary.MAX_YEAR + 1):
-            for month in range(1, 13):
-                result = armenian_lectionary.compute_armenian_lectionary(date(year, month, 1))
-                for ref in result["ReadingsRefs"]:
-                    if ref["book"] not in BOOK_NAME_TO_USFM:
-                        unmapped.add(ref["book"])
-        self.assertEqual(unmapped, set())
+        mapping by checking every date in the engine's supported range."""
+        cursor = date(armenian_lectionary.MIN_YEAR, 1, 1)
+        end = date(armenian_lectionary.MAX_YEAR, 12, 31)
+        unmapped = {}
+
+        while cursor <= end:
+            result = armenian_lectionary.compute_armenian_lectionary(cursor)
+            for ref in result["ReadingsRefs"]:
+                if ref["book"] not in BOOK_NAME_TO_USFM:
+                    unmapped.setdefault(ref["book"], cursor.isoformat())
+            cursor += timedelta(days=1)
+
+        self.assertEqual(unmapped, {})
 
 
 class GetDailyReadingsTests(TestCase):
