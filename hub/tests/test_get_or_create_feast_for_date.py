@@ -45,15 +45,18 @@ class GetOrCreateFeastForDateTests(TestCase):
     def test_skip_when_feast_already_exists(self, mock_scrape):
         """An already-complete commemoration is returned untouched.
 
-        The engine is always consulted now, because the name is what identifies the row -- there
-        is no way to know which feast a date maps to without asking. What is skipped is the
-        write: the row exists and already carries its translation, so nothing is saved.
+        The engine is always consulted now, because the observance is what identifies the row --
+        there is no way to know which feast a date maps to without asking. What is skipped is the
+        write: the row exists and already carries its names and date, so nothing is saved.
         """
-        existing_feast = Feast.objects.create(church=self.church, name="Existing Feast")
+        existing_feast = Feast.objects.create(
+            church=self.church, name="Existing Feast",
+            observance_key="existing_feast", sample_date=self.test_date)
         existing_feast.name_hy = "Existing Armenian"
         existing_feast.save(update_fields=['i18n'])
 
         mock_scrape.return_value = {
+            "observance_key": "existing_feast",
             "name": "Existing Feast",
             "name_en": "Existing Feast",
             "name_hy": "Existing Armenian",
@@ -233,6 +236,83 @@ class GetOrCreateFeastForDateTests(TestCase):
 
         self.assertTrue(created)
         self.assertEqual(feast_obj.sample_date, self.test_date)
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_an_unkeyed_row_is_adopted_rather_than_duplicated(self, mock_scrape):
+        """A row the backfill never reached must rejoin, not be shadowed by an empty twin.
+
+        Migration 0067 keys every row it can resolve, but a seed, an admin, or a row it could not
+        place carries no key -- and a key lookup would miss it, mint a duplicate, and take its
+        designation, icon and contexts out of circulation without a word.
+        """
+        orphan = Feast.objects.create(
+            church=self.church, name="Christmas", designation="Martyrs")
+        self.assertIsNone(orphan.observance_key)
+
+        mock_scrape.return_value = {
+            "observance_key": "christmas",
+            "name": "Christmas",
+            "name_en": "Christmas",
+            "name_hy": None,
+        }
+
+        feast_obj, created, _ = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertFalse(created)
+        self.assertEqual(feast_obj.pk, orphan.pk)
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
+        orphan.refresh_from_db()
+        self.assertEqual(orphan.observance_key, "christmas")
+        self.assertEqual(orphan.designation, "Martyrs")
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_adoption_does_not_steal_a_row_that_already_has_a_key(self, mock_scrape):
+        """Only unkeyed rows are adoptable; a keyed one is a different observance, not a match."""
+        other = Feast.objects.create(
+            church=self.church, name="Christmas", observance_key="some_other_observance")
+
+        mock_scrape.return_value = {
+            "observance_key": "christmas",
+            "name": "Christmas",
+            "name_en": "Christmas",
+            "name_hy": None,
+        }
+
+        feast_obj, created, _ = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertTrue(created)
+        self.assertNotEqual(feast_obj.pk, other.pk)
+        other.refresh_from_db()
+        self.assertEqual(other.observance_key, "some_other_observance")
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_the_row_is_found_by_its_observance_not_its_name(self, mock_scrape):
+        """The point of the re-key: a corrected display name updates the row, never orphans it."""
+        existing = Feast.objects.create(
+            church=self.church, name="Saints Cyricus and His Mother Julitta",
+            observance_key="cyricus_and_his_mother_2", sample_date=self.test_date,
+            designation="Martyrs")
+        mock_scrape.return_value = {
+            "observance_key": "cyricus_and_his_mother_2",
+            "name": "Sts. Cyricus and His Mother Julitta",
+            "name_en": "Sts. Cyricus and His Mother Julitta",
+            "name_hy": None,
+        }
+
+        feast_obj, created, _ = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertFalse(created)
+        self.assertEqual(feast_obj.pk, existing.pk)
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
+        feast_obj.refresh_from_db()
+        self.assertEqual(feast_obj.name, "Sts. Cyricus and His Mother Julitta")
+        self.assertEqual(feast_obj.designation, "Martyrs")
 
     @patch('hub.services.feast_service.get_feast_for_date')
     def test_backfills_the_date_on_a_row_that_predates_the_column(self, mock_scrape):

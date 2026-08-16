@@ -15,11 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 def get_feast_for_date(date_obj, church) -> dict | None:
-    """Return the day's feast name, computed offline from ``armenian_lectionary``.
+    """Return the day's observance, computed offline from ``armenian_lectionary``.
 
-    Returns a dict with ``"name"``, ``"name_en"`` and ``"name_hy"`` keys, or ``None`` if there is
-    no feast to record.  Returns ``None`` for unsupported churches or dates outside the validated
-    year window.
+    Returns a dict with ``"observance_key"``, ``"name"``, ``"name_en"`` and ``"name_hy"`` keys, or
+    ``None`` if there is no feast to record.  Returns ``None`` for unsupported churches or dates
+    outside the validated year window.
+
+    ``observance_key`` is what a ``Feast`` row is keyed by: the engine's ordered ``ObservanceIds``
+    joined into one scalar.  It is empty on a day the engine cannot fully resolve, which inside
+    the supported range does not happen -- callers fall back to the name rather than assume.
     """
     if church not in SUPPORTED_CHURCHES:
         logger.error(
@@ -50,7 +54,12 @@ def get_feast_for_date(date_obj, church) -> dict | None:
     result_hy = armenian_lectionary.compute_armenian_lectionary(date_obj, language="hy")
     name_hy = (result_hy.get("Liturgical Day") or "").strip()
 
+    # Imported here rather than at module scope: feast_rename imports this module's sibling
+    # feast_merge, and a top-level import would close the loop.
+    from hub.services.feast_rename import OBSERVANCE_KEY_SEP
+
     return {
+        "observance_key": OBSERVANCE_KEY_SEP.join(result_en.get("ObservanceIds") or ""),
         "name": name_en,
         "name_en": name_en,
         "name_hy": name_hy,

@@ -1,24 +1,27 @@
-"""The rule for moving a stored ``Feast`` name onto the name the engine emits today.
+"""The rule for putting a stored ``Feast`` under the observance the engine says it is.
 
-``Feast`` is keyed by ``(church, name)`` and the name is recomputed per request from
-``armenian_lectionary``, so the name is not stored data a date points at -- it is the lookup key.
-A stored name the engine no longer emits is therefore unreachable: its designation, icon and
-generated contexts are still in the database and nothing will ever find them again, and nothing
-errors.  ``audit_feast_duplicates`` reports that state; this module repairs it.
+``Feast`` is keyed by ``(church, observance_key)`` -- the engine's ordered ``ObservanceIds`` for
+the day.  An id is a contract: once armenian-lectionary publishes one it keeps meaning the same
+observance, so unlike the display name it does not move when the engine corrects its text.  That
+is what this key is for.  It used to be the name, and every correction the engine shipped
+silently orphaned rows: the row stopped being reachable while its designation, icon and generated
+contexts stayed in the database, and a date lookup minted an empty one beside it.
 
-Two ways a name is repaired, in order of confidence:
+Three ways a row is placed, in order of confidence:
 
-  * **By date.**  ``Feast.sample_date`` records a date the engine gave this name when the row was
-    created, so the current name for that date is what the row should be called now.  This is the
-    path every future engine upgrade takes, and it needs no artifact.
-  * **By the checked-in map.**  Rows that predate ``sample_date`` -- everything the retired
-    sacredtradition.am scrape wrote, plus what engines 1.1.x/1.2.x minted -- have no date to
-    recompute from.  ``hub/data/feast_name_map.json`` supplies old-name -> current-name for those,
-    generated once by ``scripts/build_feast_name_map.py`` from the same date join.
+  * **Its own key.**  Trusted as-is if the engine still produces it.  Nothing to re-derive -- the
+    point of the re-key is that this is the steady state.
+  * **Its ``sample_date``.**  What the row was created for, asked of the current engine.  This is
+    how a row written before ids gets one, and how anything that lost its key recovers.
+  * **Its name.**  Legacy, for rows that predate both columns: resolve the stored name (already
+    current, or through ``hub/data/feast_name_map.json``, generated once by
+    ``scripts/build_feast_name_map.py``), then take the key of a date the engine names that way.
 
 Every function here takes plain model instances and model classes, reading only attributes both
-the real and the historical model expose, so the management command and the data migration run
-the identical rule -- the same arrangement ``feast_merge`` has with migration 0062.
+the real and the historical model expose, so the management command and the data migrations run
+the identical rule -- the same arrangement ``feast_merge`` has with migration 0062.  Migration
+0065 predates the ``observance_key`` column, so writing it is guarded rather than assumed; see
+``_can_hold_key``.
 """
 import datetime
 import functools
@@ -140,6 +143,69 @@ def load_name_map():
     return {entry["key"]: entry["new"] for entry in load_name_map_entries()}
 
 
+# Joins the engine's ordered ``ObservanceIds`` into one scalar a column can hold and a unique
+# constraint can cover. The engine deliberately imposes no separator; ids are ``[a-z0-9_]`` so
+# "+" cannot occur inside one, which makes the join reversible and the key readable in a log.
+OBSERVANCE_KEY_SEP = "+"
+
+
+@functools.lru_cache(maxsize=1)
+def _keys_by_date():
+    """``{date: observance key}`` for the whole supported range.
+
+    The key is what a ``Feast`` row is identified by.  Unlike the name it does not move when the
+    engine corrects its display text -- which is the entire reason it exists, and why the
+    name-based machinery in this module is legacy from here on: it bridges rows written before
+    the engine served ids, and nothing else.
+
+    Days the engine cannot fully resolve are absent rather than partially keyed; the engine
+    already returns ``[]`` rather than a list with a hole in it.
+    """
+    keys = {}
+    day = datetime.date(MIN_YEAR, 1, 1)
+    end = datetime.date(MAX_YEAR, 12, 31)
+    while day <= end:
+        ids = armenian_lectionary.compute_armenian_lectionary(day).get("ObservanceIds") or []
+        if ids:
+            keys[day] = OBSERVANCE_KEY_SEP.join(ids)
+        day += datetime.timedelta(days=1)
+    return keys
+
+
+def observance_key_for_date(day):
+    """The observance key for a date, or ``""`` for a date the engine cannot key."""
+    if not day:
+        return ""
+    if isinstance(day, datetime.datetime):
+        day = day.date()
+    return _keys_by_date().get(day, "")
+
+
+@functools.lru_cache(maxsize=1)
+def _dates_by_key():
+    """``{observance key: earliest date the engine gives it}``.
+
+    One date per key is all anything needs: it seeds ``sample_date`` and it is where the display
+    name and its Armenian translation are read from.  The earliest is chosen for being
+    deterministic, not for meaning anything -- a commemoration recurs, and a movable one has no
+    canonical date at all.
+    """
+    dates = {}
+    for day, key in sorted(_keys_by_date().items()):
+        dates.setdefault(key, day)
+    return dates
+
+
+def observance_keys():
+    """Every observance key the engine can currently produce."""
+    return set(_dates_by_key())
+
+
+def date_for_observance_key(key):
+    """A date the engine gives this key, or ``None`` if it never does."""
+    return _dates_by_key().get(key)
+
+
 @functools.lru_cache(maxsize=1)
 def _sample_dates():
     """``{name: earliest date the engine emits it}``, for seeding ``Feast.sample_date``.
@@ -183,57 +249,100 @@ def resolve_name(feast, reachable, name_for_date=None, name_map=None):
     return name_map.get(normalize_feast_key(name))
 
 
-def plan_renames(feasts, reachable, name_for_date=None, name_map=None):
-    """Group a church's feasts by the name each should carry, and report what that implies.
+def resolve_key(feast, reachable=None, name_map=None):
+    """Return the observance key this feast belongs under, or ``None`` if nothing can say.
 
-    Returns ``(groups, unmapped)``.  ``groups`` is a list of ``(target_name, [feast, ...])`` sorted
-    by target name, with each group's feasts in ``id`` order -- which is the order
-    ``feast_merge.survivor`` reads, so the oldest row (the scrape-era one holding two years of LLM
-    contexts and curated icons) is the one that survives.  ``unmapped`` is every feast nothing
-    could resolve; those are reported and left alone, never deleted.
+    Three routes, in order of confidence:
 
-    A group can hold more than two rows.  The source glued some commemorations together on
-    different years -- ``"The Hermit Saints Anton"`` and the full four-saint form both resolve to
-    ``"The Hermits Sts. Anton, Tryphon, Barsauma and Onuphrius"`` -- so collapsing per target name
-    rather than pairwise is what keeps that correct.
+      1. **The row already has one.**  Trusted as-is if the engine still produces it.  An id is a
+         contract -- once published it keeps meaning the same observance -- so unlike a name it
+         does not need re-deriving on every engine bump.  That is the whole point of the re-key.
+      2. **Its ``sample_date``.**  What the row was named for, asked of the current engine.
+      3. **Its name.**  For rows that predate both columns: resolve the name the legacy way
+         (already-current, or through ``hub/data/feast_name_map.json``), then take the key of a
+         date the engine gives that name.
+
+    Route 3 is the bridge, not the design.  Once every row carries a key, routes 1 and 2 answer
+    everything and the name is display data.
     """
+    keys = observance_keys()
+
+    stored = (getattr(feast, "observance_key", None) or "").strip()
+    if stored and stored in keys:
+        return stored
+
+    sample_date = getattr(feast, "sample_date", None)
+    if sample_date:
+        by_date = observance_key_for_date(sample_date)
+        if by_date:
+            return by_date
+
+    if reachable is None:
+        reachable = engine_names()
+    name = resolve_name(feast, reachable, name_map=name_map)
+    if name:
+        day = sample_date_for_name(name)
+        if day:
+            return observance_key_for_date(day) or None
+    return None
+
+
+def plan_renames(feasts, reachable=None, name_map=None):
+    """Group a church's feasts by the observance each belongs to, and report what that implies.
+
+    Returns ``(groups, unresolved)``.  ``groups`` is a list of ``(observance key, [feast, ...])``
+    sorted by key, with each group's feasts in ``id`` order -- which is the order
+    ``feast_merge.survivor`` reads, so the oldest row (the scrape-era one holding two years of LLM
+    contexts and curated icons) is the one that survives.  ``unresolved`` is every feast nothing
+    could place; those are reported and left alone, never deleted.
+
+    A group can hold more than two rows: production accumulated one row per *spelling* of a
+    commemoration, and they all collapse onto its single id.
+    """
+    if reachable is None:
+        reachable = engine_names()
     if name_map is None:
         name_map = load_name_map()
 
     groups = {}
-    unmapped = []
+    unresolved = []
     for feast in sorted(feasts, key=lambda f: f.id):
-        target = resolve_name(feast, reachable, name_for_date, name_map)
-        if target is None:
-            unmapped.append(feast)
+        key = resolve_key(feast, reachable, name_map)
+        if key is None:
+            unresolved.append(feast)
         else:
-            groups.setdefault(target, []).append(feast)
+            groups.setdefault(key, []).append(feast)
 
-    return sorted(groups.items()), unmapped
+    return sorted(groups.items()), unresolved
 
 
-def describe(target_name, group):
+def describe(key, group):
     """Classify what applying this group would do, without touching anything.
 
-    ``"unchanged"`` -- one row already named this.  ``"rename"`` -- one row under a stale name.
-    ``"merge"`` -- several rows collapsing onto one, which is the case worth reading closely
-    because it is the only one that deletes anything.
+    ``"unchanged"`` -- one row already carrying this key.  ``"rekey"`` -- one row that has to be
+    moved onto it.  ``"merge"`` -- several rows collapsing onto one observance, the only outcome
+    that deletes anything.
+
+    A row from before 0066 cannot carry a key, so there is nothing to compare and the verdict
+    falls to whether anything else on it is stale (see ``stale_metadata``).
     """
     if len(group) > 1:
         return "merge"
-    return "unchanged" if group[0].name == target_name else "rename"
+    if not _can_hold_key(group[0]):
+        return "unchanged"
+    return "unchanged" if group[0].observance_key == key else "rekey"
 
 
-def apply_group(target_name, group, Feast, FeastContext):
-    """Collapse a group onto one row carrying ``target_name``.  Returns the surviving feast.
+def apply_group(key, group, Feast, FeastContext):
+    """Collapse a group onto one row carrying ``key``.  Returns the surviving feast.
 
     Delegates the collapse itself to ``feast_merge.survivor``, the rule migration 0062 applied --
     newest active context wins, thumbs are summed across the group, icon and designation are the
     first non-null in ``id`` order.  Reimplementing it here would let the two drift.
 
-    The absorbed rows are deleted **before** the survivor is renamed: one of them is typically
-    already named ``target_name`` (the empty row a post-upgrade date lookup minted alongside the
-    stale one), and renaming first would collide with ``unique_feast_per_church``.
+    The absorbed rows are deleted **before** the survivor is re-keyed: one of them typically
+    already holds ``key`` (the empty row a post-upgrade date lookup minted alongside the stale
+    one), and writing it first would collide with ``unique_feast_observance_per_church``.
     """
     keeper = group[0]
 
@@ -263,43 +372,65 @@ def apply_group(target_name, group, Feast, FeastContext):
 
         Feast.objects.filter(id__in=absorbed_ids).delete()
 
-    keeper.name = target_name
+    if _can_hold_key(keeper):
+        keeper.observance_key = key
     return keeper
 
 
-def stale_metadata(feast, target_name):
+def _can_hold_key(feast):
+    """Whether this instance's model has the ``observance_key`` column yet.
+
+    Migration 0065 applies this module through a historical model from before 0066 added it. The
+    identity is written where it can be; 0067 fills it in for every row a moment later.
+    """
+    return any(f.name == "observance_key" for f in feast._meta.fields)
+
+
+def stale_metadata(feast, key):
     """Name the fields that would change if this row were brought up to date.  Mutates nothing.
 
-    Beyond the name itself, two things are refreshed from the engine on every remap:
+    ``observance_key`` is the identity; everything else on the row is *derived from it* and is
+    brought along whenever the engine's answer moves.
 
-      * ``name_hy``, because the engine is the authority on both languages and corrects them
-        across releases -- and because the rows the retired scrape wrote took their Armenian from
-        a language code sacredtradition.am does not define, so those values mean nothing.
-      * ``sample_date``, because a row whose recorded date no longer produces its name cannot be
-        followed through the *next* rename, which is the one thing the column exists for.
+    The key itself is reported only where the row can hold one.  Migration 0065 runs this against
+    a historical model from before 0066 added the column, so the field is checked for rather than
+    assumed -- the same "read only what both models expose" rule the module docstring sets out.
+    A row that cannot hold a key still gets its names and date refreshed, which is all 0065 ever
+    did.
+
+      * ``name`` and ``name_hy``, the display text in both languages.  These are exactly what used
+        to be the key, and exactly what an engine release corrects -- which is why they are no
+        longer the key.
+      * ``sample_date``, the date the key and the names are read from.
     """
+    day = date_for_observance_key(key)
     stale = []
-    if feast.name != target_name:
+    if _can_hold_key(feast) and (feast.observance_key or "") != key:
+        stale.append("observance_key")
+    if feast.name != engine_name_for_date(day):
         stale.append("name")
-    if (feast.i18n or {}).get("name_hy") != _target_hy(target_name):
+    if (feast.i18n or {}).get("name_hy") != _target_hy(key):
         stale.append("name_hy")
-    if feast.sample_date is None or engine_name_for_date(feast.sample_date) != target_name:
+    if feast.sample_date is None or observance_key_for_date(feast.sample_date) != key:
         stale.append("sample_date")
     return stale
 
 
-def refresh_metadata(feast, target_name):
+def refresh_metadata(feast, key):
     """Apply what ``stale_metadata`` reports, in memory.  The caller saves."""
-    feast.name = target_name
-    set_translation(feast, _target_hy(target_name))
-    if feast.sample_date is None or engine_name_for_date(feast.sample_date) != target_name:
-        feast.sample_date = sample_date_for_name(target_name)
+    day = date_for_observance_key(key)
+    if _can_hold_key(feast):
+        feast.observance_key = key
+    feast.name = engine_name_for_date(day)
+    set_translation(feast, _target_hy(key))
+    if feast.sample_date is None or observance_key_for_date(feast.sample_date) != key:
+        feast.sample_date = day
     return feast
 
 
-def _target_hy(target_name):
-    """The engine's Armenian name for a commemoration, or ``None`` where it has none."""
-    return engine_name_for_date(sample_date_for_name(target_name), language="hy") or None
+def _target_hy(key):
+    """The engine's Armenian name for an observance, or ``None`` where it has none."""
+    return engine_name_for_date(date_for_observance_key(key), language="hy") or None
 
 
 def set_translation(feast, name_hy):

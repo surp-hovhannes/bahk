@@ -53,7 +53,7 @@ class AuditCommandTests(TestCase):
     def test_flags_the_unreachable_name_and_not_the_reachable_one(self):
         output = self._run()
         self.assertIn("Presentation of Jesus at the Temple", output)
-        self.assertIn("1 name(s) the engine never emits", output)
+        self.assertIn("1 stored name(s) the engine no longer emits", output)
 
     def test_reports_what_the_stranded_row_is_holding(self):
         """So a reader can judge whether to rename it onto a live name or drop it."""

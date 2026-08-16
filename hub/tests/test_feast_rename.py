@@ -20,7 +20,8 @@ from hub.models import Church, Feast, FeastContext
 from hub.services import feast_rename
 from hub.services.feast_rename import (
     apply_group, describe, engine_name_for_date, engine_names, load_name_map,
-    normalize_feast_key, plan_renames, refresh_metadata, sample_date_for_name, stale_metadata,
+    normalize_feast_key, observance_key_for_date, observance_keys, plan_renames,
+    refresh_metadata, sample_date_for_name, stale_metadata,
 )
 
 # A name the retired scrape stored, and what armenian-lectionary 1.3.0 calls the same day. The
@@ -28,6 +29,9 @@ from hub.services.feast_rename import (
 # the largest class of rename in the map.
 SCRAPED = "Saints Peter the Patriarch, Blaise the Bishop and Absalom the Deacon"
 CURRENT = "Sts. Peter the Patriarch, Blaise the Bishop and Absalom the Deacon"
+# What both spellings actually are. The id is what the row is keyed by from here on; the two
+# names above are the same observance, one release apart.
+KEY = "peter_the_patriarch_blaise"
 
 
 class NormalizeFeastKeyTests(TestCase):
@@ -121,6 +125,49 @@ class EngineLookupTests(TestCase):
         self.assertEqual(engine_name_for_date(day), CURRENT)
 
 
+class ObservanceKeyTests(TestCase):
+    """The identity a Feast row is keyed by, and why it is not the name."""
+
+    def test_a_date_resolves_to_its_observance_key(self):
+        self.assertEqual(observance_key_for_date(datetime.date(2001, 1, 16)), KEY)
+
+    def test_a_day_naming_several_observances_keys_on_all_of_them_in_order(self):
+        """A day is not one observance: a calendar position, a commemoration and an eve note."""
+        self.assertEqual(
+            observance_key_for_date(datetime.date(2004, 11, 21)),
+            "eleventh_sunday_after_the+presentation_of_the_holy+eve_of_fast_of")
+
+    def test_a_date_outside_the_range_has_no_key(self):
+        self.assertEqual(observance_key_for_date(datetime.date(1900, 1, 1)), "")
+
+    def test_the_key_survives_a_name_the_engine_no_longer_emits(self):
+        """The whole point. The scrape's spelling is gone; the observance it named is not."""
+        self.assertNotIn(SCRAPED, engine_names())
+        self.assertIn(KEY, observance_keys())
+
+    def test_the_engine_distinguishes_observances_english_conflates(self):
+        """Why the unique constraint moved off the name.
+
+        The source heads the Fast of St. Gregory the Illuminator's days with their ordinal in
+        Armenian and flattens all of them to "Fast day" in English, so one name covers several
+        keys and a unique constraint on it would refuse to store them apart.
+        """
+        keys = {observance_key_for_date(day)
+                for day in _dates_named(datetime.date(2001, 1, 1), datetime.date(2001, 12, 31),
+                                        "Fast day")}
+        self.assertGreater(len(keys), 1)
+        self.assertIn("fast_day", keys)
+
+
+def _dates_named(start, end, name):
+    """Every date in a window the engine gives this exact name."""
+    day = start
+    while day <= end:
+        if engine_name_for_date(day) == name:
+            yield day
+        day += datetime.timedelta(days=1)
+
+
 class FeastRenameTestCase(TestCase):
     """Shared fixtures: a church, and helpers for building rows in a given state."""
 
@@ -143,53 +190,63 @@ class FeastRenameTestCase(TestCase):
 
     def plan(self, feasts=None):
         feasts = self.church.feasts.all() if feasts is None else feasts
-        return plan_renames(list(feasts), engine_names(), engine_name_for_date)
+        return plan_renames(list(feasts), engine_names())
 
 
 class PlanRenamesTests(FeastRenameTestCase):
     """What the plan reports, before anything is written."""
 
-    def test_a_current_name_is_left_alone(self):
-        self.make_feast(CURRENT)
-        groups, unmapped = self.plan()
-        self.assertEqual(unmapped, [])
+    def test_a_row_already_carrying_its_key_is_left_alone(self):
+        self.make_feast(CURRENT, observance_key=KEY)
+        groups, unresolved = self.plan()
+        self.assertEqual(unresolved, [])
         self.assertEqual(describe(*groups[0]), "unchanged")
 
-    def test_a_scrape_era_name_is_a_rename(self):
+    def test_a_row_with_no_key_is_placed_by_its_name(self):
+        """The bridge: rows written under the name key resolve through it, once."""
         self.make_feast(SCRAPED)
-        groups, unmapped = self.plan()
-        self.assertEqual(unmapped, [])
-        target, group = groups[0]
-        self.assertEqual(target, CURRENT)
-        self.assertEqual(describe(target, group), "rename")
+        groups, unresolved = self.plan()
+        self.assertEqual(unresolved, [])
+        key, group = groups[0]
+        self.assertEqual(key, KEY)
+        self.assertEqual(describe(key, group), "rekey")
 
-    def test_the_stale_row_and_the_row_it_collides_with_form_one_group(self):
+    def test_two_spellings_of_one_observance_form_one_group(self):
         """The shape the upgrade actually leaves behind: the old row, and an empty new one."""
         old = self.make_feast(SCRAPED)
         new = self.make_feast(CURRENT)
         groups, _ = self.plan()
-        target, group = groups[0]
-        self.assertEqual(target, CURRENT)
-        self.assertEqual(describe(target, group), "merge")
+        key, group = groups[0]
+        self.assertEqual(key, KEY)
+        self.assertEqual(describe(key, group), "merge")
         self.assertEqual([f.id for f in group], [old.id, new.id])
 
-    def test_a_recorded_date_outranks_the_map(self):
-        """sample_date is the recurring path; the map only covers rows written before it.
+    def test_a_recorded_date_outranks_the_name(self):
+        """sample_date is the recurring path; the name only covers rows written before ids.
 
         The row is named for a day the engine now calls something else, so the date -- not the
         stored text -- decides where it lands.
         """
         feast = self.make_feast("Some Name An Engine Once Emitted",
                                 sample_date=datetime.date(2001, 1, 16))
-        groups, unmapped = self.plan([feast])
-        self.assertEqual(unmapped, [])
-        self.assertEqual(groups[0][0], CURRENT)
+        groups, unresolved = self.plan([feast])
+        self.assertEqual(unresolved, [])
+        self.assertEqual(groups[0][0], KEY)
 
-    def test_a_name_nothing_resolves_is_reported_not_guessed(self):
+    def test_a_stored_key_is_trusted_over_both(self):
+        """An id is a contract, so a row that has one needs nothing re-derived."""
+        feast = self.make_feast("Whatever This Row Says",
+                                observance_key=KEY,
+                                sample_date=datetime.date(2001, 1, 18))
+        groups, unresolved = self.plan([feast])
+        self.assertEqual(unresolved, [])
+        self.assertEqual(groups[0][0], KEY)
+
+    def test_a_row_nothing_resolves_is_reported_not_guessed(self):
         feast = self.make_feast("A Commemoration No Source Ever Published")
-        groups, unmapped = self.plan([feast])
+        groups, unresolved = self.plan([feast])
         self.assertEqual(groups, [])
-        self.assertEqual(unmapped, [feast])
+        self.assertEqual(unresolved, [feast])
 
     def test_another_church_is_planned_separately(self):
         """Feasts are unique per church; one church's rename must not reach into another."""
@@ -199,35 +256,47 @@ class PlanRenamesTests(FeastRenameTestCase):
         self.assertEqual([f.id for f in groups[0][1]], [mine.id])
         theirs.refresh_from_db()
         self.assertEqual(theirs.name, SCRAPED)
+        self.assertIsNone(theirs.observance_key)
 
 
 class StaleMetadataTests(FeastRenameTestCase):
     """What counts as out of date beyond the name itself."""
 
-    def test_a_row_with_no_recorded_date_is_stale(self):
+    def test_a_row_with_no_key_is_stale(self):
         feast = self.make_feast(CURRENT)
-        self.assertIn("sample_date", stale_metadata(feast, CURRENT))
+        self.assertIn("observance_key", stale_metadata(feast, KEY))
 
-    def test_a_date_that_no_longer_produces_the_name_is_stale(self):
-        feast = self.make_feast(CURRENT, sample_date=datetime.date(2001, 1, 18))
-        self.assertIn("sample_date", stale_metadata(feast, CURRENT))
+    def test_a_row_with_no_recorded_date_is_stale(self):
+        feast = self.make_feast(CURRENT, observance_key=KEY)
+        self.assertIn("sample_date", stale_metadata(feast, KEY))
+
+    def test_a_date_that_no_longer_produces_the_key_is_stale(self):
+        feast = self.make_feast(CURRENT, observance_key=KEY,
+                                sample_date=datetime.date(2001, 1, 18))
+        self.assertIn("sample_date", stale_metadata(feast, KEY))
+
+    def test_a_stale_display_name_is_stale(self):
+        """The name is derived from the key now, so a correction updates it in place."""
+        feast = self.make_feast(SCRAPED, observance_key=KEY)
+        self.assertIn("name", stale_metadata(feast, KEY))
 
     def test_a_fully_current_row_is_not_stale(self):
         feast = self.make_feast(CURRENT)
-        refresh_metadata(feast, CURRENT)
+        refresh_metadata(feast, KEY)
         feast.save()
-        self.assertEqual(stale_metadata(feast, CURRENT), [])
+        self.assertEqual(stale_metadata(feast, KEY), [])
 
-    def test_refresh_takes_the_armenian_name_from_the_engine(self):
+    def test_refresh_takes_both_names_from_the_engine(self):
         """The scrape's Armenian came from a language code the source does not define."""
         feast = self.make_feast(SCRAPED)
         feast.name_hy = "whatever the scrape stored"
         feast.save()
 
-        refresh_metadata(feast, CURRENT)
+        refresh_metadata(feast, KEY)
         feast.save()
         feast.refresh_from_db()
 
+        self.assertEqual(feast.observance_key, KEY)
         self.assertEqual(feast.name, CURRENT)
         self.assertEqual(
             feast.name_hy, engine_name_for_date(feast.sample_date, language="hy"))
@@ -236,13 +305,13 @@ class StaleMetadataTests(FeastRenameTestCase):
 class ApplyGroupTests(FeastRenameTestCase):
     """What applying a group does to the rows -- the only path that deletes anything."""
 
-    def test_a_lone_stale_row_is_renamed_in_place(self):
+    def test_a_lone_row_is_re_keyed_in_place(self):
         feast = self.make_feast(SCRAPED, designation="Martyrs")
-        apply_group(CURRENT, [feast], Feast, FeastContext)
+        apply_group(KEY, [feast], Feast, FeastContext)
         feast.save()
         feast.refresh_from_db()
 
-        self.assertEqual(feast.name, CURRENT)
+        self.assertEqual(feast.observance_key, KEY)
         self.assertEqual(feast.designation, "Martyrs")
 
     def test_the_enriched_row_survives_and_the_empty_one_is_absorbed(self):
@@ -251,13 +320,13 @@ class ApplyGroupTests(FeastRenameTestCase):
         self.make_context(old, "curated", 2025, active=True, thumbs_up=5, thumbs_down=1)
         new = self.make_feast(CURRENT)
 
-        keeper = apply_group(CURRENT, [old, new], Feast, FeastContext)
+        keeper = apply_group(KEY, [old, new], Feast, FeastContext)
         keeper.save()
 
         self.assertEqual(keeper.id, old.id)
         self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
         self.assertFalse(Feast.objects.filter(id=new.id).exists())
-        self.assertEqual(Feast.objects.get(id=old.id).name, CURRENT)
+        self.assertEqual(Feast.objects.get(id=old.id).observance_key, KEY)
         self.assertEqual(Feast.objects.get(id=old.id).designation, "Martyrs")
 
     def test_contexts_are_reparented_rather_than_cascaded_away(self):
@@ -266,7 +335,7 @@ class ApplyGroupTests(FeastRenameTestCase):
         new = self.make_feast(CURRENT)
         self.make_context(new, "newer", 2026, active=True, thumbs_up=3, thumbs_down=2)
 
-        keeper = apply_group(CURRENT, [old, new], Feast, FeastContext)
+        keeper = apply_group(KEY, [old, new], Feast, FeastContext)
         keeper.save()
 
         contexts = FeastContext.objects.filter(feast_id=keeper.id)
@@ -285,7 +354,7 @@ class ApplyGroupTests(FeastRenameTestCase):
         old = self.make_feast(SCRAPED)
         new = self.make_feast(CURRENT, icon=icon)
 
-        keeper = apply_group(CURRENT, [old, new], Feast, FeastContext)
+        keeper = apply_group(KEY, [old, new], Feast, FeastContext)
         keeper.save()
 
         self.assertEqual(Feast.objects.get(id=old.id).icon_id, icon.id)
@@ -301,8 +370,8 @@ class ApplyGroupTests(FeastRenameTestCase):
             self.make_feast(SCRAPED),
             self.make_feast(CURRENT),
         ]
-        keeper = apply_group(CURRENT, rows, Feast, FeastContext)
+        keeper = apply_group(KEY, rows, Feast, FeastContext)
         keeper.save()
 
         self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
-        self.assertEqual(Feast.objects.get(pk=keeper.pk).name, CURRENT)
+        self.assertEqual(Feast.objects.get(pk=keeper.pk).observance_key, KEY)

@@ -787,6 +787,18 @@ class Feast(models.Model):
         )
 
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="feasts")
+    observance_key = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "The identity of this commemoration: the engine's ordered ObservanceIds for the day, "
+            "joined with '+'. Stable across engine releases in a way the name is not -- a "
+            "published id keeps meaning the same observance, while the display text gets "
+            "corrected. Null only on rows nothing could resolve."
+        ),
+    )
     # 512 instead of 256 because two feast names in the Armenian lectionary exceed 256 characters:
     # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257)
     name = models.CharField(max_length=512)
@@ -821,11 +833,22 @@ class Feast(models.Model):
 
     class Meta:
         constraints = [
-            # One row per commemoration per church: the invariant the whole re-key exists to
-            # establish, enforced in the database so a race between two requests for the same
-            # date cannot recreate the per-occurrence duplication.
+            # One row per observance per church: the invariant the re-key exists to establish,
+            # enforced in the database so a race between two requests for the same date cannot
+            # recreate the per-occurrence duplication.
+            #
+            # Keyed on observance_key rather than name, and the two are NOT interchangeable: the
+            # engine distinguishes observances English conflates. "Fast day" is three distinct
+            # keys in range -- the general fast_day plus illuminator_fast_day_3 and _5, which the
+            # source names with their ordinal in Armenian and flattens to "Fast day" in English.
+            # A unique constraint on the name would refuse to store them separately.
+            #
+            # Partial, because a row nothing could resolve carries no key and several such rows
+            # must be allowed to coexist rather than collide on NULL.
             models.UniqueConstraint(
-                fields=["church", "name"], name="unique_feast_per_church"
+                fields=["church", "observance_key"],
+                condition=models.Q(observance_key__isnull=False),
+                name="unique_feast_observance_per_church",
             ),
         ]
 
