@@ -13,14 +13,20 @@ designation, icon and generated contexts are still in the database but no date l
 find them again.  That happens whenever an engine upgrade corrects a name -- exactly the sort of
 change armenian-lectionary ships regularly -- and it is silent, because nothing errors.
 
-Two reports, one for each side of that:
+Since the re-key onto ``observance_key`` that is mostly historical: a row identified by a stable
+id survives a text correction, and a stale name on it is a display defect rather than a lost row.
+What this reports is every way a row can still fall out of that arrangement:
 
-  * **Unreachable** -- the damage, already done.  A stored name the engine no longer emits.
-  * **Pending remap** -- the same damage caught one step earlier.  A row whose ``sample_date`` the
-    engine now calls something else is still reachable under its old name today, but will not be
-    once every date it served moves; it is what an upgrade is in the middle of stranding.
+  * **Unreachable name** -- a stored name the engine no longer emits.  Cosmetic on a keyed row,
+    the original failure on an unkeyed one.
+  * **Pending refresh** -- a row whose ``sample_date`` the engine now names differently, i.e. one
+    an upgrade has already moved but nothing has written yet.
+  * **No key** -- identified by display text alone, which is the arrangement the re-key ended.
+  * **Retired key** -- an ``observance_key`` this engine version does not serve.  Should be
+    impossible: a published id is a contract.  If this is ever non-empty the engine broke it.
+  * **No sample_date** -- the key and names cannot be re-derived from the row itself.
 
-Neither is fixed here.  ``manage.py remap_feast_names`` is the repair.
+Nothing is fixed here.  ``manage.py remap_feast_names`` is the repair.
 
 Read-only.  ``--church`` scopes it; ``--verbose`` lists every stored name, not just the orphans.
 """
@@ -29,7 +35,9 @@ from django.core.management.base import BaseCommand, CommandError
 from armenian_lectionary import MAX_YEAR, MIN_YEAR
 
 from hub.models import Church
-from hub.services.feast_rename import engine_name_for_date, engine_names
+from hub.services.feast_rename import (
+    engine_name_for_date, engine_names, observance_key_for_date, observance_keys,
+)
 
 
 class Command(BaseCommand):
@@ -75,14 +83,17 @@ class Command(BaseCommand):
 
         if unreachable:
             self.stdout.write(self.style.WARNING(
-                f"  {len(unreachable)} name(s) the engine never emits, so no date lookup reaches "
-                f"them; their enrichment is stranded:"
+                f"  {len(unreachable)} stored name(s) the engine no longer emits. On a row that "
+                f"has an observance_key this is stale display text, not a lost row -- "
+                f"remap_feast_names refreshes it. On one without, it is the old failure: nothing "
+                f"reaches the row and its enrichment is stranded:"
             ))
             for name in unreachable:
                 feast = by_name[name]
-                # Say what would be lost if it were deleted, so the reader can judge whether to
-                # rename it onto a current engine name or drop it.
+                # Say what is at stake, so the reader can judge how urgently to act.
                 held = []
+                if not feast.observance_key:
+                    held.append("NO KEY")
                 if feast.designation:
                     held.append(f"designation={feast.designation!r}")
                 if feast.icon_id:
@@ -104,6 +115,7 @@ class Command(BaseCommand):
             (feast, engine_name_for_date(feast.sample_date))
             for feast in feasts
             if feast.sample_date
+            and observance_key_for_date(feast.sample_date) == feast.observance_key
         ]
         pending = [(f, current) for f, current in pending if current and current != f.name]
         if pending:
@@ -115,11 +127,29 @@ class Command(BaseCommand):
                 self.stdout.write(f"      #{feast.id} {feast.name!r}")
                 self.stdout.write(f"          -> {current!r} (from {feast.sample_date})")
 
+        # A row with no key is identified only by its display text, which is the arrangement the
+        # re-key exists to end -- the next correction to that text strands it.
+        unkeyed = [f for f in feasts if not f.observance_key]
+        if unkeyed:
+            self.stdout.write(self.style.WARNING(
+                f"  {len(unkeyed)} row(s) carry no observance_key, so they are identified only by "
+                f"display text; remap_feast_names resolves what it can:"))
+            for feast in sorted(unkeyed, key=lambda f: f.name)[:20]:
+                self.stdout.write(f"      #{feast.id} {feast.name!r}")
+
+        serving = observance_keys()
+        retired = [f for f in feasts if f.observance_key and f.observance_key not in serving]
+        if retired:
+            self.stdout.write(self.style.WARNING(
+                f"  {len(retired)} row(s) hold an observance_key this engine no longer serves:"))
+            for feast in sorted(retired, key=lambda f: f.observance_key):
+                self.stdout.write(f"      #{feast.id} {feast.observance_key!r} ({feast.name!r})")
+
         undated = sum(1 for feast in feasts if not feast.sample_date)
         if undated:
             self.stdout.write(
-                f"  {undated} row(s) have no sample_date, so a future rename cannot be followed "
-                f"from the row itself; remap_feast_names backfills them."
+                f"  {undated} row(s) have no sample_date, so the key and names cannot be "
+                f"re-derived from the row itself; remap_feast_names backfills them."
             )
 
         if verbose:

@@ -189,30 +189,65 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
             {"status": "skipped", "reason": "no_feast_name", "date": str(date_obj)}
         )
 
-    # sample_date records a date the engine gave this name, so a later engine release that renames
-    # the feast can be followed from the row itself -- see hub/services/feast_rename.py. It is set
-    # once, at creation: any date the engine names this way will do, and rewriting it on every
-    # lookup would mean a write on every request.
-    feast_obj, feast_created = Feast.objects.get_or_create(
-        church=church, name=name_en, defaults={"sample_date": date_obj}
-    )
+    # Look the row up by the OBSERVANCE, not by its name. An id keeps meaning the same
+    # commemoration across engine releases; the name is display text the engine corrects, and
+    # keying on it is what stranded 158 rows when 1.3.0 landed.
+    #
+    # sample_date records the date the key and the names were read from, so a row can be brought
+    # forward without a date lookup ever having to find it first. Set once, at creation: any date
+    # the engine keys this way will do, and rewriting it per request would mean a write per
+    # request.
+    observance_key = feast_data.get("observance_key") or None
+    if observance_key:
+        feast_obj = Feast.objects.filter(
+            church=church, observance_key=observance_key).first()
+        if feast_obj is None:
+            # Adopt an unkeyed row that already carries this name before minting a new one.
+            # Migration 0067 keys every row it can resolve, but anything created since without
+            # going through here -- a seed, an admin, a row the backfill could not place -- would
+            # otherwise be invisible to this lookup and silently duplicated, taking its
+            # designation, icon and contexts out of circulation. Adopting it is how such a row
+            # rejoins, and it happens once.
+            feast_obj = Feast.objects.filter(
+                church=church, observance_key__isnull=True, name=name_en).first()
+        if feast_obj is None:
+            feast_obj = Feast(church=church, observance_key=observance_key,
+                              name=name_en, sample_date=date_obj)
+        feast_created = feast_obj.pk is None
+        adopted = not feast_created and feast_obj.observance_key != observance_key
+        feast_obj.observance_key = observance_key
+    else:
+        adopted = False
+        # The engine could not resolve every component of the day, so it has no usable identity.
+        # Fall back to the name: worse, but it is what the row had before the re-key, and it keeps
+        # a day serving rather than failing. Does not happen inside the supported range.
+        feast_obj, feast_created = Feast.objects.get_or_create(
+            church=church, name=name_en, defaults={"sample_date": date_obj}
+        )
 
-    # Take the Armenian name from the engine whenever it differs from what is stored. The engine
-    # is the authority on both languages -- it adds translations across releases and corrects
-    # them -- so an existing row is upgraded rather than left on whatever it was created with.
+    # The name is derived from the key now, so it is refreshed rather than matched on -- an engine
+    # release that corrects the display text updates the row in place instead of orphaning it.
+    # Same for the Armenian name, on which the engine is likewise the authority.
     name_hy = feast_data.get("name_hy")
-    translation_updated = False
+    updated_fields = ["observance_key"] if adopted else []
+    if feast_obj.name != name_en:
+        feast_obj.name = name_en
+        updated_fields.append("name")
     if name_hy and feast_obj.name_hy != name_hy:
         feast_obj.name_hy = name_hy
-        translation_updated = True
-        # A freshly created row saves in full so post_save sees the name and its translation
-        # together; an existing one touches only the translation column.
-        feast_obj.save(**({} if feast_created else {"update_fields": ["i18n"]}))
-
-    # Backfill the date on rows that predate the column rather than leaving them un-remappable.
-    if not feast_created and feast_obj.sample_date is None:
+        updated_fields.append("i18n")
+    # Backfill the date on rows that predate the column rather than leaving them un-resolvable.
+    if feast_obj.sample_date is None:
         feast_obj.sample_date = date_obj
-        feast_obj.save(update_fields=["sample_date"])
+        updated_fields.append("sample_date")
+
+    translation_updated = bool(updated_fields)
+    if feast_created:
+        # A new row saves in full, so post_save sees the key, the name and its translation
+        # together -- that is what the designation and icon-matching tasks read.
+        feast_obj.save()
+    elif updated_fields:
+        feast_obj.save(update_fields=updated_fields)
 
     if feast_created:
         action = "created"

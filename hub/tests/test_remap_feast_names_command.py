@@ -17,6 +17,7 @@ from hub.models import Church, Feast, FeastContext
 
 SCRAPED = "Saints Peter the Patriarch, Blaise the Bishop and Absalom the Deacon"
 CURRENT = "Sts. Peter the Patriarch, Blaise the Bishop and Absalom the Deacon"
+KEY = "peter_the_patriarch_blaise"
 
 
 class RemapFeastNamesCommandTests(TestCase):
@@ -29,24 +30,26 @@ class RemapFeastNamesCommandTests(TestCase):
         call_command("remap_feast_names", *args, stdout=out, stderr=out)
         return out.getvalue()
 
-    def test_dry_run_reports_the_rename_without_writing_it(self):
+    def test_dry_run_reports_the_rekey_without_writing_it(self):
         feast = Feast.objects.create(church=self.church, name=SCRAPED)
 
         output = self.run_command()
 
         self.assertIn("DRY RUN", output)
-        self.assertIn(CURRENT, output)
+        self.assertIn(KEY, output)
         self.assertIn("Re-run with --apply", output)
         feast.refresh_from_db()
         self.assertEqual(feast.name, SCRAPED)
+        self.assertIsNone(feast.observance_key)
         self.assertIsNone(feast.sample_date)
 
-    def test_apply_renames_the_row_and_records_its_date(self):
+    def test_apply_keys_the_row_and_refreshes_what_the_key_derives(self):
         feast = Feast.objects.create(church=self.church, name=SCRAPED)
 
         self.run_command("--apply")
 
         feast.refresh_from_db()
+        self.assertEqual(feast.observance_key, KEY)
         self.assertEqual(feast.name, CURRENT)
         self.assertIsNotNone(feast.sample_date)
         self.assertTrue(feast.name_hy)
@@ -63,6 +66,7 @@ class RemapFeastNamesCommandTests(TestCase):
         self.assertIn("merge", output)
         self.assertFalse(Feast.objects.filter(pk=new.pk).exists())
         survivor = Feast.objects.get(pk=old.pk)
+        self.assertEqual(survivor.observance_key, KEY)
         self.assertEqual(survivor.name, CURRENT)
         self.assertEqual(survivor.designation, "Martyrs")
         self.assertEqual(survivor.contexts.get(active=True).text, "curated")
@@ -73,19 +77,31 @@ class RemapFeastNamesCommandTests(TestCase):
 
         output = self.run_command()
 
-        self.assertIn("0 renamed, 0 merged", output)
+        self.assertIn("0 re-keyed, 0 merged", output)
         self.assertIn("0 refreshed in place", output)
         self.assertNotIn("Re-run with --apply", output)
 
-    def test_a_current_name_missing_only_its_date_is_refreshed_not_renamed(self):
-        feast = Feast.objects.create(church=self.church, name=CURRENT)
+    def test_a_keyed_row_missing_only_its_date_is_refreshed_not_re_keyed(self):
+        feast = Feast.objects.create(church=self.church, name=CURRENT, observance_key=KEY)
 
         output = self.run_command("--apply")
 
         self.assertIn("refresh", output)
         feast.refresh_from_db()
-        self.assertEqual(feast.name, CURRENT)
+        self.assertEqual(feast.observance_key, KEY)
         self.assertIsNotNone(feast.sample_date)
+
+    def test_a_keyed_row_with_a_stale_display_name_is_corrected_in_place(self):
+        """The failure this re-key exists to end: a renamed feast is an UPDATE, not an orphan."""
+        feast = Feast.objects.create(church=self.church, name=SCRAPED, observance_key=KEY,
+                                     designation="Martyrs")
+
+        self.run_command("--apply")
+
+        feast.refresh_from_db()
+        self.assertEqual(feast.name, CURRENT)
+        self.assertEqual(feast.designation, "Martyrs")
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
 
     def test_an_unresolvable_name_is_reported_and_left_alone(self):
         """Never deleted: whatever it is, its contexts and icon are not reproducible."""
@@ -93,7 +109,7 @@ class RemapFeastNamesCommandTests(TestCase):
 
         output = self.run_command("--apply")
 
-        self.assertIn("unmapped", output)
+        self.assertIn("unresolved", output)
         self.assertIn("1 unresolved", output)
         self.assertTrue(Feast.objects.filter(pk=feast.pk).exists())
         feast.refresh_from_db()
@@ -108,7 +124,8 @@ class RemapFeastNamesCommandTests(TestCase):
 
         mine.refresh_from_db()
         theirs.refresh_from_db()
-        self.assertEqual(mine.name, CURRENT)
+        self.assertEqual(mine.observance_key, KEY)
+        self.assertEqual(theirs.observance_key, None)
         self.assertEqual(theirs.name, SCRAPED)
 
     def test_an_unknown_church_is_an_error_rather_than_a_silent_no_op(self):

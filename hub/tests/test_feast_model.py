@@ -66,11 +66,33 @@ class FeastModelTests(TestCase):
         self.assertNotEqual(feast1.church, feast2.church)
         self.assertEqual(Feast.objects.filter(name="Epiphany").count(), 2)
 
-    def test_the_same_name_twice_in_one_church_is_rejected(self):
+    def test_the_same_observance_twice_in_one_church_is_rejected(self):
         """The invariant the re-key exists to establish, enforced by the database."""
-        Feast.objects.create(church=self.church, name="Epiphany")
+        Feast.objects.create(church=self.church, name="Epiphany", observance_key="epiphany")
         with self.assertRaises(IntegrityError):
-            Feast.objects.create(church=self.church, name="Epiphany")
+            Feast.objects.create(church=self.church, name="Theophany",
+                                 observance_key="epiphany")
+
+    def test_the_same_name_under_two_observances_is_allowed(self):
+        """Not interchangeable with the old name constraint, which would have refused this.
+
+        The engine distinguishes observances English conflates: the source heads the Fast of St.
+        Gregory the Illuminator's days with their ordinal in Armenian and flattens all of them to
+        "Fast day" in English.
+        """
+        Feast.objects.create(church=self.church, name="Fast day", observance_key="fast_day")
+        Feast.objects.create(church=self.church, name="Fast day",
+                             observance_key="illuminator_fast_day_3")
+
+        self.assertEqual(Feast.objects.filter(name="Fast day").count(), 2)
+
+    def test_rows_with_no_observance_key_do_not_collide(self):
+        """The constraint is partial, so unresolved rows coexist instead of clashing on NULL."""
+        Feast.objects.create(church=self.church, name="One Unresolvable Name")
+        Feast.objects.create(church=self.church, name="Another Unresolvable Name")
+
+        self.assertEqual(
+            Feast.objects.filter(church=self.church, observance_key__isnull=True).count(), 2)
 
     def test_feast_str_representation(self):
         """A feast names its church, not a date -- it no longer has one."""
