@@ -5,6 +5,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
 from django.utils import timezone
+from django.conf import settings
 import logging
 from s3_file_field.fields import S3FileField
 from modeltrans.fields import TranslationField
@@ -42,7 +43,7 @@ class Video(models.Model):
     )
     video = S3FileField(
         upload_to=video_upload_path,
-        help_text='Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 20MB.'
+        help_text='Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 500 MiB.'
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -119,6 +120,40 @@ class Video(models.Model):
         'title',
         'description',
     ))
+
+
+class DevotionalVideoUpload(models.Model):
+    """Private audit ledger for the dedicated devotional CLI upload flow."""
+
+    class State(models.TextChoices):
+        INITIALIZED = "initialized", "Initialized"
+        READY = "ready", "Completed / ready"
+        ATTACHED = "attached", "Attached"
+        CLEANED = "cleaned", "Cleaned"
+
+    nonce = models.CharField(max_length=64, unique=True, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="devotional_video_uploads",
+    )
+    storage_key = models.CharField(max_length=1024)
+    file_name = models.CharField(max_length=200)
+    expected_size = models.PositiveBigIntegerField()
+    content_type = models.CharField(max_length=100)
+    upload_id = models.CharField(max_length=1024)
+    state = models.CharField(
+        max_length=16, choices=State.choices, default=State.INITIALIZED, db_index=True
+    )
+    completion_requested_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    attached_at = models.DateTimeField(null=True, blank=True)
+    cleaned_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
 
 class Article(models.Model):
     title = models.CharField(max_length=200)
@@ -414,4 +449,3 @@ class Bookmark(models.Model):
             representation['created_at'] = content.created_at
             
         return representation
-    

@@ -2,9 +2,10 @@
 import datetime
 import logging
 from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -12,7 +13,33 @@ from django.utils.translation import activate, get_language_from_request
 
 from .mixins import ChurchContextMixin, TimezoneMixin
 from hub.models import Devotional, Fast
-from hub.serializers import DevotionalSerializer
+from hub.serializers import DevotionalSerializer, DevotionalWriteSerializer
+from icons.views import IsAdminOrReadOnly
+
+
+DUPLICATE_DEVOTIONAL_ERROR = {
+    "non_field_errors": [
+        "A devotional with this day, order, and language code already exists."
+    ]
+}
+
+
+def _matching_devotional_exists(serializer, *, exclude_id=None):
+    """Return whether the validated write candidate conflicts with a stored row."""
+    instance = serializer.instance
+    day = serializer.validated_data.get("day", getattr(instance, "day", None))
+    order = serializer.validated_data.get("order", getattr(instance, "order", None))
+    language_code = serializer.validated_data.get(
+        "language_code", getattr(instance, "language_code", None)
+    )
+    matches = Devotional.objects.filter(
+        day=day,
+        order=order,
+        language_code=language_code,
+    )
+    if exclude_id is not None:
+        matches = matches.exclude(pk=exclude_id)
+    return matches.exists()
 
 
 class LargeResultsSetPagination(PageNumberPagination):
@@ -116,10 +143,11 @@ class DevotionalDetailView(generics.RetrieveAPIView):
 
     Permissions:
         - GET: Any user can view devotional
-        - POST/PUT/PATCH/DELETE: Not supported
+        - PATCH: Staff users only
+        - POST/PUT/DELETE: Not supported
     """
     serializer_class = DevotionalSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = Devotional.objects.all()
     
     def get(self, request, *args, **kwargs):
@@ -127,17 +155,43 @@ class DevotionalDetailView(generics.RetrieveAPIView):
         activate(lang)
         return super().get(request, *args, **kwargs)
 
+    def get_serializer_class(self):
+        if self.request.method == "PATCH":
+            return DevotionalWriteSerializer
+        return DevotionalSerializer
 
-class DevotionalListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
+    def patch(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                instance = serializer.save()
+        except IntegrityError:
+            if _matching_devotional_exists(serializer, exclude_id=instance.pk):
+                raise ValidationError(DUPLICATE_DEVOTIONAL_ERROR)
+            raise
+        return Response(
+            DevotionalSerializer(instance, context=self.get_serializer_context()).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class DevotionalListView(
+    ChurchContextMixin,
+    TimezoneMixin,
+    generics.ListAPIView,
+):
     """
     API endpoint that provides a list of devotionals for a given church.
 
     Permissions:
         - GET: Any user can view devotional
-        - POST/PUT/PATCH/DELETE: Not supported
+        - POST: Staff users only
+        - PUT/PATCH/DELETE: Not supported
     """
     serializer_class = DevotionalSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
     pagination_class = PageNumberPagination
     queryset = Devotional.objects.all()
     ORDERING_ALIASES = {
@@ -145,6 +199,26 @@ class DevotionalListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView
         "-date": "-day__date",
     }
     ALLOWED_ORDERING = {"day__date", "-day__date"}
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return DevotionalWriteSerializer
+        return DevotionalSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                instance = serializer.save()
+        except IntegrityError:
+            if _matching_devotional_exists(serializer):
+                raise ValidationError(DUPLICATE_DEVOTIONAL_ERROR)
+            raise
+        return Response(
+            DevotionalSerializer(instance, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def _build_search_query(self, search_term, lang):
         """

@@ -41,7 +41,7 @@ class FeastAssignIconAPITests(TestCase):
         with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
             "hub.signals.determine_feast_designation_task.delay"
         ):
-            self.feast = Feast.objects.create(day=self.day, name="Test Feast")
+            self.feast = Feast.objects.create(church=self.day.church, name="Test Feast")
         self.url = reverse("feast-assign-icon", kwargs={"feast_id": self.feast.pk})
 
     @staticmethod
@@ -75,7 +75,8 @@ class FeastAssignIconAPITests(TestCase):
             response.json(),
             {
                 "feast_id": self.feast.id,
-                "date": "2026-07-23",
+                # No "date": a feast is a commemoration, served on every day the engine names it.
+                "name": self.feast.name,
                 "church_id": self.church.id,
                 "current_icon_id": None,
                 "current_icon": None,
@@ -156,7 +157,13 @@ class FeastAssignIconAPITests(TestCase):
         self.assertEqual(response.json()["current_icon_id"], self.icon.id)
         self.feast.refresh_from_db()
         self.assertEqual(self.feast.icon_id, self.icon.id)
-        self.assertIsNone(cache.get(cache_key))
+        # Invalidation bumps the church's cache generation rather than deleting keys, so the
+        # entry is orphaned rather than removed: the key the view builds now is a different one,
+        # and it is empty.
+        self.assertNotEqual(
+            feast_api_cache_key(self.day.date, self.church.id, "en"), cache_key)
+        self.assertIsNone(
+            cache.get(feast_api_cache_key(self.day.date, self.church.id, "en")))
 
     def test_existing_icon_requires_explicit_replacement(self):
         self._authenticate_staff()

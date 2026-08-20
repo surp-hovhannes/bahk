@@ -1,6 +1,7 @@
 """Tests for the Feast model."""
 from datetime import date
 
+from django.db.utils import IntegrityError
 from django.test import TestCase
 from django.test.utils import tag
 
@@ -17,22 +18,20 @@ class FeastModelTests(TestCase):
 
     def test_create_feast_basic(self):
         """Test creating a basic feast."""
-        day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=self.church,
             name="Christmas",
         )
 
         self.assertEqual(feast.name, "Christmas")
-        self.assertEqual(feast.day.date, self.test_date)
-        self.assertEqual(feast.day.church, self.church)
+        self.assertEqual(feast.church, self.church)
         self.assertIsNone(feast.name_hy)
 
     def test_feast_with_armenian_translation(self):
         """Test creating feast with Armenian translation."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
         feast.name_hy = "Սուրբ Ծնունդ"
@@ -43,84 +42,59 @@ class FeastModelTests(TestCase):
         self.assertEqual(feast.name, "Christmas")
         self.assertEqual(feast.name_hy, "Սուրբ Ծնունդ")
 
-    def test_multiple_feasts_can_share_the_same_day(self):
-        """Test that distinct commemorations can be stored for the same day."""
-        day = Day.objects.create(date=self.test_date, church=self.church)
+    def test_a_church_can_hold_many_distinct_commemorations(self):
+        """Distinct names coexist; it is only the same name twice that the key forbids."""
         first_feast = Feast.objects.create(
-            day=day,
+            church=self.church,
             name="First Feast",
         )
         second_feast = Feast.objects.create(
-            day=day,
+            church=self.church,
             name="Second Feast",
         )
 
         self.assertNotEqual(first_feast.id, second_feast.id)
-        self.assertEqual(Feast.objects.filter(day=day).count(), 2)
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 2)
 
-    def test_feast_different_churches_same_date(self):
-        """Test that different churches can have feasts on the same date."""
-        # Create another church
-        other_church = Church.objects.create(
-            name="Other Church"
-        )
+    def test_the_same_commemoration_can_exist_in_two_churches(self):
+        """The key is (church, name), so the name is only unique within a church."""
+        other_church = Church.objects.create(name="Other Church")
 
-        # Create days for both churches
-        day1 = Day.objects.create(date=self.test_date, church=self.church)
-        day2 = Day.objects.create(date=self.test_date, church=other_church)
+        feast1 = Feast.objects.create(church=self.church, name="Epiphany")
+        feast2 = Feast.objects.create(church=other_church, name="Epiphany")
 
-        # Create feast for first church
-        feast1 = Feast.objects.create(
-            day=day1,
-            name="Feast in Church 1",
-        )
+        self.assertNotEqual(feast1.church, feast2.church)
+        self.assertEqual(Feast.objects.filter(name="Epiphany").count(), 2)
 
-        # Create feast for second church on same date - should succeed
-        feast2 = Feast.objects.create(
-            day=day2,
-            name="Feast in Church 2",
-        )
-
-        self.assertEqual(feast1.day.date, feast2.day.date)
-        self.assertNotEqual(feast1.day.church, feast2.day.church)
-        self.assertEqual(Feast.objects.filter(day__date=self.test_date).count(), 2)
+    def test_the_same_name_twice_in_one_church_is_rejected(self):
+        """The invariant the re-key exists to establish, enforced by the database."""
+        Feast.objects.create(church=self.church, name="Epiphany")
+        with self.assertRaises(IntegrityError):
+            Feast.objects.create(church=self.church, name="Epiphany")
 
     def test_feast_str_representation(self):
-        """Test the string representation of Feast."""
-        day = Day.objects.create(date=self.test_date, church=self.church)
+        """A feast names its church, not a date -- it no longer has one."""
         feast = Feast.objects.create(
-            day=day,
+            church=self.church,
             name="Epiphany",
         )
 
-        expected = f'Epiphany (2025-12-25)'
-        self.assertEqual(str(feast), expected)
+        self.assertEqual(str(feast), f"Epiphany ({self.church.name})")
 
     def test_feast_related_name(self):
-        """Test that feasts can be accessed through day.feasts."""
-        day1 = Day.objects.create(date=date(2025, 1, 1), church=self.church)
-        day2 = Day.objects.create(date=date(2025, 1, 6), church=self.church)
-        
-        feast1 = Feast.objects.create(
-            day=day1,
-            name="New Year",
-        )
-        feast2 = Feast.objects.create(
-            day=day2,
-            name="Epiphany",
-        )
+        """Feasts are reached through church.feasts now, not day.feasts."""
+        feast1 = Feast.objects.create(church=self.church, name="New Year")
+        feast2 = Feast.objects.create(church=self.church, name="Epiphany")
 
-        # Access feasts through day
-        self.assertEqual(day1.feasts.count(), 1)
-        self.assertEqual(day2.feasts.count(), 1)
-        self.assertIn(feast1, day1.feasts.all())
-        self.assertIn(feast2, day2.feasts.all())
+        self.assertEqual(self.church.feasts.count(), 2)
+        self.assertIn(feast1, self.church.feasts.all())
+        self.assertIn(feast2, self.church.feasts.all())
 
     def test_feast_translation_field_access(self):
         """Test accessing translation fields through i18n."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Easter",
         )
         feast.name_hy = "Զատիկ"
@@ -138,7 +112,7 @@ class FeastModelTests(TestCase):
         """Test updating only the Armenian translation."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Pentecost",
         )
 
@@ -162,7 +136,7 @@ class FeastModelTests(TestCase):
         """Test that feast deletion works correctly."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -172,86 +146,37 @@ class FeastModelTests(TestCase):
         # Verify feast is deleted
         self.assertFalse(Feast.objects.filter(id=feast_id).exists())
 
-    def test_feast_ordering_by_date(self):
-        """Test querying feasts ordered by date."""
-        day1 = Day.objects.create(date=date(2025, 1, 6), church=self.church)
-        day2 = Day.objects.create(date=date(2025, 1, 1), church=self.church)
-        day3 = Day.objects.create(date=date(2025, 1, 15), church=self.church)
-        
-        feast1 = Feast.objects.create(
-            day=day1,
-            name="Epiphany",
-        )
-        feast2 = Feast.objects.create(
-            day=day2,
-            name="New Year",
-        )
-        feast3 = Feast.objects.create(
-            day=day3,
-            name="Mid-January Feast",
-        )
+    def test_a_commemoration_is_stored_once_however_often_it_recurs(self):
+        """What replaced ordering/filtering feasts by date.
 
-        # Query ordered by date
-        feasts = Feast.objects.filter(day__church=self.church).order_by('day__date')
-        feast_list = list(feasts)
+        These used to be two tests that built a Feast per day and queried them by date range.
+        There is nothing left to query that way, and that is the point of the re-key: the engine
+        names this commemoration on many dates, and all of them resolve to this one row.
+        """
+        feast = Feast.objects.create(church=self.church, name="Feast of the Holy Cross")
 
-        self.assertEqual(feast_list[0], feast2)  # Jan 1
-        self.assertEqual(feast_list[1], feast1)  # Jan 6
-        self.assertEqual(feast_list[2], feast3)  # Jan 15
+        for _ in range(3):
+            again, created = Feast.objects.get_or_create(
+                church=self.church, name="Feast of the Holy Cross")
+            self.assertFalse(created)
+            self.assertEqual(again.id, feast.id)
 
-    def test_feast_filter_by_date_range(self):
-        """Test filtering feasts by date range."""
-        day1 = Day.objects.create(date=date(2025, 1, 1), church=self.church)
-        day2 = Day.objects.create(date=date(2025, 1, 6), church=self.church)
-        day3 = Day.objects.create(date=date(2025, 1, 15), church=self.church)
-        day4 = Day.objects.create(date=date(2025, 2, 1), church=self.church)
-        
-        feast1 = Feast.objects.create(
-            day=day1,
-            name="New Year",
-        )
-        feast2 = Feast.objects.create(
-            day=day2,
-            name="Epiphany",
-        )
-        feast3 = Feast.objects.create(
-            day=day3,
-            name="Mid-January Feast",
-        )
-        feast4 = Feast.objects.create(
-            day=day4,
-            name="February Feast",
-        )
-
-        # Filter feasts in January
-        january_feasts = Feast.objects.filter(
-            day__church=self.church,
-            day__date__gte=date(2025, 1, 1),
-            day__date__lt=date(2025, 2, 1)
-        )
-
-        self.assertEqual(january_feasts.count(), 3)
-        self.assertIn(feast1, january_feasts)
-        self.assertIn(feast2, january_feasts)
-        self.assertIn(feast3, january_feasts)
-        self.assertNotIn(feast4, january_feasts)
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
 
     def test_feast_default_church(self):
-        """Test that feast can be created with day that has default church."""
-        day = Day.objects.create(date=self.test_date)  # Uses default church
+        """Test that a feast can be created against the default church."""
         feast = Feast.objects.create(
-            day=day,
+            church=Church.objects.get(pk=Church.get_default_pk()),
             name="Test Feast",
         )
 
-        # Verify default church is used
-        self.assertEqual(feast.day.church.pk, Church.get_default_pk())
+        self.assertEqual(feast.church.pk, Church.get_default_pk())
 
     def test_feast_translation_null_handling(self):
         """Test that None/null translations are handled correctly."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -274,7 +199,7 @@ class FeastModelTests(TestCase):
         """Test that designation field exists and can be set."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 
@@ -292,7 +217,7 @@ class FeastModelTests(TestCase):
         """Test that all designation choices are valid."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -315,7 +240,7 @@ class FeastModelTests(TestCase):
         """Test that designation can be None/null."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
             designation=Feast.Designation.MARTYRS,
         )
@@ -343,7 +268,7 @@ class FeastModelTests(TestCase):
             image=test_image
         )
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
         )
 

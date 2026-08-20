@@ -4,17 +4,11 @@ This document summarizes the comprehensive test coverage added for the Feast fea
 
 ## Test Files Created
 
-### 1. `test_import_feasts.py` - Management Command Tests
-**8 test cases** covering the `import_feasts` management command:
+### 1. `test_audit_feast_duplicates.py` + `test_feast_merge.py`
 
-- ✅ `test_import_feasts_with_translations` - Verifies feasts are imported with both English and Armenian translations
-- ✅ `test_import_feasts_without_translations` - Tests import when only English translation is available
-- ✅ `test_import_feasts_updates_existing` - Ensures existing feasts are updated with missing translations
-- ✅ `test_import_feasts_no_feast_found` - Handles dates with no feast gracefully
-- ✅ `test_import_feasts_multiple_dates` - Tests importing feasts across a date range
-- ✅ `test_import_feasts_invalid_church` - Handles invalid church names properly
-- ✅ `test_import_feasts_no_name_in_response` - Skips feasts with missing English names
-- ✅ `test_import_feasts_does_not_overwrite_existing_translations` - Preserves existing translations
+Cover the audit command (which stored names the engine no longer emits) and the merge rule the
+re-key migration applies. `test_import_feasts.py` and `test_scrape_feast.py` are gone: the
+scrape was retired in favour of the offline engine, and feasts are no longer imported per date.
 
 ### 2. `test_scrape_feast.py` - Utility Function Tests
 **11 test cases** covering the `scrape_feast` utility function:
@@ -58,13 +52,13 @@ This document summarizes the comprehensive test coverage added for the Feast fea
 
 Run all feast tests:
 ```bash
-python manage.py test hub.tests.test_import_feasts hub.tests.test_scrape_feast hub.tests.test_feast_model --exclude-tag=performance --settings=tests.test_settings
+python manage.py test hub.tests.test_audit_feast_duplicates hub.tests.test_feast_merge hub.tests.test_feast_model --exclude-tag=performance --settings=tests.test_settings
 ```
 
 Run individual test files:
 ```bash
 # Import command tests
-python manage.py test hub.tests.test_import_feasts --exclude-tag=performance --settings=tests.test_settings
+python manage.py test hub.tests.test_audit_feast_duplicates --exclude-tag=performance --settings=tests.test_settings
 
 # Scrape utility tests
 python manage.py test hub.tests.test_scrape_feast --exclude-tag=performance --settings=tests.test_settings
@@ -88,6 +82,6 @@ These tests follow Django best practices and the patterns established in the exi
 The tests cover functionality in:
 - `hub/models.py` - Feast model
 - `hub/utils.py` - scrape_feast function
-- `hub/management/commands/import_feasts.py` - import_feasts command
+- `hub/management/commands/audit_feast_duplicates.py` - audit command
 - `hub/admin.py` - FeastAdmin (admin interface - not directly tested)
 

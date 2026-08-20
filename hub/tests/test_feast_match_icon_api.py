@@ -54,11 +54,11 @@ class FeastMatchIconAPITests(TestCase):
             "hub.signals.determine_feast_designation_task.delay"
         ):
             self.feast_without_icon = Feast.objects.create(
-                day=self.day_without_icon,
+                church=self.day_without_icon.church,
                 name="Feast Without Icon",
             )
             self.feast_with_icon = Feast.objects.create(
-                day=self.day_with_icon,
+                church=self.day_with_icon.church,
                 name="Feast With Icon",
                 icon=self.icon,
             )

@@ -1,7 +1,6 @@
-"""Tests for feast view resilience: degraded responses, caching, circuit breaker."""
+"""Tests for feast view resilience: degraded responses, caching."""
 from datetime import date
-from unittest.mock import Mock, patch
-import urllib.error
+from unittest.mock import patch
 
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -12,7 +11,6 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from hub.models import Church, Day, Feast, FeastContext
 from hub.tasks.icon_tasks import match_icon_to_feast_task
-from hub.utils import _fetch_sacredtradition, _stable_url_key
 from hub.views.feasts import FeastContextFeedbackView, GetFeastForDate
 from icons.models import Icon
 from tests.fixtures.test_data import TestDataFactory
@@ -79,7 +77,7 @@ class FeastViewCacheTests(TestCase):
         from hub.views.feasts import GetFeastForDate
 
         day = Day.objects.create(date=self.test_date, church=self.church)
-        feast = Feast.objects.create(day=day, name="Christmas")
+        feast = Feast.objects.create(church=day.church, name="Christmas")
         mock_get_or_create.return_value = (feast, False, {"status": "success"})
 
         factory = APIRequestFactory()
@@ -106,13 +104,13 @@ class FeastViewCacheTests(TestCase):
         from hub.views.feasts import GetFeastForDate
 
         day1 = Day.objects.create(date=self.test_date, church=self.church)
-        feast1 = Feast.objects.create(day=day1, name="Christmas")
+        feast1 = Feast.objects.create(church=day1.church, name="Christmas")
         other_date = date(2025, 1, 6)
         day2 = Day.objects.create(date=other_date, church=self.church)
-        feast2 = Feast.objects.create(day=day2, name="Epiphany")
+        feast2 = Feast.objects.create(church=day2.church, name="Epiphany")
         other_church = Church.objects.create(name="Other Test Church")
         other_day = Day.objects.create(date=self.test_date, church=other_church)
-        other_feast = Feast.objects.create(day=other_day, name="Other Christmas")
+        other_feast = Feast.objects.create(church=other_day.church, name="Other Christmas")
         user = TestDataFactory.create_user(username="cache-user")
         other_user = TestDataFactory.create_user(username="other-cache-user")
         TestDataFactory.create_profile(user=user, church=self.church)
@@ -181,7 +179,7 @@ class FeastAPIRouteTests(TestCase):
         with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
             "hub.signals.determine_feast_designation_task.delay"
         ):
-            return Feast.objects.create(day=day, **kwargs)
+            return Feast.objects.create(church=day.church, **kwargs)
 
     def _create_icon(self, title="Nativity Icon"):
         return Icon.objects.create(
@@ -226,7 +224,7 @@ class FeastAPIRouteTests(TestCase):
     ):
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
@@ -287,7 +285,6 @@ class FeastAPIRouteTests(TestCase):
         )
         day = Day.objects.create(date=self.test_date, church=self.church, fast=fast)
         feast = self._create_feast(
-            day=day,
             name=(
                 "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
                 "Patriarch, and his three disciples"
@@ -301,6 +298,7 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertEqual(data["feast"]["designation"], Feast.Designation.MARTYRS)
+        self.assertTrue(data["feast"]["context_eligible"])
         self.assertEqual(data["feast"]["text"], "")
         self.assertEqual(data["feast"]["short_text"], "")
         mock_generate_context.assert_called_once_with(feast.id)
@@ -325,6 +323,7 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feast"]["designation"])
+        self.assertTrue(data["feast"]["context_eligible"])
         self.assertEqual(data["feast"]["text"], "")
         self.assertEqual(data["feast"]["short_text"], "")
         mock_generate_context.assert_called_once_with(feast.id)
@@ -347,6 +346,7 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertEqual(data["feast"]["designation"], Feast.Designation.FAST)
+        self.assertFalse(data["feast"]["context_eligible"])
         self.assertEqual(data["feast"]["text"], "")
         self.assertEqual(data["feast"]["short_text"], "")
         mock_generate_context.assert_not_called()
@@ -366,6 +366,7 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feast"]["designation"])
+        self.assertFalse(data["feast"]["context_eligible"])
         self.assertEqual(data["feast"]["text"], "")
         self.assertEqual(data["feast"]["short_text"], "")
         mock_generate_context.assert_not_called()
@@ -389,6 +390,7 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feast"]["designation"])
+        self.assertFalse(data["feast"]["context_eligible"])
         self.assertEqual(data["feast"]["text"], "")
         self.assertEqual(data["feast"]["short_text"], "")
         mock_generate_context.assert_not_called()
@@ -412,6 +414,7 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feast"]["designation"])
+        self.assertTrue(data["feast"]["context_eligible"])
         mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
@@ -427,7 +430,7 @@ class FeastAPIRouteTests(TestCase):
     ):
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Christmas",
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
@@ -640,7 +643,7 @@ class FeastContextFeedbackAPITests(TestCase):
         with patch("hub.signals.match_icon_to_feast_task.delay"), patch(
             "hub.signals.determine_feast_designation_task.delay"
         ):
-            self.feast = Feast.objects.create(day=self.day, name="Christmas")
+            self.feast = Feast.objects.create(church=self.day.church, name="Christmas")
         self.context = FeastContext.objects.create(
             feast=self.feast,
             text="Existing feast context",
@@ -715,140 +718,3 @@ class FeastContextFeedbackAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
-
-class CircuitBreakerTests(TestCase):
-    """Tests for the circuit breaker in _fetch_sacredtradition."""
-
-    def setUp(self):
-        cache.clear()
-
-    def test_url_validation_invalid(self):
-        """_fetch_sacredtradition returns None for invalid URLs."""
-        # Wrong domain
-        result = _fetch_sacredtradition("https://evil.example.com/page")
-        self.assertIsNone(result)
-
-        # No netloc
-        result = _fetch_sacredtradition("not-a-url")
-        self.assertIsNone(result)
-
-    @patch('urllib.request.urlopen')
-    def test_circuit_breaker_trips_after_failures(self, mock_urlopen):
-        """After 3+ failures, circuit breaker opens and subsequent calls return None."""
-        url = "https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL=2&ymd=20251225"
-
-        # Simulate 3 consecutive failures
-        mock_urlopen.side_effect = urllib.error.URLError("Connection timeout")
-
-        # First 3 calls should fail
-        for _ in range(3):
-            result = _fetch_sacredtradition(url)
-            self.assertIsNone(result)
-
-        # Circuit breaker should now be open
-        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
-        self.assertTrue(cache.get(circuit_key))
-
-        # Fourth call should return None immediately (circuit open)
-        mock_urlopen.reset_mock()
-        result = _fetch_sacredtradition(url)
-        self.assertIsNone(result)
-        # urlopen should NOT have been called (circuit breaker blocked it)
-        mock_urlopen.assert_not_called()
-
-    @patch('urllib.request.urlopen')
-    def test_circuit_breaker_resets_on_success(self, mock_urlopen):
-        """A successful call resets the circuit breaker."""
-        url = "https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL=2&ymd=20251225"
-
-        # Use a side_effect function to simulate failures then success
-        call_count = [0]
-        def _side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] <= 6:  # 2 calls × 3 retries each
-                raise urllib.error.URLError("Connection timeout")
-            mock_resp = Mock()
-            mock_resp.status = 200
-            mock_resp.read.return_value = b'<html><div class="dname">Test</div></html>'
-            return mock_resp
-
-        mock_urlopen.side_effect = _side_effect
-
-        _fetch_sacredtradition(url)
-        _fetch_sacredtradition(url)
-
-        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
-        # After 2 failures (< max), circuit should NOT be open
-        self.assertIsNone(cache.get(circuit_key))
-
-        # Now the third call should succeed (side_effect function returns success for call_count > 6)
-        mock_html = b'<html><div class="dname">Test</div></html>'
-        mock_response = Mock()
-        mock_response.status = 200
-        mock_response.read.return_value = mock_html
-        mock_urlopen.side_effect = [mock_response]
-
-        result = _fetch_sacredtradition(url)
-        self.assertIsNotNone(result)
-
-        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
-        # Circuit breaker should be cleared
-        self.assertIsNone(cache.get(circuit_key))
-
-    @patch('urllib.request.urlopen')
-    def test_cache_returns_stale_on_failure(self, mock_urlopen):
-        """When scrape fails, cached stale data is returned as fallback."""
-        url = "https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL=2&ymd=20251225"
-
-        # First, a successful fetch that caches the result
-        mock_html = b'<html><div class="dname">Cached Feast</div></html>'
-        mock_response = Mock()
-        mock_response.status = 200
-        mock_response.read.return_value = mock_html
-        mock_urlopen.return_value = mock_response
-
-        result1 = _fetch_sacredtradition(url)
-        self.assertIsNotNone(result1)
-        self.assertIn("Cached Feast", result1)
-
-        # Now simulate 3 consecutive failures
-        mock_urlopen.side_effect = urllib.error.URLError("Connection timeout")
-
-        for _ in range(3):
-            result = _fetch_sacredtradition(url)
-            # Should return cached data even on failure
-            self.assertIsNotNone(result)
-            self.assertIn("Cached Feast", result)
-
-
-    @patch('urllib.request.urlopen')
-    def test_failure_counter_resets_on_success(self, mock_urlopen):
-        """Failure counter is cleared when a fetch succeeds (before circuit trips)."""
-        url = "https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL=2&ymd=20251225"
-        circuit_key = f"circuit_breaker:{_stable_url_key(url)}"
-        circuit_failures_key = circuit_key + ":failures"
-
-        mock_html = b'<html><div class="dname">Test Feast</div></html>'
-        mock_success = Mock()
-        mock_success.status = 200
-        mock_success.read.return_value = mock_html
-
-        # Set up: cache some data for stale fallback, prime counter at 2
-        cache.set(f"scrape_result:{_stable_url_key(url)}", '<html><div class="dname">Test Feast</div></html>', 21600)
-        cache.set(circuit_failures_key, 2, 900)  # 2 prior failures
-
-        # Success resets the counter (even though circuit isn't open yet)
-        mock_urlopen.return_value = mock_success
-        result = _fetch_sacredtradition(url)
-        self.assertIsNotNone(result)
-        # Counter should be reset by success
-        self.assertIsNone(cache.get(circuit_failures_key))
-        self.assertIsNone(cache.get(circuit_key))
-
-        # Now 2 failures: should land at count 2, not 4 (reset works)
-        mock_urlopen.side_effect = urllib.error.URLError("Connection timeout")
-        for _ in range(2):
-            _fetch_sacredtradition(url)
-        self.assertEqual(cache.get(circuit_failures_key), 2)
-        self.assertIsNone(cache.get(circuit_key))  # not tripped yet

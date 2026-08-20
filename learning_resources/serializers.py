@@ -3,6 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from hub.mixins import ThumbnailCacheMixin
 from .models import Article, Recipe, Video, Bookmark
 from django.utils.translation import activate
+from django.conf import settings
 from .cache import BookmarkCacheManager
 from hub.models import DevotionalSet
 
@@ -78,6 +79,82 @@ class VideoSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSeriali
         data['title'] = getattr(instance, 'title_i18n', instance.title)
         data['description'] = getattr(instance, 'description_i18n', instance.description)
         return data
+
+
+class DevotionalVideoWriteSerializer(serializers.ModelSerializer):
+    """Strict staff-only input contract; storage names are capability-derived."""
+
+    upload_token = serializers.CharField(write_only=True, required=False, trim_whitespace=False)
+    clear_thumbnail = serializers.BooleanField(write_only=True, required=False, default=False)
+    language_code = serializers.ChoiceField(
+        choices=tuple(dict.fromkeys([
+            *getattr(settings, "MODELTRANS_AVAILABLE_LANGUAGES", []),
+            *(code for code, _name in getattr(settings, "LANGUAGES", [])),
+        ]))
+    )
+
+    class Meta:
+        model = Video
+        fields = [
+            "title", "description", "language_code", "upload_token",
+            "thumbnail", "clear_thumbnail",
+        ]
+        extra_kwargs = {
+            "title": {"allow_blank": False, "max_length": 200},
+            "description": {"allow_blank": False},
+            "thumbnail": {"required": False, "allow_null": False},
+        }
+
+    def validate(self, attrs):
+        unknown = set(self.initial_data) - set(self.fields)
+        if unknown:
+            raise serializers.ValidationError({name: "Unknown field." for name in sorted(unknown)})
+        if self.partial and not self.initial_data:
+            raise serializers.ValidationError("PATCH body must contain at least one field.")
+        if not self.partial and "upload_token" not in attrs:
+            raise serializers.ValidationError({"upload_token": "This field is required."})
+        if not self.partial and "clear_thumbnail" in self.initial_data:
+            raise serializers.ValidationError({"clear_thumbnail": "This field is only allowed on PATCH."})
+        if attrs.get("clear_thumbnail") and "thumbnail" in attrs:
+            raise serializers.ValidationError("thumbnail and clear_thumbnail are mutually exclusive.")
+        return attrs
+
+    def _attach(self, token, save):
+        from .devotional_video_uploads import UploadError, attach_upload_token
+        try:
+            return attach_upload_token(
+                token, user_id=self.context["request"].user.pk, save=save
+            )
+        except UploadError as exc:
+            raise serializers.ValidationError({"upload_token": str(exc)}) from exc
+
+    def create(self, validated_data):
+        token = validated_data.pop("upload_token")
+        validated_data.pop("clear_thumbnail", None)
+        validated_data["category"] = "devotional"
+        return self._attach(
+            token,
+            lambda key: super(DevotionalVideoWriteSerializer, self).create(
+                {**validated_data, "video": key}
+            ),
+        )
+
+    def update(self, instance, validated_data):
+        token = validated_data.pop("upload_token", None)
+        clear_thumbnail = validated_data.pop("clear_thumbnail", False)
+        if token:
+            validated_data["video"] = None
+        if clear_thumbnail:
+            validated_data["thumbnail"] = None
+        instance.category = "devotional"
+        def save(key=None):
+            if key is not None:
+                validated_data["video"] = key
+            return super(DevotionalVideoWriteSerializer, self).update(
+                instance, validated_data
+            )
+
+        return self._attach(token, save) if token else save()
 
 class ArticleSerializer(BookmarkOptimizedSerializerMixin, serializers.ModelSerializer, ThumbnailCacheMixin):
     thumbnail_url = serializers.SerializerMethodField()

@@ -78,7 +78,7 @@ class AuditThumbsCommandTests(TestCase):
             end_chapter=3,
             end_verse=18,
         )
-        self.feast = Feast.objects.create(day=self.day, name="Theophany")
+        self.feast = Feast.objects.create(church=self.day.church, name="Theophany")
         self.reading_prompt = LLMPrompt.objects.create(
             model="gpt-4.1-mini",
             role="Reading role",

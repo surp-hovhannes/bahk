@@ -152,26 +152,25 @@ POST /api/feasts/1/feedback/
 
 ### 4. Management Commands
 
-#### import_feasts (`hub/management/commands/import_feasts.py`)
+#### audit_feast_duplicates (`hub/management/commands/audit_feast_duplicates.py`)
 
-**Purpose:** Import feasts for a date range by scraping sacredtradition.am.
+**Purpose:** Report stored feast names the lectionary engine no longer emits.
 
 **Usage:**
 ```bash
-python manage.py import_feasts --church "Armenian Apostolic Church" --start_date 2025-01-01 --end_date 2025-12-31
+python manage.py audit_feast_duplicates
+python manage.py audit_feast_duplicates --church "Armenian Apostolic Church" --verbose
 ```
 
-**Arguments:**
-- `--church` (required) - Name of church to import feasts for
-- `--start_date` (optional) - Start date in YYYY-MM-DD format (defaults to today)
-- `--end_date` (optional) - End date in YYYY-MM-DD format (defaults to today + 10 days)
-
 **Behavior:**
-- Creates Day objects for each date if they don't exist
-- Scrapes feast data from sacredtradition.am for each date
-- Creates Feast objects with English and Armenian translations
-- Updates existing feasts with missing translations
-- Skips dates with no feast data
+- Read-only; writes nothing
+- Sweeps the engine's supported range for every name it emits
+- Flags stored names outside that set: nothing will look them up again, so their designation,
+  icon and generated contexts are stranded
+- Run it after any engine upgrade that might rename a feast — the failure is otherwise silent
+
+> **Removed:** `import_feasts` scraped and pre-created a `Feast` row per date. Feasts are no
+> longer keyed by date and names come from the engine per request, so there is nothing to import.
 
 #### regenerate_feast_contexts (`hub/management/commands/regenerate_feast_contexts.py`)
 
@@ -196,33 +195,10 @@ python manage.py regenerate_feast_contexts --feast-id 123
 
 ### 5. Background Tasks (Celery)
 
-#### create_feast_date_task (`hub/tasks/feast_tasks.py`)
-
-**Purpose:** Daily automated feast creation for today's date.
-
-**Schedule:** Runs daily at 5 minutes past midnight (00:05)
-
-**Behavior:**
-- Gets today's date
-- Gets default church
-- Checks if Day exists, if Fast is associated (skips if so)
-- Checks if Feast already exists
-- If not, scrapes and creates feast
-- Monitored by Sentry with slug `daily-feast-date-creation`
-
-**Configuration:**
-Defined in `bahk/celery.py`:
-```python
-'create-feast-date-daily': {
-    'task': 'hub.tasks.create_feast_date_task',
-    'schedule': crontab(hour=0, minute=5),
-    'options': {
-        'sentry': {
-            'monitor_slug': 'daily-feast-date-creation',
-        }
-    }
-}
-```
+> **Removed:** `create_feast_date_task` ran daily at 00:05 to create a `Feast` row for the day.
+> Feast names are computed from the engine on request and the row is keyed by commemoration, so
+> there is nothing to schedule; the Celery Beat entry and its Sentry monitor
+> (`daily-feast-date-creation`) are gone.
 
 #### generate_feast_context_task (`hub/tasks/llm_tasks.py`)
 
@@ -435,7 +411,6 @@ Comprehensive test coverage includes:
 
 ### Test Files:
 - `hub/tests/test_feast_model.py` - Model tests (13 tests)
-- `hub/tests/test_import_feasts.py` - Management command tests (8 tests)
 - `hub/tests/test_scrape_feast.py` - Utility function tests (11 tests)
 - `hub/tests/test_feast_designation.py` - Designation determination tests
 - `hub/tests/test_feast_icon_matching.py` - Icon matching tests
@@ -444,14 +419,13 @@ Comprehensive test coverage includes:
 
 **Run Tests:**
 ```bash
-python manage.py test hub.tests.test_feast_model hub.tests.test_import_feasts hub.tests.test_scrape_feast hub.tests.test_feast_designation hub.tests.test_feast_icon_matching --exclude-tag=performance --settings=tests.test_settings
+python manage.py test hub.tests.test_feast_model hub.tests.test_feast_designation hub.tests.test_feast_icon_matching --exclude-tag=performance --settings=tests.test_settings
 ```
 
 ## Usage Examples
 
 ### Create a Feast (via Management Command)
 ```bash
-python manage.py import_feasts --church "Armenian Apostolic Church" --start_date 2025-12-25 --end_date 2025-12-25
 ```
 
 ### Get Feast via API
@@ -505,13 +479,13 @@ feast.save()
 - `hub/tasks/feast_tasks.py` - Daily feast creation task
 - `hub/tasks/llm_tasks.py` - Added feast context and designation tasks
 - `hub/tasks/icon_tasks.py` - Added icon matching task
-- `hub/management/commands/import_feasts.py` - Feast import command
+- `hub/management/commands/audit_feast_duplicates.py` - Unreachable-name audit
 - `hub/management/commands/regenerate_feast_contexts.py` - Context regeneration command
 - `hub/migrations/0040_add_feast_models_and_llmprompt_applies_to.py` - Initial migration
 - `hub/migrations/0041_add_designation_to_feast.py` - Designation field migration
 - `hub/migrations/0042_feast_icon_alter_llmprompt_model.py` - Icon field migration
 - `hub/tests/test_feast_model.py` - Model tests
-- `hub/tests/test_import_feasts.py` - Command tests
+- `hub/tests/test_audit_feast_duplicates.py` - Audit command tests
 - `hub/tests/test_scrape_feast.py` - Utility tests
 - `hub/tests/test_feast_designation.py` - Designation tests
 - `hub/tests/test_feast_icon_matching.py` - Icon matching tests
@@ -555,20 +529,15 @@ All required dependencies were already present in the project:
 
 ### Celery Schedule
 
-Daily feast creation task runs at 00:05 (5 minutes past midnight):
-```python
-'create-feast-date-daily': {
-    'task': 'hub.tasks.create_feast_date_task',
-    'schedule': crontab(hour=0, minute=5),
-}
-```
+None. Feasts have no scheduled task: the name of the day is computed from the engine when it is
+asked for, and the row it resolves to is keyed by commemoration, so there is nothing to pre-create.
 
 ## Integration Points
 
 ### With Existing Features:
 
-1. **Day Model:** Feasts are linked to Day objects (date + church)
-2. **Church Model:** Feasts are church-specific
+1. **Church Model:** Feasts are keyed by `(church, name)` — church-specific, and not dated
+2. **armenian_lectionary:** supplies the name of the day, per request
 3. **Fast Model:** Feasts are skipped if a Fast is associated with the Day
 4. **Icon Model:** Feasts can have matched icons
 5. **LLMPrompt Model:** Separate prompts for readings vs feasts
