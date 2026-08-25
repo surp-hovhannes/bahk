@@ -727,7 +727,7 @@ class Command(BaseCommand):
             name_en, name_hy = feast_names[i % len(feast_names)]
 
             feast = models.Feast.objects.create(
-                day=day,
+                church=day.church,
                 name=name_en,
             )
             feast.name_hy = name_hy
