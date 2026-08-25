@@ -415,7 +415,7 @@ ANYMAIL = {
     "MAILGUN_API_KEY": config('MAILGUN_API_KEY'),
     "MAILGUN_SENDER_DOMAIN": config('MAILGUN_DOMAIN')
 }
-EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+EMAIL_BACKEND = config('EMAIL_BACKEND', default="anymail.backends.mailgun.EmailBackend")
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fastandprayhelp@gmail.com')
 
 # OPEN AI SETTINGS
