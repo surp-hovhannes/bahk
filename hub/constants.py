@@ -146,6 +146,17 @@ APOCRYPHA_USFM_IDS = {
 }
 
 CATENA_HOME_PAGE_URL = "https://catenabible.com/"
+
+# Catena has no standalone "Azariah" section -- the Prayer of Azariah / Song of the Three Young
+# Men is embedded inline in Daniel 3 (catenabible.com/dn/3, verses 24-90). Azariah's own verse
+# numbering restarts at 1 (the engine's sole scripture composite, "Daniel 3.1-23, Azariah. 1-68",
+# splits into a `book="Azariah"` reading with start_chapter=1), so Reading.create_url() remaps
+# onto Daniel chapter 3 before the normal Catena lookup. Verified live: dn003024 = "walked in the
+# midst of the flame" (Azariah v1), dn003025 = "Azarias stood up, and prayed" (Azariah v2).
+AZARIAH_CATENA_BOOK = "Daniel"
+AZARIAH_CATENA_CHAPTER = 3
+AZARIAH_TO_DANIEL_VERSE_OFFSET = 23  # Azariah verse N == Daniel 3:(N + 23)
+
 CATENA_ABBREV_FOR_BOOK = {
     # Old Testament
     "Genesis": "gn",
