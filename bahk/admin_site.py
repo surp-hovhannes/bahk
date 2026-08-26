@@ -136,15 +136,21 @@ class FastAndPrayAdminSite(AdminSite):
 
         return actions
 
+    def each_context(self, request):
+        """Add task-oriented navigation without bypassing Django permissions."""
+        context = super().each_context(request)
+        context["admin_sections"] = self.group_app_list(context["available_apps"])
+        return context
+
     def index(self, request, extra_context=None):
         """Render the dashboard without rebuilding Django's permission logic."""
-        app_list = self.get_app_list(request)
+        site_context = self.each_context(request)
+        app_list = site_context["available_apps"]
         context = {
-            **self.each_context(request),
+            **site_context,
             "title": self.index_title,
             "subtitle": None,
             "app_list": app_list,
-            "admin_sections": self.group_app_list(app_list),
             "admin_quick_actions": self.get_quick_actions(app_list),
             **(extra_context or {}),
         }

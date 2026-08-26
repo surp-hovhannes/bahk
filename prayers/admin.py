@@ -8,12 +8,14 @@ from django import forms
 from django.contrib import admin, messages
 from django.core.cache import cache
 from django.core.validators import FileExtensionValidator
+from django.db import models
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 
 from adminsortable2.admin import SortableAdminBase, SortableInlineAdminMixin
+from bahk.admin_media import admin_thumbnail
 from events.models import Event, EventType, UserMilestone
 from hub.models import Church
 from prayers.import_utils import (
@@ -68,7 +70,7 @@ class PrayerSetMembershipInline(SortableInlineAdminMixin, admin.TabularInline):
     model = PrayerSetMembership
     extra = 1
     fields = ("prayer", "order")
-    raw_id_fields = ("prayer",)
+    autocomplete_fields = ("prayer",)
     ordering = ("order",)
 
 
@@ -79,11 +81,11 @@ class PrayerAdmin(admin.ModelAdmin):
     list_display = ("title", "category", "church", "fast", "video", "icon_preview", "tag_list", "created_at")
     list_filter = ("church", "category", "fast", "created_at", "tags")
     search_fields = ("title", "text")
-    raw_id_fields = ("church", "fast", "video", "icon")
+    autocomplete_fields = ("church", "fast", "video", "icon")
     readonly_fields = ("created_at", "updated_at", "icon_preview")
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("icon")
+        return super().get_queryset(request).select_related("church", "fast", "video", "icon").prefetch_related("tags")
 
     actions = ["match_icons_with_ai"]
 
@@ -119,27 +121,15 @@ class PrayerAdmin(admin.ModelAdmin):
 
     def icon_preview(self, obj):
         """Display the selected icon thumbnail."""
-        if not obj.icon:
-            return "No icon"
-
-        if getattr(obj.icon, "cached_thumbnail_url", None):
-            return format_html(
-                '<img src="{}" style="max-height: 60px; max-width: 120px;" />',
-                obj.icon.cached_thumbnail_url,
-            )
-        try:
-            return format_html(
-                '<img src="{}" style="max-height: 60px; max-width: 120px;" />',
-                obj.icon.thumbnail.url,
-            )
-        except (AttributeError, ValueError, OSError):
-            try:
-                return format_html(
-                    '<img src="{}" style="max-height: 60px; max-width: 120px;" />',
-                    obj.icon.image.url,
+        icon = obj.icon if obj else None
+        return admin_thumbnail(
+            icon,
+            sources=("cached_thumbnail_url", "thumbnail", "image"),
+            link_source="image",
+            alt=f"Icon for {obj.title}" if obj else "Prayer icon",
+            size="small",
+            fallback="No icon",
                 )
-            except (AttributeError, ValueError, OSError):
-                return "No icon"
 
     icon_preview.short_description = "Icon"
 
@@ -152,7 +142,7 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
     list_display = ("title", "category", "church", "prayer_count", "image_preview", "created_at")
     list_filter = ("church", "category", "created_at", "updated_at")
     search_fields = ("title", "description")
-    raw_id_fields = ("church", "icon")
+    autocomplete_fields = ("church", "icon")
     readonly_fields = ("created_at", "updated_at", "image_preview", "prayer_count", "icon_preview")
     inlines = [PrayerSetMembershipInline]
 
@@ -164,53 +154,45 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("icon")
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("church", "icon")
+            .annotate(_admin_prayer_count=models.Count("memberships", distinct=True))
+        )
 
     def image_preview(self, obj):
         """Display a thumbnail preview of the image."""
-        if obj.cached_thumbnail_url:
-            return format_html(
-                '<img src="{}" style="max-height: 100px; max-width: 200px;" />', obj.cached_thumbnail_url
+        return admin_thumbnail(
+            obj,
+            sources=("cached_thumbnail_url", "thumbnail", "image"),
+            link_source="image",
+            alt=f"Image for {obj.title}" if obj else "Prayer set image",
+            fallback="No image",
             )
-        elif obj.image:
-            return format_html('<img src="{}" style="max-height: 100px; max-width: 200px;" />', obj.image.url)
-        return "No image"
 
     image_preview.short_description = "Image Preview"
 
     def icon_preview(self, obj):
         """Display the selected icon thumbnail."""
-        if not obj.icon:
-            return "No icon"
-        if getattr(obj.icon, "cached_thumbnail_url", None):
-            return format_html(
-                '<img src="{}" style="max-height: 40px; max-width: 40px;" /> {}',
-                obj.icon.cached_thumbnail_url,
-                obj.icon.title,
+        icon = obj.icon if obj else None
+        return admin_thumbnail(
+            icon,
+            sources=("cached_thumbnail_url", "thumbnail", "image"),
+            link_source="image",
+            alt=f"Icon for {obj.title}" if obj else "Prayer set icon",
+            size="small",
+            fallback="No icon",
             )
-        try:
-            return format_html(
-                '<img src="{}" style="max-height: 40px; max-width: 40px;" /> {}',
-                obj.icon.thumbnail.url,
-                obj.icon.title,
-            )
-        except Exception:
-            try:
-                return format_html(
-                    '<img src="{}" style="max-height: 40px; max-width: 40px;" /> {}',
-                    obj.icon.image.url,
-                    obj.icon.title,
-                )
-            except Exception:
-                return obj.icon.title
 
     icon_preview.short_description = "Icon"
 
+    @admin.display(description="Number of Prayers", ordering="_admin_prayer_count")
     def prayer_count(self, obj):
         """Return the number of prayers in this set."""
+        if hasattr(obj, "_admin_prayer_count"):
+            return obj._admin_prayer_count
         return obj.prayers.count()
-
-    prayer_count.short_description = "Number of Prayers"
 
     def get_urls(self):
         """Add prayer set JSON import admin views."""
@@ -380,24 +362,54 @@ class PrayerSetAdmin(SortableAdminBase, admin.ModelAdmin):
 # Prayer Request Admin
 
 
+class PrayerRequestAttentionFilter(admin.SimpleListFilter):
+    """Task-oriented moderation and lifecycle filters."""
+
+    title = "attention"
+    parameter_name = "attention"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("needs_review", "Needs review"),
+            ("pending", "Pending moderation"),
+            ("expired_active", "Expired but still approved"),
+            ("resolved", "Resolved"),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "needs_review":
+            return queryset.filter(
+                models.Q(requires_human_review=True)
+                | models.Q(status="pending_moderation", reviewed=False)
+            )
+        if value == "pending":
+            return queryset.filter(status="pending_moderation")
+        if value == "expired_active":
+            return queryset.filter(
+                status="approved", expiration_date__lte=timezone.now()
+            )
+        if value == "resolved":
+            return queryset.filter(status__in=("completed", "rejected", "deleted"))
+        return queryset
+
+
 @admin.register(PrayerRequest)
 class PrayerRequestAdmin(admin.ModelAdmin):
     """Admin interface for PrayerRequest model."""
 
     list_display = (
+        "image_preview",
         "title",
         "requester",
-        "status",
-        "moderation_severity",
-        "requires_human_review",
-        "reviewed",
-        "is_anonymous",
-        "duration_days",
-        "expiration_date",
+        "moderation_state",
+        "expiration_state",
         "acceptance_count",
         "created_at",
     )
+    list_display_links = ("title",)
     list_filter = (
+        PrayerRequestAttentionFilter,
         "status",
         "moderation_severity",
         "requires_human_review",
@@ -407,7 +419,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         "created_at",
     )
     search_fields = ("title", "description", "requester__email", "requester__first_name", "requester__last_name")
-    raw_id_fields = ("requester", "icon")
+    autocomplete_fields = ("requester", "icon")
+    date_hierarchy = "created_at"
+    list_per_page = 50
     readonly_fields = (
         "expiration_date",
         "reviewed",
@@ -443,34 +457,73 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         ("Metadata", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "requester", "icon"
+        ).annotate(
+            _admin_acceptance_count=models.Count("acceptances", distinct=True),
+            _admin_prayer_log_count=models.Count("prayer_logs", distinct=True),
+        )
+
     def image_preview(self, obj):
         """Display a thumbnail preview of the image."""
-        if obj.cached_thumbnail_url:
-            return format_html(
-                '<img src="{}" style="max-height: 100px; max-width: 200px;" />', obj.cached_thumbnail_url
-            )
-        elif obj.image:
-            return format_html('<img src="{}" style="max-height: 100px; max-width: 200px;" />', obj.image.url)
-        elif obj.icon:
-            # Fallback to icon thumbnail when no uploaded image is present
-            if getattr(obj.icon, "cached_thumbnail_url", None):
-                return format_html(
-                    '<img src="{}" style="max-height: 100px; max-width: 200px;" />', obj.icon.cached_thumbnail_url
-                )
-            try:
-                return format_html(
-                    '<img src="{}" style="max-height: 100px; max-width: 200px;" />', obj.icon.thumbnail.url
-                )
-            except (AttributeError, ValueError, OSError):
-                try:
-                    return format_html(
-                        '<img src="{}" style="max-height: 100px; max-width: 200px;" />', obj.icon.image.url
-                    )
-                except (AttributeError, ValueError, OSError):
-                    return "No image"
-        return "No image"
+        preview = admin_thumbnail(
+            obj,
+            sources=("cached_thumbnail_url", "thumbnail", "image"),
+            link_source="image",
+            alt=f"Image for {obj.title}" if obj else "Prayer request image",
+            fallback="",
+        )
+        if preview:
+            return preview
+        icon = obj.icon if obj else None
+        return admin_thumbnail(
+            icon,
+            sources=("cached_thumbnail_url", "thumbnail", "image"),
+            link_source="image",
+            alt=f"Fallback icon for {obj.title}" if obj else "Prayer request icon",
+            size="small",
+            fallback="No image",
+        )
 
     image_preview.short_description = "Image Preview"
+
+    @admin.display(description="Moderation")
+    def moderation_state(self, obj):
+        badges = [("neutral", obj.get_status_display())]
+        if obj.moderation_severity:
+            badges.append(
+                (
+                    "critical" if obj.moderation_severity in {"high", "critical"} else "warning",
+                    obj.get_moderation_severity_display(),
+                )
+            )
+        if obj.requires_human_review:
+            badges.append(("critical", "Human review"))
+        elif obj.reviewed:
+            badges.append(("positive", "Reviewed"))
+        return format_html_join(
+            " ",
+            '<span class="fp-admin-state fp-admin-state--{}">{}</span>',
+            badges,
+        )
+
+    @admin.display(description="Expiration", ordering="expiration_date")
+    def expiration_state(self, obj):
+        if obj.status in {"completed", "rejected", "deleted"}:
+            label = obj.get_status_display()
+            tone = "neutral"
+        elif obj.expiration_date <= timezone.now():
+            label = "Expired"
+            tone = "critical"
+        else:
+            label = f"Active until {obj.expiration_date:%b %d, %Y}"
+            tone = "positive"
+        return format_html(
+            '<span class="fp-admin-state fp-admin-state--{}">{}</span>',
+            tone,
+            label,
+        )
 
     def moderation_result_display(self, obj):
         """Display moderation result as formatted JSON."""
@@ -483,12 +536,17 @@ class PrayerRequestAdmin(admin.ModelAdmin):
 
     def acceptance_count(self, obj):
         """Return the number of acceptances."""
+        if hasattr(obj, "_admin_acceptance_count"):
+            return obj._admin_acceptance_count
         return obj.get_acceptance_count()
 
     acceptance_count.short_description = "Acceptances"
+    acceptance_count.admin_order_field = "_admin_acceptance_count"
 
     def prayer_log_count(self, obj):
         """Return the total number of prayer logs."""
+        if hasattr(obj, "_admin_prayer_log_count"):
+            return obj._admin_prayer_log_count
         return obj.get_prayer_log_count()
 
     prayer_log_count.short_description = "Prayer Logs"
@@ -593,10 +651,14 @@ class PrayerRequestAcceptanceAdmin(admin.ModelAdmin):
     list_display = ("prayer_request", "user", "accepted_at")
     list_filter = ("accepted_at",)
     search_fields = ("prayer_request__title", "user__email", "user__first_name", "user__last_name")
-    raw_id_fields = ("prayer_request", "user")
+    autocomplete_fields = ("prayer_request", "user")
     readonly_fields = ("accepted_at",)
+    date_hierarchy = "accepted_at"
 
     fieldsets = ((None, {"fields": ("prayer_request", "user", "accepted_at")}),)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("prayer_request", "user")
 
 
 @admin.register(PrayerRequestPrayerLog)
@@ -606,11 +668,14 @@ class PrayerRequestPrayerLogAdmin(admin.ModelAdmin):
     list_display = ("prayer_request", "user", "prayed_on_date", "created_at")
     list_filter = ("prayed_on_date", "created_at")
     search_fields = ("prayer_request__title", "user__email", "user__first_name", "user__last_name")
-    raw_id_fields = ("prayer_request", "user")
+    autocomplete_fields = ("prayer_request", "user")
     readonly_fields = ("created_at",)
     date_hierarchy = "prayed_on_date"
 
     fieldsets = ((None, {"fields": ("prayer_request", "user", "prayed_on_date", "created_at")}),)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("prayer_request", "user")
 
 
 @admin.register(FeastPrayer)
@@ -637,12 +702,12 @@ class FeastPrayerAdmin(admin.ModelAdmin):
         ("Metadata", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
+    @admin.display(description="Designation", ordering="designation")
     def designation_short(self, obj):
         """Display shortened designation."""
         return obj.designation[:50] + "..." if len(obj.designation) > 50 else obj.designation
 
-    designation_short.short_description = "Designation"
-
+    @admin.display(description="Title", ordering="title")
     def title_preview(self, obj):
         """Display prayer title with placeholder hint."""
         title = obj.title or ""

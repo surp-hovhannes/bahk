@@ -5,6 +5,7 @@ import re
 
 from django.contrib import admin
 from django.db import models
+from django.db.models.functions import Coalesce
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -14,10 +15,10 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, JsonResponse
 from markdownx.admin import MarkdownxModelAdmin
-import logging
 
 from django.db import transaction
 
+from bahk.admin_media import admin_thumbnail
 from hub.forms import (
     AddDaysToFastAdminForm,
     CombinedDevotionalForm,
@@ -85,6 +86,7 @@ class ChurchAdmin(admin.ModelAdmin):
         "fast_links",
     )
     ordering = ("name",)
+    search_fields = ("name", "name_en", "name_hy")
     list_display_links = (
         "name",
         "fast_links",
@@ -95,20 +97,24 @@ class ChurchAdmin(admin.ModelAdmin):
 
     fast_links.short_description = "Fasts"
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("fasts")
+
 
 @admin.register(Devotional, site=admin.site)
 class DevotionalAdmin(admin.ModelAdmin):
-    list_display = ("title", "fast", "date", "order")
-    list_filter = ("day__fast", "day__date")
-    ordering = ("day__date",)
+    list_display = ("video_preview", "title", "fast", "date", "language_code", "order")
+    list_filter = ("day__fast", "day__date", "language_code")
+    ordering = ("-day__date", "order", "language_code")
     search_fields = ("video__title", "description")
-    raw_id_fields = ("video", "day")
+    autocomplete_fields = ("video", "day")
     exclude = ("description",)
-    readonly_fields = ("effective_description",)
+    readonly_fields = ("video_preview", "effective_description")
+    date_hierarchy = "day__date"
 
     fieldsets = (
         (None, {
-            'fields': ('day', 'video', 'language_code', 'order'),
+            'fields': ('day', 'video', 'video_preview', 'language_code', 'order'),
         }),
         ('Description', {
             'description': (
@@ -132,6 +138,23 @@ class DevotionalAdmin(admin.ModelAdmin):
         return "(none)"
 
     effective_description.short_description = "Effective description (read-only)"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "video", "day", "day__fast", "day__church"
+        )
+
+    @admin.display(description="Video")
+    def video_preview(self, obj):
+        video = obj.video if obj else None
+        return admin_thumbnail(
+            video,
+            sources=("cached_thumbnail_url", "thumbnail_small", "thumbnail"),
+            link_source="thumbnail",
+            alt=f"Thumbnail for {video.title}" if video else "Video thumbnail",
+            size="portrait",
+            fallback="No thumbnail",
+        )
 
     def title(self, obj):
         return obj.video.title if obj.video else ""
@@ -268,7 +291,7 @@ class DevotionalSetAdmin(admin.ModelAdmin):
     search_fields = ('title', 'description', 'fast__name')
     list_filter = ('fast', 'created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'image_preview', 'number_of_days')
-    raw_id_fields = ('fast',)
+    autocomplete_fields = ('fast',)
     actions = ['duplicate_devotional_sets']
     fieldsets = (
         (None, {
@@ -288,29 +311,28 @@ class DevotionalSetAdmin(admin.ModelAdmin):
     )
 
     def image_preview(self, obj):
-        if obj.image:
-            try:
-                # Try to get cached URL first
-                if obj.cached_thumbnail_url:
-                    return format_html(
-                        '<img src="{}" style="max-height: 50px; max-width: 100px;"/>',
-                        obj.cached_thumbnail_url
-                    )
-                # Fall back to direct thumbnail URL
-                return format_html(
-                    '<img src="{}" style="max-height: 50px; max-width: 100px;"/>',
-                    obj.thumbnail.url
-                )
-            except (AttributeError, ValueError, OSError) as e:
-                logging.error(f"Thumbnail error for DevotionalSet {obj.id}: {e}")
-                return "Thumbnail error"
-        return "No image"
+        return admin_thumbnail(
+            obj,
+            sources=("cached_thumbnail_url", "thumbnail", "image"),
+            link_source="image",
+            alt=f"Image for {obj.title}" if obj else "Devotional set image",
+            fallback="No image",
+        )
 
     image_preview.short_description = 'Image Preview'
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("fast").annotate(
+            _admin_devotional_count=models.Count(
+                "fast__days__devotionals", distinct=True
+            )
+        )
+
+    @admin.display(description='Number of Days', ordering='_admin_devotional_count')
     def number_of_days(self, obj):
+        if hasattr(obj, '_admin_devotional_count'):
+            return obj._admin_devotional_count
         return obj.number_of_days
-    number_of_days.short_description = 'Number of Days'
 
     def duplicate_devotional_sets(self, request, queryset):
         success_count = 0
@@ -425,18 +447,24 @@ class FastAdmin(admin.ModelAdmin):
         "get_days",
         "culmination_feast_date",
         "get_description",
-        "image_link",
+        "image_preview",
         "participant_count",
     )
     list_display_links = ["get_name"]
     ordering = ("-year", "church", "name")
     list_filter = ("church", "year")
-    sortable_by = ("get_name", "participant_count")
+    search_fields = ("name", "name_en", "name_hy", "description", "church__name", "=year")
+    search_help_text = "Search by fast name, description, church, or exact year."
+    sortable_by = ("get_name", "church_link", "culmination_feast_date", "participant_count")
+    autocomplete_fields = ("church",)
+    readonly_fields = ("image_preview",)
     exclude = ("name", "description", "culmination_feast")  # Avoid duplicate with translation fields
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = queryset.annotate(participant_count=models.Count("profiles"))
+        queryset = queryset.select_related("church").prefetch_related(
+            models.Prefetch("days", queryset=Day.objects.order_by("date"))
+        ).annotate(_admin_participant_count=models.Count("profiles", distinct=True))
         return queryset
 
     def get_name(self, fast):
@@ -445,13 +473,12 @@ class FastAdmin(admin.ModelAdmin):
     get_name.short_description = "Fast Name"
     get_name.admin_order_field = "name"
 
+    @admin.display(description="Church", ordering="church__name")
     def church_link(self, fast):
         if not fast.church:
             return ""
         url = reverse("admin:hub_church_change", args=[fast.church.pk])
         return format_html('<a href="{}">{}</a>', url, fast.church.name)
-
-    church_link.short_description = "Church"
 
     def get_days(self, fast):
         return _concatenate_queryset(fast.days.all(), ", ", 5)
@@ -466,17 +493,21 @@ class FastAdmin(admin.ModelAdmin):
 
     get_description.short_description = "Description"
 
-    def image_link(self, fast):
-        if not fast.image:
-            return ""
-        url = fast.image.url
-        return format_html('<a href="{}">{}</a>', url, "Image Link")
+    @admin.display(description="Image")
+    def image_preview(self, fast):
+        return admin_thumbnail(
+            fast,
+            sources=("cached_thumbnail_url", "image_thumbnail", "image"),
+            link_source="image",
+            alt=f"Image for {fast}" if fast else "Fast image",
+            fallback="No image",
+        )
 
     def participant_count(self, fast):
-        return fast.participant_count
+        return fast._admin_participant_count
 
     participant_count.short_description = "Participants"
-    participant_count.admin_order_field = "participant_count"
+    participant_count.admin_order_field = "_admin_participant_count"
 
     def get_urls(self):
         """Add endpoints to admin views."""
@@ -648,21 +679,27 @@ class ProfileAdmin(admin.ModelAdmin):
         "fast_links",
         "name",
         "location",
-        "profile_image_link",
+        "profile_image_preview",
         "joined_date",
     )
-    list_display_links = ("user", "church_link", "fast_links", "profile_image_link")
+    list_display_links = ("user", "church_link", "fast_links", "profile_image_preview")
     ordering = ("church", "user")
     list_filter = ("church", "fasts", "user__date_joined")
-    sortable_by = ("user", "joined_date")
+    search_fields = (
+        "user__email", "user__username", "user__first_name", "user__last_name",
+        "name", "location",
+    )
+    search_help_text = "Search by account email/name, profile name, or location."
+    sortable_by = ("user", "church_link", "name", "location", "joined_date")
+    autocomplete_fields = ("user", "church", "fasts")
+    readonly_fields = ("profile_image_preview",)
 
-    def church_link(self, fast):
-        if not fast.church:
+    @admin.display(description="Church", ordering="church__name")
+    def church_link(self, profile):
+        if not profile.church:
             return ""
-        url = reverse("admin:hub_church_change", args=[fast.church.pk])
-        return format_html('<a href="{}">{}</a>', url, fast.church.name)
-
-    church_link.short_description = "Church"
+        url = reverse("admin:hub_church_change", args=[profile.church.pk])
+        return format_html('<a href="{}">{}</a>', url, profile.church.name)
 
     def fast_links(self, profile):
         return _get_fk_links_url(profile.fasts.all(), "fast")
@@ -675,13 +712,21 @@ class ProfileAdmin(admin.ModelAdmin):
     joined_date.short_description = "Joined"
     joined_date.admin_order_field = "user__date_joined"
 
-    def profile_image_link(self, profile):
-        if not profile.profile_image:
-            return ""
-        url = profile.profile_image.url
-        return format_html('<a href="{}">Image Link</a>', url)
+    @admin.display(description="Profile Image")
+    def profile_image_preview(self, profile):
+        return admin_thumbnail(
+            profile,
+            sources=("cached_thumbnail_url", "profile_image_thumbnail", "profile_image"),
+            link_source="profile_image",
+            alt=f"Profile photo for {profile.user.email}" if profile else "Profile photo",
+            size="small",
+            fallback="No image",
+        )
 
-    profile_image_link.short_description = "Profile Image"
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "user", "church"
+        ).prefetch_related("fasts")
 
 
 @admin.register(Day, site=admin.site)
@@ -692,27 +737,34 @@ class DayAdmin(admin.ModelAdmin):
         "date",
     )
     list_filter = ("church", "fast")
+    search_fields = ("=date", "church__name", "fast__name")
+    search_help_text = "Search by ISO date (YYYY-MM-DD), church, or fast."
+    autocomplete_fields = ("church", "fast")
+    date_hierarchy = "date"
 
+    @admin.display(description="Church", ordering="church__name")
     def church_link(self, day):
-        if not day.fast or not day.fast.church:
+        if not day.church:
             return ""
-        url = reverse("admin:hub_church_change", args=[day.fast.church.pk])
-        return format_html('<a href="{}">{}</a>', url, day.fast.church.name)
+        url = reverse("admin:hub_church_change", args=[day.church.pk])
+        return format_html('<a href="{}">{}</a>', url, day.church.name)
 
-    church_link.short_description = "Church"
-
+    @admin.display(description="Fast", ordering="fast__name")
     def fast_link(self, day):
         if not day.fast:
             return ""
         url = reverse("admin:hub_fast_change", args=[day.fast.pk])
         return format_html('<a href="{}">{}</a>', url, day.fast.name)
 
-    fast_link.short_description = "Fast"
-
     def reading_links(self, day):
         return _get_fk_links_url(day.readings.all(), "reading")
 
     reading_links.short_description = "Readings"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "church", "fast", "fast__church"
+        ).prefetch_related("readings")
 
 
 class ReadingYearFilter(admin.SimpleListFilter):
@@ -720,8 +772,12 @@ class ReadingYearFilter(admin.SimpleListFilter):
     parameter_name = "year"
 
     def lookups(self, request, model_admin):
-        all_years = set(r.day.date.year for r in model_admin.model.objects.all())
-        return [(y, y) for y in all_years]
+        years = (
+            model_admin.model.objects.order_by("day__date__year")
+            .values_list("day__date__year", flat=True)
+            .distinct()
+        )
+        return [(year, year) for year in years if year is not None]
 
     def queryset(self, request, queryset):
         if self.value() is not None:
@@ -749,6 +805,8 @@ class ReadingAdmin(admin.ModelAdmin):
         "__str__",
     )
     list_filter = (
+        "day__church",
+        "day__fast",
         ReadingYearFilter,
         "book",
         "start_chapter",
@@ -760,7 +818,18 @@ class ReadingAdmin(admin.ModelAdmin):
         "start_chapter",
         "start_verse",
     )
-    search_fields = ("passage_key",)
+    search_fields = (
+        "passage_key",
+        "book",
+        "book_en",
+        "book_hy",
+        "=day__date",
+        "day__church__name",
+        "day__fast__name",
+    )
+    search_help_text = "Search by passage, book, ISO date (YYYY-MM-DD), church, or fast."
+    autocomplete_fields = ("day",)
+    date_hierarchy = "day__date"
     actions = ["force_regenerate_context", "compare_prompts", "fetch_bible_text", "fetch_armenian_text"]
     readonly_fields = (
         "passage_key", "passage_text_summary", "fetch_text_link", "armenian_text_links",
@@ -790,6 +859,11 @@ class ReadingAdmin(admin.ModelAdmin):
             ),
         }),
     )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "day", "day__church", "day__fast"
+        )
 
     @admin.display(description="Stored text for this passage")
     def passage_text_summary(self, obj):
@@ -1031,20 +1105,18 @@ class ReadingAdmin(admin.ModelAdmin):
 
     fetch_armenian_text.short_description = "Fetch Armenian text for selected readings"
 
+    @admin.display(description="Church", ordering="day__church__name")
     def church_link(self, reading):
         if not reading.day or not reading.day.church:
             return ""
         url = reverse("admin:hub_church_change", args=[reading.day.church.pk])
         return format_html('<a href="{}">{}</a>', url, reading.day.church.name)
 
-    church_link.short_description = "Church"
-
-
 @admin.register(LLMPrompt, site=admin.site)
 class LLMPromptAdmin(admin.ModelAdmin):
     list_display = ("id", "model", "applies_to", "active", "context_count", "role", "prompt_preview")
     list_filter = ("model", "applies_to", "active")
-    search_fields = ("role", "prompt")
+    search_fields = ("model", "applies_to", "role", "prompt")
     ordering = ("id", "active")
     actions = ["duplicate_prompt", "make_active"]
 
@@ -1173,7 +1245,7 @@ class ReadingContextAdmin(admin.ModelAdmin):
     list_filter = ("active", "prompt__model", "reading__day__date")
     search_fields = ("text", "reading__book")
     ordering = ("-time_of_generation",)
-    raw_id_fields = ("reading", "prompt")
+    autocomplete_fields = ("reading", "prompt")
     readonly_fields = ("time_of_generation",)
     exclude = ("text",)  # Avoid duplicate with translation fields
 
@@ -1186,6 +1258,11 @@ class ReadingContextAdmin(admin.ModelAdmin):
         }),
     )
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "reading", "reading__day", "reading__day__church", "prompt"
+        )
+
     def text_preview(self, obj):
         return Truncator(obj.text).chars(100)
 
@@ -1195,6 +1272,7 @@ class ReadingContextAdmin(admin.ModelAdmin):
 @admin.register(Feast, site=admin.site)
 class FeastAdmin(admin.ModelAdmin):
     list_display = (
+        "icon_preview",
         "church_link",
         "__str__",
         "name",
@@ -1207,9 +1285,9 @@ class FeastAdmin(admin.ModelAdmin):
         "church",
         "designation",
     )
-    search_fields = ("name", "name_en", "name_hy")
+    search_fields = ("name", "name_en", "name_hy", "designation", "church__name")
     ordering = ("church", "name")
-    raw_id_fields = ("icon",)
+    autocomplete_fields = ("icon",)
     actions = [
         "force_rematch_icon",
         "match_icon_if_missing",
@@ -1217,7 +1295,7 @@ class FeastAdmin(admin.ModelAdmin):
         "regenerate_context_with_instructions",
     ]
     exclude = ("name",)  # Avoid duplicate with translation fields
-    readonly_fields = ("icon_rematch_links",)
+    readonly_fields = ("icon_preview", "icon_rematch_links")
 
     fieldsets = (
         (None, {
@@ -1227,12 +1305,27 @@ class FeastAdmin(admin.ModelAdmin):
             'fields': ('designation',)
         }),
         ('Icon', {
-            'fields': ('icon', 'icon_rematch_links')
+            'fields': ('icon', 'icon_preview', 'icon_rematch_links')
         }),
         ('Translations', {
             'fields': ('name_en', 'name_hy')
         }),
     )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("church", "icon")
+
+    @admin.display(description="Icon")
+    def icon_preview(self, feast):
+        icon = feast.icon if feast else None
+        return admin_thumbnail(
+            icon,
+            sources=("cached_thumbnail_url", "thumbnail", "image"),
+            link_source="image",
+            alt=f"Icon for {feast.name}" if feast else "Feast icon",
+            size="small",
+            fallback="No icon",
+        )
 
     def get_urls(self):
         """Add per-feast endpoints to trigger icon matching."""
@@ -1452,14 +1545,12 @@ class FeastAdmin(admin.ModelAdmin):
             context
         )
 
+    @admin.display(description="Church", ordering="church__name")
     def church_link(self, feast):
         if not feast.church:
             return ""
         url = reverse("admin:hub_church_change", args=[feast.church.pk])
         return format_html('<a href="{}">{}</a>', url, feast.church.name)
-
-    church_link.short_description = "Church"
-
 
 @admin.register(FeastContext, site=admin.site)
 class FeastContextAdmin(admin.ModelAdmin):
@@ -1480,7 +1571,7 @@ class FeastContextAdmin(admin.ModelAdmin):
     list_filter = ("active", "prompt__model", "feast__church")
     search_fields = ("text", "short_text", "feast__name")
     ordering = ("-time_of_generation",)
-    raw_id_fields = ("feast", "prompt")
+    autocomplete_fields = ("feast", "prompt")
     readonly_fields = ("time_of_generation",)
     exclude = ("text", "short_text")  # Avoid duplicate with translation fields
 
@@ -1497,6 +1588,11 @@ class FeastContextAdmin(admin.ModelAdmin):
             'fields': ('text_en', 'text_hy', 'short_text_en', 'short_text_hy')
         }),
     )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "feast", "feast__church", "prompt"
+        )
 
     def text_preview(self, obj):
         return Truncator(obj.text).chars(100)
@@ -1523,9 +1619,8 @@ class PatristicQuoteAdmin(MarkdownxModelAdmin):
     )
     list_filter = ('churches', 'fasts', 'tags', 'created_at', 'updated_at')
     search_fields = ('text', 'attribution')
-    raw_id_fields = ('churches', 'fasts')
+    autocomplete_fields = ('churches', 'fasts')
     readonly_fields = ('created_at', 'updated_at')
-    filter_horizontal = ('churches', 'fasts')
     exclude = ('text', 'attribution')  # Avoid duplicate with translation fields
 
     fieldsets = (
@@ -1540,6 +1635,11 @@ class PatristicQuoteAdmin(MarkdownxModelAdmin):
             'classes': ('collapse',)
         })
     )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related(
+            'churches', 'fasts', 'tags'
+        )
 
     def text_preview(self, obj):
         """Display first 100 characters of the quote."""
@@ -1574,7 +1674,10 @@ class FastIntentionAdmin(admin.ModelAdmin):
     list_filter = ('is_public', 'is_active', 'fast', 'updated_at')
     search_fields = ('text', 'user__username', 'user__email', 'fast__name')
     readonly_fields = ('created_at', 'updated_at')
-    raw_id_fields = ('user', 'fast')
+    autocomplete_fields = ('user', 'fast')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user', 'fast')
 
     def text_preview(self, obj):
         if obj.text:
@@ -1619,13 +1722,30 @@ class PassageTextAdmin(admin.ModelAdmin):
     readonly_fields = ("expired", "readings_served")
     list_per_page = 50
 
+    def get_queryset(self, request):
+        reading_counts = (
+            Reading.objects.filter(passage_key=models.OuterRef("passage_key"))
+            .order_by()
+            .values("passage_key")
+            .annotate(total=models.Count("*"))
+            .values("total")
+        )
+        return super().get_queryset(request).annotate(
+            _admin_readings_served=Coalesce(
+                models.Subquery(reading_counts, output_field=models.IntegerField()),
+                models.Value(0),
+            )
+        )
+
     @admin.display(boolean=True, description="Expired")
     def expired(self, obj):
         return obj.is_expired()
 
-    @admin.display(description="Readings served")
+    @admin.display(description="Readings served", ordering="_admin_readings_served")
     def readings_served(self, obj):
         """How many reading rows this one retrieval covers -- the dedup factor, per row."""
+        if hasattr(obj, "_admin_readings_served"):
+            return obj._admin_readings_served
         return Reading.objects.filter(passage_key=obj.passage_key).count()
 
     @admin.display(description="Text")

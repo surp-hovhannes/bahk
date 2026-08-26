@@ -87,6 +87,17 @@ class FastAndPrayAdminSiteTests(TestCase):
             ],
         )
 
+    def test_grouped_navigation_is_available_on_model_pages(self):
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(reverse("admin:prayers_prayerrequest_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="fp-nav-section"')
+        self.assertContains(response, "Content &amp; Calendar")
+        self.assertContains(response, "Prayer Requests")
+        self.assertContains(response, 'aria-current="page"')
+
     def test_staff_without_model_permissions_has_no_quick_actions(self):
         self.client.force_login(self.staff_user)
         response = self.client.get(reverse("admin:index"))
