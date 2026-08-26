@@ -15,7 +15,14 @@ class TestStaticFilesStorage(FileSystemStorage):
     SITE_URL='http://testserver',
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     EMAIL_HOST_USER='test@example.com',
-    STATICFILES_STORAGE='notifications.tests.test_email_templates.TestStaticFilesStorage',
+    STORAGES={
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'notifications.tests.test_email_templates.TestStaticFilesStorage',
+        },
+    },
     STATIC_URL='/static/'
 )
 class PromoEmailTemplateTests(TestCase):
@@ -113,4 +120,4 @@ class PromoEmailTemplateTests(TestCase):
         
         self.assertIn(self.unsubscribe_url, rendered)
         self.assertNotIn('None', rendered)
-        self.assertIn('http://testserver/email_images/logo.png', rendered) 
+        self.assertIn('http://testserver/email_images/logo.png', rendered)

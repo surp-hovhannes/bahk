@@ -69,6 +69,14 @@ class Icon(models.Model):
         indexes = [
             models.Index(fields=['church', 'created_at']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['image_hash'],
+                name='unique_icon_image_hash',
+                condition=models.Q(image_hash__gt=''),
+                violation_error_message='An icon with this image hash already exists.',
+            ),
+        ]
     
     def __str__(self):
         return self.title
