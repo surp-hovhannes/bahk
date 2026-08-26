@@ -1,6 +1,10 @@
 from django.contrib import admin
+from django.contrib.contenttypes.models import ContentType
+from django.urls import reverse
 from django.utils.html import format_html
 from markdownx.admin import MarkdownxModelAdmin
+
+from bahk.admin_media import admin_thumbnail
 from .models import Article, Recipe, Video, Bookmark
 
 from django import forms
@@ -19,21 +23,23 @@ class VideoAdminForm(forms.ModelForm):
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
     form = VideoAdminForm
-    list_display = ('title', 'category', 'thumbnail_preview', 'created_at')
+    list_display = ('title', 'category', 'language_code', 'thumbnail_preview', 'created_at')
     search_fields = ('title', 'description')
-    list_filter = ('category', 'created_at', 'updated_at')
+    list_filter = ('category', 'language_code', 'created_at', 'updated_at')
     readonly_fields = ('created_at', 'updated_at', 'thumbnail_preview')
     # Hide base fields that also have modeltrans virtual translation fields to
     # avoid duplicate inputs in the admin form
     exclude = ('title', 'description')
 
     def thumbnail_preview(self, obj):
-        if obj.thumbnail:
-            return format_html(
-                '<img src="{}" style="max-height: 50px;"/>',
-                obj.thumbnail_small.url
-            )
-        return "No thumbnail"
+        return admin_thumbnail(
+            obj,
+            sources=('cached_thumbnail_url', 'thumbnail_small', 'thumbnail'),
+            link_source='thumbnail',
+            alt=f'Thumbnail for {obj.title}' if obj else 'Video thumbnail',
+            size='portrait',
+            fallback='No thumbnail',
+        )
     thumbnail_preview.short_description = 'Thumbnail Preview'
 
 @admin.register(Article)
@@ -47,12 +53,13 @@ class ArticleAdmin(MarkdownxModelAdmin):
     exclude = ('title', 'body')
 
     def image_preview(self, obj):
-        if obj.image:
-            return format_html(
-                '<img src="{}" style="max-height: 50px;"/>',
-                obj.thumbnail.url
-            )
-        return "No image"
+        return admin_thumbnail(
+            obj,
+            sources=('cached_thumbnail_url', 'thumbnail', 'image'),
+            link_source='image',
+            alt=f'Image for {obj.title}' if obj else 'Article image',
+            fallback='No image',
+        )
     image_preview.short_description = 'Image Preview'
 
 
@@ -67,13 +74,38 @@ class RecipeAdmin(MarkdownxModelAdmin):
     exclude = ('title', 'description', 'time_required', 'serves', 'directions', 'ingredients')
 
     def image_preview(self, obj):
-        if obj.image:
-            return format_html(
-                '<img src="{}" style="max-height: 50px;"/>',
-                obj.thumbnail.url
-            )
-        return "No image"
+        return admin_thumbnail(
+            obj,
+            sources=('cached_thumbnail_url', 'thumbnail', 'image'),
+            link_source='image',
+            alt=f'Image for {obj.title}' if obj else 'Recipe image',
+            fallback='No image',
+        )
     image_preview.short_description = 'Image Preview'
+
+
+class BookmarkContentTypeFilter(admin.SimpleListFilter):
+    title = 'content type'
+    parameter_name = 'content_type'
+
+    def lookups(self, request, model_admin):
+        content_type_ids = (
+            model_admin.get_queryset(request)
+            .order_by()
+            .values_list('content_type_id', flat=True)
+            .distinct()
+        )
+        return [
+            (content_type.pk, f'{content_type.app_label} | {content_type.model}')
+            for content_type in ContentType.objects.filter(pk__in=content_type_ids).order_by(
+                'app_label', 'model'
+            )
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(content_type_id=self.value())
+        return queryset
 
 
 @admin.register(Bookmark)
@@ -84,12 +116,12 @@ class BookmarkAdmin(admin.ModelAdmin):
         'user', 'content_type_name', 'content_title', 
         'object_id', 'created_at'
     )
-    list_filter = ('content_type', 'created_at')
+    list_filter = (BookmarkContentTypeFilter, 'created_at')
     search_fields = (
         'user__username', 'user__email', 'note'
     )
     readonly_fields = ('created_at', 'content_object_link')
-    raw_id_fields = ('user',)  # Better performance for large user lists
+    autocomplete_fields = ('user',)
     
     fieldsets = (
         (None, {
@@ -122,13 +154,12 @@ class BookmarkAdmin(admin.ModelAdmin):
         if content:
             # Try to get the admin URL for the content object
             try:
-                from django.urls import reverse
                 url = reverse(
                     f'admin:{content._meta.app_label}_{content._meta.model_name}_change',
                     args=[content.pk]
                 )
                 return format_html(
-                    '<a href="{}" target="_blank">{}</a>',
+                    '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>',
                     url,
                     content
                 )
@@ -142,7 +173,7 @@ class BookmarkAdmin(admin.ModelAdmin):
         """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related(
             'user', 'content_type'
-        )
+        ).prefetch_related('content_object')
     
     def has_add_permission(self, request):
         """Allow admins to add bookmarks manually if needed."""

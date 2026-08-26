@@ -396,6 +396,113 @@ a.button {
     stroke-linejoin: round;
 }
 
+.fp-admin-thumbnail__link {
+    display: inline-flex;
+    border-radius: 6px;
+    vertical-align: middle;
+}
+
+.fp-admin-thumbnail__link:focus-visible {
+    outline: 2px solid var(--fp-accent);
+    outline-offset: 3px;
+}
+
+.fp-admin-thumbnail {
+    display: block;
+    max-width: 100%;
+    border: 1px solid var(--fp-border);
+    border-radius: 6px;
+    background: var(--fp-surface-raised);
+    object-fit: cover;
+}
+
+.fp-admin-thumbnail--small {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+}
+
+.fp-admin-thumbnail--content {
+    width: 84px;
+    height: 56px;
+}
+
+.fp-admin-thumbnail--portrait {
+    width: 42px;
+    height: 64px;
+}
+
+.fp-admin-state {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    margin: 2px 3px 2px 0;
+    padding: 2px 8px;
+    border: 1px solid var(--fp-border);
+    border-radius: 999px;
+    background: var(--darkened-bg);
+    color: var(--body-fg);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.fp-admin-state--positive {
+    border-color: color-mix(in srgb, var(--fp-success) 48%, var(--fp-border));
+    color: var(--fp-success);
+}
+
+.fp-admin-state--warning {
+    border-color: #a76b12;
+    color: #7a4a05;
+}
+
+.fp-admin-state--critical {
+    border-color: color-mix(in srgb, var(--fp-danger) 55%, var(--fp-border));
+    color: var(--fp-danger);
+}
+
+html[data-theme="dark"] .fp-admin-state--warning {
+    color: #f4c56e;
+}
+
+@media (prefers-color-scheme: dark) {
+    html[data-theme="auto"] .fp-admin-state--warning {
+        color: #f4c56e;
+    }
+}
+
+.fp-nav-section + .fp-nav-section {
+    margin-top: 14px;
+}
+
+.fp-nav-section__heading {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    padding: 9px 12px 7px;
+    color: var(--body-quiet-color);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.fp-nav-section__heading .fp-icon {
+    width: 15px;
+    height: 15px;
+}
+
+#nav-sidebar .fp-nav-section .module {
+    margin-bottom: 8px;
+}
+
+#nav-sidebar .current-model {
+    border-inline-start: 3px solid var(--fp-accent);
+}
+
 .fp-admin-section__title .fp-icon {
     width: 20px;
     height: 20px;
