@@ -432,6 +432,28 @@ a.button {
     height: 64px;
 }
 
+.fp-admin-video {
+    width: 360px;
+    max-width: 100%;
+}
+
+.fp-admin-video__player {
+    display: block;
+    width: 100%;
+    max-height: min(70vh, 640px);
+    aspect-ratio: 9 / 16;
+    border: 1px solid var(--fp-border);
+    border-radius: 8px;
+    background: #12060a;
+    box-shadow: var(--fp-shadow);
+}
+
+.fp-admin-video__link {
+    display: inline-flex;
+    margin-top: 10px;
+    font-weight: 600;
+}
+
 .fp-admin-state {
     display: inline-flex;
     align-items: center;

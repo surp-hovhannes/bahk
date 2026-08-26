@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from markdownx.admin import MarkdownxModelAdmin
 
-from bahk.admin_media import admin_thumbnail
+from bahk.admin_media import admin_thumbnail, admin_video_player
 from .models import Article, Recipe, Video, Bookmark
 
 from django import forms
@@ -26,7 +26,7 @@ class VideoAdmin(admin.ModelAdmin):
     list_display = ('title', 'category', 'language_code', 'thumbnail_preview', 'created_at')
     search_fields = ('title', 'description')
     list_filter = ('category', 'language_code', 'created_at', 'updated_at')
-    readonly_fields = ('created_at', 'updated_at', 'thumbnail_preview')
+    readonly_fields = ('created_at', 'updated_at', 'thumbnail_preview', 'video_preview')
     # Hide base fields that also have modeltrans virtual translation fields to
     # avoid duplicate inputs in the admin form
     exclude = ('title', 'description')
@@ -41,6 +41,32 @@ class VideoAdmin(admin.ModelAdmin):
             fallback='No thumbnail',
         )
     thumbnail_preview.short_description = 'Thumbnail Preview'
+
+    def video_preview(self, obj):
+        return admin_video_player(
+            obj,
+            source='video',
+            title=f'Video preview for {obj.title}' if obj else 'Video preview',
+            poster_sources=('cached_thumbnail_url', 'thumbnail_small', 'thumbnail'),
+            fallback='Upload and save a video to preview it here.',
+        )
+    video_preview.short_description = 'Watch Video'
+
+    def get_fields(self, request, obj=None):
+        """Keep media previews next to the fields they describe."""
+        fields = list(super().get_fields(request, obj))
+        for source, preview in (
+            ('thumbnail', 'thumbnail_preview'),
+            ('video', 'video_preview'),
+        ):
+            if preview not in fields:
+                continue
+            fields.remove(preview)
+            if source in fields:
+                fields.insert(fields.index(source) + 1, preview)
+            else:
+                fields.append(preview)
+        return fields
 
 @admin.register(Article)
 class ArticleAdmin(MarkdownxModelAdmin):
