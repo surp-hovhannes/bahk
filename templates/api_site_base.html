@@ -1,0 +1,34 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% block robots %}{% endblock %}
+  <meta name="description" content="{% block meta_description %}Fast & Pray API service and public documentation.{% endblock %}">
+  <title>{% block title %}Fast &amp; Pray API{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap">
+  <link rel="icon" type="image/svg+xml" href="{% static 'admin/brand/favicon.svg' %}">
+  <link rel="stylesheet" href="{% static 'landing/css/api-landing.css' %}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="{% url 'api-home' %}" aria-label="Fast & Pray API home">
+        <img class="brand__icon" src="{% static 'admin/brand/app-icon.png' %}" alt="" width="52" height="52">
+        <span>Fast &amp; Pray</span>
+      </a>
+      <nav class="site-nav" aria-label="Service navigation">
+        <a href="{% url 'api-docs' %}"{% if request.resolver_match.url_name == "api-docs" %} aria-current="page"{% endif %}>API Docs</a>
+        <a href="{% url 'admin:index' %}">Admin</a>
+        <a href="https://fastandpray.app/support">Support</a>
+        <a href="https://fastandpray.app/privacy">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  {% block content %}{% endblock %}
+</body>
+</html>

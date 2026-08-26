@@ -1,0 +1,28 @@
+{% extends "api_site_base.html" %}
+{% load static %}
+
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block meta_description %}The secure API service behind Fast &amp; Pray.{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+  <section class="hero hero--standalone" aria-labelledby="page-title">
+    <h1 id="page-title">Fast &amp; Pray API</h1>
+    <p class="hero__lede">The secure service behind Fast &amp; Pray.</p>
+    <p class="hero__body">This service powers the Fast &amp; Pray mobile and web apps.</p>
+
+    <div class="hero__actions">
+      <a class="button button--primary" href="https://fastandpray.app">
+        <span>Visit Fast &amp; Pray</span>
+        <img src="{% static 'landing/icons/arrow-right.svg' %}" alt="" width="20" height="20">
+      </a>
+      <a class="button button--secondary" href="https://web.fastandpray.app">Open Web App</a>
+    </div>
+
+    <a class="service-status" href="{% url 'health_check' %}" aria-label="View service health details">
+      <img src="{% static 'landing/icons/circle-fill.svg' %}" alt="" width="18" height="18">
+      <span>Service operational</span>
+    </a>
+  </section>
+</main>
+{% endblock %}
