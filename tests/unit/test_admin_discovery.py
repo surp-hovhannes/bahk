@@ -30,6 +30,14 @@ class AdminDiscoveryTests(SimpleTestCase):
 
         self.assertIn("language_code", video_admin.list_display)
         self.assertIn("language_code", video_admin.list_filter)
+        self.assertIn("video_preview", video_admin.readonly_fields)
+
+    def test_video_preview_is_positioned_after_upload_field(self):
+        video_admin = VideoAdmin(Video, AdminSite())
+        request = RequestFactory().get("/admin/learning_resources/video/1/change/")
+        fields = video_admin.get_fields(request)
+
+        self.assertEqual(fields.index("video_preview"), fields.index("video") + 1)
 
     def test_bookmark_uses_a_focused_content_type_filter(self):
         bookmark_admin = BookmarkAdmin(Bookmark, AdminSite())
