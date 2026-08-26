@@ -1418,28 +1418,20 @@ function refreshChartTheme() {
 
     getAnalyticsCharts().forEach(chart => {
         chart.options.color = chartTheme.text;
-        chart.options.plugins = chart.options.plugins || {};
-        chart.options.plugins.legend = chart.options.plugins.legend || {};
-        chart.options.plugins.legend.labels = {
-            ...(chart.options.plugins.legend.labels || {}),
-            color: chartTheme.text,
-        };
-        chart.options.plugins.tooltip = {
-            ...(chart.options.plugins.tooltip || {}),
-            backgroundColor: chartTheme.surface,
-            titleColor: chartTheme.text,
-            bodyColor: chartTheme.text,
-            borderColor: chartTheme.grid,
-            borderWidth: 1,
-        };
+        chart.options.plugins.legend.labels.color = chartTheme.text;
+        chart.options.plugins.tooltip.backgroundColor = chartTheme.surface;
+        chart.options.plugins.tooltip.titleColor = chartTheme.text;
+        chart.options.plugins.tooltip.bodyColor = chartTheme.text;
+        chart.options.plugins.tooltip.borderColor = chartTheme.grid;
+        chart.options.plugins.tooltip.borderWidth = 1;
 
         if (chart.options.plugins.title) {
             chart.options.plugins.title.color = chartTheme.text;
         }
 
         Object.values(chart.options.scales || {}).forEach(scale => {
-            scale.grid = { ...(scale.grid || {}), color: chartTheme.grid };
-            scale.ticks = { ...(scale.ticks || {}), color: chartTheme.text };
+            scale.grid.color = chartTheme.grid;
+            scale.ticks.color = chartTheme.text;
             if (scale.title) scale.title.color = chartTheme.text;
         });
 
@@ -1508,12 +1500,7 @@ document.getElementById('detailModal').addEventListener('click', (e) => {
     }
 });
 
-// Initialize charts when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    initializeCharts();
-    refreshChartTheme();
-    observeThemeChanges();
-
+function bindAnalyticsControls() {
     document.getElementById('dateRange').addEventListener('change', updateCharts);
     document.querySelectorAll('button[data-metric-type]').forEach(button => {
         button.addEventListener('click', () => openDetailModal(button.dataset.metricType, button));
@@ -1529,6 +1516,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const tabButton = event.target.closest('.modal-tab');
         if (tabButton) switchChecklistTab(tabButton.dataset.tab);
     });
+}
+
+// Bind controls before initializing charts so an optional chart enhancement
+// cannot disable the dashboard's date filter or detail dialogs.
+document.addEventListener('DOMContentLoaded', function() {
+    bindAnalyticsControls();
+    initializeCharts();
+    refreshChartTheme();
+    observeThemeChanges();
 });
 </script>
 {% endblock %}

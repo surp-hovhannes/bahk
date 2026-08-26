@@ -177,6 +177,25 @@ class AdminDashboardTests(TestCase):
         # Verify that staff events are excluded
         # The total should not include staff events
         self.assertGreater(context['total_events'], 0)
+
+    def test_user_engagement_dashboard_binds_controls_before_chart_setup(self):
+        """Chart enhancement errors must not disable filters or detail dialogs."""
+        response = self.client.get(reverse('admin:events_analytics'))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        controls_binding = content.rindex('    bindAnalyticsControls();')
+        chart_initialization = content.rindex('    initializeCharts();')
+
+        self.assertLess(controls_binding, chart_initialization)
+        self.assertIn(
+            'chart.options.plugins.legend.labels.color = chartTheme.text;',
+            content,
+        )
+        self.assertNotIn(
+            'chart.options.plugins.legend.labels = {',
+            content,
+        )
     
     def test_user_engagement_dashboard_data_endpoint(self):
         """Test the User Engagement Dashboard AJAX data endpoint."""
