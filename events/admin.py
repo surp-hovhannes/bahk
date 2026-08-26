@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.db.models import Count, Q, Avg, FloatField
 from django.db.models.functions import Cast, TruncDate
 from django.http import HttpResponse
-from django.shortcuts import render
+from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils import timezone
@@ -481,7 +481,10 @@ class EventAdmin(admin.ModelAdmin):
         }
         
         context = {
+            **self.admin_site.each_context(request),
             'title': 'User Engagement Dashboard',
+            'opts': self.model._meta,
+            'has_view_permission': self.has_view_permission(request),
             'total_events': total_events,
             'events_in_period': sum(events_by_day.values()),
             'events_by_type': list(events_by_type),  # Convert to list for JSON serialization
@@ -515,7 +518,7 @@ class EventAdmin(admin.ModelAdmin):
             'language_hy': language_hy,
         }
 
-        return render(request, 'admin/events/analytics.html', context)
+        return TemplateResponse(request, 'admin/events/analytics.html', context)
     
     def analytics_data(self, request):
         """
@@ -1310,7 +1313,10 @@ class EventAdmin(admin.ModelAdmin):
             .aggregate(avg=Avg(Cast('data__duration_seconds', FloatField())))['avg'] or 0
 
         context = {
+            **self.admin_site.each_context(request),
             'title': 'App Analytics Dashboard',
+            'opts': self.model._meta,
+            'has_view_permission': self.has_view_permission(request),
             'days': days,
             'events_by_day': events_by_day,
             'total_app_opens': total_app_opens,
@@ -1323,7 +1329,7 @@ class EventAdmin(admin.ModelAdmin):
             'sessions_per_user_top': sessions_per_user_top,
         }
 
-        return render(request, 'admin/events/app_analytics.html', context)
+        return TemplateResponse(request, 'admin/events/app_analytics.html', context)
 
     def app_analytics_data(self, request):
         """
@@ -1527,24 +1533,6 @@ class UserActivityFeedAdmin(admin.ModelAdmin):
         })
         
         return super().changelist_view(request, extra_context)
-
-
-# Add analytics link to the admin index
-def analytics_link():
-    """Helper to create analytics link for admin index."""
-    return format_html(
-        '<a href="{}">👥 User Engagement Dashboard</a>',
-        reverse('admin:events_analytics')
-    )
-
-
-# Register a custom admin site section for events
-class EventsAdminSite:
-    """Custom admin configuration for events."""
-    
-    def __init__(self):
-        # Add analytics link to the admin index
-        admin.site.index_template = 'admin/events/index_with_analytics.html'
 
 
 @admin.register(UserMilestone)

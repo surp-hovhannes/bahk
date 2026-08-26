@@ -3,14 +3,16 @@
 
 {% block object-tools-items %}
     <li>
-        <a href="{% url 'admin:events_analytics' %}" class="addlink" style="background: #417690; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none;">
-            📊 User Engagement Dashboard
+        <a href="{% url 'admin:events_analytics' %}" class="fp-object-tool">
+            {% include "admin/includes/icon.html" with name="users" %}
+            <span>User Engagement</span>
         </a>
     </li>
     <li>
-        <a href="{% url 'admin:events_app_analytics' %}" class="addlink" style="background: #6f42c1; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none;">
-            📱 App Analytics Dashboard
+        <a href="{% url 'admin:events_app_analytics' %}" class="fp-object-tool">
+            {% include "admin/includes/icon.html" with name="chart" %}
+            <span>App Analytics</span>
         </a>
     </li>
     {{ block.super }}
-{% endblock %} 
+{% endblock %}

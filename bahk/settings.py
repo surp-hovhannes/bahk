@@ -103,7 +103,7 @@ ENABLE_FEEDBACK_THROTTLING = config('ENABLE_FEEDBACK_THROTTLING', default=True, 
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    'bahk.admin_config.FastAndPrayAdminConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -268,6 +268,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

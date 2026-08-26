@@ -2,109 +2,125 @@
 {% load i18n %}
 
 {% block content %}
-<div id="content-main">
-    {% if app_list %}
-        {% for app in app_list %}
-            <div class="app-{{ app.app_label }} module{% if app.app_url in request.path %} current-app{% endif %}">
-            <table>
-            <caption>
-                <a href="{{ app.app_url }}" class="section" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">{{ app.name }}</a>
-            </caption>
-            {% for model in app.models %}
-                <tr class="model-{{ model.object_name|lower }}{% if model.admin_url in request.path %} current-model{% endif %}">
-                {% if model.admin_url %}
-                    <th scope="row"><a href="{{ model.admin_url }}"{% if model.admin_url in request.path %} aria-current="page"{% endif %}>{{ model.name }}</a></th>
-                {% else %}
-                    <th scope="row">{{ model.name }}</th>
-                {% endif %}
-
-                {% if model.add_url %}
-                    <td><a href="{{ model.add_url }}" class="addlink">{% translate 'Add' %}</a></td>
-                {% else %}
-                    <td>&nbsp;</td>
-                {% endif %}
-
-                {% if model.admin_url and show_changelinks %}
-                    {% if model.view_only %}
-                    <td><a href="{{ model.admin_url }}" class="viewlink">{% translate 'View' %}</a></td>
-                    {% else %}
-                    <td><a href="{{ model.admin_url }}" class="changelink">{% translate 'Change' %}</a></td>
-                    {% endif %}
-                {% else %}
-                    <td>&nbsp;</td>
-                {% endif %}
-                </tr>
-            {% endfor %}
-            </table>
-            </div>
-        {% endfor %}
-    {% else %}
-        <p>{% translate "You don't have permission to view or edit anything." %}</p>
-    {% endif %}
+<div id="content-main" class="fp-dashboard">
+  {% if admin_sections %}
+    {% for section in admin_sections %}
+      <section class="fp-admin-section" aria-labelledby="section-{{ section.slug }}">
+        <div class="fp-admin-section__heading">
+          <div class="fp-admin-section__title">
+            {% include "admin/includes/icon.html" with name=section.icon %}
+            <h2 id="section-{{ section.slug }}">{{ section.name }}</h2>
+          </div>
+          <span>{{ section.apps|length }} app{{ section.apps|length|pluralize }}</span>
+        </div>
+        <div class="fp-admin-section__grid">
+          {% for app in section.apps %}
+            <article class="module fp-admin-app app-{{ app.app_label }}{% if app.app_url in request.path|urlencode %} current-app{% endif %}">
+              <h3>
+                <a class="fp-admin-app__title" href="{{ app.app_url }}" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">
+                  {% include "admin/includes/icon.html" with name=app.icon %}
+                  <span>{{ app.name }}</span>
+                </a>
+              </h3>
+              <table>
+                <tbody>
+                  {% for model in app.models %}
+                    <tr class="model-{{ model.object_name|lower }}{% if model.admin_url in request.path|urlencode %} current-model{% endif %}">
+                      {% if model.admin_url %}
+                        <th scope="row">
+                          <a class="fp-model-link" href="{{ model.admin_url }}"{% if model.admin_url in request.path|urlencode %} aria-current="page"{% endif %}>
+                            {% include "admin/includes/icon.html" with name="model" %}
+                            <span>{{ model.name }}</span>
+                          </a>
+                        </th>
+                      {% else %}
+                        <th scope="row">{{ model.name }}</th>
+                      {% endif %}
+                      <td class="fp-admin-app__actions">
+                        {% if model.add_url %}
+                          <a href="{{ model.add_url }}" class="addlink">
+                            {% include "admin/includes/icon.html" with name="plus" %}
+                            <span>{% translate 'Add' %}</span>
+                          </a>
+                        {% endif %}
+                        {% if model.admin_url %}
+                          {% if model.view_only %}
+                            <a href="{{ model.admin_url }}" class="viewlink">
+                              {% include "admin/includes/icon.html" with name="eye" %}
+                              <span>{% translate 'View' %}</span>
+                            </a>
+                          {% else %}
+                            <a href="{{ model.admin_url }}" class="changelink">
+                              {% include "admin/includes/icon.html" with name="pencil" %}
+                              <span>{% translate 'Change' %}</span>
+                            </a>
+                          {% endif %}
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+  {% else %}
+    <p>{% translate "You don't have permission to view or edit anything." %}</p>
+  {% endif %}
 </div>
 {% endblock %}
 
 {% block sidebar %}
-<div id="content-related">
-    <!-- Custom Analytics Section -->
-    <div class="module" id="prayer-import-module">
-        <h2>Prayer Tools</h2>
-        <ul class="actionlist">
-            <li>
-                <a href="{% url 'admin:prayers_import' %}" style="font-weight: bold; color: #417690;">
-                    Import Prayer Sets
-                </a>
-                <br>
-                <span class="mini quiet">Upload prayer set JSON and preview it before creating records</span>
-            </li>
-        </ul>
-    </div>
+<div id="content-related" class="fp-dashboard-sidebar">
+  {% if admin_quick_actions %}
+    <section class="module fp-quick-actions" aria-labelledby="quick-actions-heading">
+      <h2 id="quick-actions-heading">Quick actions</h2>
+      <ul>
+        {% for action in admin_quick_actions %}
+          <li>
+            <a href="{{ action.url }}">
+              <span class="fp-quick-actions__icon">
+                {% include "admin/includes/icon.html" with name=action.icon %}
+              </span>
+              <span class="fp-quick-actions__body">
+                <strong>{{ action.name }}</strong>
+                <span>{{ action.description }}</span>
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
 
-    <div class="module" id="analytics-module">
-        <h2>📊 Analytics Dashboards</h2>
-        <ul class="actionlist">
-            <li>
-                <a href="{% url 'admin:events_analytics' %}" style="font-weight: bold; color: #417690;">
-                    👥 User Engagement Dashboard
-                </a>
-                <br>
-                <span class="mini quiet">Track user activity and engagement trends (excludes staff & analytics events)</span>
-            </li>
-            <li>
-                <a href="{% url 'admin:events_app_analytics' %}" style="font-weight: bold; color: #6f42c1;">
-                    📱 App Analytics Dashboard
-                </a>
-                <br>
-                <span class="mini quiet">Screen views, platforms, app opens by hour, session metrics</span>
-            </li>
-        </ul>
-    </div>
-    
-    <div class="module" id="recent-actions-module">
-        <h2>{% translate 'Recent actions' %}</h2>
-        {% load log %}
-        {% get_admin_log 10 as admin_log for_user user %}
-        {% if not admin_log %}
-        <p>{% translate 'None available' %}</p>
-        {% else %}
-        <ul class="actionlist">
+  <section class="module" id="recent-actions-module" aria-labelledby="recent-actions-heading">
+    <h2 id="recent-actions-heading">{% translate 'Recent actions' %}</h2>
+    <h3>{% translate 'My actions' %}</h3>
+    {% load log %}
+    {% get_admin_log 10 as admin_log for_user user %}
+    {% if not admin_log %}
+      <p>{% translate 'None available' %}</p>
+    {% else %}
+      <ul class="actionlist">
         {% for entry in admin_log %}
-        <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %}changelink{% endif %}{% if entry.is_deletion %}deletelink{% endif %}">
+          <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %}changelink{% endif %}{% if entry.is_deletion %}deletelink{% endif %}">
             {% if entry.is_deletion or not entry.get_admin_url %}
-                {{ entry.object_repr }}
+              {{ entry.object_repr }}
             {% else %}
-                <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+              <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
             {% endif %}
             <br>
             {% if entry.content_type %}
-                <span class="mini quiet">{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %}</span>
+              <span class="mini quiet">{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %}</span>
             {% else %}
-                <span class="mini quiet">{% translate 'Unknown content' %}</span>
+              <span class="mini quiet">{% translate 'Unknown content' %}</span>
             {% endif %}
-        </li>
+          </li>
         {% endfor %}
-        </ul>
-        {% endif %}
-    </div>
+      </ul>
+    {% endif %}
+  </section>
 </div>
-{% endblock %} 
+{% endblock %}
