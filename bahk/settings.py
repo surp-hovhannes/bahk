@@ -96,6 +96,13 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
+# Always allow the production API domain, independent of the ALLOWED_HOSTS env
+# var. Previously masked by django_heroku.settings()'s ALLOWED_HOSTS = ['*']
+# override, which was removed when upgrading to Django 5.2 (#486) and caused
+# production to start rejecting requests to this host (Sentry 9e50bcbfcdeb4f898c4ee5b60e3bbea5).
+if 'api.fastandpray.app' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('api.fastandpray.app')
+
 # Enable/disable rate limiting on the icon feedback endpoint
 ENABLE_FEEDBACK_THROTTLING = config('ENABLE_FEEDBACK_THROTTLING', default=True, cast=bool)
 
