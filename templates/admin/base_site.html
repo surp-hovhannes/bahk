@@ -1,0 +1,27 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/fastandpray-admin.css' %}">
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap">
+<link rel="icon" type="image/svg+xml" href="{% static 'admin/brand/favicon.svg' %}">
+{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+  <a class="fp-admin-brand" href="{% url 'admin:index' %}">
+    <img class="fp-admin-brand__icon" src="{% static 'admin/brand/app-icon.png' %}" alt="" width="36" height="36">
+    <span>{{ site_header|default:_('Fast & Pray Admin') }}</span>
+  </a>
+</h1>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
