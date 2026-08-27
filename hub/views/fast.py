@@ -497,7 +497,9 @@ class JoinFastView(generics.UpdateAPIView):
             ).first()
             if soft_kept:
                 soft_kept.is_active = True
-                soft_kept.text = intention_text or soft_kept.text
+                if intention_text and intention_text != soft_kept.text:
+                    soft_kept.text = intention_text
+                    soft_kept.matched_tags = None
                 if 'intention_is_public' in self.request.data:
                     soft_kept.is_public = intention_is_public
                 soft_kept.save()

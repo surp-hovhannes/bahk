@@ -1,6 +1,6 @@
 """Tests for intention → prayer recommendations (issue #450)."""
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -209,4 +209,56 @@ class StoredLLMTagsTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         mock_task.delay.assert_called_once_with(intention.id)
         intention.refresh_from_db()
+        self.assertIsNone(intention.matched_tags)
+
+    def test_read_without_prompt_does_not_enqueue_tagging(self):
+        from unittest.mock import patch
+        intention = FastIntention.objects.create(
+            user=self.user, fast=self.fast, text='peace')
+
+        with patch('hub.tasks.llm_tasks.tag_intention_prayers') as mock_task:
+            from hub.intention_recommendations import tags_for_recommendation
+            tags_for_recommendation(intention)
+
+        mock_task.delay.assert_not_called()
+
+    @override_settings(CACHES={
+        'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}
+    })
+    def test_repeated_reads_enqueue_tagging_once(self):
+        from unittest.mock import patch
+        from hub.models import LLMPrompt
+        LLMPrompt.objects.create(
+            model='claude-haiku-4-5-20251001',
+            role='Tag intentions.',
+            prompt='Pick relevant tags.',
+            applies_to='intentions',
+            active=True,
+        )
+        intention = FastIntention.objects.create(
+            user=self.user, fast=self.fast, text='peace')
+
+        with patch('hub.tasks.llm_tasks.tag_intention_prayers') as mock_task:
+            from hub.intention_recommendations import tags_for_recommendation
+            tags_for_recommendation(intention)
+            tags_for_recommendation(intention)
+
+        mock_task.delay.assert_called_once_with(intention.id)
+
+    def test_rejoin_with_changed_text_clears_stored_tags(self):
+        from unittest.mock import patch
+        intention = FastIntention.objects.create(
+            user=self.user, fast=self.fast, text='old intention',
+            matched_tags=['faith'], is_active=False)
+        join_url = reverse('fast-join')
+
+        with patch('hub.views.fast.tag_intention_prayers'):
+            res = self.client.put(join_url, {
+                'fast_id': self.fast.id,
+                'intention_text': 'new intention',
+            }, format='json')
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        intention.refresh_from_db()
+        self.assertEqual(intention.text, 'new intention')
         self.assertIsNone(intention.matched_tags)

@@ -168,8 +168,20 @@ def tags_for_recommendation(intention):
     tags = tags_for_intention(intention.text)
     if intention.matched_tags is None:
         if intention.text.strip() and intention.pk:
+            from django.core.cache import cache
+            from hub.models import LLMPrompt
             from hub.tasks.llm_tasks import tag_intention_prayers
-            tag_intention_prayers.delay(intention.pk)
+
+            # Without a configured prompt the task is guaranteed to no-op. A
+            # short-lived cache lock also prevents repeated reads from flooding
+            # the queue while a tag attempt is pending or after a transient
+            # provider failure.
+            has_prompt = LLMPrompt.objects.filter(
+                active=True, applies_to='intentions'
+            ).exists()
+            lock_key = f'intention-prayer-tagging:{intention.pk}'
+            if has_prompt and cache.add(lock_key, True, timeout=300):
+                tag_intention_prayers.delay(intention.pk)
     else:
         tags = list(dict.fromkeys(tags + intention.matched_tags))
     return tags
