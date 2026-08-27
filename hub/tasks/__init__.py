@@ -6,7 +6,7 @@ This module exposes all Celery tasks from the separate task modules.
 from .email_tasks import test_email_task, send_fast_reminder_task
 from .mapping_tasks import generate_participant_map, update_current_fast_maps
 from .geocoding_tasks import batch_geocode_profiles, geocode_profile_location
-from .llm_tasks import generate_reading_context_task, generate_feast_context_task
+from .llm_tasks import generate_reading_context_task, generate_feast_context_task, tag_intention_prayers
 from .icon_tasks import match_icon_to_feast_task
 from .bible_api_tasks import fetch_reading_text_task, refresh_all_reading_texts_task
 from .armenian_text_tasks import fetch_armenian_reading_text_task
@@ -26,6 +26,7 @@ __all__ = [
     'geocode_profile_location',
     'generate_reading_context_task',
     'generate_feast_context_task',
+    'tag_intention_prayers',
     'match_icon_to_feast_task',
     'fetch_reading_text_task',
     'refresh_all_reading_texts_task',

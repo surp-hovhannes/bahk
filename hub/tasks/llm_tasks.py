@@ -414,3 +414,24 @@ def determine_feast_designation_task(self, feast_id: int):
     except Exception as e:
         logger.exception(f"Error determining designation for Feast {feast_id}: {e}")
         # Don't retry on general exceptions, just log the error
+
+
+@shared_task
+def tag_intention_prayers(intention_id):
+    """LLM-tag a FastIntention's text and store the result in matched_tags.
+
+    No-op (leaves matched_tags None) if no active 'intentions' LLMPrompt exists
+    or the LLM call fails — the curated keyword map remains the read-path fallback.
+    """
+    from hub.intention_recommendations import llm_tags_for_intention
+    from hub.models import FastIntention
+
+    intention = FastIntention.objects.filter(id=intention_id, is_active=True).first()
+    if not intention or not intention.text.strip():
+        return
+    tags = llm_tags_for_intention(intention.text)
+    if tags is None:
+        return
+    intention.matched_tags = tags
+    intention.save(update_fields=['matched_tags', 'updated_at'])
+    logger.debug("Intention %s tagged with %s", intention_id, tags)
