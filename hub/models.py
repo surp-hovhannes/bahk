@@ -18,6 +18,9 @@ from taggit.managers import TaggableManager
 
 import bahk.settings as settings
 from hub.constants import (
+    AZARIAH_CATENA_BOOK,
+    AZARIAH_CATENA_CHAPTER,
+    AZARIAH_TO_DANIEL_VERSE_OFFSET,
     CATENA_ABBREV_FOR_BOOK_NORMALIZED,
     CATENA_HOME_PAGE_URL,
     DAYS_TO_CACHE_THUMBNAIL,
@@ -698,7 +701,15 @@ class Reading(models.Model):
         """
         from hub.constants import normalize_book_name
 
-        normalized_book = normalize_book_name(self.book)
+        book, start_chapter, start_verse = self.book, self.start_chapter, self.start_verse
+        if normalize_book_name(book) == "Azariah":
+            # See hub.constants.AZARIAH_TO_DANIEL_VERSE_OFFSET: Catena has no standalone
+            # "Azariah" section, so remap onto its Daniel 3 home before the normal lookup.
+            book = AZARIAH_CATENA_BOOK
+            start_chapter = AZARIAH_CATENA_CHAPTER
+            start_verse = start_verse + AZARIAH_TO_DANIEL_VERSE_OFFSET
+
+        normalized_book = normalize_book_name(book)
         book_abbrev = CATENA_ABBREV_FOR_BOOK_NORMALIZED.get(normalized_book)
         if book_abbrev is None:
             logging.error(
@@ -709,10 +720,10 @@ class Reading(models.Model):
             return CATENA_HOME_PAGE_URL
         verse_ref = (
             ""
-            if self.start_verse <= 2
-            else f"#{book_abbrev}{self.start_chapter:03d}{self.start_verse - 2:03d}"
+            if start_verse <= 2
+            else f"#{book_abbrev}{start_chapter:03d}{start_verse - 2:03d}"
         )
-        return f"{CATENA_HOME_PAGE_URL}{book_abbrev}/{self.start_chapter:d}/{verse_ref}"
+        return f"{CATENA_HOME_PAGE_URL}{book_abbrev}/{start_chapter:d}/{verse_ref}"
 
     # Add a helper property to easily reference the passage in a standard format
     @property

@@ -18,7 +18,14 @@ class TestStaticFilesStorage(FileSystemStorage):
     FRONTEND_URL='http://testserver',
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     EMAIL_HOST_USER='test@example.com',
-    STATICFILES_STORAGE='hub.tests.test_email_templates.TestStaticFilesStorage',
+    STORAGES={
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'hub.tests.test_email_templates.TestStaticFilesStorage',
+        },
+    },
     STATIC_URL='/static/'
 )
 class EmailTemplateTests(TestCase):

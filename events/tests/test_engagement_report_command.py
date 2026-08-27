@@ -4,7 +4,7 @@ Tests for the engagement_report management command.
 import json
 import tempfile
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 
 from django.test import TestCase
 from django.core.management import call_command
@@ -192,7 +192,7 @@ class EngagementReportCommandTestCase(TestCase):
         self.assertEqual(result.year, 2025)
         self.assertEqual(result.month, 1)
         self.assertEqual(result.day, 15)
-        self.assertEqual(result.tzinfo, timezone.utc)
+        self.assertEqual(result.tzinfo, datetime_timezone.utc)
         
         # Test None input
         result = command._parse_date(None)
@@ -349,7 +349,9 @@ class EngagementReportCommandTestCase(TestCase):
         command = Command()
         
         # Test with UTC datetime
-        utc_dt = timezone.make_aware(datetime(2025, 1, 15, 14, 30, 0), timezone.utc)
+        utc_dt = timezone.make_aware(
+            datetime(2025, 1, 15, 14, 30, 0), datetime_timezone.utc
+        )
         
         # Simulate the timezone-preserving normalization
         if isinstance(utc_dt, datetime):
@@ -358,8 +360,8 @@ class EngagementReportCommandTestCase(TestCase):
             end_dt = datetime.combine(utc_dt.date(), datetime.max.time()).replace(tzinfo=original_tz)
         
         # Verify timezone is preserved
-        self.assertEqual(start_dt.tzinfo, timezone.utc)
-        self.assertEqual(end_dt.tzinfo, timezone.utc)
+        self.assertEqual(start_dt.tzinfo, datetime_timezone.utc)
+        self.assertEqual(end_dt.tzinfo, datetime_timezone.utc)
         self.assertEqual(start_dt.hour, 0)
         self.assertEqual(start_dt.minute, 0)
         self.assertEqual(end_dt.hour, 23)

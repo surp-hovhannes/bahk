@@ -218,6 +218,23 @@ class BookNameMappingTests(TestCase):
         self.assertIn("heb", url)
         self.assertNotEqual(url, CATENA_HOME_PAGE_URL)
 
+    def test_create_url_with_azariah_book_name(self):
+        """Reading.create_url() should remap Azariah onto Catena's Daniel 3 page.
+
+        Catena has no standalone "Azariah" section; the Prayer of Azariah / Song of
+        the Three Young Men is embedded inline in Daniel 3 (verses 24-90). Azariah
+        verse 1 == Daniel 3:24, verified live against catenabible.com/dn/3.
+        """
+        reading = Reading(
+            book="Azariah",
+            start_chapter=1,
+            start_verse=1,
+            end_chapter=1,
+            end_verse=68,
+        )
+        url = reading.create_url()
+        self.assertEqual(url, "https://catenabible.com/dn/3/#dn003022")
+
     def test_create_url_with_unknown_book_returns_home(self):
         """Unknown book should return CATENA_HOME_PAGE_URL."""
         reading = Reading(
