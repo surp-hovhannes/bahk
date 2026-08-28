@@ -913,6 +913,7 @@ class LLMPrompt(models.Model):
         ("readings", "Readings"),
         ("feasts", "Feasts"),
         ("prayer_requests", "Prayer Requests"),
+        ("intentions", "Intentions"),
     ]
 
     model = models.CharField(
@@ -1151,6 +1152,12 @@ class FastIntention(models.Model):
     is_active = models.BooleanField(
         default=True,
         help_text='Soft-delete flag; set to False when user leaves the fast',
+    )
+    matched_tags = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text='LLM-derived prayer tags for this intention; null until computed',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

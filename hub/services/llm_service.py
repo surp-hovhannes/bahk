@@ -105,7 +105,6 @@ If none match, return: []
         response = client.messages.create(
             model="claude-sonnet-4-6",  # Sonnet for better Armenian/transliteration matching
             max_tokens=200,
-            temperature=0.0,  # Deterministic
             system="You are a precise feast matching assistant. Return only JSON arrays of indices.",
             messages=[
                 {"role": "user", "content": prompt},
@@ -564,7 +563,6 @@ class AnthropicService(LLMService):
                     {"role": "user", "content": user_message}
                 ],
                 max_tokens=1000,
-                temperature=0.35,
             )
             if response and response.content:
                 return response.content[0].text.strip()
@@ -662,7 +660,6 @@ class AnthropicService(LLMService):
                     {"role": "user", "content": user_content}
                 ],
                 max_tokens=2000,  # Increased for Armenian text which uses more tokens
-                temperature=0.35,
             )
             if response and response.content:
                 response_text = response.content[0].text.strip()
@@ -736,7 +733,6 @@ class AnthropicService(LLMService):
                     {"role": "user", "content": user_message}
                 ],
                 max_tokens=200,
-                temperature=0.1,  # Lower temperature for more deterministic classification
             )
             if response and response.content:
                 response_text = response.content[0].text.strip()
