@@ -1,11 +1,10 @@
 # Django and extensions
-django==4.2.11
-djangorestframework==3.14.0
+django==5.2.17
+djangorestframework==3.17.2
 pytest==8.1.1
 pytest-django==4.8.0
 whitenoise
 gunicorn
-django-heroku
 dj-database-url
 psycopg2-binary
 djangorestframework_simplejwt
@@ -13,6 +12,7 @@ django-storages
 Pillow
 boto3
 python-decouple
+pytz
 django-imagekit
 imagehash
 django-celery-beat
@@ -47,6 +47,8 @@ openai
 anthropic
 # Bible API
 requests
+# Armenian lectionary (offline daily-readings engine; replaces sacredtradition.am scraping)
+armenian-lectionary>=1.3.0
 # Linting
 ruff
 timezonefinder==6.5.5

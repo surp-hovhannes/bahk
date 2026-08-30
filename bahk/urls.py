@@ -20,9 +20,10 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import include, path
-from django.views.generic import RedirectView
 from markdownx.views import ImageUploadView, MarkdownifyView
+
 from bahk.tag_views import SystemTagsView
+from bahk.views import ApiDocsView, LandingPageView
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -108,7 +109,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', HealthCheckView.as_view(), name='health_check'),
     path('hub/', include('hub.urls')),
-    path('', RedirectView.as_view(url='hub/', permanent=True)),
+    path('docs/', ApiDocsView.as_view(), name='api-docs'),
+    path('', LandingPageView.as_view(), name='api-home'),
 
     # Authentication endpoints
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
@@ -147,7 +149,7 @@ urlpatterns += [
 
 # S3FileField URLs
 urlpatterns += [
-    path('api/s3-upload/', include('s3_file_field.urls')),
+    path('api/s3-upload/', include('bahk.s3_upload_urls')),
 ]
 
 # for serving media files during development

@@ -1,0 +1,61 @@
+{% load i18n %}
+
+<button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="{% translate 'Toggle navigation' %}"></button>
+<nav class="sticky" id="nav-sidebar" aria-label="{% translate 'Sidebar' %}">
+  <input type="search" id="nav-filter"
+         placeholder="{% translate 'Filter navigation items' %}"
+         aria-label="{% translate 'Filter navigation items' %}">
+  {% for section in admin_sections %}
+    <section class="fp-nav-section" aria-labelledby="nav-section-{{ section.slug }}">
+      <h2 class="fp-nav-section__heading" id="nav-section-{{ section.slug }}">
+        {% include "admin/includes/icon.html" with name=section.icon %}
+        <span>{{ section.name }}</span>
+      </h2>
+      {% for app in section.apps %}
+        <div class="app-{{ app.app_label }} module{% if app.app_url in request.path %} current-app{% endif %}">
+          <table>
+            <caption>
+              <a href="{{ app.app_url }}" class="section" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">
+                {{ app.name }}
+              </a>
+            </caption>
+            <thead class="visually-hidden">
+              <tr>
+                <th scope="col">{% translate 'Model name' %}</th>
+                <th scope="col">{% translate 'Add link' %}</th>
+                <th scope="col">{% translate 'Change or view list link' %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for model in app.models %}
+                <tr class="model-{{ model.object_name|lower }}{% if model.admin_url in request.path %} current-model{% endif %}">
+                  <th scope="row">
+                    {% if model.admin_url %}
+                      <a href="{{ model.admin_url }}"{% if model.admin_url in request.path %} aria-current="page"{% endif %}>{{ model.name }}</a>
+                    {% else %}
+                      {{ model.name }}
+                    {% endif %}
+                  </th>
+                  <td>
+                    {% if model.add_url %}
+                      <a href="{{ model.add_url }}" class="addlink" aria-label="{% blocktranslate with name=model.name %}Add {{ name }}{% endblocktranslate %}">{% translate 'Add' %}</a>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if model.admin_url %}
+                      {% if model.view_only %}
+                        <a href="{{ model.admin_url }}" class="viewlink">{% translate 'View' %}</a>
+                      {% else %}
+                        <a href="{{ model.admin_url }}" class="changelink">{% translate 'Change' %}</a>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </section>
+  {% endfor %}
+</nav>

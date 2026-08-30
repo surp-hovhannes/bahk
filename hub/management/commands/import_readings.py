@@ -5,7 +5,7 @@ import logging
 from django.core.management.base import BaseCommand
 
 import hub.models as models
-from hub.utils import scrape_readings
+from hub.services.lectionary_service import get_daily_readings, persist_readings
 
 
 def daterange(start_date: date, end_date: date):
@@ -36,29 +36,7 @@ class Command(BaseCommand):
         end_date = datetime.strptime(end_date_value, "%Y-%m-%d")
         for date_obj in daterange(start_date, end_date):
             day, _ = models.Day.objects.get_or_create(church=church, date=date_obj)
-            readings = scrape_readings(date_obj, church)
-            for reading in readings:
-                reading.update({"day": day})
-                # Extract and remove all book-related fields to handle them separately
-                book_en = reading.pop("book_en", reading.get("book"))
-                book_hy = reading.pop("book_hy", None)
-                # Remove 'book' from the dict to avoid using it in get_or_create lookup
-                reading.pop("book", None)
-
-                # Use explicit lookup with book_en to match the uniqueness constraint
-                # (modeltrans treats 'book' as 'book_en' in the database)
-                reading_obj, created = models.Reading.objects.get_or_create(
-                    day=reading["day"],
-                    book=book_en,  # This becomes book_en in the database
-                    start_chapter=reading["start_chapter"],
-                    start_verse=reading["start_verse"],
-                    end_chapter=reading["end_chapter"],
-                    end_verse=reading["end_verse"]
-                )
-
-                # Update translations if they are missing
-                if book_hy and not reading_obj.book_hy:
-                    reading_obj.book_hy = book_hy
-                    reading_obj.save(update_fields=['i18n'])
-                    action = "Created" if created else "Updated"
-                    logging.info(f"{action} reading with translations: {reading_obj}")
+            readings = get_daily_readings(date_obj, church)
+            for reading_obj, created in persist_readings(day, readings):
+                action = "Created" if created else "Updated"
+                logging.info(f"{action} reading: {reading_obj}")

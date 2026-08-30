@@ -32,9 +32,8 @@ class FeastDesignationTaskTests(TestCase):
 
     def test_determine_designation_task_skips_if_designation_exists(self):
         """Test that task skips if designation is already set."""
-        day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=self.church,
             name="Christmas",
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
@@ -53,7 +52,7 @@ class FeastDesignationTaskTests(TestCase):
         """Test that task sets designation when LLM returns valid response."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Saint Stephen",
         )
 
@@ -71,7 +70,7 @@ class FeastDesignationTaskTests(TestCase):
         """Test that task handles invalid designation response."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -90,7 +89,7 @@ class FeastDesignationTaskTests(TestCase):
         """Test that task handles None response from LLM."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -114,7 +113,7 @@ class FeastDesignationTaskTests(TestCase):
         """Test that task uses active LLM prompt if available."""
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -155,7 +154,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Saint Stephen",
         )
 
@@ -180,7 +179,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Saint Stephen",
         )
 
@@ -205,7 +204,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Easter Sunday",
         )
 
@@ -229,7 +228,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -245,7 +244,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -276,7 +275,7 @@ class FeastDesignationSignalTests(TestCase):
         post_save.disconnect(handle_feast_save, sender=Feast)
         
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -302,7 +301,7 @@ class FeastDesignationSignalTests(TestCase):
         post_save.disconnect(handle_feast_save, sender=Feast)
         
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
             designation=Feast.Designation.MARTYRS,
         )
@@ -332,7 +331,7 @@ class FeastDesignationSignalTests(TestCase):
         # Create feast - this should trigger the signal which calls the task
         # Since CELERY_TASK_ALWAYS_EAGER is True, the task executes synchronously
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Saint Stephen",
         )
 
@@ -361,11 +360,11 @@ class FeastDesignationSignalTests(TestCase):
         """
         day = Day.objects.create(date=self.test_date, church=self.church)
         
-        # Simulate the pattern from views/feasts.py and import_feasts.py:
+        # Simulate the pattern from views/feasts.py:
         # get_or_create followed by setting translation and saving
         feast_obj, created = Feast.objects.get_or_create(
-            day=day,
-            defaults={"name": "Test Feast"}
+            church=day.church,
+            name="Test Feast",
         )
         
         # Verify feast was created
@@ -389,7 +388,7 @@ class FeastDesignationSignalTests(TestCase):
         
         # Create feast first (this will trigger the signal)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Existing Feast",
         )
         
@@ -423,10 +422,13 @@ class FeastDesignationAPITests(TestCase):
         from hub.views.feasts import GetFeastForDate
         from rest_framework.test import APIRequestFactory
 
-        day = Day.objects.create(date=self.test_date, church=self.church)
+        # The view resolves the commemoration for the date through the engine, so the row it
+        # finds is the one carrying that engine name -- seed it under the same name rather than
+        # an invented one, and the test exercises the real resolution path.
+        from hub.services.feast_service import get_feast_for_date
         feast = Feast.objects.create(
-            day=day,
-            name="Christmas",
+            church=self.church,
+            name=get_feast_for_date(self.test_date, self.church)["name_en"],
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
 
@@ -450,7 +452,7 @@ class FeastDesignationAPITests(TestCase):
 
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(
-            day=day,
+            church=day.church,
             name="Test Feast",
         )
 
@@ -471,7 +473,7 @@ class FeastDesignationAPITests(TestCase):
         from rest_framework.test import APIRequestFactory
 
         day = Day.objects.create(date=self.test_date, church=self.church)
-        feast = Feast.objects.create(day=day, name="Test Feast")
+        feast = Feast.objects.create(church=day.church, name="Test Feast")
 
         mock_get_or_create.return_value = (feast, False, {"status": "success"})
 
@@ -502,7 +504,7 @@ class FeastContextAnthropicServiceTests(TestCase):
         self.addCleanup(lambda: post_save.connect(handle_feast_save, sender=Feast))
         self.day = Day.objects.create(date=self.test_date, church=self.church)
         self.feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="Theophany",
         )
         self.prompt = LLMPrompt.objects.create(

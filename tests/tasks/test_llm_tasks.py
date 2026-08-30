@@ -269,7 +269,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
     def test_fast_named_real_commemoration_is_eligible(self):
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name=(
                 "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
                 "Patriarch, and his three disciples"
@@ -281,7 +281,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
     def test_unclassified_fast_named_real_commemoration_is_eligible(self):
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name=(
                 "Fast day, Saints Epiphanius Bishop of Cyprus, Babylas the "
                 "Patriarch, and his three disciples"
@@ -292,7 +292,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
     def test_generic_fast_designation_is_not_eligible(self):
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="First day of the Fast",
             designation=Feast.Designation.FAST,
         )
@@ -301,7 +301,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
     def test_unclassified_generic_fast_name_is_not_eligible(self):
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="First day of the Fast",
         )
 
@@ -311,7 +311,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
         # Regression: "Sts." and plural "Martyrs" must be recognized as
         # a named commemoration even before designation is classified.
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="Commemoration of Sts. Martyrs",
         )
 
@@ -321,7 +321,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
         # Mijink (Median day of Great Lent) is a known generic fast day
         # whose rendered name does not match the "fast day / lent day" pattern.
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="Median day of Great Lent (Mijink)",
         )
 
@@ -329,7 +329,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
     def test_mijink_alone_is_not_eligible(self):
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="Mijink",
         )
 
@@ -341,7 +341,7 @@ class FeastContextGenerationEligibilityTests(TestCase):
         # matched only "Prophetesse"/"Prophetesses" (e + s?), so the singular
         # "Prophetess" alone was missed and the fast-day would be skipped.
         feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name="Fast day, Prophetess Anna",
         )
 

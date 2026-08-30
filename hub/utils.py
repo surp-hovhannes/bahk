@@ -1,12 +1,6 @@
 """Utilities for supporting backend."""
 from datetime import datetime, timedelta
 import logging
-import re
-import urllib
-import urllib.parse
-import hashlib
-
-import sentry_sdk
 
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
@@ -23,92 +17,7 @@ from hub.serializers import FastSerializer
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-PARSER_REGEX = r"^([\w\u0531-\u058A\u0400-\u04FF1-4\'\.\s]+) ([0-9]+\.)?([0-9]+)\-?([0-9]+\.)?([0-9]+)?$"
 SUPPORTED_CHURCHES = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME)
-
-# Circuit breaker state: key = "circuit_breaker:{url_hash}" (store in cache)
-# After 3 consecutive failures in 15 min, block further attempts for 15 min
-SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT = 900  # 15 min
-SCRAPE_CIRCUIT_BREAKER_MAX_FAILURES = 3
-SCRAPE_CACHE_TIMEOUT = 21600  # 6 hours
-
-
-def _stable_url_key(url: str) -> str:
-    """Stable hash for URL cache keys (unlike Python's salted hash())."""
-    return hashlib.md5(url.encode()).hexdigest()[:16]
-
-
-def _fetch_sacredtradition(url: str, timeout: int = 10) -> str | None:
-    """Fetch a sacredtradition.am page with retries, circuit breaker, and caching.
-    
-    Args:
-        url: Full URL to fetch
-        timeout: Request timeout in seconds
-        
-    Returns:
-        Decoded HTML string, or None on failure (with cached data if avail)
-    """
-    # URL validation
-    parsed = urllib.parse.urlparse(url)
-    if not parsed.netloc or parsed.netloc != "sacredtradition.am":
-        logger.error("Invalid URL for sacredtradition.am scrape: %s", url)
-        return None
-    
-    url_key = _stable_url_key(url)
-    
-    # Check circuit breaker
-    circuit_key = f"circuit_breaker:{url_key}"
-    circuit_open = cache.get(circuit_key)
-    if circuit_open:
-        logger.warning("Circuit breaker open for %s, skipping scrape", url)
-        # Try cache fallback anyway
-        cached = cache.get(f"scrape_result:{url_key}")
-        if cached:
-            return cached
-        return None
-    
-    # Get any cached result to use as stale fallback
-    cache_key = f"scrape_result:{url_key}"
-    cached = cache.get(cache_key)
-    
-    # Fetch with retries
-    last_error = None
-    for attempt in range(3):
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; BahkBot/1.0)'})
-            response = urllib.request.urlopen(req, timeout=timeout)
-            if response.status == 200:
-                data = response.read().decode("utf-8")
-                # Cache successful result
-                cache.set(cache_key, data, SCRAPE_CACHE_TIMEOUT)
-                # Reset circuit breaker + failure counter on success
-                cache.delete(circuit_key)
-                cache.delete(circuit_key + ":failures")
-                return data
-            else:
-                last_error = f"HTTP {response.status}"
-                logger.error("sacredtradition.am returned status %d for %s", response.status, url)
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
-            last_error = str(e)
-            logger.warning("Attempt %d/3 failed for %s: %s", attempt + 1, url, last_error)
-            if attempt < 2:
-                import time
-                time.sleep(1 * (attempt + 1))  # 1s, 2s backoff
-    
-    # All attempts failed — trip circuit breaker
-    failure_count = cache.get(circuit_key + ":failures", 0)
-    failure_count += 1
-    cache.set(circuit_key + ":failures", failure_count, SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT)
-    if failure_count >= SCRAPE_CIRCUIT_BREAKER_MAX_FAILURES:
-        cache.set(circuit_key, True, SCRAPE_CIRCUIT_BREAKER_CACHE_TIMEOUT)
-        sentry_sdk.capture_exception(Exception(f"Circuit breaker tripped for {url}"))
-    
-    # Log the final failure
-    if last_error:
-        sentry_sdk.capture_exception(Exception(f"Scrape failed for {url} after 3 attempts: {last_error}"))
-    
-    # Return stale cached data as fallback (or None if never cached)
-    return cached
 
 
 def get_user_profile_safe(user):
@@ -161,250 +70,6 @@ def invalidate_fast_stats_cache(user):
     # Use the same cache key format as FastStatsView
     cache_key = f"bahk:fast_stats:{user.id}"
     cache.delete(cache_key)
-
-
-def scrape_readings(date_obj, church, date_format="%Y%m%d", max_num_readings=40):
-    """Scrapes readings from sacredtradition.am in both English and Armenian."""
-    if church not in SUPPORTED_CHURCHES:
-        logging.error("Web-scraping for readings only set up for the following churches: %r. %s not supported.",
-                      SUPPORTED_CHURCHES, church)
-        return []
-
-    date_str = date_obj.strftime(date_format)
-
-    def scrape_language(language_code):
-        """Helper function to scrape readings for a specific language.
-
-        Args:
-            language_code: 2 for English, 3 for Armenian
-        """
-        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
-        html_content = _fetch_sacredtradition(url)
-        if html_content is None:
-            return []
-
-        book_start = html_content.find("<b>")
-
-        readings = []
-        ct = 0
-        while book_start != -1:
-            # prevent infinite loop
-            if ct > max_num_readings:
-                logging.error("Reached maximum number of readings: %d. Breaking to avoid infinite loop.", max_num_readings)
-                break
-            ct += 1
-
-            i1 = book_start + len("<b>")
-            i2 = html_content.find("</b>")
-            reading_str = html_content[i1:i2]
-
-            # advance to next section of web text early to prevent infinite loop in case of failure later on
-            html_content = html_content[i2 + 1:]
-            book_start = html_content.find("<b>")
-
-            if "," in reading_str:
-                # TODO: if comma found, second reading appended to first, as for Daniel 3.1-23 and Azariah 1-68
-                # for now, omit second reading
-                reading_str = reading_str.split(",")[0]
-
-            groups = re.search(PARSER_REGEX, reading_str)
-
-            # skip reading if does not match parser regex
-            if groups is None:
-                logging.error("Could not parse reading %s at %s with regex %s", reading_str, url, PARSER_REGEX)
-                continue
-
-            try:
-                # parse groups
-                book = groups.group(1)
-                # remove decimal if start chapter provided; otherwise, part of book with 1 chapter
-                start_chapter = groups.group(2).strip(".") if groups.group(2) is not None else 1
-                start_verse = groups.group(3)
-                # remove decimal if end chapter provided; otherwise, must be the same as the start chapter
-                end_chapter = groups.group(4).strip(".") if groups.group(4) is not None else start_chapter
-                end_verse = groups.group(5) if groups.group(5) is not None else start_verse
-
-                readings.append({
-                    "book": book,
-                    "start_chapter": int(start_chapter),
-                    "start_verse": int(start_verse),
-                    "end_chapter": int(end_chapter),
-                    "end_verse": int(end_verse)
-                })
-            except Exception:
-                logging.error(
-                    "Could not parse reading with text %s with regex %s from %s. Skipping.",
-                    reading_str, PARSER_REGEX, url, exc_info=True
-                )
-                continue
-
-        return readings
-
-    # Scrape English (iL=2) and Armenian (iL=3)
-    english_readings = scrape_language(2)
-    armenian_readings = scrape_language(3)
-
-    # Combine the readings with both translations
-    # Assuming the readings are in the same order, we match them by index
-    combined_readings = []
-    for i, en_reading in enumerate(english_readings):
-        reading_data = {
-            "book": en_reading["book"],
-            "book_en": en_reading["book"],
-            "start_chapter": en_reading["start_chapter"],
-            "start_verse": en_reading["start_verse"],
-            "end_chapter": en_reading["end_chapter"],
-            "end_verse": en_reading["end_verse"]
-        }
-
-        # Add Armenian translation if available
-        if i < len(armenian_readings):
-            hy_reading = armenian_readings[i]
-            # Verify the readings match (same chapter/verse structure)
-            if (hy_reading["start_chapter"] == en_reading["start_chapter"] and
-                hy_reading["start_verse"] == en_reading["start_verse"] and
-                hy_reading["end_chapter"] == en_reading["end_chapter"] and
-                hy_reading["end_verse"] == en_reading["end_verse"]):
-                reading_data["book_hy"] = hy_reading["book"]
-            else:
-                logging.warning(
-                    "Armenian reading %d does not match English reading structure. Skipping Armenian translation.",
-                    i
-                )
-
-        combined_readings.append(reading_data)
-
-    return combined_readings
-
-
-def scrape_armenian_reading_texts(date_obj, church, date_format="%Y%m%d"):
-    """Scrapes Armenian Bible verse text from sacredtradition.am.
-
-    Fetches the Armenian readings page (iL=0) for the given date and extracts
-    the verse text for each reading block. Each block is delimited by a ``<b>``
-    reference tag and the next ``<hr>`` separator.
-
-    Args:
-        date_obj: datetime.date object for the date to scrape.
-        church: Church object (must be a supported church).
-        date_format: Format string for date in URL.
-
-    Returns:
-        List of dicts, each with keys:
-            - start_chapter (int)
-            - start_verse (int)
-            - end_chapter (int)
-            - end_verse (int)
-            - text_hy (str): The Armenian Bible verse text.
-        Returns an empty list if the page cannot be fetched or parsed.
-    """
-    if church not in SUPPORTED_CHURCHES:
-        logging.error(
-            "Web-scraping for Armenian reading texts only set up for: %r. %s not supported.",
-            SUPPORTED_CHURCHES, church,
-        )
-        return []
-
-    date_str = date_obj.strftime(date_format)
-    url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL=0&ymd={date_str}"
-
-    try:
-        response = urllib.request.urlopen(url)
-    except urllib.error.URLError:
-        logging.error("Invalid url %s", url)
-        return []
-
-    if response.status != 200:
-        logging.error(
-            "Could not access Armenian readings from url %s. Failed with status %r",
-            url, response.status,
-        )
-        return []
-
-    data = response.read()
-    html_content = data.decode("utf-8")
-
-    # Extract body content between comment markers
-    body_start = html_content.find("<!--body-->")
-    body_end = html_content.find("<!--/body-->")
-    if body_start == -1 or body_end == -1:
-        logging.error("Could not find body markers in Armenian readings page %s", url)
-        return []
-
-    body = html_content[body_start:body_end]
-
-    results = []
-    pos = 0
-    while True:
-        # Find next <b> tag (reading reference)
-        b_open = body.find("<b>", pos)
-        if b_open == -1:
-            break
-        b_close = body.find("</b>", b_open)
-        if b_close == -1:
-            break
-
-        reference = body[b_open + 3:b_close]
-
-        # Parse the reference to get chapter/verse numbers
-        # Handle comma-separated references the same way as scrape_readings
-        if "," in reference:
-            reference = reference.split(",")[0]
-
-        groups = re.search(PARSER_REGEX, reference)
-        if groups is None:
-            logging.error(
-                "Could not parse Armenian reading reference '%s' from %s",
-                reference, url,
-            )
-            pos = b_close + 1
-            continue
-
-        try:
-            start_chapter = int(groups.group(2).strip(".")) if groups.group(2) else 1
-            start_verse = int(groups.group(3))
-            end_chapter = int(groups.group(4).strip(".")) if groups.group(4) else start_chapter
-            end_verse = int(groups.group(5)) if groups.group(5) else start_verse
-        except Exception:
-            logging.error(
-                "Could not parse chapter/verse from Armenian reference '%s' at %s",
-                reference, url, exc_info=True,
-            )
-            pos = b_close + 1
-            continue
-
-        # Extract text after </b> until the next <center><hr or <!--/body-->
-        text_start = b_close + len("</b>")
-        # Find the next separator: <center><hr
-        next_sep = body.find("<center><hr", text_start)
-        if next_sep == -1:
-            # Fall back to end of body
-            next_sep = len(body)
-
-        raw_text = body[text_start:next_sep]
-
-        # Clean up the text: remove <br> tags and extra whitespace
-        clean_text = re.sub(r"<br\s*/?>", " ", raw_text)
-        clean_text = re.sub(r"<[^>]+>", "", clean_text)  # Remove any remaining HTML tags
-        clean_text = re.sub(r"\s+", " ", clean_text).strip()
-
-        # Wrap verse/chapter numbers in brackets: "16 Լdelays..." -> "[16] Լdelays..."
-        # Matches standalone digits followed by Armenian characters (U+0531-U+058A)
-        clean_text = re.sub(r"(^|\s)(\d+)(?=\s[\u0531-\u058A])", r"\1[\2]", clean_text)
-
-        if clean_text:
-            results.append({
-                "book": groups.group(1),
-                "start_chapter": start_chapter,
-                "start_verse": start_verse,
-                "end_chapter": end_chapter,
-                "end_verse": end_verse,
-                "text_hy": clean_text,
-            })
-
-        pos = next_sep + 1
-
-    return results
 
 
 def send_fast_reminders():
@@ -465,240 +130,93 @@ def send_fast_reminders():
             logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {earliest_fast.name}')
 
 
-def scrape_feast(date_obj, church, date_format="%Y%m%d"):
-    """Scrapes feast name from sacredtradition.am in both English and Armenian.
-    
-    Args:
-        date_obj: datetime.date object for the date to scrape
-        church: Church object
-        date_format: Format string for date in URL
-        
-    Returns:
-        Dict with 'name', 'name_en', 'name_hy' keys or None if no feast found
-    """
-    if church not in SUPPORTED_CHURCHES:
-        logging.error("Web-scraping for feasts only set up for the following churches: %r. %s not supported.",
-                      SUPPORTED_CHURCHES, church)
-        return None
-
-    date_str = date_obj.strftime(date_format)
-    
-    def scrape_feast_for_language(language_code):
-        """Helper function to scrape feast for a specific language.
-        
-        Args:
-            language_code: 2 for English, 3 for Armenian
-        """
-        url = f"https://sacredtradition.am/Calendar/nter.php?NM=0&iM=1103&iL={language_code}&ymd={date_str}"
-        html_content = _fetch_sacredtradition(url)
-        if html_content is None:
-            return None
-
-        # Look for elements with class="dname" or class=dname (with or without quotes)
-        # Match various HTML tags with class dname
-        import re
-        
-        # First, find the opening tag with class=dname (handles both quoted and unquoted)
-        opening_pattern = r'<([a-z]+)[^>]*class=["\']?dname["\']?[^>]*>'
-        opening_match = re.search(opening_pattern, html_content, re.DOTALL | re.IGNORECASE)
-        
-        if not opening_match:
-            return None
-        
-        tag_name = opening_match.group(1)
-        start_pos = opening_match.end()
-        
-        # Find the corresponding closing tag
-        closing_pattern = f'</{tag_name}>'
-        closing_match = re.search(closing_pattern, html_content[start_pos:], re.IGNORECASE)
-        
-        if not closing_match:
-            return None
-        
-        # Extract content between opening and closing tags
-        feast_html = html_content[start_pos:start_pos + closing_match.start()]
-        
-        # Remove any nested HTML tags
-        feast_name = re.sub(r'<[^>]+>', '', feast_html).strip()
-        
-        return feast_name if feast_name else None
-    
-    # Scrape both English and Armenian
-    name_en = scrape_feast_for_language(2)  # English
-    name_hy = scrape_feast_for_language(3)  # Armenian
-    
-    # If no feast found in either language, return None
-    if not name_en and not name_hy:
-        return None
-    
-    # Use English as default, fallback to Armenian if English not available
-    default_name = name_en if name_en else name_hy
-    
-    return {
-        "name": default_name,
-        "name_en": name_en,
-        "name_hy": name_hy,
-    }
-
-
 def get_or_create_feast_for_date(date_obj, church, check_fast=True):
-    """
-    Get or create a Feast for a given date and church.
-    
-    This function handles the common logic for creating feasts:
-    1. Gets or creates a Day for the date and church
-    2. Optionally checks if a Fast is associated (skips feast lookup if so)
-    3. Checks if a Feast already exists
-    4. If not, scrapes and creates the feast
-    
+    """Resolve the commemoration for a date, and return its Feast row.
+
+    The name of the day comes from the ``armenian_lectionary`` engine, recomputed per call, so
+    nothing has to be imported ahead of time for a date to resolve.  The Feast row this returns is
+    keyed by ``(church, name)``, not by date: it is where the app keeps the parts the engine has
+    no notion of -- designation, icon, generated contexts -- and one row serves every recurrence
+    of that commemoration.
+
+    ``created`` therefore means "this commemoration was seen for the first time", not "a row was
+    made for this date".  After the first year of a full cycle it is almost always ``False``, and
+    that is the point: the LLM context and icon match behind it run once, not once a year.
+
     Args:
-        date_obj: datetime.date object for the date
+        date_obj: datetime.date for the date
         church: Church object
-        check_fast: If True, skip feast lookup if Day has a Fast associated
-        
+        check_fast: If True, return no feast when a Fast is associated with the day
+
     Returns:
         Tuple of (feast_obj, created, status_dict) where:
-        - feast_obj: Feast instance or None if no feast found/created
-        - created: Boolean indicating if feast was created (False if existed or skipped)
+        - feast_obj: Feast instance, or None if there is no feast to record
+        - created: True only when the commemoration had no row in this church yet
         - status_dict: Dict with status information (status, reason, etc.)
     """
-    # Get or create Day for the date
-    day, day_created = Day.objects.get_or_create(
-        date=date_obj,
-        church=church,
-        defaults={}
-    )
-    
-    # Check if a Fast is associated with this day - if so, skip feast lookup
-    if check_fast and day.fast:
-        return (
-            None,
-            False,
-            {
-                "status": "skipped",
-                "reason": "fast_associated",
-                "fast_name": day.fast.name,
-                "date": str(date_obj)
-            }
-        )
-    
-    # Check if feast already exists for this day
-    existing_feast = day.feasts.first() if day.feasts.exists() else None
+    # A Fast on the day outranks the feast in the UI. Look the Day up without creating one --
+    # resolving a feast name should not mint calendar rows as a side effect.
+    if check_fast:
+        day = Day.objects.filter(date=date_obj, church=church).select_related("fast").first()
+        if day and day.fast:
+            return (
+                None,
+                False,
+                {
+                    "status": "skipped",
+                    "reason": "fast_associated",
+                    "fast_name": day.fast.name,
+                    "date": str(date_obj),
+                }
+            )
 
-    # If feast exists and has all translations, return it immediately (no scrape needed)
-    if existing_feast and existing_feast.name and existing_feast.name_hy:
-        return (
-            existing_feast,
-            False,
-            {
-                "status": "skipped",
-                "reason": "feast_already_exists",
-                "date": str(date_obj)
-            }
-        )
+    # Imported lazily to avoid a circular import (feast_service imports SUPPORTED_CHURCHES here).
+    from hub.services.feast_service import get_feast_for_date
 
-    # Scrape feast data only if feast doesn't exist or is missing translations
-    feast_data = scrape_feast(date_obj, church)
-    
+    feast_data = get_feast_for_date(date_obj, church)
     if not feast_data:
-        # If no feast data and feast already exists, return existing feast
-        if existing_feast:
-            return (
-                existing_feast,
-                False,
-                {
-                    "status": "skipped",
-                    "reason": "feast_already_exists",
-                    "date": str(date_obj)
-                }
-            )
         return (
             None,
             False,
-            {
-                "status": "skipped",
-                "reason": "no_feast_data",
-                "date": str(date_obj)
-            }
+            {"status": "skipped", "reason": "no_feast_data", "date": str(date_obj)}
         )
-    
-    # Extract name fields
-    name_en = feast_data.get("name_en", feast_data.get("name"))
-    name_hy = feast_data.get("name_hy", None)
-    
+
+    name_en = feast_data.get("name_en") or feast_data.get("name")
     if not name_en:
-        # If no English name, try to use name field directly
-        name_en = feast_data.get("name")
-    
-    if not name_en:
-        # If no feast name and feast already exists, return existing feast
-        if existing_feast:
-            return (
-                existing_feast,
-                False,
-                {
-                    "status": "skipped",
-                    "reason": "feast_already_exists",
-                    "date": str(date_obj)
-                }
-            )
         return (
             None,
             False,
-            {
-                "status": "skipped",
-                "reason": "no_feast_name",
-                "date": str(date_obj)
-            }
+            {"status": "skipped", "reason": "no_feast_name", "date": str(date_obj)}
         )
-    
-    # Get or create feast with English name
-    feast_obj, feast_created = Feast.objects.get_or_create(
-        day=day,
-        defaults={"name": name_en}
-    )
-    
-    # Set translation if available and missing
-    # For new feasts, set it immediately after creation to avoid second save
-    # For existing feasts, only update if translation is missing
+
+    feast_obj, feast_created = Feast.objects.get_or_create(church=church, name=name_en)
+
+    # Fill in the Armenian name if the engine has one and this row does not. Engine releases add
+    # translations over time, so an existing row can still be upgraded.
+    name_hy = feast_data.get("name_hy")
     translation_updated = False
     if name_hy and not feast_obj.name_hy:
         feast_obj.name_hy = name_hy
         translation_updated = True
-        # Only save if feast was just created (to set translation) 
-        # or if it existed and needs translation update
-        if feast_created:
-            # For new feasts, save immediately after setting translation
-            # This triggers post_save once with both name and translation set
-            feast_obj.save()
-        else:
-            # For existing feasts, save with update_fields to only update i18n
-            feast_obj.save(update_fields=['i18n'])
-    
-    # Determine action: created, updated (with translation), or skipped (no changes)
+        # A freshly created row saves in full so post_save sees the name and its translation
+        # together; an existing one touches only the translation column.
+        feast_obj.save(**({} if feast_created else {"update_fields": ["i18n"]}))
+
     if feast_created:
         action = "created"
-        status = "success"
     elif translation_updated:
         action = "updated"
-        status = "success"
     else:
-        # Feast existed and no updates were made
-        # feast_created=False means the feast already existed
-        action = "skipped"
-        status = "skipped"
-    
-    if status == "skipped":
         return (
             feast_obj,
             False,
             {
                 "status": "skipped",
                 "reason": "feast_already_exists",
-                "date": str(date_obj)
+                "date": str(date_obj),
             }
         )
-    
+
     return (
         feast_obj,
         feast_created,
@@ -707,10 +225,9 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
             "action": action,
             "feast_id": feast_obj.id,
             "feast_name": feast_obj.name,
-            "date": str(date_obj)
+            "date": str(date_obj),
         }
     )
-
 
 def test_email():
     try:

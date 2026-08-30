@@ -12,7 +12,6 @@ import logging
 
 import requests
 from decouple import config
-from django.utils import timezone
 
 from hub.constants import APOCRYPHA_USFM_IDS, BOOK_NAME_TO_USFM
 
@@ -21,6 +20,14 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://rest.api.bible/v1"
 NKJV_BIBLE_ID = "63097d2a0a2f7db3-01"
 KJVAIC_BIBLE_ID = "a6aee10bb058511c-01"  # KJV with Apocrypha, American Edition
+
+# KJVAIC keeps the Greek additions to Esther in a separate ESG book numbered 1-7, where
+# the lectionary cites them inline as EST 10-16 (the numbering the Armenian corpus uses
+# too).  The two differ only in the chapter number; verse numbers are identical.
+ESG_FIRST_EST_CHAPTER = 10  # EST 10 -> ESG 1
+ESG_LAST_EST_CHAPTER = 16  # EST 16 -> ESG 7
+ESG_CHAPTER_OFFSET = ESG_FIRST_EST_CHAPTER - 1
+ESG_FIRST_ADDITION_VERSE = 4  # EST 10:1-3 is canonical; the addition starts at 10:4
 
 
 class BibleAPIService:
@@ -122,6 +129,17 @@ class BibleAPIService:
         return usfm_id
 
     @staticmethod
+    def _in_esther_additions(chapter: int, verse: int) -> bool:
+        """Whether an EST chapter/verse falls in the Greek additions (KJVAIC's ESG).
+
+        Chapter 10 is split: 10:1-3 close the Hebrew narrative, 10:4 onwards are
+        Addition F.  Chapters 11-16 are additions in their entirety.
+        """
+        if chapter == ESG_FIRST_EST_CHAPTER:
+            return verse >= ESG_FIRST_ADDITION_VERSE
+        return ESG_FIRST_EST_CHAPTER < chapter <= ESG_LAST_EST_CHAPTER
+
+    @staticmethod
     def resolve_reading_passage(
         book_name: str,
         start_chapter: int,
@@ -131,20 +149,44 @@ class BibleAPIService:
     ) -> tuple[str, int, int, int, int]:
         """Resolve a Reading reference to the API.Bible book/range.
 
-        KJVAIC stores the Greek additions to Esther as ESG 1-7. The liturgical
-        source may refer to the first addition as Esther 10:4-13, which maps to
-        API.Bible's ESG 1:4-13.
+        Applies KJVAIC's versification of Esther: the lectionary cites the Greek additions
+        inline as EST 10-16, KJVAIC keeps them in a separate ESG book numbered 1-7.  So
+        ``Esther 10:4-9`` is ``ESG 1:4-9`` and ``Esther 13:8-14:19`` is ``ESG 4:8-5:19``.
+        Only the chapter shifts; verse numbers are the same in both.
+
+        That mapping is a property of the *edition*, not of the passage, which is why it
+        lives here rather than in ``hub.constants.passage_key`` -- the Armenian corpus
+        keeps the additions inline and needs no remap at all.
+
+        Verse numbers are not range-checked: the API is the authority on whether a verse
+        exists, and it answers with a 404 rather than the wrong text.
         """
         usfm_id = BibleAPIService.resolve_book_name(book_name)
-        if (
-            usfm_id == "EST"
-            and start_chapter == 10
-            and end_chapter == 10
-            and start_verse >= 4
-            and end_verse <= 13
-        ):
-            return "ESG", 1, start_verse, 1, end_verse
-        return usfm_id, start_chapter, start_verse, end_chapter, end_verse
+        unchanged = (usfm_id, start_chapter, start_verse, end_chapter, end_verse)
+        if usfm_id != "EST":
+            return unchanged
+
+        starts_in_additions = BibleAPIService._in_esther_additions(start_chapter, start_verse)
+        ends_in_additions = BibleAPIService._in_esther_additions(end_chapter, end_verse)
+        if starts_in_additions and ends_in_additions:
+            return (
+                "ESG",
+                start_chapter - ESG_CHAPTER_OFFSET,
+                start_verse,
+                end_chapter - ESG_CHAPTER_OFFSET,
+                end_verse,
+            )
+        if starts_in_additions or ends_in_additions:
+            # No single KJVAIC address spans canonical Esther and the additions, since
+            # they are different books there.  No such citation exists in the lectionary
+            # today; warn rather than raise, so one appearing degrades to the canonical
+            # part of the range instead of losing the reading entirely.
+            logger.warning(
+                "Esther %s:%s-%s:%s straddles canonical Esther and the Greek additions; "
+                "KJVAIC has no single passage for it. Serving the canonical range.",
+                start_chapter, start_verse, end_chapter, end_verse,
+            )
+        return unchanged
 
     @staticmethod
     def _bible_id_for_book(usfm_book_id: str) -> tuple[str, str]:
@@ -174,71 +216,3 @@ class BibleAPIService:
         if start == end:
             return start
         return f"{start}-{end}"
-
-
-# ------------------------------------------------------------------ #
-#  Module-level helpers (used by views, admin, and Celery tasks)
-# ------------------------------------------------------------------ #
-
-def fetch_text_for_reading(reading, service: BibleAPIService | None = None) -> bool:
-    """Fetch Bible text for a single Reading.
-
-    Each Reading gets its own API call so that it receives a unique FUMS token,
-    as required by API.Bible's Fair Use Management System terms of use.
-
-    Can be called synchronously from views or from Celery tasks.
-
-    Args:
-        reading: A Reading model instance (must be saved to the database).
-        service: Optional pre-initialized BibleAPIService. If None, one will
-                 be created (requires BIBLE_API_KEY to be configured).
-
-    Returns:
-        True if the reading now has text, False if it could not be populated
-        (e.g. missing API key, unknown book).
-    """
-    from hub.models import Reading as ReadingModel  # deferred to avoid circular import
-
-    if service is None:
-        try:
-            service = BibleAPIService()
-        except ValueError as e:
-            logger.error("Cannot initialize BibleAPIService: %s", e)
-            return False
-
-    try:
-        passage = BibleAPIService.resolve_reading_passage(
-            reading.book,
-            reading.start_chapter,
-            reading.start_verse,
-            reading.end_chapter,
-            reading.end_verse,
-        )
-        result = service.get_passage(
-            *passage,
-        )
-
-        ReadingModel.objects.filter(pk=reading.pk).update(
-            text=result["content"],
-            text_copyright=result["copyright"],
-            text_version=result["version"],
-            text_fetched_at=timezone.now(),
-            fums_token=result.get("fums_token", ""),
-        )
-        logger.info(
-            "Fetched text for Reading %s (%s).",
-            reading.pk, reading.passage_reference,
-        )
-        return True
-    except ValueError as e:
-        logger.error(
-            "Book name mapping failed for Reading %s ('%s'): %s",
-            reading.pk, reading.book, e,
-        )
-        return False
-    except Exception as e:
-        logger.error(
-            "API call failed for Reading %s (%s): %s",
-            reading.pk, reading.passage_reference, e,
-        )
-        return False

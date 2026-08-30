@@ -61,6 +61,14 @@ BOOK_NAME_TO_USFM = {
     "Sirach": "SIR",
     "Epistle of Jeremiah": "LJE",
     "Baruch": "BAR",
+    # The engine's one composite citation, "Daniel 3.1-23, Azariah. 1-68", resolves its second
+    # half to the book name "Azariah". S3Y is already in APOCRYPHA_USFM_IDS, so its English text
+    # comes from KJVAIC like the other deuterocanonical books. The Armenian corpus embeds this
+    # material inside Daniel 3 rather than carrying it as a standalone book, so hy text for S3Y
+    # arrives with the verse-mapping work (#470) -- until then Armenian falls back to empty here.
+    "Azariah": "S3Y",
+    "Prayer of Azariah": "S3Y",
+    "Song of the Three Young Men": "S3Y",
     # New Testament
     "Matthew": "MAT",
     "Mark": "MRK",
@@ -138,6 +146,17 @@ APOCRYPHA_USFM_IDS = {
 }
 
 CATENA_HOME_PAGE_URL = "https://catenabible.com/"
+
+# Catena has no standalone "Azariah" section -- the Prayer of Azariah / Song of the Three Young
+# Men is embedded inline in Daniel 3 (catenabible.com/dn/3, verses 24-90). Azariah's own verse
+# numbering restarts at 1 (the engine's sole scripture composite, "Daniel 3.1-23, Azariah. 1-68",
+# splits into a `book="Azariah"` reading with start_chapter=1), so Reading.create_url() remaps
+# onto Daniel chapter 3 before the normal Catena lookup. Verified live: dn003024 = "walked in the
+# midst of the flame" (Azariah v1), dn003025 = "Azarias stood up, and prayed" (Azariah v2).
+AZARIAH_CATENA_BOOK = "Daniel"
+AZARIAH_CATENA_CHAPTER = 3
+AZARIAH_TO_DANIEL_VERSE_OFFSET = 23  # Azariah verse N == Daniel 3:(N + 23)
+
 CATENA_ABBREV_FOR_BOOK = {
     # Old Testament
     "Genesis": "gn",
@@ -269,3 +288,52 @@ CATENA_ABBREV_FOR_BOOK_NORMALIZED: dict[str, str] = {
     normalize_book_name(k): v
     for k, v in CATENA_ABBREV_FOR_BOOK.items()
 }
+
+# Normalized English-book-name -> USFM lookup, built once at import time.
+# Absorbs smart-quote/whitespace variants in book names coming from the lectionary engine.
+BOOK_NAME_TO_USFM_NORMALIZED: dict[str, str] = {
+    normalize_book_name(k): v
+    for k, v in BOOK_NAME_TO_USFM.items()
+}
+
+
+def passage_key(
+    book: str | None,
+    start_chapter: int,
+    start_verse: int,
+    end_chapter: int,
+    end_verse: int,
+) -> str:
+    """Identity of a Scripture citation, independent of language or edition.
+
+    Format ``{USFM}.{start_ch}.{start_v}-{end_ch}.{end_v}``, e.g. ``"GEN.1.1-1.5"``.
+    Two readings with this key cite the same passage, so text fetched for one is the
+    text for all of them — which is what lets a lectionary of tens of thousands of
+    reading rows be served from ~1,100 retrievals.
+
+    Book *names* are fully normalized here: ``normalize_book_name`` plus
+    ``BOOK_NAME_TO_USFM`` collapse every spelling variant (curly vs. straight
+    apostrophes, "Song of Solomon", the verbose Epistle titles) onto one USFM id.
+    That much is language-neutral by construction, since USFM is a standard.
+
+    Deliberately *not* normalized here: per-edition versification.  KJVAIC splits the
+    Greek additions to Esther into a separate ESG book numbered 1-7, while the Armenian
+    Nor Ejmiatsin corpus keeps them inline as EST chapters 10-16 — so ``Esther 10:4-13``
+    is ``ESG 1:4-13`` in one and ``EST 10:4-13`` in the other.  Baking either mapping
+    into the shared key would impose one edition's quirk on the other; each fetcher
+    applies its own (see ``BibleAPIService.resolve_reading_passage``).
+
+    Returns "" when the book has no USFM mapping, i.e. when no retrieval is possible in
+    any language.  Never raises: an unmappable book name is a data problem to fix in
+    ``BOOK_NAME_TO_USFM``, and must not be able to break a save or a request.
+    """
+    usfm_id = BOOK_NAME_TO_USFM_NORMALIZED.get(normalize_book_name(book))
+    if usfm_id is None:
+        return ""
+    try:
+        return (
+            f"{usfm_id}.{int(start_chapter)}.{int(start_verse)}"
+            f"-{int(end_chapter)}.{int(end_verse)}"
+        )
+    except (TypeError, ValueError):
+        return ""

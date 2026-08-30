@@ -25,7 +25,7 @@ from django.db.models import Q, Count, Min, Max, Sum, Exists, OuterRef, Subquery
 from rest_framework.pagination import LimitOffsetPagination
 from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache
 from functools import wraps
-from hub.tasks import generate_participant_map
+from hub.tasks import generate_participant_map, tag_intention_prayers
 from better_profanity import profanity
 import sentry_sdk
 
@@ -497,7 +497,9 @@ class JoinFastView(generics.UpdateAPIView):
             ).first()
             if soft_kept:
                 soft_kept.is_active = True
-                soft_kept.text = intention_text or soft_kept.text
+                if intention_text and intention_text != soft_kept.text:
+                    soft_kept.text = intention_text
+                    soft_kept.matched_tags = None
                 if 'intention_is_public' in self.request.data:
                     soft_kept.is_public = intention_is_public
                 soft_kept.save()
@@ -528,6 +530,13 @@ class JoinFastView(generics.UpdateAPIView):
         
         # Invalidate fast list caches for this church
         FastListView().invalidate_cache(fast.church_id)
+
+        # LLM-tag the intention text for prayer recommendations
+        intention = FastIntention.objects.filter(
+            user=self.request.user, fast=fast, is_active=True
+        ).first()
+        if intention and intention.text.strip():
+            tag_intention_prayers.delay(intention.id)
 
 
 class LeaveFastView(generics.UpdateAPIView):
@@ -1136,6 +1145,7 @@ class FastIntentionView(views.APIView):
             existing.text = text
             existing.is_public = is_public
             existing.is_active = True
+            existing.matched_tags = None  # stale; recomputed async below
             existing.save()
             intention = existing
             created = False
@@ -1149,6 +1159,9 @@ class FastIntentionView(views.APIView):
                 is_active=True,
             )
             created = True
+
+        if intention.text.strip():
+            tag_intention_prayers.delay(intention.id)
 
         # Invalidate participant cache since visibility may have changed
         invalidate_fast_participants_cache(fast.id)
@@ -1178,3 +1191,51 @@ class FastIntentionView(views.APIView):
             {"detail": "Intention cleared."},
             status=status.HTTP_200_OK
         )
+
+
+class RecommendedPrayersView(views.APIView):
+    """
+    GET /api/intentions/recommend-prayers/?fast=<id>
+
+    Returns up to 5 prayers from the fast's church, matched to the user's
+    active intention via a curated keyword→tag map and ranked by tag overlap
+    (issue #450). If `fast` is omitted, uses the user's fast for today.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from hub.intention_recommendations import recommended_prayers
+        from prayers.serializers import PrayerSerializer
+
+        fast_id = request.query_params.get('fast')
+        if fast_id:
+            try:
+                fast = get_object_or_404(Fast, id=int(fast_id))
+            except ValueError:
+                return response.Response(
+                    {"detail": "Invalid fast id."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            fast = _get_user_fast_on_date(request.user, datetime.date.today())
+            if fast is None:
+                return response.Response(
+                    {"detail": "No fast found for today."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        intention = FastIntention.objects.filter(
+            user=request.user,
+            fast=fast,
+            is_active=True,
+        ).first()
+
+        if not intention or not intention.text.strip():
+            return response.Response(
+                {"detail": "No active intention found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        prayers = recommended_prayers(intention, fast)
+        serializer = PrayerSerializer(prayers, many=True, context={'request': request})
+        return response.Response(serializer.data)

@@ -122,10 +122,14 @@ Bahk retrieves Scripture text from the [API.Bible](https://scripture.api.bible/)
 
 Key compliance measures:
 
-- **Content freshness**: A weekly Celery Beat task refreshes all reading texts so none exceed 30 days old.
+Text is stored **per passage**, not per reading date, in the `PassageText` table — one row per `(passage, language)`. The lectionary emits ~1,500 readings a year forever but resolves to only ~1,124 distinct passages across all years, so this is what keeps retrieval inside the plan's 5,000-call monthly quota no matter how large the reading table grows.
+
+Key compliance measures:
+
+- **Content freshness**: A weekly Celery Beat task re-retrieves passages whose text has passed `READING_TEXT_REFRESH_DAYS` (23), leaving a week of margin under the 30-day cap. Any text that nonetheless passes 30 days is **withheld from the API response** and re-retrieved on demand the next time it is requested, so text older than 30 days is never served.
 - **Content integrity**: Text is stored exactly as returned by the API with no modifications.
 - **Copyright citation**: The copyright string from the API response is stored and displayed alongside the text.
-- **FUMS (Fair Use Management System)**: All API.Bible requests include `fums-version=3`, and the returned `fumsToken` is stored on each `Reading` and served to the frontend via the readings API. The frontend reports tokens to `https://fums.api.bible/f3` with anonymized device, session, and user identifiers each time scripture is displayed.
+- **FUMS (Fair Use Management System)**: All API.Bible requests include `fums-version=3`, and the returned `fumsToken` is stored against the passage and served to the frontend via the readings API. The frontend reports tokens to `https://fums.api.bible/f3` with anonymized device, session, and user identifiers each time scripture is displayed. Readings that cite the same passage share a token: FUMS tracks *displays*, and a stored token is already served to unlimited users across the 30-day cache window, with the client deduplicating per device and session.
 - **DRM**: Scripture text is rendered with `selectable={false}` on the frontend to prevent copying on all platforms including web.
 - **Non-commercial use**: The app has no ads, in-app purchases, or revenue generation.
 - **Security**: The API.Bible key is stored server-side only and never exposed to the frontend.

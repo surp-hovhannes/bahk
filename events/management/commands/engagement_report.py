@@ -6,7 +6,7 @@ import json
 import os
 import tempfile
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.contrib.auth import get_user_model
@@ -252,7 +252,7 @@ class Command(BaseCommand):
         if not value:
             return None
         try:
-            return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=datetime_timezone.utc)
         except ValueError:
             raise ValueError("Invalid date format. Use YYYY-MM-DD.")
 
@@ -871,4 +871,3 @@ class Command(BaseCommand):
         key = f"{s3_prefix.rstrip('/')}/engagement_report.zip"
         s3.put_object(Bucket=bucket, Key=key, Body=buffer.getvalue(), ContentType="application/zip")
         return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
-

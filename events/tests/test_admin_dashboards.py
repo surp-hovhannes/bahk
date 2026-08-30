@@ -164,10 +164,38 @@ class AdminDashboardTests(TestCase):
         self.assertIn('events_by_day', context)
         self.assertIn('events_by_type', context)
         self.assertIn('top_users', context)
+        self.assertEqual(context['site_header'], 'Fast & Pray Admin')
+        self.assertEqual(context['opts'], Event._meta)
+        self.assertTrue(context['has_view_permission'])
+        self.assertContains(response, 'admin/css/fastandpray-admin.css')
+        self.assertContains(response, 'admin/css/fastandpray-analytics.css')
+        self.assertContains(response, '<label for="dateRange">Date range</label>', html=True)
+        self.assertContains(response, 'type="button" class="stat-card"', count=4)
+        self.assertContains(response, 'role="img" aria-label=', count=7)
+        self.assertEqual(response.content.decode().count('User Engagement Dashboard</h1>'), 1)
         
         # Verify that staff events are excluded
         # The total should not include staff events
         self.assertGreater(context['total_events'], 0)
+
+    def test_user_engagement_dashboard_binds_controls_before_chart_setup(self):
+        """Chart enhancement errors must not disable filters or detail dialogs."""
+        response = self.client.get(reverse('admin:events_analytics'))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        controls_binding = content.rindex('    bindAnalyticsControls();')
+        chart_initialization = content.rindex('    initializeCharts();')
+
+        self.assertLess(controls_binding, chart_initialization)
+        self.assertIn(
+            'chart.options.plugins.legend.labels.color = chartTheme.text;',
+            content,
+        )
+        self.assertNotIn(
+            'chart.options.plugins.legend.labels = {',
+            content,
+        )
     
     def test_user_engagement_dashboard_data_endpoint(self):
         """Test the User Engagement Dashboard AJAX data endpoint."""
@@ -207,6 +235,14 @@ class AdminDashboardTests(TestCase):
         self.assertIn('app_open_hourly', context)
         self.assertIn('top_screens', context)
         self.assertIn('platform_counts', context)
+        self.assertEqual(context['site_header'], 'Fast & Pray Admin')
+        self.assertEqual(context['opts'], Event._meta)
+        self.assertTrue(context['has_view_permission'])
+        self.assertContains(response, 'admin/css/fastandpray-admin.css')
+        self.assertContains(response, 'admin/css/fastandpray-analytics.css')
+        self.assertContains(response, '<label for="dateRange">Date range</label>', html=True)
+        self.assertContains(response, 'role="img" aria-label=', count=5)
+        self.assertEqual(response.content.decode().count('App Analytics Dashboard</h1>'), 1)
 
         # Verify analytics data is present
         self.assertGreaterEqual(context['total_app_opens'], 1)

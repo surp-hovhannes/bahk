@@ -141,7 +141,7 @@ class CombinedDevotionalForm(forms.Form):
                 required=False,
                 widget=S3FileInput(attrs={'accept': 'video/*', 'data-field-id': video_field_id}),
                 label=f"Video file ({code.upper()})",
-                help_text="Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 20MB.",
+                help_text="Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 500 MiB.",
             )
             self.fields[f'video_thumbnail_{code}'] = forms.ImageField(
                 required=False, label=f"Video thumbnail ({code.upper()})",

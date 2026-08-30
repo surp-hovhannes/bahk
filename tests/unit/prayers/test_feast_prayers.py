@@ -26,7 +26,7 @@ class FeastPrayerModelTests(TestCase):
             date=date(2026, 1, 1)
         )
         self.feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name='The Nativity of Our Lord Jesus Christ',
             designation='Nativity of Christ, Feasts of the Mother of God, Presentation of the Lord'
         )
@@ -115,7 +115,7 @@ class FeastPrayerSerializerTests(TestCase):
             date=date(2026, 1, 1)
         )
         self.feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name='St. Stephen the Protomartyr',
             designation='Martyrs'
         )
@@ -186,7 +186,7 @@ class FeastPrayerAPITests(TestCase):
             date=date(2026, 1, 6)
         )
         self.feast = Feast.objects.create(
-            day=self.day,
+            church=self.day.church,
             name='Theophany',
             designation='Sundays, Dominical Feast Days'
         )
@@ -223,7 +223,7 @@ class FeastPrayerAPITests(TestCase):
             date=date(2026, 1, 7)
         )
         Feast.objects.create(
-            day=day2,
+            church=day2.church,
             name='St. John the Baptist',
             designation='Martyrs'
         )

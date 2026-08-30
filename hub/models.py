@@ -18,6 +18,9 @@ from taggit.managers import TaggableManager
 
 import bahk.settings as settings
 from hub.constants import (
+    AZARIAH_CATENA_BOOK,
+    AZARIAH_CATENA_CHAPTER,
+    AZARIAH_TO_DANIEL_VERSE_OFFSET,
     CATENA_ABBREV_FOR_BOOK_NORMALIZED,
     CATENA_HOME_PAGE_URL,
     DAYS_TO_CACHE_THUMBNAIL,
@@ -586,6 +589,11 @@ class Reading(models.Model):
     """Stores details for a Bible reading."""
 
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="readings")
+    sequence = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Position of this reading within its day's list, as returned by the "
+        "armenian_lectionary engine. Determines display order."
+    )
     book = models.CharField(max_length=64)
     start_chapter = models.IntegerField(verbose_name="Start Chapter")
     start_verse = models.IntegerField(verbose_name="Start Verse")
@@ -596,50 +604,53 @@ class Reading(models.Model):
         verbose_name="End Verse", help_text="May be same as end verse"
     )
 
-    # Bible text from API.Bible
-    text = models.TextField(
-        blank=True, default="",
-        help_text="Verse content retrieved from API.Bible"
-    )
-    text_copyright = models.TextField(
-        blank=True, default="",
-        help_text="Copyright notice from API.Bible for the retrieved text"
-    )
+    # LEGACY -- superseded by PassageText, which stores text per (passage, language).
+    # Nothing reads these; they are retained for one release so a revert is a one-line
+    # change in get_reading_text_fields, and are dropped in a follow-up migration.
+    # Do not add code that depends on them.
+    _LEGACY_TEXT_HELP = "LEGACY, unused -- text now lives in PassageText."
+
+    text = models.TextField(blank=True, default="", help_text=_LEGACY_TEXT_HELP)
+    text_copyright = models.TextField(blank=True, default="", help_text=_LEGACY_TEXT_HELP)
     text_version = models.CharField(
-        max_length=16, blank=True, default="",
-        help_text="Bible version used (e.g. NKJV, KJVAIC)"
+        max_length=16, blank=True, default="", help_text=_LEGACY_TEXT_HELP,
     )
     text_fetched_at = models.DateTimeField(
-        null=True, blank=True,
-        help_text="When the text was last fetched from API.Bible"
+        null=True, blank=True, help_text=_LEGACY_TEXT_HELP,
     )
-    fums_token = models.TextField(
-        blank=True, default="",
-        help_text="FUMS v3 token from API.Bible for fair-use tracking"
-    )
+    fums_token = models.TextField(blank=True, default="", help_text=_LEGACY_TEXT_HELP)
 
-    # Armenian text metadata (from sacredtradition.am)
     text_hy_version = models.CharField(
-        max_length=64, blank=True, default="",
-        help_text="Armenian Bible version used (e.g. \u0546\u0578\u0580 \u0537\u057b\u0574\u056b\u0561\u056e\u056b\u0576)"
+        max_length=64, blank=True, default="", help_text=_LEGACY_TEXT_HELP,
     )
     text_hy_copyright = models.TextField(
-        blank=True, default="",
-        help_text="Copyright notice for the Armenian text"
+        blank=True, default="", help_text=_LEGACY_TEXT_HELP,
     )
     text_hy_fetched_at = models.DateTimeField(
-        null=True, blank=True,
-        help_text="When the Armenian text was last fetched from sacredtradition.am"
+        null=True, blank=True, help_text=_LEGACY_TEXT_HELP,
     )
     text_hy_fums_token = models.TextField(
-        blank=True, default="",
-        help_text="FUMS token for Armenian text (reserved for future use)"
+        blank=True, default="", help_text=_LEGACY_TEXT_HELP,
     )
 
-    # Translations for user-facing fields
-    i18n = TranslationField(fields=('book', 'text'))
+    # Which passage this reading cites, independent of language or edition.  Rows sharing
+    # a key share one retrieval per language (see hub.constants.passage_key and PassageText).
+    # Derived from book/chapter/verse; recomputed on every save().
+    passage_key = models.CharField(
+        max_length=64, blank=True, default="", editable=False, db_index=True,
+        help_text=(
+            "Passage identity, e.g. 'GEN.1.1-1.5'. Readings sharing this key share one "
+            "fetched text per language. Empty when the book name has no USFM mapping, "
+            "i.e. when no retrieval is possible."
+        ),
+    )
+
+    # Translations for user-facing fields.  `text` is deliberately absent: translated text
+    # is keyed by passage in PassageText, not stashed per row in this JSON column.
+    i18n = TranslationField(fields=('book',))
 
     class Meta:
+        ordering = ["day__date", "sequence", "id"]
         constraints = [
             constraints.UniqueConstraint(
                 fields=[
@@ -654,6 +665,34 @@ class Reading(models.Model):
             ),
         ]
 
+    def save(self, *args, **kwargs):
+        """Keep ``passage_key`` in step with the citation fields.
+
+        Done here rather than at each ``get_or_create`` call site so the admin (which
+        exposes ``book_en`` for editing and saves via ``ModelAdmin.save_model``) and any
+        future creation path stay correct.  A stale key would silently split one dedup
+        group in two and double retrieval spend, so it must not depend on callers
+        remembering.
+
+        ``bulk_create`` and ``QuerySet.update()`` bypass this, as they bypass every
+        ``save()``; neither is used to write Reading's citation fields today.  If that
+        changes, compute the key there too — or run ``backfill_reading_passage_keys``.
+        """
+        from hub.constants import passage_key as compute_passage_key
+
+        key = compute_passage_key(
+            self.book, self.start_chapter, self.start_verse,
+            self.end_chapter, self.end_verse,
+        )
+        if key != self.passage_key:
+            self.passage_key = key
+            # Widen a narrow update_fields so a key repaired on an otherwise-unrelated
+            # save (e.g. the book_hy writes that pass update_fields=['i18n']) persists.
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = list(update_fields) + ["passage_key"]
+        super().save(*args, **kwargs)
+
     def create_url(self):
         """Creates URL to read the reading.
 
@@ -662,7 +701,15 @@ class Reading(models.Model):
         """
         from hub.constants import normalize_book_name
 
-        normalized_book = normalize_book_name(self.book)
+        book, start_chapter, start_verse = self.book, self.start_chapter, self.start_verse
+        if normalize_book_name(book) == "Azariah":
+            # See hub.constants.AZARIAH_TO_DANIEL_VERSE_OFFSET: Catena has no standalone
+            # "Azariah" section, so remap onto its Daniel 3 home before the normal lookup.
+            book = AZARIAH_CATENA_BOOK
+            start_chapter = AZARIAH_CATENA_CHAPTER
+            start_verse = start_verse + AZARIAH_TO_DANIEL_VERSE_OFFSET
+
+        normalized_book = normalize_book_name(book)
         book_abbrev = CATENA_ABBREV_FOR_BOOK_NORMALIZED.get(normalized_book)
         if book_abbrev is None:
             logging.error(
@@ -673,10 +720,10 @@ class Reading(models.Model):
             return CATENA_HOME_PAGE_URL
         verse_ref = (
             ""
-            if self.start_verse <= 2
-            else f"#{book_abbrev}{self.start_chapter:03d}{self.start_verse - 2:03d}"
+            if start_verse <= 2
+            else f"#{book_abbrev}{start_chapter:03d}{start_verse - 2:03d}"
         )
-        return f"{CATENA_HOME_PAGE_URL}{book_abbrev}/{self.start_chapter:d}/{verse_ref}"
+        return f"{CATENA_HOME_PAGE_URL}{book_abbrev}/{start_chapter:d}/{verse_ref}"
 
     # Add a helper property to easily reference the passage in a standard format
     @property
@@ -710,7 +757,19 @@ class Reading(models.Model):
 
 
 class Feast(models.Model):
-    """Stores details for a feast day."""
+    """A commemoration, and the enrichment the app keeps for it.
+
+    Keyed by ``(church, name)``, not by date.  The name of the day comes from the
+    ``armenian_lectionary`` engine and is recomputed per request, so nothing here needs to be
+    pre-populated for a date to resolve; what this row exists to hold is the part the engine has
+    no notion of -- the AI ``designation``, the matched ``icon``, and the generated ``contexts``.
+
+    Those are properties of the commemoration, not of the day it lands on.  This model used to
+    hang off ``Day``, which meant the same feast earned a new row, a new LLM context and a new
+    icon match every year it recurred; the engine emits a few hundred distinct names across its
+    whole supported range, so the table was almost entirely duplicates.  Same reasoning as
+    ``PassageText``: key by the thing, never by the date.
+    """
 
     class Designation(models.TextChoices):
         SUNDAYS_DOMINICAL = (
@@ -738,8 +797,10 @@ class Feast(models.Model):
             'Fast'
         )
 
-    day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name="feasts")
-    name = models.CharField(max_length=256)
+    church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="feasts")
+    # 512 instead of 256 because two feast names in the Armenian lectionary exceed 256 characters:
+    # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257)
+    name = models.CharField(max_length=512)
     designation = models.CharField(
         max_length=256,
         choices=Designation.choices,
@@ -760,7 +821,14 @@ class Feast(models.Model):
     i18n = TranslationField(fields=('name',))
 
     class Meta:
-        pass
+        constraints = [
+            # One row per commemoration per church: the invariant the whole re-key exists to
+            # establish, enforced in the database so a race between two requests for the same
+            # date cannot recreate the per-occurrence duplication.
+            models.UniqueConstraint(
+                fields=["church", "name"], name="unique_feast_per_church"
+            ),
+        ]
 
     @property
     def active_context(self):
@@ -768,7 +836,7 @@ class Feast(models.Model):
         return self.contexts.filter(active=True).first()
 
     def __str__(self):
-        return f"{self.name} ({self.day.date.strftime('%Y-%m-%d')})"
+        return f"{self.name} ({self.church.name})"
 
 
 class FastParticipantMap(models.Model):
@@ -845,6 +913,7 @@ class LLMPrompt(models.Model):
         ("readings", "Readings"),
         ("feasts", "Feasts"),
         ("prayer_requests", "Prayer Requests"),
+        ("intentions", "Intentions"),
     ]
 
     model = models.CharField(
@@ -1084,6 +1153,12 @@ class FastIntention(models.Model):
         default=True,
         help_text='Soft-delete flag; set to False when user leaves the fast',
     )
+    matched_tags = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text='LLM-derived prayer tags for this intention; null until computed',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1204,3 +1279,90 @@ class BibleVerse(models.Model):
         )
         parts = [f"[{r.verse}] {r.text}" for r in rows]
         return " ".join(parts).strip()
+
+
+class PassageText(models.Model):
+    """Retrieved text for one passage in one language.
+
+    Text is stored per *passage*, not per ``Reading`` row.  The Armenian lectionary
+    assigns ~1,100 distinct passages across all years, but emits ~1,500 readings a year
+    forever, so a row-keyed cache makes retrieval cost grow without bound while a
+    passage-keyed one is a constant.  That is the difference between exhausting
+    API.Bible's monthly quota and using a quarter of it.
+
+    One table serves every language.  Adding a language means inserting rows and
+    registering a fetcher — not adding columns to ``Reading`` — which is what keeps a
+    future source with its own retrieval limits from needing a schema change.
+    ``fums_token`` stays empty for languages composed from a local corpus.
+    """
+
+    passage_key = models.CharField(
+        max_length=64, db_index=True,
+        help_text="Passage identity from hub.constants.passage_key, e.g. 'GEN.1.1-1.5'.",
+    )
+    language = models.CharField(
+        max_length=8,
+        help_text="ISO 639-1 code, e.g. 'en', 'hy'.",
+    )
+    text = models.TextField(blank=True, default="")
+    version = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text=(
+            "Edition the text came from, e.g. 'NKJV', 'KJVAIC', 'Նոր Էջմիածին'. A column "
+            "rather than part of the key because it varies within a language: English "
+            "uses NKJV for canonical books and KJVAIC for the Apocrypha."
+        ),
+    )
+    copyright = models.TextField(
+        blank=True, default="",
+        help_text="Copyright notice, stored exactly as the source returned it.",
+    )
+    fums_token = models.TextField(
+        blank=True, default="",
+        help_text="API.Bible FUMS v3 token, where the source issues one.",
+    )
+    fetched_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text=(
+            "When the text was retrieved. NULL means the passage is known but has never "
+            "been fetched — how the warm-up enumerates work for the refresh task."
+        ),
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["passage_key", "language"],
+                name="unique_passage_text_per_language",
+            ),
+        ]
+        indexes = [
+            # Backs the refresh task's "what is stale in this language" scan.
+            models.Index(fields=["language", "fetched_at"], name="passage_text_lang_fresh_idx"),
+        ]
+        verbose_name = "Passage Text"
+        verbose_name_plural = "Passage Texts"
+
+    def __str__(self):
+        return f"{self.passage_key} ({self.language})"
+
+    def is_expired(self, *, now=None) -> bool:
+        """True when this text is past its source's freshness cap.
+
+        A missing ``fetched_at`` counts as expired: we cannot show the text is fresh
+        enough to serve, so it is treated the same as stale.  Languages absent from
+        ``LANGUAGE_TEXT_MAX_AGE_DAYS`` never expire — a locally composed corpus has no
+        licence clock.
+        """
+        # django.conf.settings, not the module-level `bahk.settings` bound at the top of
+        # this file: only the former honours override_settings in tests.
+        from datetime import timedelta
+
+        from django.conf import settings as django_settings
+
+        max_age = getattr(django_settings, "LANGUAGE_TEXT_MAX_AGE_DAYS", {}).get(self.language)
+        if max_age is None:
+            return False
+        if self.fetched_at is None:
+            return True
+        return self.fetched_at < (now or timezone.now()) - timedelta(days=max_age)

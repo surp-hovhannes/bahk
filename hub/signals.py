@@ -92,7 +92,7 @@ def handle_feast_context_delete(sender, instance, **kwargs):
 
 def invalidate_feast_api_cache_for_icon(icon):
     """Invalidate feast API cache entries for every feast using an icon."""
-    for feast in icon.feasts.select_related("day", "day__church").all():
+    for feast in icon.feasts.only("church_id").all():
         invalidate_feast_api_cache_for_feast(feast)
 
 
