@@ -23,7 +23,7 @@ from django.utils.encoding import force_str
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count, Min, Max, Sum, Exists, OuterRef, Subquery
 from rest_framework.pagination import LimitOffsetPagination
-from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache
+from ..utils import invalidate_fast_participants_cache, invalidate_fast_stats_cache, shuffled_fast_participants
 from functools import wraps
 from hub.tasks import generate_participant_map, tag_intention_prayers
 from better_profanity import profanity
@@ -717,9 +717,10 @@ class FastParticipantsView(views.APIView):
             limit = NUMBER_PARTICIPANTS_TO_SHOW_WEB
 
         # Optimized query with select_related and prefetch_related
-        other_participants = fast.profiles.select_related(
-            'user'  # For email/username
-        ).order_by('user__date_joined')[:limit]
+        other_participants = shuffled_fast_participants(
+            fast.id,
+            fast.profiles.select_related('user'),  # For email/username
+        )[:limit]
 
         # Hydrate intentions to avoid N+1
         _hydrate_intentions(fast, other_participants)
@@ -783,13 +784,16 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
             fast = get_object_or_404(Fast, id=fast_id)
             cache.set(cache_key, fast, CACHE_TTL)
         
-        queryset = fast.profiles.select_related(
-            'user'  # For email/username
-        ).order_by('user__date_joined')  # Consistent ordering
-        
+        # Shuffled (but stable per-fast) ordering, so pagination stays
+        # consistent across requests/pages while varying between fasts.
+        queryset = shuffled_fast_participants(
+            fast.id,
+            fast.profiles.select_related('user'),  # For email/username
+        )
+
         # Hydrate intentions to avoid N+1
         _hydrate_intentions(fast, queryset)
-        
+
         return queryset
     
     def get_serializer_context(self):

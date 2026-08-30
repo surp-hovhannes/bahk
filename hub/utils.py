@@ -1,5 +1,6 @@
 """Utilities for supporting backend."""
 from datetime import datetime, timedelta
+import hashlib
 import logging
 
 from django.core.mail import EmailMultiAlternatives, send_mail
@@ -53,6 +54,36 @@ def invalidate_fast_participants_cache(fast_id):
         cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*fast.{fast_id}.participants.*")
         # Invalidate FastParticipantsView cache
         cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*{fast_id}/participants.*")
+
+
+def shuffled_fast_participants(fast_id, profiles):
+    """
+    Order a fast's participant profiles into a stable "shuffle".
+
+    Ordering by account creation (or any other fixed attribute) means the
+    same handful of accounts always lead every fast's participant list.
+    Sorting by a hash of `(fast_id, profile.user_id)` instead spreads
+    participants differently across fasts while staying identical for a
+    given fast every time it's requested.
+
+    Deliberately not `hash()`: it's salted with a random seed per
+    process (PYTHONHASHSEED), so the order would reshuffle on every
+    restart or worker. `hashlib.md5` is stable across processes and
+    machines. The `fast_id`/`user_id` delimiter keeps e.g. fast 1 + user
+    23 from hashing the same as fast 12 + user 3.
+
+    Args:
+        fast_id: id of the fast the profiles belong to.
+        profiles: iterable of Profile instances (e.g. `fast.profiles.all()`).
+
+    Returns:
+        A list of the given profiles sorted into the stable shuffle order.
+    """
+    def sort_key(profile):
+        digest = hashlib.md5(f"{fast_id}-{profile.user_id}".encode("utf-8")).hexdigest()
+        return (digest, profile.id)
+
+    return sorted(profiles, key=sort_key)
 
 
 def invalidate_fast_stats_cache(user):
