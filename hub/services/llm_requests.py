@@ -12,6 +12,7 @@ def openai_chat_completion(client, *, model, messages, max_tokens, temperature=N
         **kwargs,
     }
     if model.startswith(OPENAI_REASONING_MODEL_PREFIXES):
+        request.pop("top_p", None)
         request["max_completion_tokens"] = max_tokens
     else:
         request["max_tokens"] = max_tokens

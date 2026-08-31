@@ -958,7 +958,7 @@ class LLMPrompt(models.Model):
         """
         from hub.services.llm_service import OpenAIService, AnthropicService
 
-        if "gpt" in self.model:
+        if self.model.startswith(("gpt", "o1", "o3", "o4")):
             return OpenAIService()
         elif "claude" in self.model:
             return AnthropicService()

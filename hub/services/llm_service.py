@@ -989,7 +989,7 @@ class OpenAIService(LLMService):
 
 def get_llm_service(model_name: str) -> LLMService:
     """Factory function to get the appropriate LLM service based on model name."""
-    if "gpt" in model_name:
+    if model_name.startswith(("gpt", "o1", "o3", "o4")):
         return OpenAIService()
     elif "claude" in model_name:
         return AnthropicService()

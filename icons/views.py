@@ -413,8 +413,7 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                                 messages=[
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": user_message},
-                                ],
-                                max_completion_tokens=500,)
+                                ], max_tokens=500, )
                                 logger.info(f"Successfully used model: {model} (without temperature)")
                                 break
                             except Exception as retry_error:
@@ -440,8 +439,7 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                                 messages=[
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": user_message},
-                                ],
-                                max_completion_tokens=500,)
+                                ], max_tokens=500, )
                                 logger.info(f"Successfully used model: {model} (without temperature)")
                                 break
                             except Exception as retry_error:

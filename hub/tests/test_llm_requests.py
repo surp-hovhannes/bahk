@@ -15,6 +15,7 @@ class LLMRequestTests(SimpleTestCase):
             messages=[{"role": "user", "content": "hello"}],
             max_tokens=100,
             temperature=0.2,
+            top_p=1,
         )
 
         client.chat.completions.create.assert_called_once_with(
