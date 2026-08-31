@@ -13,6 +13,7 @@ from rest_framework.throttling import AnonRateThrottle
 from icons.cache import IconViewCache
 from icons.models import Icon, IconFeedback
 from icons.serializers import IconSerializer, IconFeedbackSerializer
+from hub.services.llm_requests import openai_chat_completion
 
 class IsAdminOrReadOnly(BasePermission):
     """
@@ -385,14 +386,12 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                 for model in models_to_try:
                     try:
                         # Try with temperature first
-                        response = client.chat.completions.create(
-                            model=model,
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_message},
-                            ],
-                            max_completion_tokens=500
-                        )
+                        response = openai_chat_completion(client, model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                        max_completion_tokens=500)
                         logger.info(f"Successfully used model: {model}")
                         break
                     except APIError as api_error:
@@ -410,14 +409,12 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                             logger.warning(f"Model {model} doesn't support custom temperature, retrying without temperature parameter...")
                             try:
                                 # Retry without temperature parameter (uses default)
-                                response = client.chat.completions.create(
-                                    model=model,
-                                    messages=[
-                                        {"role": "system", "content": system_prompt},
-                                        {"role": "user", "content": user_message},
-                                    ],
-                                    max_completion_tokens=500,
-                                )
+                                response = openai_chat_completion(client, model=model,
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": user_message},
+                                ],
+                                max_completion_tokens=500,)
                                 logger.info(f"Successfully used model: {model} (without temperature)")
                                 break
                             except Exception as retry_error:
@@ -439,14 +436,12 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                             logger.warning(f"Model {model} doesn't support custom temperature, retrying without temperature parameter...")
                             try:
                                 # Retry without temperature parameter
-                                response = client.chat.completions.create(
-                                    model=model,
-                                    messages=[
-                                        {"role": "system", "content": system_prompt},
-                                        {"role": "user", "content": user_message},
-                                    ],
-                                    max_completion_tokens=500,
-                                )
+                                response = openai_chat_completion(client, model=model,
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": user_message},
+                                ],
+                                max_completion_tokens=500,)
                                 logger.info(f"Successfully used model: {model} (without temperature)")
                                 break
                             except Exception as retry_error:

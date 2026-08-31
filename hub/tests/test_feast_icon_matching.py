@@ -306,8 +306,8 @@ class FeastIconMatchingScopeTests(TestCase):
         self.assertIsNone(feast.icon)
 
     @override_settings(OPENAI_API_KEY='test-key')
-    @patch('openai.OpenAI')
-    def test_llm_parser_filters_out_of_scope_icon_ids(self, mock_openai):
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_llm_parser_filters_out_of_scope_icon_ids(self, mock_completion):
         """LLM parser should only return IDs from the provided icon list."""
         icon = Icon.objects.create(
             title="Local Nativity Icon",
@@ -323,7 +323,7 @@ class FeastIconMatchingScopeTests(TestCase):
                 content_type='image/jpeg'
             ),
         )
-        mock_choice = mock_openai.return_value.chat.completions.create.return_value.choices[0]
+        mock_choice = mock_completion.return_value.choices[0]
         mock_choice.message.content = (
             f'[{{"id": {other_icon.id}, "confidence": "high"}}, '
             f'{{"id": {icon.id}, "confidence": "high"}}]'
