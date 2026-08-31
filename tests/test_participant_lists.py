@@ -131,7 +131,7 @@ class FastParticipantListTests(APITestCase):
     def test_participants_are_drawn_from_joined_profiles(self):
         """Test that every returned participant is one of the profiles that joined the fast.
 
-        Participant order is a stable per-fast shuffle (see
+        Participant order is a stable daily shuffle per fast (see
         `hub.utils.shuffled_fast_participants`), not join/insertion order, so
         this only checks membership and count rather than a fixed position.
         """

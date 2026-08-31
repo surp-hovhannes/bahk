@@ -696,7 +696,7 @@ class FastParticipantsViewTest(TestCase):
         payload = response.json()
         self.assertEqual(len(payload), 2)
 
-        # Participant order is a stable per-fast shuffle, not insertion
+        # Participant order is a stable daily per-fast shuffle, not insertion
         # order, so look up by id rather than asserting position.
         by_id = {participant["id"]: participant for participant in payload}
         self.assertEqual(set(by_id), {self.participant_profile.id, self.other_profile.id})
@@ -799,7 +799,7 @@ class PaginatedFastParticipantsViewTest(TestCase):
         self.assertIsNone(payload["previous"])
         self.assertEqual(len(payload["results"]), 1)
 
-        # Participant order is a stable per-fast shuffle, not insertion
+        # Participant order is a stable daily per-fast shuffle, not insertion
         # order, so validate whichever profile lands first by its own id
         # rather than asserting a fixed position.
         expected_by_id = {

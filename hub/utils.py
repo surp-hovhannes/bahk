@@ -1,13 +1,14 @@
 """Utilities for supporting backend."""
 from datetime import datetime, timedelta
-import hashlib
 import logging
 
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import CharField, Q, Value
+from django.db.models.functions import Cast, Concat, MD5
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from django.utils import timezone
 from django.core.cache import cache
 
 import bahk.settings as settings
@@ -56,34 +57,26 @@ def invalidate_fast_participants_cache(fast_id):
         cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*{fast_id}/participants.*")
 
 
-def shuffled_fast_participants(fast_id, profiles):
-    """
-    Order a fast's participant profiles into a stable "shuffle".
+def shuffled_fast_participants(fast_id, profiles, rotation_date=None):
+    """Order participant profiles by a stable, daily rotating database key.
 
-    Ordering by account creation (or any other fixed attribute) means the
-    same handful of accounts always lead every fast's participant list.
-    Sorting by a hash of `(fast_id, profile.user_id)` instead spreads
-    participants differently across fasts while staying identical for a
-    given fast every time it's requested.
-
-    Deliberately not `hash()`: it's salted with a random seed per
-    process (PYTHONHASHSEED), so the order would reshuffle on every
-    restart or worker. `hashlib.md5` is stable across processes and
-    machines. The `fast_id`/`user_id` delimiter keeps e.g. fast 1 + user
-    23 from hashing the same as fast 12 + user 3.
+    The key varies by fast and calendar day, so a participant's position is
+    stable for pagination during one day but changes on the next day. Keeping
+    the expression in SQL lets callers apply ``LIMIT`` and offsets before
+    profile rows are materialized in Django.
 
     Args:
-        fast_id: id of the fast the profiles belong to.
-        profiles: iterable of Profile instances (e.g. `fast.profiles.all()`).
-
-    Returns:
-        A list of the given profiles sorted into the stable shuffle order.
+        fast_id: ID of the fast the profiles belong to.
+        profiles: A Profile queryset (for example, ``fast.profiles.all()``).
+        rotation_date: Optional date used as the rotation seed; defaults to
+            the current Django-local date.
     """
-    def sort_key(profile):
-        digest = hashlib.md5(f"{fast_id}-{profile.user_id}".encode("utf-8")).hexdigest()
-        return (digest, profile.id)
-
-    return sorted(profiles, key=sort_key)
+    rotation_date = rotation_date or timezone.localdate()
+    seed = Concat(
+        Value(f"{fast_id}-{rotation_date.isoformat()}-"),
+        Cast("user_id", output_field=CharField()),
+    )
+    return profiles.annotate(shuffle_key=MD5(seed)).order_by("shuffle_key", "id")
 
 
 def invalidate_fast_stats_cache(user):

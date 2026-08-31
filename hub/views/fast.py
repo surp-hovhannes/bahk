@@ -784,17 +784,13 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
             fast = get_object_or_404(Fast, id=fast_id)
             cache.set(cache_key, fast, CACHE_TTL)
         
-        # Shuffled (but stable per-fast) ordering, so pagination stays
-        # consistent across requests/pages while varying between fasts.
-        queryset = shuffled_fast_participants(
+        # Daily, stable shuffle: profile order changes between days while
+        # remaining consistent for offset pagination within a day.
+        self.fast = fast
+        return shuffled_fast_participants(
             fast.id,
             fast.profiles.select_related('user'),  # For email/username
         )
-
-        # Hydrate intentions to avoid N+1
-        _hydrate_intentions(fast, queryset)
-
-        return queryset
     
     def get_serializer_context(self):
         """Add request to serializer context for thumbnail URL generation"""
@@ -807,22 +803,23 @@ class PaginatedFastParticipantsView(generics.ListAPIView):
         """Override to add count caching for pagination performance"""
         fast_id = self.kwargs.get('fast_id')
         count_cache_key = get_cache_key('fast_participants_count', fast_id)
-        
-        # Check if we have a cached count
         cached_count = cache.get(count_cache_key)
         
         if cached_count is not None and hasattr(self.paginator, 'count'):
             # If count is cached, use it directly to avoid COUNT(*) query
             self.paginator.count = cached_count
-            return super().paginate_queryset(queryset)
-        
-        # Get paginated results normally (will perform COUNT(*))
-        result = super().paginate_queryset(queryset)
-        
-        # Cache the count for future requests if it was calculated
-        if hasattr(self.paginator, 'count'):
-            cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
-            
+            result = super().paginate_queryset(queryset)
+        else:
+            # Get paginated results normally (will perform COUNT(*))
+            result = super().paginate_queryset(queryset)
+
+            # Cache the count for future requests if it was calculated
+            if hasattr(self.paginator, 'count'):
+                cache.set(count_cache_key, self.paginator.count, CACHE_TTL)
+
+        if result is not None:
+            _hydrate_intentions(self.fast, result)
+
         return result
 
 

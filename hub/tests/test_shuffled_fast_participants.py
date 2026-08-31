@@ -1,12 +1,17 @@
 import hashlib
+from datetime import date, timedelta
 
+from django.db.models import QuerySet
 from django.test import TestCase
 
+from hub.models import Profile
 from hub.utils import shuffled_fast_participants
 from tests.fixtures.test_data import TestDataFactory
 
 
 class ShuffledFastParticipantsTest(TestCase):
+    rotation_date = date(2026, 8, 31)
+
     def setUp(self):
         self.church = TestDataFactory.create_church(name="Shuffle Church")
         self.profiles = [
@@ -20,44 +25,67 @@ class ShuffledFastParticipantsTest(TestCase):
             )
             for i in range(5)
         ]
+        self.queryset = Profile.objects.filter(id__in=[profile.id for profile in self.profiles])
 
-    def test_order_is_deterministic_for_the_same_fast(self):
-        first_pass = shuffled_fast_participants(1, self.profiles)
-        second_pass = shuffled_fast_participants(1, self.profiles)
+    def _ordered_profiles(self, fast_id=1, rotation_date=None):
+        return list(
+            shuffled_fast_participants(
+                fast_id,
+                self.queryset,
+                rotation_date or self.rotation_date,
+            )
+        )
 
-        self.assertEqual([p.id for p in first_pass], [p.id for p in second_pass])
+    def test_order_is_deterministic_within_one_day(self):
+        first_pass = self._ordered_profiles()
+        second_pass = self._ordered_profiles()
+
+        self.assertEqual([profile.id for profile in first_pass], [profile.id for profile in second_pass])
+
+    def test_order_changes_on_the_next_day(self):
+        today = self._ordered_profiles()
+        tomorrow = self._ordered_profiles(rotation_date=self.rotation_date + timedelta(days=1))
+
+        self.assertNotEqual([profile.id for profile in today], [profile.id for profile in tomorrow])
 
     def test_order_is_independent_of_input_order(self):
-        forward = shuffled_fast_participants(1, self.profiles)
-        reversed_input = shuffled_fast_participants(1, list(reversed(self.profiles)))
+        forward = list(
+            shuffled_fast_participants(
+                1,
+                self.queryset.order_by("id"),
+                self.rotation_date,
+            )
+        )
+        reverse = list(
+            shuffled_fast_participants(
+                1,
+                self.queryset.order_by("-id"),
+                self.rotation_date,
+            )
+        )
 
-        self.assertEqual([p.id for p in forward], [p.id for p in reversed_input])
+        self.assertEqual([profile.id for profile in forward], [profile.id for profile in reverse])
 
-    def test_order_differs_between_fasts(self):
-        order_for_fast_1 = [p.id for p in shuffled_fast_participants(1, self.profiles)]
-        order_for_fast_2 = [p.id for p in shuffled_fast_participants(2, self.profiles)]
-
-        self.assertNotEqual(order_for_fast_1, order_for_fast_2)
-
-    def test_matches_expected_md5_order_with_delimiter(self):
-        # Pins the exact sort key so a regression to Python's built-in
-        # hash() (random per-process) or a delimiter-less key format
-        # (which would collide e.g. fast 1 + user 23 with fast 12 + user 3)
-        # gets caught.
+    def test_matches_expected_md5_order_with_fast_and_date_delimiters(self):
         expected = sorted(
             self.profiles,
-            key=lambda p: (
-                hashlib.md5(f"1-{p.user_id}".encode("utf-8")).hexdigest(),
-                p.id,
+            key=lambda profile: (
+                hashlib.md5(
+                    f"1-{self.rotation_date.isoformat()}-{profile.user_id}".encode("utf-8")
+                ).hexdigest(),
+                profile.id,
             ),
         )
 
-        result = shuffled_fast_participants(1, self.profiles)
+        result = self._ordered_profiles()
 
-        self.assertEqual([p.id for p in result], [p.id for p in expected])
+        self.assertEqual([profile.id for profile in result], [profile.id for profile in expected])
 
-    def test_returns_a_list_and_preserves_all_profiles(self):
-        result = shuffled_fast_participants(1, self.profiles)
+    def test_returns_a_queryset_that_applies_limit_in_sql(self):
+        result = shuffled_fast_participants(1, self.queryset, self.rotation_date)
 
-        self.assertIsInstance(result, list)
-        self.assertEqual({p.id for p in result}, {p.id for p in self.profiles})
+        self.assertIsInstance(result, QuerySet)
+        with self.assertNumQueries(1):
+            limited_profiles = list(result[:2])
+
+        self.assertEqual(len(limited_profiles), 2)
