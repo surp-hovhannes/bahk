@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
+from hub.constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
 from hub.models import Day
 from tests.fixtures.test_data import TestDataFactory
 from datetime import datetime, timedelta
@@ -127,24 +128,28 @@ class FastParticipantListTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 5)
     
-    def test_participants_ordered_by_join_date(self):
-        """Test that participants are ordered by join date (simulated by user creation date)."""
+    def test_participants_are_drawn_from_joined_profiles(self):
+        """Test that every returned participant is one of the profiles that joined the fast.
+
+        Participant order is a stable per-fast shuffle (see
+        `hub.utils.shuffled_fast_participants`), not join/insertion order, so
+        this only checks membership and count rather than a fixed position.
+        """
         # Create authenticated client
         client = APIClient()
         client.force_authenticate(user=self.users[0])
-        
-        # Our test setup adds users in order, so the first users should appear first
+
         response = client.get(self.regular_participants_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Get the profile IDs in the order they appear in the response
         participant_ids = [p['id'] for p in response.data]
-        
-        # Our test added profiles 0-19 to the fast in order
-        # The exact order may depend on the API implementation (might be ascending or descending)
-        # So we just check that the IDs of participants that joined are present
-        for i in range(min(len(participant_ids), 20)):
-            self.assertIn(self.profiles[i].id, participant_ids)
+
+        # Our test added profiles 0-19 to the fast; the endpoint defaults to
+        # returning up to NUMBER_PARTICIPANTS_TO_SHOW_WEB of them.
+        joined_profile_ids = {self.profiles[i].id for i in range(20)}
+        self.assertTrue(set(participant_ids).issubset(joined_profile_ids))
+        self.assertEqual(len(participant_ids), min(20, NUMBER_PARTICIPANTS_TO_SHOW_WEB))
     
     @unittest.skip("Skipping paginated participants endpoint test")
     def test_paginated_participants_endpoint(self):
