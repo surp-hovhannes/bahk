@@ -12,7 +12,6 @@ Implementation-ready plans and their current delivery status.
 | 006 | [Expand useful admin sorting](006-expand-admin-sortability.md) | P2 | S | Low | Implemented | `2f3b2e7` |
 | 007 | [Improve content discovery and navigation](007-improve-content-discovery.md) | P2 | M | Low | Implemented | `2f3b2e7` |
 | 008 | [Replace opaque relation pickers](008-improve-admin-relation-pickers.md) | P2 | M | Medium | Implemented | `2f3b2e7` |
-| 010 | [Configure the video field for multipart S3 uploads](010-configure-video-s3-storage.md) | P1 | S | Medium | Implemented — dedicated migration branch | `5af5c7d` |
 
 Plans in this directory are intentionally separate from application changes. Approve a plan before implementation, then keep its status aligned with delivery and verification.
 
@@ -28,4 +27,3 @@ All seven plans were selected on 2026-08-26. No audit finding was rejected.
 
 Plans 002-008 are implemented in the `codex/admin-improvement-audit` working tree. Record the implementation commit when the branch is prepared for review.
 
-Plan 010 is a separately approved migration and must remain in its dedicated PR.
