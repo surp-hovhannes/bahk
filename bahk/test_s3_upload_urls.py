@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth import get_user_model
 from django.core import signing
 from django.http import JsonResponse
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import resolve, reverse
 from s3_file_field.widgets import S3FileInput, get_base_url
 
@@ -95,7 +95,10 @@ class ProtectedS3FileFieldURLsTests(TestCase):
             MultipartUpload={"Parts": [{"PartNumber": 1, "ETag": '"part-etag"'}]},
         )
 
-    def test_staff_completion_acknowledgement_succeeds(self):
-        self.client.force_login(self.staff)
-        response = self.client.post(reverse("s3_file_field:completion-ack"))
+    def test_staff_completion_acknowledgement_is_csrf_exempt(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.staff)
+
+        response = client.post(reverse("s3_file_field:completion-ack"))
+
         self.assertEqual(response.status_code, 204)
