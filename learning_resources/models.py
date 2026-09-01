@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.conf import settings
 import logging
 from s3_file_field.fields import S3FileField
+from storages.backends.s3 import S3Storage
 from modeltrans.fields import TranslationField
 
 from learning_resources.constants import DAYS_TO_CACHE_THUMBNAIL
@@ -42,6 +43,7 @@ class Video(models.Model):
         blank=True
     )
     video = S3FileField(
+        storage=S3Storage(),
         upload_to=video_upload_path,
         help_text='Supported formats: MP4, WebM. Portrait orientation (9:16). Files up to 500 MiB.'
     )
