@@ -1,5 +1,7 @@
-from django.test import TestCase
+from django.apps import apps
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
+from django.test import TestCase, override_settings
 from django.urls import resolve, reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
@@ -25,6 +27,16 @@ class VideoStorageConfigurationTests(TestCase):
         self.assertIsInstance(video_field.storage, S3Storage)
         self.assertTrue(MultipartManager.supported_storage(video_field.storage))
 
+
+    @override_settings(OFFLINE_VIDEO_STORAGE=True, IS_PRODUCTION=True)
+    def test_offline_storage_is_rejected_in_production(self):
+        app_config = apps.get_app_config("learning_resources")
+
+        with self.assertRaisesRegex(
+            ImproperlyConfigured,
+            "OFFLINE_VIDEO_STORAGE must not be enabled in production",
+        ):
+            app_config.ready()
 
 class DevotionalSetModelTest(TestCase):
     """Test cases for DevotionalSet model"""
