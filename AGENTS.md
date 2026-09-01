@@ -26,6 +26,10 @@ class MyTestCase(TestCase):
 
 Config lives in `.crabbox.slug.conf` — slug `bahk-fast`, 45m idle, 4h TTL. Warm with `scripts/crabbox-box.sh warm`. Validate with `scripts/crabbox-validate.sh ci`. Never commit `.crabbox/` runtime state.
 
+### Planning Artifacts
+
+Do not create, modify, or commit agent-generated planning documents (`plans/`, `advisor-plans/`, or equivalent) in this repository unless Der Hayr explicitly requests that repository documentation. Keep planning in the agent conversation or local task state; implementation PRs contain only the requested product, test, and operational changes.
+
 ---
 
 # Project Command Note
