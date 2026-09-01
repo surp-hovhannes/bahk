@@ -12,6 +12,7 @@ Implementation-ready plans and their current delivery status.
 | 006 | [Expand useful admin sorting](006-expand-admin-sortability.md) | P2 | S | Low | Implemented | `2f3b2e7` |
 | 007 | [Improve content discovery and navigation](007-improve-content-discovery.md) | P2 | M | Low | Implemented | `2f3b2e7` |
 | 008 | [Replace opaque relation pickers](008-improve-admin-relation-pickers.md) | P2 | M | Medium | Implemented | `2f3b2e7` |
+| 009 | [Accept ISO calendar dates on legacy fast endpoints](009-accept-iso-fast-date.md) | P1 | S | Low | Implemented — focused tests pass; Crabbox unavailable | `7289ba8` |
 
 Plans in this directory are intentionally separate from application changes. Approve a plan before implementation, then keep its status aligned with delivery and verification.
 
@@ -26,3 +27,7 @@ Plans in this directory are intentionally separate from application changes. App
 All seven plans were selected on 2026-08-26. No audit finding was rejected.
 
 Plans 002-008 are implemented in the `codex/admin-improvement-audit` working tree. Record the implementation commit when the branch is prepared for review.
+
+## Pending plan
+
+- Execute 009 independently. It addresses Sentry issue #487 without changing the public response contract.

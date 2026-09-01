@@ -103,6 +103,13 @@ class FastOnDateEndpointTests(TestCase):
         date_str = today.strftime("%Y%m%d")
         self._assert_fast_on_date_countdown(query_params=f"?date={date_str}")
 
+    def test_fast_on_date_with_query_params_iso_countdown(self):
+        """Tests endpoint retrieving fast on a date with an ISO yyyy-mm-dd query parameter."""
+        from django.utils import timezone
+        today = timezone.localdate()
+        date_str = today.isoformat()
+        self._assert_fast_on_date_countdown(query_params=f"?date={date_str}")
+
     def test_fast_on_date_culmination_feast_countdown(self):
         """Tests endpoint retrieving fast on a date with a culmination feast countdown."""
         from django.utils import timezone
@@ -112,3 +119,19 @@ class FastOnDateEndpointTests(TestCase):
             query_params=f"?date={date_str}",
             culmination_feast_name="Pascha",
         )
+
+
+class FastParseDateStrTests(TestCase):
+    """Direct shape-guard tests for hub.views.fast._parse_date_str."""
+
+    def test_parse_date_str_returns_none_for_non_zero_padded_iso(self):
+        """Non-zero-padded ISO inputs like `2026-8-1` must be rejected."""
+        from hub.views.fast import _parse_date_str
+
+        self.assertIsNone(_parse_date_str("2026-8-1"))
+
+    def test_parse_date_str_returns_none_for_short_compact(self):
+        """Seven-digit compact inputs like `2026081` must be rejected."""
+        from hub.views.fast import _parse_date_str
+
+        self.assertIsNone(_parse_date_str("2026081"))
