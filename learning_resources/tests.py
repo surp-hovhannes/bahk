@@ -1,11 +1,15 @@
-from django.test import TestCase
+from django.apps import apps
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
+from django.test import TestCase, override_settings
 from django.urls import resolve, reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 from rest_framework import status
 import tempfile
 from PIL import Image
+from s3_file_field._multipart import MultipartManager
+from storages.backends.s3 import S3Storage
 
 from hub.models import Church, Fast, DevotionalSet, Day, Devotional
 from learning_resources.models import Video, Article, Recipe, Bookmark
@@ -14,6 +18,25 @@ from learning_resources.views import VideoDetailView, VideoListView
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 
+
+
+class VideoStorageConfigurationTests(TestCase):
+    def test_video_field_uses_a_multipart_compatible_s3_storage(self):
+        video_field = Video._meta.get_field("video")
+
+        self.assertIsInstance(video_field.storage, S3Storage)
+        self.assertTrue(MultipartManager.supported_storage(video_field.storage))
+
+
+    @override_settings(OFFLINE_VIDEO_STORAGE=True, IS_PRODUCTION=True)
+    def test_offline_storage_is_rejected_in_production(self):
+        app_config = apps.get_app_config("learning_resources")
+
+        with self.assertRaisesRegex(
+            ImproperlyConfigured,
+            "OFFLINE_VIDEO_STORAGE must not be enabled in production",
+        ):
+            app_config.ready()
 
 class DevotionalSetModelTest(TestCase):
     """Test cases for DevotionalSet model"""

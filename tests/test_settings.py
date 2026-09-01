@@ -33,6 +33,14 @@ DATABASES = {
 # Test media settings
 MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
 MEDIA_URL = '/test_media/'
+OFFLINE_VIDEO_STORAGE = True
+
+
+# Video uploads use django-s3-file-field's multipart S3 workflow. Test settings
+# intentionally have no bucket credentials, so suppress its live-bucket probe;
+# `learning_resources.tests.VideoStorageConfigurationTests` verifies the field's
+# configured storage type without external I/O.
+SILENCED_SYSTEM_CHECKS = ["s3_file_field.E002"]
 
 # Disable email sending during tests
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
