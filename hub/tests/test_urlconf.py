@@ -27,3 +27,21 @@ class HubURLConfTests(SimpleTestCase):
         self.assertEqual(reverse("fast_on_date_without_user"), "/api/fast/")
         self.assertEqual(resolve("/api/user/fasts/").url_name, "fast_on_date")
         self.assertEqual(resolve("/api/fast/").url_name, "fast_on_date_without_user")
+
+    def test_notification_routes_keep_both_prefixes_with_distinct_namespaces(self):
+        self.assertEqual(
+            reverse("notifications:unsubscribe"),
+            "/hub/notifications/unsubscribe/",
+        )
+        self.assertEqual(
+            reverse("api_notifications:unsubscribe"),
+            "/api/notifications/unsubscribe/",
+        )
+        self.assertEqual(
+            resolve("/hub/notifications/unsubscribe/").namespace,
+            "notifications",
+        )
+        self.assertEqual(
+            resolve("/api/notifications/unsubscribe/").namespace,
+            "api_notifications",
+        )

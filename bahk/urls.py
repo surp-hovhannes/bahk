@@ -109,6 +109,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', HealthCheckView.as_view(), name='health_check'),
     path('hub/', include('hub.urls')),
+    path('hub/notifications/', include('notifications.urls')),
     path('docs/', ApiDocsView.as_view(), name='api-docs'),
     path('', LandingPageView.as_view(), name='api-home'),
 
@@ -137,6 +138,10 @@ urlpatterns += [
 # pin hub endpoints to /api/ root url
 urlpatterns += [
     path("api/tags/", SystemTagsView.as_view(), name="system-tags"),
+    path(
+        'api/notifications/',
+        include(('notifications.urls', 'notifications'), namespace='api_notifications'),
+    ),
     path("api/", include("hub.urls")),
     path("api/learning-resources/", include("learning_resources.urls")),
     path("api/events/", include("events.urls")),
