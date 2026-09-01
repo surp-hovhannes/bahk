@@ -38,9 +38,9 @@ Internal URLconfs must never be mounted under `/api/v1/` as a shortcut for publi
 
 ## Compatibility and deprecation
 
-Stable v1 resources retain their response fields and request semantics. A removal or other breaking change requires a new version or a documented deprecation path.
+Stable v1 resources retain their response fields and request semantics for the lifetime of v1. A breaking change requires a new API version; the affected v1 route is not removed or repurposed in place.
 
-Deprecated stable endpoints are announced in the public reference documentation and release notes, remain available for at least 180 days unless a security, privacy, or legal emergency requires faster removal, and return `Deprecation` and `Sunset` response headers during the notice period.
+When a successor version replaces v1, its deprecation is announced in the public reference documentation and release notes. V1 remains available for at least 180 days unless a security, privacy, or legal emergency requires faster retirement, and its routes return `Deprecation` and `Sunset` response headers during that version-level notice period.
 
 ## Errors
 

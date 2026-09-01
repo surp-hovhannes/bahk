@@ -6,9 +6,12 @@ readiness gates.
 """
 
 from django.http import JsonResponse
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class PublicApiRootView(View):
     """Return the stable service descriptor for the public v1 API."""
 
@@ -20,7 +23,6 @@ class PublicApiRootView(View):
                 "service": "fast-and-pray",
                 "version": "v1",
                 "base_url": "/api/v1/",
-                "contract": "/docs/public-api-contract.md",
                 "status": "planned",
             }
         )

@@ -1,5 +1,7 @@
 from django.test import SimpleTestCase
 from django.urls import NoReverseMatch, resolve, reverse
+from django.test.client import Client
+from bahk.public_api_urls import urlpatterns as public_api_urlpatterns
 
 from bahk.views import ApiDocsView, LandingPageView
 
@@ -74,7 +76,6 @@ class PublicApiV1Tests(SimpleTestCase):
                 "service": "fast-and-pray",
                 "version": "v1",
                 "base_url": "/api/v1/",
-                "contract": "/docs/public-api-contract.md",
                 "status": "planned",
             },
         )
@@ -88,6 +89,19 @@ class PublicApiV1Tests(SimpleTestCase):
         with self.assertRaises(NoReverseMatch):
             reverse("public_api:fast-list")
 
+
+    def test_root_is_the_only_v1_route_until_resources_are_ready(self):
+        self.assertEqual(
+            [(pattern.name, str(pattern.pattern)) for pattern in public_api_urlpatterns],
+            [("root", "")],
+        )
+
+    def test_unsupported_method_returns_api_appropriate_405(self):
+        client = Client(enforce_csrf_checks=True)
+        response = client.post("/api/v1/")
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response["Allow"], "GET, HEAD, OPTIONS")
     def test_public_v1_does_not_expose_unready_or_internal_routes(self):
         for path in (
             "/api/v1/fasts/",
