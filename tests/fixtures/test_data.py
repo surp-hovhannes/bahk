@@ -175,15 +175,11 @@ class TestDataFactory:
             random_suffix = random.randint(1000, 9999)
             title = f"Test Video {timestamp}_{random_suffix}"
         
-        # Create a simple test file for the video field
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        test_video = SimpleUploadedFile("test_video.mp4", b"video content", content_type="video/mp4")
-        
         return Video.objects.create(
             title=title,
             description=description,
             category=category,
-            video=test_video
+            video="videos/test_video.mp4",
         )
     
     @staticmethod
