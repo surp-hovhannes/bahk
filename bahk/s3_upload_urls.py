@@ -1,6 +1,7 @@
 """Staff-protected compatibility URLs for django-s3-file-field's admin widget."""
 
 from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.csrf import csrf_exempt
 from django.core import signing
 from django.http import HttpResponse
 from django.urls import path, reverse
@@ -51,6 +52,7 @@ def upload_complete(request, *args, **kwargs):
     )
 
 
+@csrf_exempt
 @staff_member_required
 def completion_ack(request, *args, **kwargs):
     return HttpResponse(status=204)
