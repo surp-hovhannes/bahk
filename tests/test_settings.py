@@ -33,6 +33,7 @@ DATABASES = {
 # Test media settings
 MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
 MEDIA_URL = '/test_media/'
+OFFLINE_VIDEO_STORAGE = True
 
 
 # Video uploads use django-s3-file-field's multipart S3 workflow. Test settings
