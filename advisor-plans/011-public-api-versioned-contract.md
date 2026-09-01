@@ -34,6 +34,7 @@ V1 is anonymous, read-only, and limited initially to Churches, Readings, Fasts, 
 
 - `docs/public-api-contract.md` (new) — approved v1 base URL, ownership, support window, compatibility/deprecation policy, error-envelope target, resource inventory, and explicit exclusions.
 - `bahk/public_api_urls.py` (new) — a dedicated, namespaced v1 URLconf containing only v1 routes as each becomes ready; initially no resource route may delegate to internal `hub.urls`.
+- `bahk/public_api_views.py` (new) — an unauthenticated, read-only v1 root descriptor with no resource payloads or internal route inventory.
 - `bahk/urls.py` — mount the dedicated URLconf at `/api/v1/` without changing `/api/` behavior.
 - `tests/unit/test_api_site.py` or a dedicated URLconf test — prove `/api/v1/` is separate from internal `/api/`, and prove legacy/internal endpoints are not advertised as v1 routes.
 
@@ -77,7 +78,7 @@ Add focused tests that assert:
 - `/api/v1/` has its own namespace and does not include mixed internal URL patterns.
 - Existing `/api/` and `/hub/` routes remain unchanged.
 - `/docs/` remains Coming soon and does not advertise v1 resources before #500.
-- The public-contract document records all four planned resource families and all explicit exclusions.
+- The public-contract document is manually reviewed for all four planned resource families and explicit exclusions; do not add string-matching tests for document prose.
 
 **Verify**: `docker exec -e IS_PRODUCTION=false <app-container> python manage.py test tests.unit.test_api_site hub.tests.test_urlconf --exclude-tag=performance --settings=tests.test_settings` exits 0.
 
@@ -98,7 +99,7 @@ Open or update the follow-on implementation tickets/PRs so they depend on this c
 
 - URL-boundary test for `/api/v1/` isolation and `/api/` compatibility.
 - Existing API-site tests proving `/docs/` remains non-public.
-- Contract-document assertions only for durable public commitments (base URL, exclusions, resource inventory), not prose formatting.
+- Verify the contract document by review; tests exercise only runtime routing and response behavior.
 - No network, database migration, or production smoke test belongs in this contract-boundary plan.
 
 ## Done criteria
