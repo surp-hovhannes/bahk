@@ -6,6 +6,8 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 import tempfile
 from PIL import Image
+from s3_file_field._multipart import MultipartManager
+from storages.backends.s3 import S3Storage
 
 from hub.models import Church, Fast, DevotionalSet, Day, Devotional
 from learning_resources.models import Video, Article, Recipe, Bookmark
@@ -13,6 +15,15 @@ from learning_resources.serializers import DevotionalSetSerializer
 from learning_resources.views import VideoDetailView, VideoListView
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
+
+
+
+class VideoStorageConfigurationTests(TestCase):
+    def test_video_field_uses_a_multipart_compatible_s3_storage(self):
+        video_field = Video._meta.get_field("video")
+
+        self.assertIsInstance(video_field.storage, S3Storage)
+        self.assertTrue(MultipartManager.supported_storage(video_field.storage))
 
 
 class DevotionalSetModelTest(TestCase):
