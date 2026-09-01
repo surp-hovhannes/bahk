@@ -1,5 +1,6 @@
 from django.apps import AppConfig
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 
 class LearningResourcesConfig(AppConfig):
@@ -8,6 +9,11 @@ class LearningResourcesConfig(AppConfig):
 
     def ready(self):
         """Import signals and install test-only offline video storage."""
+        if getattr(settings, "OFFLINE_VIDEO_STORAGE", False) and settings.IS_PRODUCTION:
+            raise ImproperlyConfigured(
+                "OFFLINE_VIDEO_STORAGE must not be enabled in production."
+            )
+
         if getattr(settings, "OFFLINE_VIDEO_STORAGE", False):
             from storages.backends.s3 import S3Storage
 
