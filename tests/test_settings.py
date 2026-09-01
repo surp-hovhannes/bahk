@@ -34,6 +34,12 @@ DATABASES = {
 MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
 MEDIA_URL = '/test_media/'
 
+# Explicit S3-backed video fields still need deterministic URLs in tests. Avoid
+# credential lookup and network I/O while preserving the production field type.
+AWS_STORAGE_BUCKET_NAME = "test-bucket"
+AWS_S3_CUSTOM_DOMAIN = "test-bucket.s3.amazonaws.com"
+AWS_QUERYSTRING_AUTH = False
+
 # Video uploads use django-s3-file-field's multipart S3 workflow. Test settings
 # intentionally have no bucket credentials, so suppress its live-bucket probe;
 # `learning_resources.tests.VideoStorageConfigurationTests` verifies the field's
