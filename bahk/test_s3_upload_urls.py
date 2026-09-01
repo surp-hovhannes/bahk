@@ -1,6 +1,8 @@
-from unittest.mock import patch
+import json
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.core import signing
 from django.http import JsonResponse
 from django.test import TestCase
 from django.urls import resolve, reverse
@@ -17,6 +19,7 @@ class ProtectedS3FileFieldURLsTests(TestCase):
         expected = {
             "upload-initialize": "/api/s3-upload/upload-initialize/",
             "upload-complete": "/api/s3-upload/upload-complete/",
+            "completion-ack": "/api/s3-upload/completion-ack/",
             "finalize": "/api/s3-upload/finalize/",
         }
         for name, path in expected.items():
@@ -37,7 +40,7 @@ class ProtectedS3FileFieldURLsTests(TestCase):
 
     def test_staff_requests_delegate_to_each_installed_package_view(self):
         self.client.force_login(self.staff)
-        for name in ("upload_initialize", "upload_complete", "finalize"):
+        for name in ("upload_initialize", "finalize"):
             url_name = name.replace("_", "-")
             with patch(
                 f"s3_file_field.views.{name}",
@@ -46,3 +49,53 @@ class ProtectedS3FileFieldURLsTests(TestCase):
                 response = self.client.post(reverse(f"s3_file_field:{url_name}"))
             self.assertEqual(response.status_code, 200)
             package_view.assert_called_once()
+
+    @patch("bahk.s3_upload_urls._registry.get_field")
+    def test_staff_completion_uses_server_s3_client(self, get_field):
+        storage = Mock(bucket_name="video-bucket")
+        storage.connection.meta.client = Mock()
+        get_field.return_value.storage = storage
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("s3_file_field:upload-complete"),
+            data=json.dumps(
+                {
+                    "upload_signature": signing.dumps(
+                        {
+                            "field_id": "learning_resources.Video.video",
+                            "object_key": "videos/server-name.mp4",
+                        }
+                    ),
+                    "upload_id": "upload-id",
+                    "parts": [
+                        {
+                            "part_number": 1,
+                            "size": 1024,
+                            "etag": '"part-etag"',
+                        }
+                    ],
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "complete_url": reverse("s3_file_field:completion-ack"),
+                "body": "",
+            },
+        )
+        storage.connection.meta.client.complete_multipart_upload.assert_called_once_with(
+            Bucket="video-bucket",
+            Key="videos/server-name.mp4",
+            UploadId="upload-id",
+            MultipartUpload={"Parts": [{"PartNumber": 1, "ETag": '"part-etag"'}]},
+        )
+
+    def test_staff_completion_acknowledgement_succeeds(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(reverse("s3_file_field:completion-ack"))
+        self.assertEqual(response.status_code, 204)
