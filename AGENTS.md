@@ -20,31 +20,38 @@ class MyTestCase(TestCase):
 
 ### Baseline Validation Is Broken
 
-`ruff format --check` wants to reformat 220 files. `pytest` is missing. `npm test` placeholder fails. Use `scripts/crabbox-validate.sh ci` instead, and `--force` with `clawpatch open-pr` when needed.
+`ruff format --check` wants to reformat 220 files. `pytest` is missing. `npm test` placeholder fails. When Crabbox is installed, use `scripts/crabbox-validate.sh ci` instead; otherwise use the local Docker fallback below. Use `--force` with `clawpatch open-pr` when needed.
 
 ### Crabbox
 
-Config lives in `.crabbox.slug.conf` — slug `bahk-fast`, 45m idle, 4h TTL. Warm with `scripts/crabbox-box.sh warm`. Validate with `scripts/crabbox-validate.sh ci`. Never commit `.crabbox/` runtime state.
+Config lives in `.crabbox.slug.conf` — slug `bahk-fast`, 45m idle, 4h TTL. When the `crabbox` executable is installed, warm with `scripts/crabbox-box.sh warm` and validate with `scripts/crabbox-validate.sh ci`; never commit `.crabbox/` runtime state.
+
+When Crabbox is unavailable, run Django/Python validation in the local Docker app container. Discover its current name with `docker ps --format '{{.Names}}'` rather than assuming a compose-project prefix, then use `docker exec -e IS_PRODUCTION=false <app-container> python manage.py <command>`.
 
 ---
 
 # Project Command Note
 
-This project runs commands through Docker containers.
+Use Crabbox as the preferred validation environment when its executable is installed. Otherwise run Django/Python commands through the local Docker app container.
 
-- Use the app container for Django/Python commands from the local host: `devcontainer-app-1`
-- Preferred command pattern:
+- Discover the current local app-container name with:
 
 ```bash
-docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py <command>
+docker ps --format '{{.Names}}'
+```
+
+- Docker command pattern:
+
+```bash
+docker exec -e IS_PRODUCTION=false <app-container> python manage.py <command>
 ```
 
 Examples:
 
 ```bash
-docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py migrate
-docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py test --settings=tests.test_settings
-docker exec -e IS_PRODUCTION=false devcontainer-app-1 python manage.py createsuperuser
+docker exec -e IS_PRODUCTION=false <app-container> python manage.py migrate
+docker exec -e IS_PRODUCTION=false <app-container> python manage.py test --settings=tests.test_settings
+docker exec -e IS_PRODUCTION=false <app-container> python manage.py createsuperuser
 ```
 
 When running from inside crabbox, the app container, or another environment that is already inside the project runtime, do not use `docker exec`. Run Django/Python commands directly:

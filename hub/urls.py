@@ -127,8 +127,6 @@ urlpatterns = [
 
 
 
-    # Push Notifications endpoints
-    path('notifications/', include('notifications.urls')),
 
     # Admin endpoints
     path(
