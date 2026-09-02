@@ -2,7 +2,12 @@ from django.urls import include, path
 from rest_framework import routers
 
 
-from .views.profile import ProfileDetailView, ProfileImageUploadView
+from .views.profile import (
+    ProfileDetailView,
+    ProfileImageConfirmView,
+    ProfileImagePresignView,
+    ProfileImageUploadView,
+)
 from .views.fast import (
     FastListView, 
     FastDetailView, 
@@ -61,6 +66,16 @@ urlpatterns = [
     path('register/', RegisterView.as_view(), name='auth_register'),
     path('profile/', ProfileDetailView.as_view(), name='profile-detail'),
     path('profile/image-upload/', ProfileImageUploadView.as_view(), name='profile-image-upload'),
+    path(
+        'profile/image-upload/presign/',
+        ProfileImagePresignView.as_view(),
+        name='profile-image-upload-presign',
+    ),
+    path(
+        'profile/image-upload/confirm/',
+        ProfileImageConfirmView.as_view(),
+        name='profile-image-upload-confirm',
+    ),
     path('password/reset/', PasswordResetView.as_view(), name='password_reset'),
     path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('account/delete/', DeleteAccountView.as_view(), name='account-delete'),
