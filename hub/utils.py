@@ -4,9 +4,11 @@ import logging
 
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import CharField, Q, Value
+from django.db.models.functions import Cast, Concat, MD5
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from django.utils import timezone
 from django.core.cache import cache
 
 import bahk.settings as settings
@@ -53,6 +55,28 @@ def invalidate_fast_participants_cache(fast_id):
         cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*fast.{fast_id}.participants.*")
         # Invalidate FastParticipantsView cache
         cache.delete_pattern(f"bahk:views.decorators.cache.cache_page.*{fast_id}/participants.*")
+
+
+def shuffled_fast_participants(fast_id, profiles, rotation_date=None):
+    """Order participant profiles by a stable, daily rotating database key.
+
+    The key varies by fast and calendar day, so a participant's position is
+    stable for pagination during one day but changes on the next day. Keeping
+    the expression in SQL lets callers apply ``LIMIT`` and offsets before
+    profile rows are materialized in Django.
+
+    Args:
+        fast_id: ID of the fast the profiles belong to.
+        profiles: A Profile queryset (for example, ``fast.profiles.all()``).
+        rotation_date: Optional date used as the rotation seed; defaults to
+            the current Django-local date.
+    """
+    rotation_date = rotation_date or timezone.localdate()
+    seed = Concat(
+        Value(f"{fast_id}-{rotation_date.isoformat()}-"),
+        Cast("user_id", output_field=CharField()),
+    )
+    return profiles.annotate(shuffle_key=MD5(seed)).order_by("shuffle_key", "id")
 
 
 def invalidate_fast_stats_cache(user):
