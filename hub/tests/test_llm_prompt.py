@@ -18,6 +18,15 @@ class LLMPromptTests(TestCase):
         service = prompt.get_llm_service()
         self.assertIsInstance(service, OpenAIService)
 
+    def test_get_llm_service_o_series(self):
+        prompt = LLMPrompt.objects.create(
+            model="o4-mini",
+            role="Test role",
+            prompt="Test prompt",
+        )
+
+        self.assertIsInstance(prompt.get_llm_service(), OpenAIService)
+
     def test_get_llm_service_claude(self):
         """Test get_llm_service returns AnthropicService for Claude models."""
         prompt = LLMPrompt.objects.create(

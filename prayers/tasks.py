@@ -13,6 +13,7 @@ from django.utils import timezone
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
+from hub.services.llm_requests import anthropic_message
 
 PRAYER_ICON_MATCH_CONFIDENCE = 'medium'  # More permissive than feast matching
 from hub.tasks.icon_tasks import _match_icons_with_llm
@@ -231,24 +232,16 @@ def moderate_prayer_request_task(self, prayer_request_id):
             # Get prompt and model (from database or fallback to hard-coded)
             model_name, system_role, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
 
-            # Call LLM with low temperature for consistent moderation
             from anthropic import Anthropic
 
             client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-            # Build API call arguments
-            api_kwargs = {
-                "model": model_name,
-                "max_tokens": 500,
-                "temperature": 0.1,
-                "messages": [{"role": "user", "content": moderation_prompt}],
-            }
-
-            # Add system message if role is provided
-            if system_role:
-                api_kwargs["system"] = system_role
-
-            response = client.messages.create(**api_kwargs)
+            response = anthropic_message(
+                client,
+                model=model_name,
+                max_tokens=500,
+                system=system_role,
+                messages=[{"role": "user", "content": moderation_prompt}],
+            )
 
             # Parse response
             import json

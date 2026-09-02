@@ -894,10 +894,7 @@ class LLMPrompt(models.Model):
 
     MODEL_CHOICES = [
         ("o4-mini", "o4 Mini"),
-        ("gpt-4.1-mini", "GPT 4.1 Mini"),
-        ("gpt-4.1-nano", "GPT 4.1 Nano"),
         ("gpt-4o-mini", "GPT 4o Mini"),
-        ("gpt-4.1", "GPT 4.1"),
         ("gpt-5-mini", "GPT 5 Mini"),
         ("gpt-5-nano", "GPT 5 Nano"),
         ("gpt-5-mini-2025-08-07", "GPT 5 Mini (2025-08-07)"),
@@ -905,7 +902,6 @@ class LLMPrompt(models.Model):
         ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
         ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
         ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
-        ("claude-3-7-sonnet-20250219", "Claude 3.7 Sonnet"),
         ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet")
     ]
 
@@ -958,7 +954,7 @@ class LLMPrompt(models.Model):
         """
         from hub.services.llm_service import OpenAIService, AnthropicService
 
-        if "gpt" in self.model:
+        if self.model.startswith(("gpt", "o1", "o3", "o4")):
             return OpenAIService()
         elif "claude" in self.model:
             return AnthropicService()

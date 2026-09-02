@@ -12,6 +12,7 @@ from django.core.mail import mail_admins
 
 from hub.models import LLMPrompt, Reading, Feast
 from hub.services.feast_service import representative_date_for_feast_name
+from hub.services.llm_requests import anthropic_message, openai_chat_completion
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ If none match, return: []
 
         client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-        response = client.messages.create(
+        response = anthropic_message(client,
             model="claude-sonnet-4-6",  # Sonnet for better Armenian/transliteration matching
             max_tokens=200,
             system="You are a precise feast matching assistant. Return only JSON arrays of indices.",
@@ -556,7 +557,7 @@ class AnthropicService(LLMService):
         )
 
         try:
-            response = self.client.messages.create(
+            response = anthropic_message(self.client,
                 model=llm_prompt.model,
                 system=system_prompt,
                 messages=[
@@ -653,7 +654,7 @@ class AnthropicService(LLMService):
         ]
 
         try:
-            response = self.client.messages.create(
+            response = anthropic_message(self.client,
                 model=llm_prompt.model,
                 system=system_prompt,
                 messages=[
@@ -726,7 +727,7 @@ class AnthropicService(LLMService):
         )
 
         try:
-            response = self.client.messages.create(
+            response = anthropic_message(self.client,
                 model=model_name,
                 system=system_prompt,
                 messages=[
@@ -782,7 +783,7 @@ class OpenAIService(LLMService):
         try:
             if not self.client:
                 self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            response = self.client.chat.completions.create(
+            response = openai_chat_completion(self.client,
                 model=llm_prompt.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -878,7 +879,7 @@ class OpenAIService(LLMService):
         try:
             if not self.client:
                 self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            response = self.client.chat.completions.create(
+            response = openai_chat_completion(self.client,
                 model=llm_prompt.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -955,7 +956,7 @@ class OpenAIService(LLMService):
         try:
             if not self.client:
                 self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            response = self.client.chat.completions.create(
+            response = openai_chat_completion(self.client,
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -988,7 +989,7 @@ class OpenAIService(LLMService):
 
 def get_llm_service(model_name: str) -> LLMService:
     """Factory function to get the appropriate LLM service based on model name."""
-    if "gpt" in model_name:
+    if model_name.startswith(("gpt", "o1", "o3", "o4")):
         return OpenAIService()
     elif "claude" in model_name:
         return AnthropicService()
