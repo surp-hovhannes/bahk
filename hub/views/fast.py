@@ -886,7 +886,7 @@ class FastOnDate(views.APIView):
 
 
 class FastOnDateWithoutUser(views.APIView):
-    """Returns fast data on the date specified in query params (`?date=<yyyymmdd>`).
+    """Returns fast data on the date specified in query params (`?date=<YYYYMMDD or YYYY-MM-DD>`).
     
     If no date provided, defaults to today. If there is no fast on the given date, or the date string provided is
     invalid or malformed, the response will contain no fast information.
@@ -944,14 +944,38 @@ def _get_fast_on_date(request):
 
 
 def _parse_date_str(date_str):
-    """Parses a date string in the format yyyymmdd into a date object."""
-    try:
-        date = datetime.datetime.strptime(date_str, "%Y%m%d").date()
-    except ValueError:
-        logging.error("Date string %s did not follow the expected format yyyymmdd. Returning None.", date_str)
-        return None
+    """Parses a date string in the format yyyymmdd or yyyy-mm-dd into a date object.
 
-    return date
+    Both formats are validated exactly: exactly eight ASCII digits, or exactly four
+    digits, '-', two digits, '-', two digits. Non-zero-padded or otherwise malformed
+    strings return None.
+    """
+    if isinstance(date_str, str) and len(date_str) == 8 and date_str.isdigit():
+        fmt = "%Y%m%d"
+    elif (
+        isinstance(date_str, str)
+        and len(date_str) == 10
+        and date_str[4] == "-"
+        and date_str[7] == "-"
+        and date_str[:4].isdigit()
+        and date_str[5:7].isdigit()
+        and date_str[8:].isdigit()
+    ):
+        fmt = "%Y-%m-%d"
+    else:
+        logging.error(
+            "Date string %s did not follow the expected formats yyyymmdd or yyyy-mm-dd. Returning None.",
+            date_str,
+        )
+        return None
+    try:
+        return datetime.datetime.strptime(date_str, fmt).date()
+    except ValueError:
+        logging.error(
+            "Date string %s did not follow the expected formats yyyymmdd or yyyy-mm-dd. Returning None.",
+            date_str,
+        )
+        return None
 
 
 class FastParticipantsMapView(views.APIView):

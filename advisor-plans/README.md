@@ -26,3 +26,4 @@ Plans in this directory are intentionally separate from application changes. App
 All seven plans were selected on 2026-08-26. No audit finding was rejected.
 
 Plans 002-008 are implemented in the `codex/admin-improvement-audit` working tree. Record the implementation commit when the branch is prepared for review.
+
