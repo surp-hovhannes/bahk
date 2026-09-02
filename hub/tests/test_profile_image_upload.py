@@ -98,9 +98,8 @@ class ProfileImageUploadRouteTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["upload_url"], "https://s3.invalid/presigned")
-        self.assertEqual(
-            response.data["key"],
-            f"profile_images/originals/{self.user.pk}/" + response.data["key"].rsplit("/", 1)[1],
+        self.assertTrue(
+            response.data["key"].startswith(f"profile_images/pending/{self.user.pk}/")
         )
         self.assertEqual(response.data["headers"], {"Content-Type": "image/gif"})
         storage.presign_put.assert_called_once_with(
@@ -124,7 +123,7 @@ class ProfileImageUploadRouteTests(TestCase):
 
         response = self.client.post(
             self.confirm_url,
-            {"key": "profile_images/originals/999/profile.gif"},
+            {"key": "profile_images/pending/999/profile.gif"},
             format="json",
         )
 
@@ -137,13 +136,18 @@ class ProfileImageUploadRouteTests(TestCase):
         storage.head_object.return_value = {"ContentLength": 43, "ContentType": "image/gif"}
         storage.open.return_value = io.BytesIO(self._test_image().read())
         self.client.force_authenticate(user=self.user)
-        key = f"profile_images/originals/{self.user.pk}/direct.gif"
+        key = f"profile_images/pending/{self.user.pk}/direct.gif"
 
         response = self.client.post(self.confirm_url, {"key": key}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.profile.refresh_from_db()
-        self.assertEqual(self.profile.profile_image.name, key)
+        self.assertTrue(
+            self.profile.profile_image.name.startswith(f"profile_images/originals/{self.user.pk}/")
+        )
+        self.assertTrue(self.profile.profile_image.name.endswith(".gif"))
+        storage.copy.assert_called_once()
+        storage.delete.assert_called_once_with(key)
         self.assertIn("profile_image", response.data)
 
     @patch("hub.views.profile.ProfileImageUploadStorage")
@@ -152,7 +156,7 @@ class ProfileImageUploadRouteTests(TestCase):
         storage.head_object.return_value = {"ContentLength": 3, "ContentType": "image/gif"}
         storage.open.return_value = io.BytesIO(b"bad")
         self.client.force_authenticate(user=self.user)
-        key = f"profile_images/originals/{self.user.pk}/invalid.gif"
+        key = f"profile_images/pending/{self.user.pk}/invalid.gif"
 
         response = self.client.post(self.confirm_url, {"key": key}, format="json")
 
@@ -169,7 +173,7 @@ class ProfileImageUploadRouteTests(TestCase):
             "ContentType": "image/gif",
         }
         self.client.force_authenticate(user=self.user)
-        key = f"profile_images/originals/{self.user.pk}/oversized.gif"
+        key = f"profile_images/pending/{self.user.pk}/oversized.gif"
 
         response = self.client.post(self.confirm_url, {"key": key}, format="json")
 
