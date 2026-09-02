@@ -9,9 +9,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from hub.models import Church, Day, Feast
 from hub.tasks.icon_tasks import (
-    match_icon_to_feast_task,
+    _is_direct_icon_match,
     _match_icons_with_llm,
     _simple_match_icons,
+    match_icon_to_feast_task,
 )
 from hub.signals import handle_feast_save
 from icons.models import Icon
@@ -120,15 +121,48 @@ class FeastIconMatchingTaskTests(TestCase):
             name="Nativity of Christ",
         )
 
-        # Mock the matching function to return high confidence match
-        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
+        # Mock matching and directness verification to permit assignment.
+        with (
+            patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match,
+            patch('hub.tasks.icon_tasks._is_direct_icon_match', return_value=True) as mock_verify,
+        ):
             mock_match.return_value = [
                 {'id': icon.id, 'confidence': 'high'}
             ]
             match_icon_to_feast_task(feast.id)
 
+        mock_verify.assert_called_once_with(icon, feast.name)
+
         feast.refresh_from_db()
         self.assertEqual(feast.icon, icon)
+
+    def test_match_icon_task_rejects_unverified_high_confidence_match(self):
+        """A high-confidence candidate must pass directness verification."""
+        day = Day.objects.create(date=self.test_date, church=self.church)
+        icon = Icon.objects.create(
+            title="Unrelated Martyr",
+            church=self.church,
+            image=SimpleUploadedFile(
+                name='unrelated-martyr.jpg',
+                content=b'fake image content',
+                content_type='image/jpeg',
+            ),
+        )
+        feast = self._create_feast_without_signal(
+            church=day.church,
+            name="Saints Maccabees: Eleazar and Shamuna",
+        )
+
+        with (
+            patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match,
+            patch('hub.tasks.icon_tasks._is_direct_icon_match', return_value=False) as mock_verify,
+        ):
+            mock_match.return_value = [{'id': icon.id, 'confidence': 'high'}]
+            match_icon_to_feast_task(feast.id)
+
+        mock_verify.assert_called_once_with(icon, feast.name)
+        feast.refresh_from_db()
+        self.assertIsNone(feast.icon)
 
     def test_match_icon_task_with_medium_confidence_match(self):
         """Test that task does not save icon when confidence is below threshold."""
@@ -325,13 +359,104 @@ class FeastIconMatchingScopeTests(TestCase):
         )
         mock_choice = mock_completion.return_value.choices[0]
         mock_choice.message.content = (
-            f'[{{"id": {other_icon.id}, "confidence": "high"}}, '
-            f'{{"id": {icon.id}, "confidence": "high"}}]'
+            f'{{"matches":[{{"id": {other_icon.id}, "confidence": "high"}}, '
+            f'{{"id": {icon.id}, "confidence": "high"}}]}}'
         )
 
         matches = _match_icons_with_llm([icon], "Nativity", max_results=2)
 
         self.assertEqual(matches, [{'id': icon.id, 'confidence': 'high'}])
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_llm_parser_deduplicates_icon_ids_preserving_first_match(self, mock_completion):
+        """Repeated LLM IDs must not consume result slots."""
+        first_icon = Icon.objects.create(
+            title="St. Vartan",
+            church=self.church,
+            image=self.test_image,
+        )
+        second_icon = Icon.objects.create(
+            title="St. Vartan and St. Ghevont",
+            church=self.church,
+            image=SimpleUploadedFile(
+                name='vartan-and-ghevont.jpg',
+                content=b'fake image content',
+                content_type='image/jpeg',
+            ),
+        )
+        mock_choice = mock_completion.return_value.choices[0]
+        mock_choice.message.content = (
+            f'{{"matches":[{{"id": {first_icon.id}, "confidence": "high"}}, '
+            f'{{"id": {first_icon.id}, "confidence": "medium"}}, '
+            f'{{"id": {second_icon.id}, "confidence": "medium"}}]}}'
+        )
+
+        matches = _match_icons_with_llm([first_icon, second_icon], "Saint Vartan", max_results=3)
+
+        self.assertEqual(
+            matches,
+            [
+                {'id': first_icon.id, 'confidence': 'high'},
+                {'id': second_icon.id, 'confidence': 'medium'},
+            ],
+        )
+        self.assertNotIn('temperature', mock_completion.call_args.kwargs)
+        self.assertEqual(mock_completion.call_args.kwargs['model'], 'gpt-4.1-mini')
+        response_format = mock_completion.call_args.kwargs['response_format']
+        self.assertEqual(response_format['type'], 'json_schema')
+        self.assertTrue(response_format['json_schema']['strict'])
+        self.assertIn(
+            'COMPOSITE COMMEMORATIONS:',
+            mock_completion.call_args.kwargs['messages'][0]['content'],
+        )
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_directness_verifier_accepts_transliterated_composition(self, mock_completion):
+        """Variant saint names and a matching composition must not be vetoed."""
+        icon = Icon.objects.create(
+            title="St Trdat with St Gregory the Illuminator and St Hripsime",
+            church=self.church,
+            image=self.test_image,
+        )
+        mock_completion.return_value.choices[0].message.content = (
+            '{"is_direct_match": false}'
+        )
+
+        is_direct = _is_direct_icon_match(
+            icon,
+            "Saints Tiridates (Trdat), Ashkhen, and Khosrovidoukht",
+        )
+
+        self.assertTrue(is_direct)
+        self.assertTrue(
+            mock_completion.call_args.kwargs['response_format']['json_schema']['strict']
+        )
+        self.assertIn(
+            'Accept conventional saint-name variants',
+            mock_completion.call_args.kwargs['messages'][0]['content'],
+        )
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_directness_verifier_rejects_broad_martyr_match(self, mock_completion):
+        """Shared martyr status alone must not permit an assignment."""
+        icon = Icon.objects.create(
+            title="Holy Martyrs of the Soukiasants",
+            church=self.church,
+            image=self.test_image,
+        )
+        mock_completion.return_value.choices[0].message.content = (
+            '{"is_direct_match": false}'
+        )
+
+        is_direct = _is_direct_icon_match(
+            icon,
+            "Saints Maccabees: Eleazar and Shamuna",
+        )
+
+        self.assertFalse(is_direct)
 
 
 @tag('slow', 'integration')

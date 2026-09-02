@@ -15,6 +15,53 @@ from icons.models import Icon
 
 logger = logging.getLogger(__name__)
 
+ICON_MATCH_RESPONSE_FORMAT = {
+    'type': 'json_schema',
+    'json_schema': {
+        'name': 'icon_matches',
+        'strict': True,
+        'schema': {
+            'type': 'object',
+            'properties': {
+                'matches': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'id': {'type': 'integer'},
+                            'confidence': {
+                                'type': 'string',
+                                'enum': ['high', 'medium', 'low'],
+                            },
+                        },
+                        'required': ['id', 'confidence'],
+                        'additionalProperties': False,
+                    },
+                    'maxItems': 3,
+                },
+            },
+            'required': ['matches'],
+            'additionalProperties': False,
+        },
+    },
+}
+
+ICON_DIRECTNESS_RESPONSE_FORMAT = {
+    'type': 'json_schema',
+    'json_schema': {
+        'name': 'icon_directness',
+        'strict': True,
+        'schema': {
+            'type': 'object',
+            'properties': {
+                'is_direct_match': {'type': 'boolean'},
+            },
+            'required': ['is_direct_match'],
+            'additionalProperties': False,
+        },
+    },
+}
+
 
 def _get_openai_error_details(api_error):
     error_body = getattr(api_error, 'body', {}) or {}
@@ -94,67 +141,54 @@ def _match_icons_with_llm(icons, prompt, max_results=3):
         description = f"Icon ID: {icon.id}, Title: {icon.title}, Tags: {tags}"
         icon_descriptions.append(description)
     
-    # Create LLM prompt
     system_prompt = """
-You match a user's natural-language request to the most relevant icons.
+You select the best devotional icon for a church-calendar commemoration.
 
-INPUT:
-- A list of icons. Each icon has: ID, Title, and Tags.
-- A user request.
-- A maximum number of results (N).
+Each candidate has an ID, title, and editorial tags. Return only candidates
+that directly depict or name a person, group, or event explicitly commemorated
+by the request. Titles and tags may use conventional saint-name variants,
+abbreviations, transliterations, or synonymous event names.
 
-OUTPUT FORMAT (STRICT):
-Return a JSON array of match objects. Each object must follow this exact format:
+RELEVANCE:
+- A high-confidence match is an explicit, direct correspondence.
+- A medium-confidence match is a direct but less-specific correspondence.
+- A low-confidence match must still be directly related; otherwise omit it.
+- A bare liturgical period, fast, day number, or ordinal is not a commemoration.
+  Return no match unless the request also names a concrete person or event.
+- Do not infer a match from thematic proximity. For example, Eastertide does
+  not by itself mean Resurrection, Pentecost, Ascension, or Palm Sunday.
+- Shared broad categories alone are insufficient: "saint", "martyr", "king",
+  "apostle", "fast", or a group size must not produce a match.
+- Return no matches rather than a merely related icon.
 
-[
-  {
-    "id": 3,
-    "confidence": "high"
-  },
-  {
-    "id": 12,
-    "confidence": "medium"
-  }
-]
+COMPOSITE COMMEMORATIONS:
+- When the request names multiple people, compare every candidate before
+  ranking. Prefer a composition naming two or more requested subjects over an
+  icon naming only one subject.
+- Do not assign high confidence to a single-subject icon when a matching group
+  composition is available.
+- A single named person is acceptable only when no group composition is
+  available and that person is a principal subject of the commemoration.
 
-Rules for Output:
-- Do NOT include any text outside the JSON.
-- Do NOT include extra keys or commentary.
-- If no icons are meaningfully relevant, return: []
-- Return at most N matches.
+RANKING:
+1. Exact title or tag match, including direct conventional variants.
+2. A composition covering more explicitly named subjects.
+3. A canonical icon for the explicitly named event or person.
+4. More-specific evidence beats broad thematic overlap.
 
-CONFIDENCE SCORING:
-Assign confidence based on clarity of match:
-- "high": The icon's title or tags clearly and directly match the request, with minimal ambiguity.
-- "medium": The match is plausible and relevant, but not exact.
-- "low": Only return "low" confidence if it is still clearly related; otherwise do not return it at all.
-
-RELEVANCE RULES:
-- Prefer icons whose Title strongly matches the user request.
-- Next, consider strong Tag matches.
-- Ignore weak or tangential keyword overlap.
-- Only return IDs that appear in the provided list.
-- NEVER guess or invent icons.
-
-TIEBREAKERS:
-If multiple icons seem similar in relevance:
-1) Exact title match or near-synonym wins.
-2) More specific tags beat general tags.
-3) Well-known canonical association beats broad thematic similarity.
-
-If unsure whether an icon is relevant:
-DO NOT RETURN IT.
+Only return IDs from the supplied candidates. Never invent an ID. Do not
+repeat an ID.
 """
     
     allowed_ids = {icon.id for icon in icons}
     
-    user_message = f"""User request: "{prompt}"
+    user_message = f"""Commemoration: "{prompt}"
 Allowed icon IDs: {sorted(allowed_ids)}
 
-Available icons (ID, Title, Tags):
+Candidate icons (ID, Title, Tags):
 {chr(10).join(icon_descriptions)}
 
-Return up to {max_results} most relevant icons as a JSON array of objects with "id" and "confidence" fields."""
+Return up to {max_results} matches in the required schema."""
     
     try:
         # Check if OpenAI API key is configured
@@ -173,12 +207,9 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
         
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
         
-        # Try models in order of preference, falling back if one fails
-        # gpt-4.1-nano: fastest, cheapest, clean JSON (0.4s, 14 tok)
-        # gpt-4.1-mini: fast fallback (0.6s, 11 tok)
-        # gpt-4o-mini: legacy fallback (0.8s, 11 tok)
-        # gpt-5-nano excluded: cannot produce structured JSON
-        models_to_try = ['gpt-4.1-nano', 'gpt-4.1-mini', 'gpt-4o-mini']
+        # Prefer the more accurate model because incorrect high-confidence
+        # assignments are persisted; retain cheaper models as fallbacks.
+        models_to_try = ['gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o-mini']
         response = None
         last_error = None
         
@@ -189,7 +220,8 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
-                max_tokens=500)
+                max_tokens=500,
+                response_format=ICON_MATCH_RESPONSE_FORMAT)
                 logger.info(f"Successfully used model: {model}")
                 break
             except APIError as api_error:
@@ -215,7 +247,8 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                                 {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": user_message},
                             ],
-                            max_tokens=500)
+                            max_tokens=500,
+                            response_format=ICON_MATCH_RESPONSE_FORMAT)
                             logger.info(f"Successfully used model: {model}")
                             break
                         except APIError as retry_api_error:
@@ -252,7 +285,9 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_message},
-                        ], max_tokens=500, )
+                        ],
+                        max_tokens=500,
+                        response_format=ICON_MATCH_RESPONSE_FORMAT)
                         logger.info(f"Successfully used model: {model} (without temperature)")
                         break
                     except Exception as retry_error:
@@ -278,7 +313,9 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_message},
-                        ], max_tokens=500, )
+                        ],
+                        max_tokens=500,
+                        response_format=ICON_MATCH_RESPONSE_FORMAT)
                         logger.info(f"Successfully used model: {model} (without temperature)")
                         break
                     except Exception as retry_error:
@@ -292,66 +329,45 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
         if not response:
             raise last_error if last_error else Exception("No models available")
         
-        # Parse the response
         llm_response = response.choices[0].message.content.strip()
-        
-        # Try to parse as JSON array
-        try:
-            parsed_response = json.loads(llm_response)
-            if not isinstance(parsed_response, list):
-                parsed_response = [parsed_response]
-            
-            # Handle new format: array of objects with 'id' and 'confidence'
-            matched_results = []
-            valid_confidence_levels = {'high', 'medium', 'low'}
-            for item in parsed_response:
-                if isinstance(item, dict):
-                    # New format: {"id": 3, "confidence": "high"}
-                    if 'id' in item:
-                        try:
-                            icon_id = int(item['id'])
-                        except (TypeError, ValueError):
-                            logger.warning("Skipping invalid icon ID from LLM response: %r", item['id'])
-                            continue
-                        if icon_id not in allowed_ids:
-                            logger.warning("Skipping out-of-scope icon ID from LLM response: %s", icon_id)
-                            continue
-                        confidence = item.get('confidence', 'medium')
-                        # Validate confidence level
-                        if confidence not in valid_confidence_levels:
-                            logger.warning(f"Invalid confidence '{confidence}', defaulting to 'medium'")
-                            confidence = 'medium'
-                        matched_results.append({
-                            'id': icon_id,
-                            'confidence': confidence
-                        })
-                elif isinstance(item, (int, str)):
-                    # Backward compatibility: just an ID
-                    try:
-                        icon_id = int(item)
-                    except (TypeError, ValueError):
-                        logger.warning("Skipping invalid icon ID from LLM response: %r", item)
-                        continue
-                    if icon_id not in allowed_ids:
-                        logger.warning("Skipping out-of-scope icon ID from LLM response: %s", icon_id)
-                        continue
-                    matched_results.append({
-                        'id': icon_id,
-                        'confidence': 'medium'  # Default if not provided
-                    })
-            
-            # Limit to max_results
-            matched_results = matched_results[:max_results]
-            return matched_results
-            
-        except json.JSONDecodeError:
-            # Fallback: extract numbers from response
-            matched_ids = [int(x) for x in re.findall(r'\d+', llm_response)]
-            matched_ids = [icon_id for icon_id in matched_ids if icon_id in allowed_ids]
-            return [
-                {'id': icon_id, 'confidence': 'medium'}
-                for icon_id in matched_ids[:max_results]
-            ]
+        parsed_response = json.loads(llm_response)
+        if not isinstance(parsed_response, dict):
+            logger.warning("Skipping non-object structured response from LLM")
+            return []
+
+        matches = parsed_response.get('matches')
+        if not isinstance(matches, list):
+            logger.warning("Skipping structured response without a matches list")
+            return []
+
+        matched_results = []
+        seen_ids = set()
+        for item in matches:
+            if not isinstance(item, dict):
+                logger.warning("Skipping invalid match from LLM response: %r", item)
+                continue
+
+            try:
+                icon_id = int(item['id'])
+            except (KeyError, TypeError, ValueError):
+                logger.warning("Skipping invalid icon ID from LLM response: %r", item)
+                continue
+
+            if icon_id not in allowed_ids:
+                logger.warning("Skipping out-of-scope icon ID from LLM response: %s", icon_id)
+                continue
+            if icon_id in seen_ids:
+                logger.warning("Skipping duplicate icon ID from LLM response: %s", icon_id)
+                continue
+
+            seen_ids.add(icon_id)
+            confidence = item.get('confidence')
+            if confidence not in {'high', 'medium', 'low'}:
+                logger.warning("Skipping invalid confidence from LLM response: %r", confidence)
+                continue
+            matched_results.append({'id': icon_id, 'confidence': confidence})
+
+        return matched_results[:max_results]
     
     except Exception as e:
         logger.error(f"Error in LLM icon matching: {e}", exc_info=True)
@@ -366,6 +382,105 @@ Return up to {max_results} most relevant icons as a JSON array of objects with "
         except Exception as fallback_error:
             logger.error(f"Fallback matching also failed: {fallback_error}")
             return []
+
+_GENERIC_ICON_MATCH_TOKENS = frozenset({
+    'and', 'apostle', 'apostles', 'companions', 'day', 'fast', 'feast',
+    'group', 'holy', 'icon', 'king', 'martyr', 'martyrs', 'of', 'saint',
+    'saints', 'the',
+})
+
+
+def _has_direct_metadata_evidence(icon, commemoration):
+    """Return whether title or tags explicitly name the commemoration."""
+    def meaningful_tokens(value):
+        return {
+            token
+            for token in re.findall(r'[a-z0-9]+', value.lower())
+            if len(token) >= 4 and token not in _GENERIC_ICON_MATCH_TOKENS
+        }
+
+    commemoration_tokens = meaningful_tokens(commemoration)
+    icon_text = ' '.join([icon.title, *(tag.name for tag in icon.tags.all())])
+    icon_tokens = meaningful_tokens(icon_text)
+    if commemoration_tokens & icon_tokens:
+        return True
+
+    return any(
+        len(left) >= 6
+        and len(right) >= 6
+        and (left.startswith(right) or right.startswith(left))
+        for left in commemoration_tokens
+        for right in icon_tokens
+    )
+
+
+def _is_direct_icon_match(icon, commemoration):
+    """Return whether an icon directly depicts the named commemoration."""
+    tags = ', '.join(tag.name for tag in icon.tags.all())
+    system_prompt = """
+You are the final safety check before a devotional icon is assigned to a
+church-calendar commemoration. Decide whether this one icon directly depicts
+or names the commemoration.
+
+Accept conventional saint-name variants, abbreviations, transliterations, and
+canonical equivalents. Accept a group composition when it depicts multiple
+named subjects, even if its title omits one subject. Reject thematic,
+calendar-season, role-only, and broad-category associations. In particular,
+"martyr", "saint", "king", "apostle", a fast, or a group size alone is not a
+direct match.
+
+If uncertain, reject the assignment.
+"""
+    user_message = f"""Commemoration: "{commemoration}"
+Icon title: "{icon.title}"
+Icon tags: "{tags}"
+
+Does this icon directly match the commemoration?"""
+
+    try:
+        from openai import OpenAI
+
+        if not settings.OPENAI_API_KEY:
+            logger.warning("OPENAI_API_KEY not configured; rejecting icon assignment")
+            return False
+
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        for model in ('gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o-mini'):
+            try:
+                response = openai_chat_completion(
+                    client,
+                    model=model,
+                    messages=[
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': user_message},
+                    ],
+                    max_tokens=50,
+                    response_format=ICON_DIRECTNESS_RESPONSE_FORMAT,
+                )
+                payload = json.loads(response.choices[0].message.content)
+                is_direct_match = payload.get('is_direct_match')
+                if is_direct_match is True:
+                    return True
+                if is_direct_match is False and _has_direct_metadata_evidence(
+                    icon,
+                    commemoration,
+                ):
+                    logger.info(
+                        "Accepted icon %s using direct title or tag evidence.",
+                        icon.id,
+                    )
+                    return True
+                if is_direct_match is False:
+                    return False
+                logger.warning("Invalid directness response from model %s", model)
+            except Exception as error:
+                logger.warning("Directness verification failed with %s: %s", model, error)
+
+        return False
+    except Exception as error:
+        logger.error("Could not verify icon directness: %s", error, exc_info=True)
+        return False
+
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -425,6 +540,13 @@ def match_icon_to_feast_task(self, feast_id: int):
             icon_id = first_match['id']
             try:
                 icon = Icon.objects.get(pk=icon_id, church=church)
+                if not _is_direct_icon_match(icon, prompt):
+                    logger.info(
+                        "Rejected icon %s for feast %s after directness verification.",
+                        icon_id,
+                        feast_id,
+                    )
+                    return
                 with transaction.atomic():
                     locked_feast = Feast.objects.select_for_update().get(pk=feast_id)
                     if locked_feast.icon_id is not None:

@@ -531,7 +531,10 @@ class FeastAPIRouteTests(TestCase):
         self.assertIsNone(first_response.json()["feast"]["icon"])
 
         with self.captureOnCommitCallbacks(execute=True):
-            with patch("hub.tasks.icon_tasks._match_icons_with_llm") as mock_match:
+            with (
+                patch("hub.tasks.icon_tasks._match_icons_with_llm") as mock_match,
+                patch("hub.tasks.icon_tasks._is_direct_icon_match", return_value=True),
+            ):
                 mock_match.return_value = [{"id": icon.id, "confidence": "high"}]
                 match_icon_to_feast_task(feast.id)
 
