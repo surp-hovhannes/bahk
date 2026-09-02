@@ -15,7 +15,7 @@ from ..models import Profile, Fast
 
 
 PROFILE_IMAGE_PREFIX = "profile_images/originals/"
-PROFILE_IMAGE_MAX_SIZE = 5 * 1024 * 1024
+PROFILE_IMAGE_MAX_SIZE = 10 * 1024 * 1024
 PROFILE_IMAGE_UPLOAD_EXPIRY = 5 * 60
 PROFILE_IMAGE_TYPES = {
     ".gif": ("image/gif", "GIF"),

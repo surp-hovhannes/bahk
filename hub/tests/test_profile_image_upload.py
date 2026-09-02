@@ -165,7 +165,7 @@ class ProfileImageUploadRouteTests(TestCase):
     def test_confirm_rejects_oversized_uploaded_image(self, storage_class):
         storage = storage_class.return_value
         storage.head_object.return_value = {
-            "ContentLength": 5 * 1024 * 1024 + 1,
+            "ContentLength": 10 * 1024 * 1024 + 1,
             "ContentType": "image/gif",
         }
         self.client.force_authenticate(user=self.user)
