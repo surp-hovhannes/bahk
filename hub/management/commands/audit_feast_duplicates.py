@@ -13,43 +13,30 @@ designation, icon and generated contexts are still in the database but no date l
 find them again.  That happens whenever an engine upgrade corrects a name -- exactly the sort of
 change armenian-lectionary ships regularly -- and it is silent, because nothing errors.
 
+Two reports, one for each side of that:
+
+  * **Unreachable** -- the damage, already done.  A stored name the engine no longer emits.
+  * **Pending remap** -- the same damage caught one step earlier.  A row whose ``sample_date`` the
+    engine now calls something else is still reachable under its old name today, but will not be
+    once every date it served moves; it is what an upgrade is in the middle of stranding.
+
+Neither is fixed here.  ``manage.py remap_feast_names`` is the repair.
+
 Read-only.  ``--church`` scopes it; ``--verbose`` lists every stored name, not just the orphans.
 """
-import datetime
-
 from django.core.management.base import BaseCommand, CommandError
 
-import armenian_lectionary
 from armenian_lectionary import MAX_YEAR, MIN_YEAR
 
 from hub.models import Church
-
-
-def engine_names(min_year=None, max_year=None):
-    """Return every distinct English feast name the engine emits over the supported range.
-
-    This is the set a re-keyed table can actually be reached by: after the migration a feast is
-    looked up by the name the engine computes for the requested date, so a stored name outside
-    this set is unreachable no matter what enrichment hangs off it.
-    """
-    min_year = MIN_YEAR if min_year is None else min_year
-    max_year = MAX_YEAR if max_year is None else max_year
-    names = set()
-    day = datetime.date(min_year, 1, 1)
-    end = datetime.date(max_year, 12, 31)
-    while day <= end:
-        result = armenian_lectionary.compute_armenian_lectionary(day)
-        name = (result.get("Liturgical Day") or "").strip()
-        if name:
-            names.add(name)
-        day += datetime.timedelta(days=1)
-    return names
+from hub.services.feast_rename import engine_name_for_date, engine_names
 
 
 class Command(BaseCommand):
     help = (
         "Read-only: report stored feast names the lectionary engine no longer emits, whose "
-        "enrichment is therefore unreachable by a date lookup."
+        "enrichment is therefore unreachable by a date lookup, and names an upgrade is about "
+        "to strand. Run remap_feast_names to repair either."
     )
 
     def add_arguments(self, parser):
@@ -109,6 +96,31 @@ class Command(BaseCommand):
                 )
         else:
             self.stdout.write("  every stored name is one the engine still emits.")
+
+        # The same failure caught before it lands. A row whose recorded date the engine now calls
+        # something else is reachable today only because some other date still produces its name;
+        # when that stops it joins the list above, and by then there is no date left to follow.
+        pending = [
+            (feast, engine_name_for_date(feast.sample_date))
+            for feast in feasts
+            if feast.sample_date
+        ]
+        pending = [(f, current) for f, current in pending if current and current != f.name]
+        if pending:
+            self.stdout.write(self.style.WARNING(
+                f"  {len(pending)} name(s) the engine has already renamed on their own recorded "
+                f"date; remap_feast_names moves them:"
+            ))
+            for feast, current in sorted(pending, key=lambda pair: pair[0].name):
+                self.stdout.write(f"      #{feast.id} {feast.name!r}")
+                self.stdout.write(f"          -> {current!r} (from {feast.sample_date})")
+
+        undated = sum(1 for feast in feasts if not feast.sample_date)
+        if undated:
+            self.stdout.write(
+                f"  {undated} row(s) have no sample_date, so a future rename cannot be followed "
+                f"from the row itself; remap_feast_names backfills them."
+            )
 
         if verbose:
             self.stdout.write("\n  all stored names:")

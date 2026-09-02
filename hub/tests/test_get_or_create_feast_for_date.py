@@ -193,9 +193,14 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(existing_feast.name_hy, "Սուրբ Ծնունդ")
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_does_not_overwrite_existing_translation(self, mock_scrape):
-        """Test that existing translation is not overwritten."""
-        # Create existing feast with Armenian translation
+    def test_overwrites_a_stored_translation_that_differs_from_the_engine(self, mock_scrape):
+        """The engine is the authority on both languages, so a stale hy name is replaced.
+
+        Rows the retired sacredtradition.am scrape wrote took their Armenian from ``iL=3``, which
+        is not a language code the source defines, so those values cannot be trusted; and the
+        engine corrects its own translations across releases. Keeping whatever was stored first
+        would freeze both mistakes.
+        """
         day = Day.objects.create(date=self.test_date, church=self.church)
         existing_feast = Feast.objects.create(church=day.church, name="Christmas")
         existing_feast.name_hy = "Existing Armenian"
@@ -207,13 +212,45 @@ class GetOrCreateFeastForDateTests(TestCase):
             "name_hy": "Սուրբ Ծնունդ",  # Different translation
         }
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        get_or_create_feast_for_date(self.test_date, self.church, check_fast=True)
+
+        existing_feast.refresh_from_db()
+        self.assertEqual(existing_feast.name_hy, "Սուրբ Ծնունդ")
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_records_the_date_a_new_feast_was_named_for(self, mock_scrape):
+        """sample_date is what lets a later engine release's rename be followed. See
+        hub/services/feast_rename.py."""
+        mock_scrape.return_value = {
+            "name": "Christmas",
+            "name_en": "Christmas",
+            "name_hy": None,
+        }
+
+        feast_obj, created, _ = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        # Verify existing translation was preserved
-        existing_feast.refresh_from_db()
-        self.assertEqual(existing_feast.name_hy, "Existing Armenian")
+        self.assertTrue(created)
+        self.assertEqual(feast_obj.sample_date, self.test_date)
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_backfills_the_date_on_a_row_that_predates_the_column(self, mock_scrape):
+        """Rows written before sample_date existed pick one up the next time they are served."""
+        Feast.objects.create(church=self.church, name="Christmas", sample_date=None)
+        mock_scrape.return_value = {
+            "name": "Christmas",
+            "name_en": "Christmas",
+            "name_hy": None,
+        }
+
+        feast_obj, created, _ = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertFalse(created)
+        feast_obj.refresh_from_db()
+        self.assertEqual(feast_obj.sample_date, self.test_date)
 
     @patch('hub.services.feast_service.get_feast_for_date')
     def test_creates_day_if_not_exists(self, mock_scrape):
