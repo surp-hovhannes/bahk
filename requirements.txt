@@ -52,3 +52,6 @@ armenian-lectionary>=1.3.0
 # Linting
 ruff
 timezonefinder==6.5.5
+
+# Traceback pickling for Django --parallel test runner
+tblib==3.0.0
