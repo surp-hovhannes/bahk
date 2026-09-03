@@ -40,6 +40,7 @@ from .views.feasts import (
     FeastAssignIconView,
     FeastContextFeedbackView,
     FeastMatchIconView,
+    FeastSetIconView,
     GetFeastForDate,
 )
 from .views.patristic_quotes import (
@@ -132,6 +133,11 @@ urlpatterns = [
         "feasts/<int:feast_id>/match-icon/",
         FeastMatchIconView.as_view(),
         name="feast-match-icon",
+    ),
+    path(
+        "feasts/<int:feast_id>/set-icon/",
+        FeastSetIconView.as_view(),
+        name="feast-set-icon",
     ),
     path(
         "feasts/<int:feast_id>/assign-icon/",

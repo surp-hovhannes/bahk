@@ -265,6 +265,114 @@ class FeastMatchIconView(APIView):
         )
 
 
+class FeastSetIconView(APIView):
+    """Assign one operator-approved icon to a feast, with a safe preview mode."""
+
+    permission_classes = [IsAdminUser]
+
+    @staticmethod
+    def _is_positive_integer(value):
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+    @staticmethod
+    def _result(result_status, feast, requested_icon, current_icon):
+        return {
+            "status": result_status,
+            "feast_id": feast.pk,
+            "feast_name": feast.name,
+            # Feasts are church-scoped commemorations and no longer belong to one date.
+            "date": None,
+            "church_id": feast.church_id,
+            "church_name": feast.church.name,
+            "current_icon_id": current_icon.pk if current_icon is not None else None,
+            "current_icon_title": current_icon.title if current_icon is not None else None,
+            "requested_icon_id": requested_icon.pk,
+            "requested_icon_title": requested_icon.title,
+        }
+
+    @staticmethod
+    def _load_locked_records(feast_id, icon_id):
+        locked_feast = get_object_or_404(
+            Feast.objects.select_for_update().select_related("church"),
+            pk=feast_id,
+        )
+        try:
+            locked_icon = Icon.objects.select_for_update().get(
+                pk=icon_id,
+                church_id=locked_feast.church_id,
+            )
+        except Icon.DoesNotExist as exc:
+            if Icon.objects.filter(pk=icon_id).exists():
+                raise ValidationError(
+                    {
+                        "detail": (
+                            f"Icon {icon_id} belongs to a different church; "
+                            f"expected church {locked_feast.church_id}."
+                        )
+                    }
+                ) from exc
+            raise ValidationError({"detail": f"Icon {icon_id} does not exist."}) from exc
+        return locked_feast, locked_icon
+
+    def post(self, request, feast_id: int):
+        if not isinstance(request.data, Mapping):
+            raise ValidationError(
+                {"detail": "icon_id is required and must be a positive integer"}
+            )
+
+        icon_id = request.data.get("icon_id")
+        force = request.data.get("force", False)
+        dry_run = request.data.get("dry_run", False)
+        if not self._is_positive_integer(icon_id):
+            raise ValidationError(
+                {"detail": "icon_id is required and must be a positive integer"}
+            )
+        if not isinstance(force, bool):
+            raise ValidationError({"detail": "force must be a boolean"})
+        if not isinstance(dry_run, bool):
+            raise ValidationError({"detail": "dry_run must be a boolean"})
+
+        with transaction.atomic():
+            locked_feast, locked_icon = self._load_locked_records(feast_id, icon_id)
+            current_icon = locked_feast.icon
+
+            # This check deliberately happens after acquiring the row lock. The automatic
+            # matcher may have assigned an icon between request arrival and lock acquisition.
+            if locked_feast.icon_id == locked_icon.pk:
+                result_status = "ALREADY-MATCHED" if dry_run else "NO-OP"
+                return Response(
+                    self._result(result_status, locked_feast, locked_icon, current_icon),
+                    status=status.HTTP_200_OK,
+                )
+
+            if locked_feast.icon_id is not None and not force:
+                raise ValidationError(
+                    {
+                        "detail": (
+                            "force is required to replace existing icon "
+                            f"{locked_feast.icon_id}"
+                        )
+                    }
+                )
+
+            if dry_run:
+                result_status = (
+                    "WOULD-REPLACE" if locked_feast.icon_id is not None else "WOULD-ASSIGN"
+                )
+            else:
+                result_status = "REPLACED" if locked_feast.icon_id is not None else "ASSIGNED"
+                locked_feast.icon = locked_icon
+                locked_feast.save(update_fields=["icon"])
+                transaction.on_commit(
+                    lambda: invalidate_feast_api_cache_for_feast(locked_feast)
+                )
+
+            return Response(
+                self._result(result_status, locked_feast, locked_icon, current_icon),
+                status=status.HTTP_200_OK,
+            )
+
+
 class FeastAssignIconView(APIView):
     """Staff-only feast icon assignment preflight and mutation endpoint."""
 
