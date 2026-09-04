@@ -30,6 +30,7 @@ from rest_framework_simplejwt.views import (
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
+from hub.auth import SafeTokenRefreshSerializer
 from rest_framework.views import APIView
 from rest_framework import status
 
@@ -116,7 +117,7 @@ urlpatterns = [
     # Authentication endpoints
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path('api/token/', TrackingTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/refresh/', TokenRefreshView.as_view(serializer_class=SafeTokenRefreshSerializer), name='token_refresh'),
 
     path(
         'markdownx/upload/',
