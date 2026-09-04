@@ -13,9 +13,8 @@ from django.utils import timezone
 from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
+from hub.services.icon_matching import IconMatchRequest
 from hub.services.llm_requests import anthropic_message
-
-PRAYER_ICON_MATCH_CONFIDENCE = 'medium'  # More permissive than feast matching
 from hub.tasks.icon_tasks import _match_icons_with_llm
 from icons.models import Icon
 from prayers.models import Prayer, PrayerRequest, PrayerRequestPrayerLog
@@ -38,17 +37,25 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
     for prayer_id in prayer_ids:
         try:
             prayer = Prayer.objects.prefetch_related("tags").get(id=prayer_id, church_id=church_id)
-            prompt = f"{prayer.title} {' '.join(tag.name for tag in prayer.tags.all())}"
-            matched_results = _match_icons_with_llm(icons, prompt, max_results=1)
+            context_terms = tuple(tag.name for tag in prayer.tags.all())
+            matched_results = _match_icons_with_llm(
+                icons,
+                IconMatchRequest(
+                    kind="content",
+                    primary_text=prayer.title,
+                    context_terms=context_terms,
+                    auto_assign_policy="content_suggest",
+                    max_results=1,
+                ),
+                max_results=1,
+            )
             if not matched_results:
                 continue
 
             first_match = matched_results[0]
-            match_confidence = first_match.get("confidence", "medium")
-            confidence_order = {"high": 3, "medium": 2, "low": 1}
-            threshold_order = confidence_order.get(PRAYER_ICON_MATCH_CONFIDENCE, 2)
-            match_order = confidence_order.get(match_confidence, 0)
-            if match_order < threshold_order:
+            match_confidence = first_match.get("confidence")
+            match_tier = first_match.get("match_tier")
+            if (match_tier, match_confidence) != ("direct_exact", "high"):
                 continue
 
             matched_icon = icons_by_id.get(first_match["id"])

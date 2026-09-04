@@ -1,6 +1,8 @@
 """Tests for feast icon matching functionality."""
 from datetime import date
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest import TestCase as SimpleTestCase
+from unittest.mock import MagicMock, patch
 from django.test import TestCase, override_settings
 from django.test.utils import tag
 from django.db.models.signals import post_save
@@ -8,14 +10,351 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from hub.models import Church, Day, Feast
+from hub.services.icon_matching import (
+    CANDIDATE_LIMIT_PER_TIER,
+    IconMatchRequest,
+    build_metadata_vocabulary,
+    generate_icon_candidates,
+    validate_and_rank_decision,
+    validate_interpreted_concepts,
+)
 from hub.tasks.icon_tasks import (
-    _is_direct_icon_match,
     _match_icons_with_llm,
-    _simple_match_icons,
     match_icon_to_feast_task,
 )
 from hub.signals import handle_feast_save
 from icons.models import Icon
+
+
+def fake_icon(icon_id, title, *tags):
+    return SimpleNamespace(id=icon_id, title=title, tags=tags)
+
+
+def approving_payload(candidate):
+    rationale = {
+        'direct_exact': 'explicit_subject',
+        'related_specific': 'specific_related_subject',
+        'thematic': 'defensible_theme',
+    }[candidate.match_tier]
+    confidence = {
+        'direct_exact': 'high',
+        'related_specific': 'medium',
+        'thematic': 'low',
+    }[candidate.match_tier]
+    return {
+        'decision': {
+            'id': candidate.icon_id,
+            'match_tier': candidate.match_tier,
+            'confidence': confidence,
+            'matched_concepts': list(candidate.matched_concepts),
+            'evidence_refs': list(candidate.evidence_refs),
+            'rationale_code': rationale,
+        }
+    }
+
+
+class IconMatchHierarchyTests(SimpleTestCase):
+    def test_baptist_direct_candidates_exclude_incidental_transfiguration_tags(self):
+        icons = [
+            fake_icon(498, 'Transfiguration1', 'john'),
+            fake_icon(259, 'Transfiguration of Christ', 'john-apostle'),
+            fake_icon(377, 'St John the Baptist'),
+            fake_icon(36, 'St. John the Baptist'),
+        ]
+        request = IconMatchRequest(
+            kind='feast',
+            primary_text='Sts. John the Forerunner (Baptist) and Job the Righteous',
+            auto_assign_policy='feast_strict',
+        )
+
+        candidates = generate_icon_candidates(icons, request)
+
+        self.assertEqual({candidate.icon_id for candidate in candidates}, {36, 377})
+        self.assertTrue(all(candidate.match_tier == 'related_specific' for candidate in candidates))
+        self.assertTrue(all(not candidate.complete_coverage for candidate in candidates))
+
+    def test_composite_requires_all_concrete_subjects_for_direct_exact(self):
+        candidates = generate_icon_candidates(
+            [
+                fake_icon(1, 'St John the Baptist'),
+                fake_icon(2, 'St John the Baptist and Job the Righteous'),
+            ],
+            IconMatchRequest(
+                kind='feast',
+                primary_text='Sts. John the Forerunner (Baptist) and Job the Righteous',
+            ),
+        )
+
+        by_id = {candidate.icon_id: candidate for candidate in candidates}
+        self.assertEqual(by_id[1].match_tier, 'related_specific')
+        self.assertEqual(by_id[2].match_tier, 'direct_exact')
+        self.assertTrue(by_id[2].complete_coverage)
+
+    def test_direct_cap_cannot_drop_full_composite_candidate(self):
+        icons = [
+            fake_icon(index, 'St John the Baptist')
+            for index in range(1, CANDIDATE_LIMIT_PER_TIER + 5)
+        ]
+        icons.append(fake_icon(999, 'St John the Baptist and Job the Righteous'))
+        candidates = generate_icon_candidates(
+            icons,
+            IconMatchRequest(
+                kind='feast',
+                primary_text='John the Baptist and Job the Righteous',
+            ),
+        )
+
+        direct = [candidate for candidate in candidates if candidate.match_tier == 'direct_exact']
+        self.assertEqual([candidate.icon_id for candidate in direct], [999])
+
+    def test_unregistered_saint_and_event_match_from_metadata_vocabulary(self):
+        for request_text, title in (
+            ('Saint Vartan the Warrior', 'St. Vartan the Warrior'),
+            ('Feast of the Presentation of the Lord', 'Presentation of the Lord'),
+        ):
+            with self.subTest(request_text=request_text):
+                candidates = generate_icon_candidates(
+                    [fake_icon(1, title)],
+                    IconMatchRequest(kind='feast', primary_text=request_text),
+                )
+                self.assertEqual(candidates[0].match_tier, 'direct_exact')
+
+    def test_registered_and_unregistered_composite_is_additive(self):
+        candidates = generate_icon_candidates(
+            [
+                fake_icon(1, 'St John the Baptist'),
+                fake_icon(2, 'St John the Baptist and Job the Righteous'),
+            ],
+            IconMatchRequest(
+                kind='feast',
+                primary_text='John the Forerunner and Job the Righteous',
+            ),
+        )
+        by_id = {candidate.icon_id: candidate for candidate in candidates}
+        self.assertEqual(by_id[1].match_tier, 'related_specific')
+        self.assertEqual(by_id[2].match_tier, 'direct_exact')
+
+    def test_bare_john_does_not_match_qualified_or_incidental_john_metadata(self):
+        candidates = generate_icon_candidates(
+            [
+                fake_icon(1, 'St John the Apostle'),
+                fake_icon(2, 'St John the Baptist'),
+                fake_icon(3, 'St John the Evangelist'),
+                fake_icon(4, 'Transfiguration', 'john'),
+                fake_icon(5, 'St John (Apostle)'),
+                fake_icon(6, 'St John (Baptist)'),
+                fake_icon(7, 'St John (Evangelist)'),
+            ],
+            IconMatchRequest(kind='feast', primary_text='Saint John'),
+        )
+
+        self.assertEqual(candidates, [])
+
+    def test_parenthetical_identity_qualifiers_are_preserved_for_exact_matching(self):
+        cases = (
+            ('Saint John the Apostle', 'St John (Apostle)'),
+            ('Saint John the Baptist', 'St John (Baptist)'),
+            ('Saint John the Evangelist', 'St John (Evangelist)'),
+            ('Saint Vartan the Martyr', 'St Vartan (Martyr)'),
+            ('King Tiridates', 'Tiridates (King)'),
+        )
+        for request_text, title in cases:
+            with self.subTest(request_text=request_text):
+                candidates = generate_icon_candidates(
+                    [fake_icon(1, title)],
+                    IconMatchRequest(kind='feast', primary_text=request_text),
+                )
+
+                self.assertEqual(candidates[0].match_tier, 'direct_exact')
+
+    def test_single_word_event_title_can_still_match_exactly(self):
+        candidates = generate_icon_candidates(
+            [fake_icon(1, 'Nativity')],
+            IconMatchRequest(kind='feast', primary_text='Nativity'),
+        )
+
+        self.assertEqual(candidates[0].match_tier, 'direct_exact')
+
+    def test_direct_duplicate_selection_is_high_and_input_order_stable(self):
+        icons = [
+            fake_icon(377, 'St John the Baptist'),
+            fake_icon(36, 'St. John the Baptist'),
+            fake_icon(333, 'St John the Baptist 1'),
+        ]
+        request = IconMatchRequest(kind='feast', primary_text='John the Baptist')
+
+        first_candidates = generate_icon_candidates(icons, request)
+        second_candidates = generate_icon_candidates(reversed(icons), request)
+        payload = approving_payload(next(item for item in first_candidates if item.icon_id == 377))
+
+        first = validate_and_rank_decision(payload, first_candidates, max_results=3)
+        second = validate_and_rank_decision(payload, second_candidates, max_results=3)
+
+        self.assertEqual(first, second)
+        self.assertEqual([item['id'] for item in first], [36, 377, 333])
+        self.assertTrue(all(item['confidence'] == 'high' for item in first))
+
+    def test_python_rejects_lower_tier_when_direct_candidate_exists(self):
+        icons = [
+            fake_icon(36, 'St. John the Baptist'),
+            fake_icon(900, 'The Prodigal Son', 'repentance'),
+        ]
+        request = IconMatchRequest(
+            kind='content',
+            primary_text='John the Baptist penitential prayer',
+        )
+        candidates = generate_icon_candidates(icons, request)
+        thematic = next(item for item in candidates if item.match_tier == 'thematic')
+
+        self.assertEqual(validate_and_rank_decision(approving_payload(thematic), candidates), [])
+
+    def test_holy_translators_relates_to_mesrop_only_without_direct_icon(self):
+        request = IconMatchRequest(kind='feast', primary_text='Feast of the Holy Translators')
+        related = generate_icon_candidates(
+            [fake_icon(408, 'Unknown Armenian painter. St. Mesrop Mashtots')],
+            request,
+        )
+        self.assertEqual(related[0].match_tier, 'related_specific')
+        self.assertEqual(related[0].matched_concepts, ('mesrop_mashtots',))
+
+        with_direct = generate_icon_candidates(
+            [
+                fake_icon(408, 'St. Mesrop Mashtots'),
+                fake_icon(901, 'The Holy Translators'),
+            ],
+            request,
+        )
+        self.assertEqual(with_direct[0].match_tier, 'direct_exact')
+
+    def test_penitential_content_relates_thematically_to_prodigal_son(self):
+        candidates = generate_icon_candidates(
+            [fake_icon(902, 'The Prodigal Son')],
+            IconMatchRequest(
+                kind='content',
+                primary_text='A penitential prayer',
+                context_terms=('repentance',),
+            ),
+        )
+
+        self.assertEqual(candidates[0].match_tier, 'thematic')
+        self.assertEqual(candidates[0].evidence_refs, ('theme:repentance',))
+
+    def test_invalid_schema_ids_and_tier_confidence_pairs_fail_closed(self):
+        candidates = generate_icon_candidates(
+            [fake_icon(36, 'St. John the Baptist')],
+            IconMatchRequest(kind='feast', primary_text='John the Baptist'),
+        )
+        valid = approving_payload(candidates[0])
+        invalid_id = {**valid, 'decision': {**valid['decision'], 'id': 999}}
+        invalid_pair = {
+            **valid,
+            'decision': {**valid['decision'], 'confidence': 'medium'},
+        }
+        unknown_ref = {
+            **valid,
+            'decision': {**valid['decision'], 'evidence_refs': ['tag:john']},
+        }
+
+        for payload in ({'matches': []}, invalid_id, invalid_pair, unknown_ref):
+            with self.subTest(payload=payload):
+                self.assertEqual(validate_and_rank_decision(payload, candidates), [])
+
+    def test_interpreted_aliases_are_bounded_and_respect_identity_boundaries(self):
+        request = IconMatchRequest(kind='feast', primary_text='John the Baptist')
+        vocabulary = build_metadata_vocabulary([fake_icon(1, 'St John the Apostle')])
+        payload = {
+            'concepts': [
+                {
+                    'request_concept': 'john_the_baptist',
+                    'metadata_concept': 'literal:john apostle',
+                    'aliases': ['John the Baptist'],
+                }
+            ]
+        }
+
+        self.assertEqual(validate_interpreted_concepts(payload, request, vocabulary), {})
+        payload['concepts'][0]['metadata_concept'] = 'literal:not supplied'
+        self.assertEqual(validate_interpreted_concepts(payload, request, vocabulary), {})
+
+    def test_interpreted_aliases_reject_unrelated_literal_mapping(self):
+        request = IconMatchRequest(kind='feast', primary_text='Saint Vartan the Warrior')
+        vocabulary = build_metadata_vocabulary([fake_icon(1, 'St John the Apostle')])
+        payload = {
+            'concepts': [
+                {
+                    'request_concept': 'literal:vartan warrior',
+                    'metadata_concept': 'literal:john apostle',
+                    'aliases': ['Vartan the Warrior'],
+                }
+            ]
+        }
+
+        self.assertEqual(validate_interpreted_concepts(payload, request, vocabulary), {})
+
+    @override_settings(OPENAI_API_KEY='')
+    def test_missing_provider_fails_closed_without_simple_fallback(self):
+        icons = [fake_icon(10, 'Nativity')]
+        result = _match_icons_with_llm(icons, 'Nativity', max_results=1)
+        self.assertEqual(result, [])
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion', side_effect=RuntimeError('provider down'))
+    def test_provider_failure_fails_closed(self, _mock_completion):
+        self.assertEqual(
+            _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1),
+            [],
+        )
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_malformed_provider_output_fails_closed(self, mock_completion):
+        mock_completion.return_value.choices[0].message.content = 'not json'
+        self.assertEqual(
+            _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1),
+            [],
+        )
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.time.sleep')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_rate_limit_retry_after_then_success(self, mock_completion, mock_sleep):
+        from openai import RateLimitError
+
+        response = MagicMock(status_code=429, headers={'retry-after': '0.25'})
+        response.request = MagicMock()
+        rate_limit = RateLimitError('rate limited', response=response, body={'error': {}})
+        success = MagicMock()
+        success.choices[0].message.content = (
+            '{"decision":{"id":10,"match_tier":"direct_exact",'
+            '"confidence":"high","matched_concepts":["literal:nativity"],'
+            '"evidence_refs":["title:literal:nativity"],'
+            '"rationale_code":"explicit_event"}}'
+        )
+        mock_completion.side_effect = [rate_limit, success]
+
+        matches = _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1)
+
+        self.assertEqual(matches[0]['id'], 10)
+        mock_sleep.assert_called_once_with(1)
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.time.sleep')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_exhausted_rate_limits_fail_closed(self, mock_completion, mock_sleep):
+        from openai import RateLimitError
+
+        response = MagicMock(status_code=429, headers={'Retry-After': '99'})
+        response.request = MagicMock()
+        mock_completion.side_effect = RateLimitError(
+            'rate limited', response=response, body={'error': {}}
+        )
+
+        result = _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1)
+
+        self.assertEqual(result, [])
+        self.assertEqual(mock_completion.call_count, 12)
+        self.assertEqual(mock_sleep.call_count, 9)
+        self.assertTrue(all(call.args == (8.0,) for call in mock_sleep.call_args_list))
 
 
 @override_settings(
@@ -121,48 +460,14 @@ class FeastIconMatchingTaskTests(TestCase):
             name="Nativity of Christ",
         )
 
-        # Mock matching and directness verification to permit assignment.
-        with (
-            patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match,
-            patch('hub.tasks.icon_tasks._is_direct_icon_match', return_value=True) as mock_verify,
-        ):
+        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
             mock_match.return_value = [
-                {'id': icon.id, 'confidence': 'high'}
+                {'id': icon.id, 'match_tier': 'direct_exact', 'confidence': 'high'}
             ]
             match_icon_to_feast_task(feast.id)
 
-        mock_verify.assert_called_once_with(icon, feast.name)
-
         feast.refresh_from_db()
         self.assertEqual(feast.icon, icon)
-
-    def test_match_icon_task_rejects_unverified_high_confidence_match(self):
-        """A high-confidence candidate must pass directness verification."""
-        day = Day.objects.create(date=self.test_date, church=self.church)
-        icon = Icon.objects.create(
-            title="Unrelated Martyr",
-            church=self.church,
-            image=SimpleUploadedFile(
-                name='unrelated-martyr.jpg',
-                content=b'fake image content',
-                content_type='image/jpeg',
-            ),
-        )
-        feast = self._create_feast_without_signal(
-            church=day.church,
-            name="Saints Maccabees: Eleazar and Shamuna",
-        )
-
-        with (
-            patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match,
-            patch('hub.tasks.icon_tasks._is_direct_icon_match', return_value=False) as mock_verify,
-        ):
-            mock_match.return_value = [{'id': icon.id, 'confidence': 'high'}]
-            match_icon_to_feast_task(feast.id)
-
-        mock_verify.assert_called_once_with(icon, feast.name)
-        feast.refresh_from_db()
-        self.assertIsNone(feast.icon)
 
     def test_match_icon_task_with_medium_confidence_match(self):
         """Test that task does not save icon when confidence is below threshold."""
@@ -185,7 +490,7 @@ class FeastIconMatchingTaskTests(TestCase):
         # Mock the matching function to return medium confidence match
         with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
             mock_match.return_value = [
-                {'id': icon.id, 'confidence': 'medium'}
+                {'id': icon.id, 'match_tier': 'related_specific', 'confidence': 'medium'}
             ]
             match_icon_to_feast_task(feast.id)
 
@@ -214,7 +519,7 @@ class FeastIconMatchingTaskTests(TestCase):
         # Mock the matching function to return low confidence match
         with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
             mock_match.return_value = [
-                {'id': icon.id, 'confidence': 'low'}
+                {'id': icon.id, 'match_tier': 'thematic', 'confidence': 'low'}
             ]
             match_icon_to_feast_task(feast.id)
 
@@ -247,45 +552,6 @@ class FeastIconMatchingTaskTests(TestCase):
 
         feast.refresh_from_db()
         self.assertIsNone(feast.icon)
-
-    def test_simple_match_icons_function(self):
-        """Test the simple icon matching fallback function."""
-        test_image1 = SimpleUploadedFile(
-            name='nativity.jpg',
-            content=b'fake image content',
-            content_type='image/jpeg'
-        )
-        test_image2 = SimpleUploadedFile(
-            name='easter.jpg',
-            content=b'fake image content',
-            content_type='image/jpeg'
-        )
-        icon1 = Icon.objects.create(
-            title="Nativity Scene",
-            church=self.church,
-            image=test_image1
-        )
-        icon2 = Icon.objects.create(
-            title="Easter Icon",
-            church=self.church,
-            image=test_image2
-        )
-        icons = [icon1, icon2]
-
-        # Test exact title match
-        result = _simple_match_icons(icons, "Nativity Scene", max_results=1)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], icon1.id)
-
-        # Test partial match
-        result = _simple_match_icons(icons, "Nativity", max_results=1)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], icon1.id)
-
-        # Test no match
-        result = _simple_match_icons(icons, "Christmas", max_results=1)
-        self.assertEqual(len(result), 0)
-
 
 class FeastIconMatchingScopeTests(TestCase):
     """Tests for church scoping in icon matching."""
@@ -332,7 +598,7 @@ class FeastIconMatchingScopeTests(TestCase):
 
         with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
             mock_match.return_value = [
-                {'id': other_icon.id, 'confidence': 'high'}
+                {'id': other_icon.id, 'match_tier': 'direct_exact', 'confidence': 'high'}
             ]
             match_icon_to_feast_task(feast.id)
 
@@ -359,18 +625,20 @@ class FeastIconMatchingScopeTests(TestCase):
         )
         mock_choice = mock_completion.return_value.choices[0]
         mock_choice.message.content = (
-            f'{{"matches":[{{"id": {other_icon.id}, "confidence": "high"}}, '
-            f'{{"id": {icon.id}, "confidence": "high"}}]}}'
+            f'{{"decision":{{"id":{other_icon.id},"match_tier":"direct_exact",'
+            '"confidence":"high","matched_concepts":["literal:local nativity icon"],'
+            '"evidence_refs":["title:literal:local nativity icon"],'
+            '"rationale_code":"explicit_subject"}}'
         )
 
         matches = _match_icons_with_llm([icon], "Nativity", max_results=2)
 
-        self.assertEqual(matches, [{'id': icon.id, 'confidence': 'high'}])
+        self.assertEqual(matches, [])
 
     @override_settings(OPENAI_API_KEY='test-key')
     @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_llm_parser_deduplicates_icon_ids_preserving_first_match(self, mock_completion):
-        """Repeated LLM IDs must not consume result slots."""
+    def test_python_tie_breaks_duplicates_independent_of_llm_choice(self, mock_completion):
+        """Equivalent direct duplicates are ordered by metadata and ID in Python."""
         first_icon = Icon.objects.create(
             title="St. Vartan",
             church=self.church,
@@ -387,77 +655,24 @@ class FeastIconMatchingScopeTests(TestCase):
         )
         mock_choice = mock_completion.return_value.choices[0]
         mock_choice.message.content = (
-            f'{{"matches":[{{"id": {first_icon.id}, "confidence": "high"}}, '
-            f'{{"id": {first_icon.id}, "confidence": "medium"}}, '
-            f'{{"id": {second_icon.id}, "confidence": "medium"}}]}}'
+            f'{{"decision":{{"id":{second_icon.id},"match_tier":"direct_exact",'
+            '"confidence":"high","matched_concepts":["literal:vartan"],'
+            '"evidence_refs":["title:literal:vartan"],'
+            '"rationale_code":"explicit_subject"}}'
         )
 
         matches = _match_icons_with_llm([first_icon, second_icon], "Saint Vartan", max_results=3)
 
-        self.assertEqual(
-            matches,
-            [
-                {'id': first_icon.id, 'confidence': 'high'},
-                {'id': second_icon.id, 'confidence': 'medium'},
-            ],
-        )
+        self.assertEqual([match['id'] for match in matches], [first_icon.id, second_icon.id])
         self.assertNotIn('temperature', mock_completion.call_args.kwargs)
         self.assertEqual(mock_completion.call_args.kwargs['model'], 'gpt-4.1-mini')
         response_format = mock_completion.call_args.kwargs['response_format']
         self.assertEqual(response_format['type'], 'json_schema')
         self.assertTrue(response_format['json_schema']['strict'])
         self.assertIn(
-            'COMPOSITE COMMEMORATIONS:',
+            'relationship hierarchy is strict',
             mock_completion.call_args.kwargs['messages'][0]['content'],
         )
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_directness_verifier_accepts_transliterated_composition(self, mock_completion):
-        """Variant saint names and a matching composition must not be vetoed."""
-        icon = Icon.objects.create(
-            title="St Trdat with St Gregory the Illuminator and St Hripsime",
-            church=self.church,
-            image=self.test_image,
-        )
-        mock_completion.return_value.choices[0].message.content = (
-            '{"is_direct_match": false}'
-        )
-
-        is_direct = _is_direct_icon_match(
-            icon,
-            "Saints Tiridates (Trdat), Ashkhen, and Khosrovidoukht",
-        )
-
-        self.assertTrue(is_direct)
-        self.assertTrue(
-            mock_completion.call_args.kwargs['response_format']['json_schema']['strict']
-        )
-        self.assertIn(
-            'Accept conventional saint-name variants',
-            mock_completion.call_args.kwargs['messages'][0]['content'],
-        )
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_directness_verifier_rejects_broad_martyr_match(self, mock_completion):
-        """Shared martyr status alone must not permit an assignment."""
-        icon = Icon.objects.create(
-            title="Holy Martyrs of the Soukiasants",
-            church=self.church,
-            image=self.test_image,
-        )
-        mock_completion.return_value.choices[0].message.content = (
-            '{"is_direct_match": false}'
-        )
-
-        is_direct = _is_direct_icon_match(
-            icon,
-            "Saints Maccabees: Eleazar and Shamuna",
-        )
-
-        self.assertFalse(is_direct)
-
 
 @tag('slow', 'integration')
 class FeastIconMatchingSignalTests(TestCase):

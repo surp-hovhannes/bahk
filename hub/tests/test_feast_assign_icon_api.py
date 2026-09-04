@@ -227,7 +227,13 @@ class FeastAssignIconAPITests(TestCase):
         with patch("hub.tasks.icon_tasks._match_icons_with_llm") as mock_match:
             def assign_manually_before_matcher_save(*args, **kwargs):
                 self.assertEqual(self._post().status_code, status.HTTP_200_OK)
-                return [{"id": self.other_icon.id, "confidence": "high"}]
+                return [
+                    {
+                        "id": self.other_icon.id,
+                        "match_tier": "direct_exact",
+                        "confidence": "high",
+                    }
+                ]
 
             mock_match.side_effect = assign_manually_before_matcher_save
             match_icon_to_feast_task(self.feast.id)
