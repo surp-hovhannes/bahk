@@ -1,5 +1,7 @@
 from django.test import SimpleTestCase
-from django.urls import resolve, reverse
+from django.urls import NoReverseMatch, resolve, reverse
+from django.test.client import Client
+from bahk.public_api_urls import urlpatterns as public_api_urlpatterns
 
 from bahk.views import ApiDocsView, LandingPageView
 
@@ -60,3 +62,72 @@ class ApiDocsTests(SimpleTestCase):
 
         self.assertContains(response, 'aria-current="page"')
         self.assertContains(response, f'href="{reverse("api-docs")}"')
+
+
+class PublicApiV1Tests(SimpleTestCase):
+    def test_root_exposes_only_service_level_contract_metadata(self):
+        response = self.client.get("/api/v1/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
+        self.assertEqual(
+            response.json(),
+            {
+                "service": "fast-and-pray",
+                "version": "v1",
+                "base_url": "/api/v1/",
+                "status": "planned",
+            },
+        )
+
+    def test_root_uses_an_isolated_public_api_namespace(self):
+        match = resolve("/api/v1/")
+
+        self.assertEqual(match.namespace, "public_api")
+        self.assertEqual(match.url_name, "root")
+        self.assertEqual(reverse("public_api:root"), "/api/v1/")
+        with self.assertRaises(NoReverseMatch):
+            reverse("public_api:fast-list")
+
+
+    def test_root_is_the_only_v1_route_until_resources_are_ready(self):
+        self.assertEqual(
+            [(pattern.name, str(pattern.pattern)) for pattern in public_api_urlpatterns],
+            [("root", "")],
+        )
+
+    def test_unsupported_method_returns_api_appropriate_405(self):
+        client = Client(enforce_csrf_checks=True)
+        response = client.post("/api/v1/")
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response["Allow"], "GET, HEAD, OPTIONS")
+    def test_public_v1_does_not_expose_unready_or_internal_routes(self):
+        for path in (
+            "/api/v1/fasts/",
+            "/api/v1/churches/",
+            "/api/v1/readings/",
+            "/api/v1/feasts/",
+            "/api/v1/user/fasts/",
+            "/api/v1/profile/",
+            "/api/v1/s3-upload/upload-initialize/",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 404)
+
+    def test_existing_legacy_routes_keep_their_reverse_values(self):
+        self.assertEqual(reverse("fast_on_date"), "/api/user/fasts/")
+        self.assertEqual(reverse("fast_on_date_without_user"), "/api/fast/")
+
+    def test_docs_remain_coming_soon_without_v1_resource_links(self):
+        response = self.client.get("/docs/")
+
+        self.assertContains(response, "Coming soon")
+        for path in (
+            "/api/v1/churches/",
+            "/api/v1/readings/",
+            "/api/v1/fasts/",
+            "/api/v1/feasts/",
+        ):
+            with self.subTest(path=path):
+                self.assertNotContains(response, path)
