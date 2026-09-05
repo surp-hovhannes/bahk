@@ -10,6 +10,7 @@ from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 
 from hub.management.commands.evaluate_icon_matching import evaluate
+from hub.services.icon_match_service import BATCH, assessment_batch_id
 from hub.tests.icon_match_fixtures import FixtureProvider, analysis_for, candidate
 
 
@@ -32,6 +33,36 @@ class EvaluationTests(SimpleTestCase):
         self.assertEqual(report["recommendation_count"], 1)
         self.assertEqual(report["call_count"], 3)
         self.assertEqual(report["results"][0]["outcome"]["model"], "offline-fixture")
+
+    def test_replay_requires_original_batch_attestation(self):
+        catalogue = [{"id": 1, "title": "Արամ", "tags": []}]
+        analysis = analysis_for("Արամ")
+        response = {
+            "batch_id": assessment_batch_id(catalogue),
+            "assessment_complete": True,
+            "matches": [],
+            "exact_event_exists": False,
+        }
+        for changes, expected in (
+            ({}, "complete"),
+            ({"batch_id": "wrong"}, "unavailable"),
+            ({"assessment_complete": False}, "unavailable"),
+        ):
+            with patch("hub.services.icon_match_service.OpenAIIconProvider") as live:
+                report = evaluate(
+                    catalogue,
+                    ["Արամ"],
+                    replays=[
+                        [
+                            {"stage": "analyze", "response": analysis},
+                            {"stage": "assess", "response": {**response, **changes}},
+                        ]
+                    ],
+                )
+            live.assert_not_called()
+            self.assertEqual(report["status_counts"], {expected: 1})
+        self.assertNotIn("assessed_ids", BATCH["properties"])
+        self.assertIn("attestation", report["coverage_semantics"])
 
     def test_json_command_writes_explicit_unavailable_offline_report(self):
         with TemporaryDirectory() as directory:

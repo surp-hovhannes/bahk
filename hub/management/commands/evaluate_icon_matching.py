@@ -18,6 +18,8 @@ from hub.services.icon_match_service import match_icons
 
 
 class ReplayProvider:
+    # Replay responses must preserve their actual batch_id/completion attestation.
+    # Never upgrade legacy ID echoes or rewrite a mismatched digest to fit new input.
     model = "offline-replay"
 
     def __init__(self, responses):
@@ -87,6 +89,8 @@ def evaluate(catalogue, requests, *, live=False, replays=None, provider_factory=
     return {
         "mode": "live" if live else "offline",
         "label": "Exploratory coverage audit; no accuracy labels supplied",
+        "coverage_semantics": "Validated model batch attestation, not mechanical proof of reasoning or recall",
+        "positive_semantics": "Bounded ranked recommendations; not all possible matches are returned",
         "catalogue_count": len(catalogue),
         "request_count": len(requests),
         "status_counts": dict(Counter(r["outcome"]["status"] for r in results)),

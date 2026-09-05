@@ -5,6 +5,7 @@ from copy import deepcopy
 
 def analysis_for(subject="Սուրբ Նարեկ", event=None):
     return {
+        "intent": "event" if event else ("subject" if subject else "theme"),
         "subjects": [{"span": {"ref": "request:primary", "quote": subject}, "qualifiers": []}] if subject else [],
         "event": [{"ref": "request:primary", "quote": event}] if event else [],
         "context": [],
@@ -62,12 +63,20 @@ class FixtureProvider:
             matches = [deepcopy(m) for m in self.matches if m["id"] in ids]
             # Fixtures implement the contract's relation priority before top-N.
             order = ["exact_event", "exact_subject", "subject_portrait", "related_specific", "thematic"]
-            matches.sort(key=lambda m: order.index(m["relation"]))
+            matches.sort(
+                key=lambda m: (
+                    order.index(m["relation"]),
+                    -len(m["covered_subjects"]),
+                    ["high", "medium", "low"].index(m["confidence"]),
+                    -m["relevance"],
+                    m["id"],
+                )
+            )
             result = {
-                "assessed_ids": list(reversed(ids)),
+                "batch_id": payload["batch_id"],
+                "assessment_complete": True,
                 "matches": matches[: payload["positive_limit"]],
                 "exact_event_exists": any(m["relation"] == "exact_event" for m in matches),
-                "truncated": False,
             }
         else:
             result = {
