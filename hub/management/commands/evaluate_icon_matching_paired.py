@@ -14,7 +14,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from hub.management.commands.evaluate_icon_matching import OfflineUnavailableProvider
 from hub.services.icon_matching import IconMatchRequest
-from hub.services.icon_match_profiles import CONTROL, LUNA, digest
+from hub.services.icon_match_profiles import DEFAULT_PROFILES, REGISTERED_PROFILES, digest
 from hub.services.icon_match_service import (
     IconMatchOutcome,
     MatchLimits,
@@ -174,7 +174,38 @@ def prepare_requests(requests, records):
     return prepared
 
 
-def evaluate_paired(catalogue, requests, *, live=False, maximum_wire_calls=None, replays=None, arm_timeout=180):
+class InvalidProfiles(ValueError):
+    """Profile selection failed before provider construction or spending."""
+
+
+def select_profiles(profiles):
+    if not isinstance(profiles, (tuple, list)) or len(profiles) != 2:
+        raise InvalidProfiles("Select exactly two distinct registered profiles")
+    selected = []
+    for value in profiles:
+        if isinstance(value, str):
+            profile = REGISTERED_PROFILES.get(value)
+        else:
+            profile = next((p for p in REGISTERED_PROFILES.values() if value is p), None)
+        if profile is None:
+            raise InvalidProfiles("Unknown or unregistered profile")
+        selected.append(profile)
+    if selected[0] is selected[1]:
+        raise InvalidProfiles("Select exactly two distinct registered profiles")
+    return tuple(selected)
+
+
+def evaluate_paired(
+    catalogue,
+    requests,
+    *,
+    live=False,
+    maximum_wire_calls=None,
+    replays=None,
+    arm_timeout=180,
+    profiles=DEFAULT_PROFILES,
+):
+    profiles = select_profiles(profiles)
     if not math.isfinite(arm_timeout) or arm_timeout <= 0:
         raise ValueError("Arm timeout must be positive and finite")
     if live and replays is not None:
@@ -186,7 +217,7 @@ def evaluate_paired(catalogue, requests, *, live=False, maximum_wire_calls=None,
     pairs = []
     for index, (request, input_digest) in enumerate(prepared):
         case_id = f"case-{index:04d}-{input_digest[:12]}"
-        order = (CONTROL, LUNA) if index % 2 == 0 else (LUNA, CONTROL)
+        order = profiles if index % 2 == 0 else profiles[::-1]
         pair = {
             "case_id": case_id,
             "request_index": index,
@@ -248,7 +279,7 @@ def evaluate_paired(catalogue, requests, *, live=False, maximum_wire_calls=None,
             }
         pairs.append(pair)
     summary = {}
-    for profile in (CONTROL, LUNA):
+    for profile in profiles:
         arms = [pair["arms"][profile.id] for pair in pairs]
         complete = [arm for arm in arms if arm["state"] == "evaluated" and arm["outcome"]["status"] == "complete"]
         summary[profile.id] = {
@@ -269,7 +300,12 @@ def evaluate_paired(catalogue, requests, *, live=False, maximum_wire_calls=None,
     return {
         "mode": "live" if live else "offline",
         "label": "Exploratory paired audit; no accuracy labels or winner",
-        "comparison": "Bundled model, prompt and recommendation policy profiles; not model-only effects",
+        "selected_profile_ids": [p.id for p in profiles],
+        "comparison": (
+            "Prompt-only comparison; same model, reasoning, limits and recommendation policy"
+            if {p.id for p in profiles} == {"luna-v1", "luna-v2"}
+            else "Bundled model, prompt and recommendation policy profiles; not model-only effects"
+        ),
         "catalogue_digest": catalogue_digest,
         "catalogue_count": len(records),
         "request_count": len(requests),
@@ -290,13 +326,16 @@ def evaluate_paired(catalogue, requests, *, live=False, maximum_wire_calls=None,
 
 
 class Command(BaseCommand):
-    help = "Read-only paired control/Luna audit. Billable calls require --live AND --maximum-wire-calls."
+    help = "Read-only paired profile audit. Billable calls require --live AND --maximum-wire-calls."
 
     def add_arguments(self, parser):
         for name in ("catalogue-json", "requests-json", "output-json"):
             parser.add_argument("--" + name, required=True)
         parser.add_argument(
-            "--responses-json", help="Offline responses keyed by stable case_id, then control-v1/luna-v1"
+            "--responses-json", help="Offline responses keyed by stable case_id, then selected profile ID"
+        )
+        parser.add_argument(
+            "--profiles", nargs=2, choices=tuple(REGISTERED_PROFILES), default=[p.id for p in DEFAULT_PROFILES]
         )
         parser.add_argument("--live", action="store_true")
         parser.add_argument("--maximum-wire-calls", type=int)
@@ -325,9 +364,10 @@ class Command(BaseCommand):
                 maximum_wire_calls=options["maximum_wire_calls"],
                 replays=replays,
                 arm_timeout=options["arm_timeout"],
+                profiles=options["profiles"],
             )
             output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-        except InvalidRequest as exc:
+        except (InvalidRequest, InvalidProfiles) as exc:
             raise CommandError(str(exc)) from exc
         except (OSError, ValueError, TypeError, KeyError) as exc:
             raise CommandError(

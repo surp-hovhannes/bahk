@@ -257,3 +257,174 @@ CONTROL = IconMatchingProfile(
     "control-v1", "gpt-4.1-mini", None, "control-v1", "control-v1", tuple(STAGE_PROMPTS.items()), 8, _rank
 )
 LUNA = IconMatchingProfile("luna-v1", "gpt-5.6-luna", "none", "luna-v1", "luna-event-v1", LUNA_PROMPTS, 4, luna_rank)
+
+
+LUNA_V2_AUDIT = """EXCLUDE BEFORE RANKING: inspect the whole original title and ALL tags.
+Exclude a candidate positively identified as a different person or place-qualified
+identity from the request entirely.
+Shared name, office or broad category is not a useful relation: do not relabel a
+wrong namesake related_specific/thematic or retain it with conflict=true.
+Missing detail differs from contradiction. Missing scene evidence cannot establish
+exact_event; portrait fallback requires affirmative same-full-identity generic
+portrait evidence. An explicit competing scene contradicts a generic portrait
+claim even alongside a portrait tag. Do not dismiss inconvenient metadata as noise
+without evidence. If portrait interpretation is uncertain, abstain from that claim.
+Preserve defensible weaker suggestions: one confirmed member of a requested group
+can be related_specific with incomplete coverage; a genuinely relevant neighboring
+scene or theme can be useful. State missing coverage; do not upgrade or autoassign
+these relations. Partial coverage of a correct group is not a different namesake.
+Apply these exclusions BEFORE selection and ranking; rank only valid survivors.
+If none survives, return matches=[]. The positive limit is a maximum, not a target.
+During independent verification, repeat this audit on original metadata and remove
+unsupported hypotheses; caveats alone do not justify preserving their IDs.
+Return only the existing structured fields and a short grounded reason, never
+private deliberation or chain-of-thought.
+"""
+
+
+# Independent v2 data: no v1 helper output or example objects are edited/reused.
+# IDs only connect each fictional record to its evidence; they are not selection rules.
+def _v2_example(
+    primary, *, subjects=(), event=None, title, tags=(), relation=None, covered=(), complete=True, reason=""
+):
+    analysis = {
+        "intent": "event" if event else ("subject" if subjects else "theme"),
+        "subjects": [
+            {
+                "span": {"ref": "request:primary", "quote": name},
+                "qualifiers": [{"ref": "request:primary", "quote": q} for q in qualifiers],
+            }
+            for name, qualifiers in subjects
+        ],
+        "event": [{"ref": "request:primary", "quote": event}] if event else [],
+        "context": [],
+        "unresolved": [],
+    }
+    evidence = []
+    if covered:
+        evidence.append({"source": "title", "quote": title, "role": "identity", "subject_indices": list(covered)})
+    if relation == "exact_event" or (event and relation == "related_specific"):
+        evidence.append({"source": "title", "quote": title, "role": "event", "subject_indices": []})
+    if relation == "thematic":
+        evidence.append({"source": "tag", "quote": tags[0], "role": "topic", "subject_indices": []})
+    if relation == "subject_portrait":
+        evidence.append({"source": "tag", "quote": "portrait", "role": "topic", "subject_indices": []})
+    matches = (
+        []
+        if relation is None
+        else [
+            {
+                "id": 1,
+                "relation": relation,
+                "confidence": "high",
+                "relevance": 90 if complete else 60,
+                "reason": reason,
+                "evidence": evidence,
+                "covered_subjects": list(covered),
+                "full_request_coverage": complete,
+                "identity_qualified": set(covered) == set(range(len(subjects))),
+                "event_agrees": not event or relation in ("exact_event", "subject_portrait"),
+                "generic_portrait": relation == "subject_portrait",
+                "conflict": bool(event and relation == "related_specific"),
+            }
+        ]
+    )
+    return json.dumps(
+        {
+            "request": {"kind": "feast", "sources": {"request:primary": primary}},
+            "analysis": analysis,
+            "catalogue": [{"id": 1, "title": title, "tags": list(tags)}],
+            "assessment": {
+                "batch_id": "example",
+                "assessment_complete": True,
+                "matches": matches,
+                "exact_event_exists": relation == "exact_event",
+            },
+        },
+        ensure_ascii=False,
+    )
+
+
+LUNA_V2_EXAMPLES = (
+    _v2_example(
+        "Arrival of Elder Sere of the Vale",
+        subjects=(("Sere", ("Elder", "of the Vale")),),
+        event="Arrival",
+        title="Elder Sere of the Vale",
+        tags=("portrait",),
+        relation="subject_portrait",
+        covered=(0,),
+        reason="Title identifies the requested elder; portrait tag supports a generic portrait, not the arrival.",
+    ),
+    _v2_example(
+        "Sere and Tovan",
+        subjects=(("Sere", ()), ("Tovan", ())),
+        title="Sere",
+        tags=("portrait",),
+        relation="related_specific",
+        covered=(0,),
+        complete=False,
+        reason="Sere is depicted; Tovan is missing, so this covers only one requested member.",
+    ),
+    _v2_example(
+        "Elder Sere of the Vale",
+        subjects=(("Sere", ("Elder", "of the Vale")),),
+        title="Elder Sere of the Coast",
+        tags=("portrait",),
+    ),
+    _v2_example(
+        "Arrival of Elder Sere",
+        subjects=(("Sere", ("Elder",)),),
+        event="Arrival",
+        title="Elder Sere",
+        tags=("portrait", "Burial of Elder Sere"),
+    ),
+    _v2_example(
+        "Arrival of Elder Sere of the Vale",
+        subjects=(("Sere", ("Elder", "of the Vale")),),
+        event="Arrival",
+        title="Arrival of Elder Sere of the Vale",
+        relation="exact_event",
+        covered=(0,),
+        reason="Title identifies the requested elder and explicitly depicts the requested arrival.",
+    ),
+    _v2_example(
+        "Arrival of Elder Sere",
+        subjects=(("Sere", ("Elder",)),),
+        event="Arrival",
+        title="Elder Sere greets the arriving travelers",
+        relation="related_specific",
+        covered=(0,),
+        complete=False,
+        reason="The elder welcomes travelers, a related arrival scene, but not the elder's own arrival.",
+    ),
+    _v2_example(
+        "A prayer about generosity",
+        title="Sharing food",
+        tags=("generosity",),
+        relation="thematic",
+        reason="The generosity tag supports the requested theme.",
+    ),
+)
+_V2_EXAMPLES = "\nFictional valid analyses and assessment envelopes (not vocabulary rules):\n" + "\n".join(
+    LUNA_V2_EXAMPLES
+)
+# Keep strict source rules and ranking instructions, inserting the audit before ranking.
+LUNA_V2_CANDIDATE = LUNA_CANDIDATE.replace("For event requests rank", LUNA_V2_AUDIT + "For event requests rank")
+LUNA_V2_PROMPTS = (
+    ("analyze", LUNA.stage_prompts["analyze"]),
+    ("assess", LUNA_REQUEST + LUNA_V2_CANDIDATE + _V2_EXAMPLES + LUNA.stage_prompts["assess"].split(_EXAMPLES, 1)[1]),
+    ("verify", LUNA_REQUEST + LUNA_V2_CANDIDATE + _V2_EXAMPLES + LUNA.stage_prompts["verify"].split(_EXAMPLES, 1)[1]),
+)
+LUNA_V2 = IconMatchingProfile(
+    "luna-v2",
+    LUNA.model,
+    LUNA.reasoning_effort,
+    "luna-v2",
+    LUNA.policy_version,
+    LUNA_V2_PROMPTS,
+    LUNA.positive_limit,
+    luna_rank,
+)
+REGISTERED_PROFILES = MappingProxyType({p.id: p for p in (CONTROL, LUNA, LUNA_V2)})
+DEFAULT_PROFILES = (CONTROL, LUNA)

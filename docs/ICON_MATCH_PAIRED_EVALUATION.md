@@ -1,12 +1,35 @@
 # Control/Luna paired icon evaluation
 
 `evaluate_icon_matching_paired` is a read-only, evaluation-only comparison of two
-bundled model/prompt/recommendation-policy profiles:
+explicit profiles (default: `control-v1` versus `luna-v1`):
 
 | Profile | Pinned model | Reasoning | Positive maximum per batch | Ranking |
 | --- | --- | --- | --- | --- |
 | `control-v1` | `gpt-4.1-mini` | Omitted, as before | 8 | Existing control ordering |
 | `luna-v1` | `gpt-5.6-luna` | `none` | 4 | Event alternatives use confidence/relevance before relation |
+| `luna-v2` | `gpt-5.6-luna` | `none` | 4 | Same as Luna v1 |
+
+Use `--profiles luna-v1 luna-v2` for the prompt-only comparison, or
+`--profiles control-v1 luna-v2` for a bundled profile comparison. Exactly two
+distinct registered IDs are required; unknown or duplicate selections fail before
+provider construction or billing. The Python evaluator accepts `profiles=(LUNA,
+LUNA_V2)` or the corresponding two ID strings. Omitting selection retains the
+original control/v1 pair and alternating arm order. Reports include
+`selected_profile_ids`; case IDs and input digests do not depend on profile selection.
+Replay responses must be bound to the selected version's profile hash; v1 recordings
+cannot be relabeled v2.
+
+Luna v2 changes only assessment/verification prompts and their fictional examples.
+Both stages exclude positively different identities before ranking, distinguish
+missing details from contradictory metadata, and inspect all title/tags before a
+portrait claim. Useful correct-member partial groups, related scenes and themes
+remain suggestions; an empty list is valid when no candidate survives. Independent
+verification removes unsupported hypotheses. Reasons stay short and grounded in
+existing structured fields. The request analysis prompt, model, reasoning, limit of
+four, ranking and recommendation-policy hash remain identical to Luna v1.
+These instructions are a precision hypothesis, not deterministic semantic enforcement
+or evidence of live improvement. Existing source quotes, schema and safeguards are
+unchanged; control/v1 comparisons remain bundled effects.
 
 The production default, existing single evaluator, endpoint selection, settings,
 assignment tasks, prayer imports and caches are unchanged. Profiles are explicit,
@@ -69,7 +92,8 @@ python manage.py evaluate_icon_matching_paired \
 ```
 
 Paired recordings are a JSON object keyed by `case_id`, then `control-v1` and
-`luna-v1`, each holding an ordered list of wire response entries. Each entry needs:
+`luna-v1` by default (or the selected two profile IDs), each holding an ordered
+list of wire response entries. Each entry needs:
 
 - `stage`: `analyze`, `assess`, or `verify`.
 - `payload_hash`: SHA-256 of the canonical **wire** payload, including the original

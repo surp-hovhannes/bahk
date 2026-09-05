@@ -5,12 +5,13 @@ import json
 from copy import deepcopy
 from dataclasses import FrozenInstanceError, asdict, replace
 from types import SimpleNamespace
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from django.test import SimpleTestCase, override_settings
 
 from hub.services.icon_matching import IconMatchRequest
-from hub.services.icon_match_profiles import CONTROL, LUNA, LUNA_EXAMPLES, luna_rank
+from hub.services.icon_match_profiles import CONTROL, LUNA, LUNA_V2, LUNA_EXAMPLES, LUNA_V2_EXAMPLES, luna_rank
 from hub.services.icon_match_service import (
     ANALYSIS,
     BATCH,
@@ -25,11 +26,91 @@ from hub.services.icon_match_service import (
     normalize_provider_matches,
     serialize_catalogue,
     validate_schema,
+    wire_schema,
 )
 from hub.tests.icon_match_fixtures import FixtureProvider, analysis_for, candidate
 
 
 class ProfileTests(SimpleTestCase):
+    def test_frozen_profiles_and_v2_prompt_only_contract(self):
+        baseline = json.loads(Path(__file__).with_name("icon_match_profile_baseline.json").read_text())
+        before = {p.id: self.event_case(p) for p in (CONTROL, LUNA)}
+        self.event_case(LUNA_V2)
+        LUNA_V2.metadata()
+        for profile in (CONTROL, LUNA):
+            self.assertEqual(profile.metadata(), baseline[profile.id])
+            result, provider = self.event_case(profile)
+            old_result, old_provider = before[profile.id]
+            self.assertEqual(result.matches, old_result.matches)
+            self.assertEqual([(s, p) for s, p, _ in provider.calls], [(s, p) for s, p, _ in old_provider.calls])
+        v1, v2 = LUNA.metadata(), LUNA_V2.metadata()
+        self.assertEqual(
+            {
+                k: v
+                for k, v in v1.items()
+                if k not in ("profile_id", "prompt_version", "prompt_hash", "stage_prompt_hashes", "profile_hash")
+            },
+            {
+                k: v
+                for k, v in v2.items()
+                if k not in ("profile_id", "prompt_version", "prompt_hash", "stage_prompt_hashes", "profile_hash")
+            },
+        )
+        self.assertNotEqual(v1["prompt_hash"], v2["prompt_hash"])
+        self.assertIs(LUNA_V2.rank_function, LUNA.rank_function)
+        self.assertEqual(LUNA.stage_prompts["analyze"], LUNA_V2.stage_prompts["analyze"])
+        with self.assertRaises(TypeError):
+            LUNA_V2.stage_prompts["assess"] = "changed"
+        with self.assertRaises(FrozenInstanceError):
+            LUNA_V2.positive_limit = 8
+
+    def test_v2_examples_validate_envelopes_evidence_and_assignment_contracts(self):
+        expected = ["subject_portrait", "related_specific", None, None, "exact_event", "related_specific", "thematic"]
+        for encoded, relation in zip(LUNA_V2_EXAMPLES, expected, strict=True):
+            example = json.loads(encoded)
+            with self.subTest(request=example["request"]):
+                analysis = example["analysis"]
+                _analysis(analysis, example["request"]["sources"])
+                validate_schema(example["assessment"], wire_schema(BATCH))
+                result = normalize_provider_matches(example["assessment"], BATCH, example["catalogue"])
+                _matches(result["matches"], serialize_catalogue(example["catalogue"]), analysis)
+                matches = example["assessment"]["matches"]
+                self.assertEqual([m["relation"] for m in matches], [] if relation is None else [relation])
+                outcome = match_icons(
+                    example["catalogue"],
+                    IconMatchRequest(
+                        kind="feast",
+                        primary_text=example["request"]["sources"]["request:primary"],
+                        auto_assign_policy="feast_strict",
+                    ),
+                    provider=FixtureProvider(analysis, result["matches"]),
+                    profile=LUNA_V2,
+                )
+                self.assertEqual(outcome.status, "complete")
+                if relation is None:
+                    self.assertEqual(outcome.matches, [])
+                    self.assertFalse(example["assessment"]["exact_event_exists"])
+                elif relation == "related_specific":
+                    self.assertFalse(matches[0]["full_request_coverage"])
+                    self.assertFalse(outcome.matches[0]["auto_assignable"])
+                elif relation in ("exact_event", "subject_portrait"):
+                    self.assertTrue(outcome.matches[0]["auto_assignable"])
+        partial = json.loads(LUNA_V2_EXAMPLES[1])
+        self.assertEqual(len(partial["analysis"]["subjects"]), 2)
+        self.assertEqual(partial["assessment"]["matches"][0]["covered_subjects"], [0])
+        self.assertEqual(
+            partial["assessment"]["matches"][0]["evidence"],
+            [{"source": "title", "quote": "Sere", "role": "identity", "subject_indices": [0]}],
+        )
+        # Both decision stages see complete examples and exclusions before the rank instructions.
+        for stage in ("assess", "verify"):
+            prompt = LUNA_V2.stage_prompts[stage]
+            self.assertLess(prompt.index("EXCLUDE BEFORE RANKING"), prompt.index("For event requests rank"))
+            for example in LUNA_V2_EXAMPLES:
+                self.assertIn(example, prompt)
+            for example in LUNA_EXAMPLES:
+                self.assertNotIn(example, prompt)
+
     def test_frozen_control_prompts_limits_and_rank_matrix(self):
         self.assertEqual(
             {k: hashlib.sha256(v.encode()).hexdigest() for k, v in STAGE_PROMPTS.items()},
@@ -273,7 +354,7 @@ class ProfileTests(SimpleTestCase):
                 ]
             )
         )
-        for profile in (LUNA, CONTROL, None):
+        for profile in (LUNA_V2, LUNA, CONTROL, None):
             provider = OpenAIIconProvider(profile=profile) if profile else OpenAIIconProvider()
             provider.call("analyze", {"request": {}}, ANALYSIS, 3)
             kwargs = client.return_value.chat.completions.create.call_args.kwargs
@@ -293,7 +374,7 @@ class ProfileTests(SimpleTestCase):
                     "json_schema": {"name": "icon_analyze", "strict": True, "schema": ANALYSIS},
                 },
             }
-            if profile is LUNA:
+            if profile in (LUNA, LUNA_V2):
                 expected.update(max_completion_tokens=16000, reasoning_effort="none")
             else:
                 expected["max_tokens"] = 16000

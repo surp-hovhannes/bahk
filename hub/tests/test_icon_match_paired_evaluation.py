@@ -20,7 +20,7 @@ from hub.management.commands.evaluate_icon_matching_paired import (
     replay_binding,
     usage_summary,
 )
-from hub.services.icon_match_profiles import CONTROL, LUNA
+from hub.services.icon_match_profiles import CONTROL, LUNA, LUNA_V2, DEFAULT_PROFILES
 from hub.services.icon_match_service import VERIFICATION, match_icons, provider_payload, normalize_provider_matches
 from hub.tests.icon_match_fixtures import FixtureProvider, analysis_for, candidate
 
@@ -50,18 +50,118 @@ class PairedEvaluationTests(SimpleTestCase):
     catalogue = [{"id": 2, "title": "Other", "tags": []}, {"id": 1, "title": "Elder Vela", "tags": ["portrait"]}]
     requests = [{"kind": "feast", "title": "Elder Vela", "tags": ["courage"]}, "Elder Vela"]
 
-    def recordings(self, *, matches=True):
-        skeleton = evaluate_paired(self.catalogue, self.requests)
+    def recordings(self, *, matches=True, profiles=DEFAULT_PROFILES):
+        skeleton = evaluate_paired(self.catalogue, self.requests, profiles=profiles)
         replays = {}
         providers = {}
         for pair, item in zip(skeleton["pairs"], self.requests, strict=True):
             replays[pair["case_id"]] = {}
-            for profile in (CONTROL, LUNA):
+            for profile in profiles:
                 provider = RecordingFixture(profile, [candidate(1, "Elder Vela")] if matches else [])
                 match_icons(self.catalogue, canonical_request(item), provider=provider, profile=profile)
                 replays[pair["case_id"]][profile.id] = provider.entries
                 providers[(pair["case_id"], profile.id)] = provider
         return replays, providers
+
+    def test_selected_pairs_replay_same_inputs_and_keep_case_ids(self):
+        default = evaluate_paired(self.catalogue, self.requests)
+        self.assertEqual(DEFAULT_PROFILES, (CONTROL, LUNA))
+        self.assertEqual(default["selected_profile_ids"], ["control-v1", "luna-v1"])
+        for profiles in ((CONTROL, LUNA), (LUNA, LUNA_V2), (CONTROL, LUNA_V2), (LUNA_V2, LUNA)):
+            with self.subTest(profiles=[p.id for p in profiles]):
+                replays, _ = self.recordings(profiles=profiles)
+                with (
+                    patch("hub.management.commands.evaluate_icon_matching_paired.OpenAIIconProvider") as live,
+                    patch(
+                        "hub.management.commands.evaluate_icon_matching_paired.match_icons", wraps=match_icons
+                    ) as matcher,
+                ):
+                    report = evaluate_paired(
+                        self.catalogue, self.requests, replays=replays, profiles=[p.id for p in profiles]
+                    )
+                live.assert_not_called()
+                self.assertEqual(report["wire_calls"], 0)
+                self.assertEqual(report["complete_pair_count"], 2)
+                ids = [p.id for p in profiles]
+                self.assertEqual(report["selected_profile_ids"], ids)
+                self.assertEqual(list(report["summary"]), ids)
+                self.assertEqual(report["pairs"][0]["arm_order"], ids)
+                self.assertEqual(report["pairs"][1]["arm_order"], ids[::-1])
+                self.assertEqual("Prompt-only" in report["comparison"], CONTROL not in profiles)
+                for index in (0, 2):
+                    self.assertEqual(matcher.call_args_list[index].args, matcher.call_args_list[index + 1].args)
+                for old, new in zip(default["pairs"], report["pairs"], strict=True):
+                    self.assertEqual(old["case_id"], new["case_id"])
+                    self.assertEqual(old["input_digest"], new["input_digest"])
+                    self.assertTrue(all(a["input_digest"] == new["input_digest"] for a in new["arms"].values()))
+                    self.assertEqual(set(new["arms"]), set(ids))
+
+    def test_profile_preflight_rejects_invalid_selection_without_billing(self):
+        for profiles in (
+            None,
+            [],
+            [LUNA],
+            [CONTROL, LUNA, LUNA_V2],
+            "luna-v1",
+            [LUNA, LUNA],
+            ["luna-v1", LUNA],
+            ["unknown", "luna-v2"],
+            [object(), LUNA_V2],
+        ):
+            with (
+                self.subTest(profiles=profiles),
+                patch("hub.management.commands.evaluate_icon_matching_paired.OpenAIIconProvider") as live,
+                patch("hub.management.commands.evaluate_icon_matching_paired.PairedReplayProvider") as replay,
+                patch("hub.management.commands.evaluate_icon_matching_paired.OfflineUnavailableProvider") as offline,
+                patch("hub.management.commands.evaluate_icon_matching_paired.WireBudget.consume") as dispatch,
+                patch("openai.AsyncOpenAI") as sdk,
+            ):
+                for mode in ({}, {"replays": {}}, {"live": True, "maximum_wire_calls": 10}):
+                    with self.assertRaises(ValueError):
+                        evaluate_paired(self.catalogue, self.requests, profiles=profiles, **mode)
+                for mocked in (live, replay, offline, dispatch, sdk):
+                    mocked.assert_not_called()
+
+    def test_luna_replay_cannot_cross_prompt_versions(self):
+        for source, target in ((LUNA, LUNA_V2), (LUNA_V2, LUNA)):
+            replays, _ = self.recordings(profiles=(CONTROL, source))
+            for arms in replays.values():
+                arms[target.id] = arms.pop(source.id)
+            report = evaluate_paired(self.catalogue, self.requests, profiles=(CONTROL, target), replays=replays)
+            for pair in report["pairs"]:
+                arm = pair["arms"][target.id]
+                self.assertEqual(arm["state"], "failed")
+                self.assertEqual(arm["outcome"]["matches"], [])
+                self.assertIn("replay_binding_mismatch", arm["replay_diagnostics"])
+                self.assertEqual(arm["usage"]["per_call"], [])
+            self.assertEqual(report["wire_calls"], 0)
+
+    def test_command_profile_selection_and_invalid_selection_preserve_output(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            catalogue, requests, output = (root / name for name in ("catalogue.json", "requests.json", "output.json"))
+            catalogue.write_text(json.dumps(self.catalogue))
+            requests.write_text(json.dumps(self.requests))
+            kwargs = dict(catalogue_json=str(catalogue), requests_json=str(requests), output_json=str(output))
+            call_command("evaluate_icon_matching_paired", "--profiles", "luna-v1", "luna-v2", **kwargs)
+            saved = output.read_text()
+            self.assertEqual(json.loads(saved)["selected_profile_ids"], ["luna-v1", "luna-v2"])
+            for profiles in (["luna-v1", "luna-v1"], ["unknown", "luna-v2"], ["luna-v2"]):
+                with (
+                    patch("hub.management.commands.evaluate_icon_matching_paired.OpenAIIconProvider") as live,
+                    patch("hub.management.commands.evaluate_icon_matching_paired.WireBudget.consume") as dispatch,
+                ):
+                    with self.assertRaises(CommandError):
+                        call_command(
+                            "evaluate_icon_matching_paired",
+                            profiles=profiles,
+                            live=True,
+                            maximum_wire_calls=10,
+                            **kwargs,
+                        )
+                    live.assert_not_called()
+                    dispatch.assert_not_called()
+                    self.assertEqual(output.read_text(), saved)
 
     def test_offline_default_and_live_require_positive_budget_before_initialization(self):
         with patch("hub.management.commands.evaluate_icon_matching_paired.OpenAIIconProvider") as provider:
