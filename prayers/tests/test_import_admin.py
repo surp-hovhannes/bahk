@@ -1,3 +1,4 @@
+from hub.services.icon_match_service import IconMatchOutcome
 """Tests for the prayer set import admin flow and icon matching task."""
 
 import io
@@ -105,7 +106,7 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
     def setUp(self):
         self.church = Church.objects.create(name="Task Church")
 
-    @patch("prayers.tasks._match_icons_with_llm")
+    @patch("prayers.tasks.match_icons")
     def test_task_assigns_matching_icon_and_leaves_unmatched_prayer(self, mock_match_icons):
         icon = Icon.objects.create(
             title="Healing Christ",
@@ -129,9 +130,11 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
         )
 
         def match_side_effect(icons, prompt, max_results=1):
-            if "healing" in prompt.lower():
-                return [{"id": icon.id, "confidence": "high"}]
-            return []
+            if "healing" in prompt.primary_text.lower() or "healing" in prompt.context_terms:
+                return IconMatchOutcome(status="complete", matches=[
+                    {"id": icon.id, "match_tier": "direct_exact", "confidence": "high", "auto_assignable": True}
+                ])
+            return IconMatchOutcome(status="complete")
 
         mock_match_icons.side_effect = match_side_effect
 
@@ -142,7 +145,7 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
         self.assertEqual(matching_prayer.icon, icon)
         self.assertIsNone(unmatched_prayer.icon)
 
-    @patch("prayers.tasks._match_icons_with_llm")
+    @patch("prayers.tasks.match_icons")
     def test_task_sends_prayer_title_and_tags_as_prompt(self, mock_match_icons):
         """LLM prompt must contain the prayer title and tags, not just the title."""
         icon = Icon.objects.create(
@@ -160,17 +163,19 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
         )
         prayer.tags.add("offering", "morning")
 
-        mock_match_icons.return_value = [{"id": icon.id, "confidence": "high"}]
+        mock_match_icons.return_value = IconMatchOutcome(status="complete", matches=[
+            {"id": icon.id, "match_tier": "direct_exact", "confidence": "high", "auto_assignable": True}
+        ])
 
         match_icons_for_imported_prayers_task([prayer.id], self.church.id)
 
         mock_match_icons.assert_called_once()
-        (icons_arg, prompt), _ = mock_match_icons.call_args
-        self.assertIn("Morning Offering", prompt)
-        self.assertIn("offering", prompt)
-        self.assertIn("morning", prompt)
+        (icons_arg, request), _ = mock_match_icons.call_args
+        self.assertEqual(request.kind, "content")
+        self.assertEqual(request.primary_text, "Morning Offering")
+        self.assertEqual(set(request.context_terms), {"offering", "morning"})
 
-    @patch("prayers.tasks._match_icons_with_llm")
+    @patch("prayers.tasks.match_icons")
     def test_task_sends_icons_with_ids_and_tags(self, mock_match_icons):
         """LLM must receive all church icons with their IDs, titles, and tags."""
         icon1 = Icon.objects.create(
@@ -193,7 +198,7 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
             church=self.church,
         )
 
-        mock_match_icons.return_value = []
+        mock_match_icons.return_value = IconMatchOutcome(status="complete", matches=[])
 
         match_icons_for_imported_prayers_task([prayer.id], self.church.id)
 
@@ -202,7 +207,7 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
         icon_ids = {i.id for i in icons_arg}
         self.assertEqual(icon_ids, {icon1.id, icon2.id})
 
-    @patch("prayers.tasks._match_icons_with_llm")
+    @patch("prayers.tasks.match_icons")
     def test_task_respects_confidence_threshold(self, mock_match_icons):
         """Only icons meeting ICON_MATCH_CONFIDENCE_THRESHOLD should be assigned."""
         icon = Icon.objects.create(
@@ -219,14 +224,38 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
         )
 
         # Return "low" confidence — should be below default threshold ("medium")
-        mock_match_icons.return_value = [{"id": icon.id, "confidence": "low"}]
+        mock_match_icons.return_value = IconMatchOutcome(status="complete", matches=[
+            {"id": icon.id, "match_tier": "thematic", "confidence": "low"}
+        ])
 
         match_icons_for_imported_prayers_task([prayer.id], self.church.id)
 
         prayer.refresh_from_db()
         self.assertIsNone(prayer.icon, "Low-confidence match should not be assigned")
 
-    @patch("prayers.tasks._match_icons_with_llm")
+    @patch("prayers.tasks.match_icons")
+    def test_task_does_not_persist_related_specific_medium(self, mock_match_icons):
+        icon = Icon.objects.create(
+            title="St. Mesrop Mashtots",
+            church=self.church,
+            image=uploaded_image("mesrop.jpg"),
+        )
+        prayer = Prayer.objects.create(
+            title="Prayer of the Holy Translators",
+            text="Grant us wisdom.",
+            category="general",
+            church=self.church,
+        )
+        mock_match_icons.return_value = IconMatchOutcome(status="complete", matches=[
+            {"id": icon.id, "match_tier": "related_specific", "confidence": "medium"}
+        ])
+
+        match_icons_for_imported_prayers_task([prayer.id], self.church.id)
+
+        prayer.refresh_from_db()
+        self.assertIsNone(prayer.icon)
+
+    @patch("prayers.tasks.match_icons")
     def test_task_returns_early_when_no_icons_exist(self, mock_match_icons):
         """Task should return early without calling LLM when church has no icons."""
         prayer = Prayer.objects.create(
