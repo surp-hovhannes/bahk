@@ -820,3 +820,75 @@ class TaxonomyTests(TransactionTestCase):
             self.assertFalse(IconTaxonomyWork.objects.filter(icon_id=pk).exists())
             self.assertFalse(IconTaxonomyProjection.objects.filter(icon_id=pk).exists())
             self.assertFalse(IconAnalysis.objects.filter(icon_id=pk).exists())
+
+    def test_unresolved_scene_tag_retains_original_sources_and_blocks_portrait(self):
+        icon = self.icon(tags=["holy-portrait", "ascension"], name="Սուրբ_John-the-Baptist.png")
+        provider = self.analyze(icon)
+        comparison = provider.calls[1][1]
+        self.assertEqual(comparison["metadata"]["title"], BAPTIST)
+        self.assertEqual(comparison["metadata"]["filename"], icon.original_filename)
+        self.assertEqual(comparison["metadata"]["tags"], ["ascension", "holy-portrait"])
+        source = next(s for s in comparison["sources"] if s["text"] == "ascension")
+        self.assertTrue(source["parsed"]["unresolved"])
+        self.assertTrue(source["scene_hint"])
+        analysis = icon.taxonomic_analyses.get(state="complete")
+        portrait = analysis.assertions.get(attribute="portrait")
+        self.assertEqual(portrait.status, "unknown")
+        self.assertIn(source, portrait.evidence)
+        self.assertEqual(analysis.claims["sources"], comparison["sources"])
+        result = self.matches("Beheading of " + BAPTIST).matches
+        self.assertTrue(result, "Supported identity suggestions should survive the scene ambiguity")
+        self.assertFalse(any(m["auto_assignable"] for m in result))
+        self.assertFalse(any(m["generic_portrait"] for m in result))
+
+    def test_unfamiliar_scene_descriptors_block_but_search_tags_do_not(self):
+        for tag in ("episode: a traveler at an uncharted gate", "a figure wading through luminous reeds"):
+            icon = self.icon(tags=["holy-portrait", tag])
+            provider = self.analyze(icon)
+            source = next(s for s in provider.calls[1][1]["sources"] if s["text"] == tag)
+            self.assertTrue(source["parsed"]["unresolved"])
+            self.assertTrue(source["scene_hint"])
+            matches = self.matches("Beheading of " + BAPTIST, icons=[icon]).matches
+            self.assertTrue(matches)
+            self.assertFalse(any(m["auto_assignable"] for m in matches), tag)
+        harmless = self.icon(tags=["holy-portrait", "collection-17", "blue background"])
+        self.analyze(harmless)
+        self.assertTrue(self.matches("Beheading of " + BAPTIST, icons=[harmless]).matches[0]["auto_assignable"])
+
+    def test_unresolved_filename_stem_and_component_aliases_invalidate_locally(self):
+        other = concept("subject", "Nerses of Lambron", {"qualified": True}, source={"fixture": "qualified source"})
+        for index, name in enumerate(("mystery_label.png", "John_the_Baptist-and-hidden_label.png")):
+            icon = self.icon(name=name)
+            self.analyze(icon)
+            analysis = icon.taxonomic_analyses.get(state="complete")
+            term = "mystery label" if index == 0 else "hidden label"
+            self.assertIn(term, analysis.dependencies["terms"])
+            alias(other, "unrelated label " + str(index), source={"fixture": "unrelated addition"})
+            self.assertTrue(dependencies_current(analysis.dependencies))
+            alias(other, term, source={"fixture": "new exact alias"})
+            self.assertFalse(dependencies_current(analysis.dependencies))
+            self.assertFalse(self.matches(BAPTIST, icons=[icon]).matches)
+            self.assertIn(icon.pk, reconcile_versions())
+
+    def test_scene_only_event_ranks_below_complete_participant_portrait(self):
+        scene = self.icon(title="generic")
+        self.analyze(scene, FixtureProvider(names=(), depiction="scene", activities=["shared_supper", "bread_and_cup"]))
+        portrait = self.icon(title="Jesus Christ and Twelve Apostles")
+        self.analyze(portrait, FixtureProvider(names=("Jesus Christ", "Twelve Apostles")))
+        results = self.matches("Last Supper", icons=[scene, portrait]).matches
+        self.assertEqual([m["id"] for m in results], [portrait.pk, scene.pk])
+        self.assertEqual(results[0]["relation"], "subject_portrait")
+        self.assertTrue(results[0]["auto_assignable"])
+        self.assertEqual(results[1]["relation"], "related_specific")
+        self.assertEqual(results[1]["coverage"], {"required": 2, "covered": 0})
+        self.assertFalse(results[1]["auto_assignable"])
+
+    def test_supported_event_without_required_participants_remains_exact_suggestion(self):
+        scene = self.icon(title="generic")
+        self.analyze(
+            scene, FixtureProvider(names=(), depiction="scene", activities=["returning_son", "father_embracing_son"])
+        )
+        result = self.matches("Return of the Prodigal Son", icons=[scene]).matches[0]
+        self.assertEqual(result["relation"], "exact_event")
+        self.assertEqual(result["coverage"]["required"], 0)
+        self.assertFalse(result["auto_assignable"])

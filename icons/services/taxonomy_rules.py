@@ -5,7 +5,7 @@ from icons.services.taxonomy_inputs import normalize
 from icons.services.taxonomy_vocabulary import release_version
 
 
-def validate_assertions(claims, observation, comparison):
+def validate_assertions(claims, observation, comparison, *, sources=()):
     vocabulary = {
         c.pk: c for c in TaxonomyConcept.objects.filter(release__version=release_version()).prefetch_related("aliases")
     }
@@ -162,7 +162,9 @@ def validate_assertions(claims, observation, comparison):
                 evidence=evidence,
             )
         )
-    scene_claim = any(vocabulary[pk].kind == "event" for pk in claimed)
+    scene_claim = any(vocabulary[pk].kind == "event" for pk in claimed) or any(
+        source["scene_hint"] for source in sources
+    )
     portrait = observation["depiction"] == "portrait" and not scene_claim
     result.append(
         dict(
@@ -170,8 +172,8 @@ def validate_assertions(claims, observation, comparison):
             attribute="portrait",
             status="supported" if portrait else "unknown",
             evidence_level="observed" if portrait else "none",
-            rule="affirmative_portrait_no_scene_claim",
-            evidence=[{"figures": observation["figures"]}],
+            rule="scene_claim_blocks_portrait" if scene_claim else "affirmative_portrait_no_scene_claim",
+            evidence=[{"figures": observation["figures"]}, *sources],
         )
     )
     return result

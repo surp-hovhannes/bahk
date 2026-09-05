@@ -27,7 +27,7 @@ from icons.services.taxonomy_inputs import (
     versions,
 )
 from icons.services.taxonomy_rules import validate_assertions
-from icons.services.taxonomy_vocabulary import catalogue_claims
+from icons.services.taxonomy_vocabulary import catalogue_claims, catalogue_sources
 from icons.services.vision_provider import (
     COMPARISON_SCHEMA,
     OBSERVATION_SCHEMA,
@@ -185,6 +185,7 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
             refresh_content(icon)
             raise StaleInput("content_generation_changed")
         claims = catalogue_claims(inputs)
+        sources = catalogue_sources(inputs)
         version = versions()
         prior = (
             IconAnalysis.objects.filter(icon=icon, image_digest=image_digest, versions=version, claims__metadata=inputs)
@@ -207,7 +208,7 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
                     "image_digest": image_digest,
                     "versions": version,
                     "dependencies": dependencies,
-                    "claims": {"metadata": inputs, "claims": claims},
+                    "claims": {"metadata": inputs, "claims": claims, "sources": sources},
                 },
             )
         if analysis.state == "unavailable":
@@ -254,7 +255,13 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
                         "id", "kind", "label", "definition"
                     )
                 )
-                payload = {"claims": claims, "concepts": candidates, "observations": observation}
+                payload = {
+                    "metadata": {key: inputs[key] for key in ("title", "tags", "filename", "filename_provenance")},
+                    "sources": sources,
+                    "claims": claims,
+                    "concepts": candidates,
+                    "observations": observation,
+                }
                 if len(str(payload).encode()) > 64000:
                     raise ValueError("claims_too_large")
                 comparison, returned_model, usage = wire_call(
@@ -262,7 +269,7 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
                 )
                 analysis.comparison = comparison
                 analysis.save(update_fields=["comparison"])
-            assertions = validate_assertions(claims, observation, analysis.comparison)
+            assertions = validate_assertions(claims, observation, analysis.comparison, sources=sources)
         else:
             assertions = list(
                 analysis.assertions.values("concept_id", "attribute", "status", "evidence_level", "rule", "evidence")

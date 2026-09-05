@@ -160,12 +160,12 @@ def match_icons(icons, request, *, church_id=None, adapter=None, deadline=None, 
         portrait = portrait and portrait_figures >= len(requested)
         event = accepted.get(parsed["event"])
         tier, relation, eligible = None, None, False
-        if parsed["event"] and event:
+        if parsed["event"] and event and (complete or not requested):
             tier, relation = 1, "exact_event"
             eligible = corroborated and event["evidence_level"] == "corroborated"
         elif complete and portrait:
             tier, relation, eligible = 2, "subject_portrait", corroborated
-        elif covered:
+        elif covered or event:
             tier, relation = 3, "related_specific"
         elif (
             not requested

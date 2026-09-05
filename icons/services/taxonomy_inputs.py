@@ -12,7 +12,8 @@ from PIL import Image, ImageOps
 NORMALIZER = "nfc-qualified-v2"
 SCHEMA = "icon-evidence-v1"
 PROMPT = "observation-comparison-v1"
-RULES = "corroboration-v2"
+RULES = "corroboration-v3"
+COMPARISON_PROMPT = "comparison-whole-sources-v2"
 ADAPTER = "themes-only-v1"
 
 
@@ -47,6 +48,7 @@ def versions():
         normalizer=NORMALIZER,
         schema=SCHEMA,
         prompt=PROMPT,
+        comparison_prompt=COMPARISON_PROMPT,
         rules=RULES,
         image_processor="exif-rgb-1536-v1",
     )
@@ -96,7 +98,9 @@ def analysis_dependencies(inputs, claims, observation=None, prior=None):
     from icons.models import TaxonomyConcept, TaxonomyAlias
 
     ids = {c["concept"] for c in claims}
-    terms = {normalize(inputs["title"]), *(normalize(t) for t in inputs["tags"])}
+    from icons.services.taxonomy_vocabulary import catalogue_sources
+
+    terms = {term for source in catalogue_sources(inputs) for term in source["parsed"]["lookup_terms"]}
     # Fixed code-owned scene/theme definitions can add observations absent claims.
     for c in TaxonomyConcept.objects.filter(release__version=versions()["release"]):
         if c.kind in {"theme", "event"} and (

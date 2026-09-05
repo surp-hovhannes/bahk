@@ -290,9 +290,29 @@ python manage.py test icons.tests \
   hub.tests.test_icon_match_paired_evaluation --noinput --settings=tests.test_settings
 ```
 
-278 targeted tests passed, including 46 taxonomy invariant tests. Changed-file
+283 targeted tests passed, including 51 taxonomy invariant tests. Changed-file
 Ruff lint and `git diff --check` passed. `makemigrations icons --check --dry-run`
 reported no changes with the throwaway storage-settings workaround above.
 The corresponding full-project drift check reports only the existing
 `hub.LLMPrompt.model` choice change; no hub migration was kept. Source dependency
 pin `armenian-lectionary>=1.3.0,<2.0.0` and baseline/profile files are unchanged.
+
+Round-three corrections retain whole original title/tag/filename sources alongside
+resolved claims and unresolved spans in comparison and private assertion evidence.
+Metadata is rejected rather than truncated above 64 source entries, 16,000 raw
+source bytes or 48,000 parsed-source bytes. Bare event types, explicit scene/event
+labels and unfamiliar action/scene descriptors block portrait fallback while
+unresolved; ordinary search tags alone do not. Model reassurance cannot override
+that guard. Arbitrary unmarked prose can still be semantically unknown; preserving
+it for comparison does not claim exhaustive deterministic scene recognition.
+
+Alias dependency fingerprints now include every lookup term from parsing,
+including separator-normalized filename stems and unresolved conjunction/event
+components. New aliases affecting those terms invalidate only dependent analyses;
+unrelated vocabulary additions remain inert. Rule and comparison-prompt versions
+advance for these corrections while the independent observation cache remains
+reusable. An event with required participants receives exact-event ranking only
+with their complete supported coverage. Scene-only evidence remains a related
+suggestion and cannot suppress a fully covered portrait merely by carrying an
+event label. Supported events with no required participants can still be exact
+event suggestions under the unchanged strict automatic-assignment policy.

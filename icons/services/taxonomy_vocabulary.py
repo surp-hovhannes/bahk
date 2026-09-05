@@ -6,6 +6,7 @@ iconographic meanings, not feasts or dates.
 """
 
 import re
+import json
 
 from django.conf import settings
 
@@ -222,10 +223,12 @@ def parse(text, *, create=False, person_context=False):
         "group": None,
         "unresolved": [],
         "identity_constraint": identity_constrained(original),
+        "lookup_terms": [],
     }
     if NEGATION.search(value) or not value:
         result["unresolved"] = [original]
         return result
+    result["lookup_terms"].append(value)
     known = resolve(value)
     if known:
         if known.kind == "subject":
@@ -251,6 +254,7 @@ def parse(text, *, create=False, person_context=False):
     # Recover saint source markers from the original text for qualification.
     original_parts = re.split(r"\s+(?:and|և|եւ)\s+", original, flags=re.I)
     for index, part in enumerate(parts):
+        result["lookup_terms"].append(normalize(part))
         found = resolve(part, kinds=["subject", "group"])
         source_text = original_parts[index] if index < len(original_parts) else part
         source_text = re.sub(r"^(?:portrait of|icon of) ", "", source_text, flags=re.I)
@@ -285,19 +289,58 @@ def parse(text, *, create=False, person_context=False):
     return result
 
 
+def scene_hint(text, parsed):
+    """Retain event/scene claims without inventing a canonical event identity.
+
+    Open-ended scene labels and action descriptions are distinct from ordinary
+    search tags. Unrecognized wording stays available to contextual comparison.
+    """
+    value = normalize(text)
+    return bool(
+        parsed["event_intent"]
+        or re.search(r"\b(?:" + "|".join(EVENT_ACTIONS) + r")\b", value)
+        or re.search(r"\b(?:scene|event|episode|narrative|miracle|procession)\b", value)
+        or re.match(r"^(?:depicts|depicting)\s+", value)
+        or re.search(r"\b\w+ing\s+.+\b(?:across|into|through|towards?|over)\b", value)
+        or re.search(r"\b\w+ing\s+(?:across|into|through|towards?|over)\b", value)
+    )
+
+
+def catalogue_sources(metadata, *, create=False):
+    """Whole bounded sources, parsed spans and the exact alias lookup footprint."""
+    raw = [("title", metadata["title"])] + [("tag", tag) for tag in metadata["tags"]]
+    if metadata["filename"]:
+        raw.append(("filename", metadata["filename"]))
+    if len(raw) > 64 or len(json.dumps(raw, ensure_ascii=False).encode()) > 16000:
+        raise ValueError("metadata_sources_too_large")
+    person_context = any(normalize(tag) in {"portrait", "saint", "saints", "սուրբ"} for tag in metadata["tags"])
+    sources = []
+    for ref, original in raw:
+        text = re.sub(r"\.[^.]+$", "", original).replace("_", " ").replace("-", " ") if ref == "filename" else original
+        parsed = parse(text, create=create, person_context=person_context or normalize(text).startswith("portrait of "))
+        sources.append(
+            {
+                "source": ref,
+                "text": original,
+                "parse_text": text,
+                "parsed": parsed,
+                "scene_hint": scene_hint(text, parsed),
+            }
+        )
+    # Reject oversize data instead of silently dropping qualifiers/source spans.
+    if len(json.dumps(sources, ensure_ascii=False).encode()) > 48000:
+        raise ValueError("metadata_sources_too_large")
+    return sources
+
+
 def catalogue_claims(metadata):
     seed_vocabulary()
     claims = []
-    tags = metadata["tags"]
-    person_context = any(normalize(tag) in {"portrait", "saint", "saints", "սուրբ"} for tag in tags)
-    sources = [("title", metadata["title"])] + [("tag", tag) for tag in tags]
-    if metadata["filename"]:
-        sources.append(("filename", re.sub(r"\.[^.]+$", "", metadata["filename"]).replace("_", " ").replace("-", " ")))
-    for ref, text in sources:
-        parsed = parse(text, create=True, person_context=person_context or normalize(text).startswith("portrait of "))
+    for source in catalogue_sources(metadata, create=True):
+        parsed = source["parsed"]
         for kind in ("subjects", "themes"):
-            claims.extend({"concept": pk, "source": ref, "text": text} for pk in parsed[kind])
+            claims.extend({"concept": pk, "source": source["source"], "text": source["text"]} for pk in parsed[kind])
         for kind in ("event", "group"):
             if parsed[kind]:
-                claims.append({"concept": parsed[kind], "source": ref, "text": text})
+                claims.append({"concept": parsed[kind], "source": source["source"], "text": source["text"]})
     return claims
