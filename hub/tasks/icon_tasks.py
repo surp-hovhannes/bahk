@@ -11,10 +11,8 @@ from django.db import transaction
 from hub.models import Feast
 from hub.services.icon_matching import (
     IconMatchRequest,
-    build_metadata_vocabulary,
     generate_icon_candidates,
     validate_and_rank_decision,
-    validate_interpreted_concepts,
 )
 from hub.services.llm_requests import openai_chat_completion
 from icons.models import Icon
@@ -68,34 +66,6 @@ ICON_MATCH_RESPONSE_FORMAT = {
                 },
             },
             'required': ['decision'],
-            'additionalProperties': False,
-        },
-    },
-}
-
-ICON_CONCEPT_RESPONSE_FORMAT = {
-    'type': 'json_schema',
-    'json_schema': {
-        'name': 'icon_concepts',
-        'strict': True,
-        'schema': {
-            'type': 'object',
-            'properties': {
-                'concepts': {
-                    'type': 'array',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'request_concept': {'type': 'string'},
-                            'metadata_concept': {'type': 'string'},
-                            'aliases': {'type': 'array', 'items': {'type': 'string'}},
-                        },
-                        'required': ['request_concept', 'metadata_concept', 'aliases'],
-                        'additionalProperties': False,
-                    },
-                },
-            },
-            'required': ['concepts'],
             'additionalProperties': False,
         },
     },
@@ -205,45 +175,12 @@ def _coerce_match_request(request, max_results):
     )
 
 
-def _interpret_unmapped_concepts(client, icons, request):
-    """Optionally map request aliases to the supplied metadata vocabulary."""
-    vocabulary = build_metadata_vocabulary(icons)
-    response = _call_openai_with_fallback(
-        client,
-        messages=[
-            {
-                'role': 'system',
-                'content': (
-                    'Map request phrases only to synonymous concepts in the supplied bounded '
-                    'metadata vocabulary. Return concepts and request-grounded aliases only. '
-                    'Never return icon IDs, match tiers, confidence, or inferred relationships. '
-                    'Return an empty concepts array when uncertain.'
-                ),
-            },
-            {
-                'role': 'user',
-                'content': json.dumps(
-                    {
-                        'request': request.primary_text,
-                        'metadata_vocabulary': list(vocabulary),
-                    },
-                    sort_keys=True,
-                ),
-            },
-        ],
-        max_tokens=300,
-        response_format=ICON_CONCEPT_RESPONSE_FORMAT,
-    )
-    if response is None:
-        return {}
-    payload = json.loads(response.choices[0].message.content)
-    return validate_interpreted_concepts(payload, request, vocabulary)
-
-
 def _match_icons_with_llm(icons, request, max_results=3):
     """Return strictly validated, Python-ranked icon match decisions."""
     request = _coerce_match_request(request, max_results)
     candidates = generate_icon_candidates(icons, request)
+    if not candidates:
+        return []
     system_prompt = """
 You adjudicate precomputed devotional-icon candidates. Return one decision.
 
@@ -252,6 +189,7 @@ related_specific/medium, which outranks thematic/low, then no_match/none.
 Only approve evidence supplied with a candidate. Never invent an ID, concept,
 evidence reference, tier, or relationship. Equivalent direct duplicates are
 not ambiguity; approve the direct concept and Python will tie-break them.
+Event-exact evidence takes precedence over same-subject portrait fallback.
 Reject incidental shared names, broad categories, and thematic proximity.
 Return no_match when no supplied candidate is defensible.
 """
@@ -263,16 +201,6 @@ Return no_match when no supplied candidate is defensible.
             return []
 
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        if not candidates:
-            interpreted_aliases = _interpret_unmapped_concepts(client, icons, request)
-            candidates = generate_icon_candidates(
-                icons,
-                request,
-                interpreted_aliases=interpreted_aliases,
-            )
-            if not candidates:
-                return []
-
         candidate_payload = [
             {
                 'id': candidate.icon_id,
@@ -282,6 +210,7 @@ Return no_match when no supplied candidate is defensible.
                 'matched_concepts': list(candidate.matched_concepts),
                 'requested_concepts': list(candidate.requested_concepts),
                 'coverage': candidate.coverage,
+                'specificity': candidate.specificity,
                 'complete_coverage': candidate.complete_coverage,
                 'evidence_refs': list(candidate.evidence_refs),
             }

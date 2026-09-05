@@ -1,4 +1,5 @@
 """Tests for feast icon matching functionality."""
+import json
 from datetime import date
 from types import SimpleNamespace
 from unittest import TestCase as SimpleTestCase
@@ -13,10 +14,8 @@ from hub.models import Church, Day, Feast
 from hub.services.icon_matching import (
     CANDIDATE_LIMIT_PER_TIER,
     IconMatchRequest,
-    build_metadata_vocabulary,
     generate_icon_candidates,
     validate_and_rank_decision,
-    validate_interpreted_concepts,
 )
 from hub.tasks.icon_tasks import (
     _match_icons_with_llm,
@@ -259,37 +258,151 @@ class IconMatchHierarchyTests(SimpleTestCase):
             with self.subTest(payload=payload):
                 self.assertEqual(validate_and_rank_decision(payload, candidates), [])
 
-    def test_interpreted_aliases_are_bounded_and_respect_identity_boundaries(self):
-        request = IconMatchRequest(kind='feast', primary_text='John the Baptist')
-        vocabulary = build_metadata_vocabulary([fake_icon(1, 'St John the Apostle')])
-        payload = {
-            'concepts': [
-                {
-                    'request_concept': 'john_the_baptist',
-                    'metadata_concept': 'literal:john apostle',
-                    'aliases': ['John the Baptist'],
-                }
-            ]
-        }
+    def test_identity_boundaries_and_unicode(self):
+        cases = (
+            ('James (Nisibis)', 'James (Jerusalem)', (), False),
+            ('James (Nisibis)', 'James of Nisibis', (), True),
+            ('John the Baptist (Nisibis)', 'John the Baptist', (), False),
+            ('John the Baptist', 'John the Baptist (Nisibis)', ('John the Baptist',), False),
+            ('John the Baptist', 'John the Apostle', ('John the Baptist',), False),
+            ('John the Baptist', 'John the Baptist Unknown Saint', (), False),
+            ('John the Baptist Unknown Saint', 'John the Baptist', (), False),
+            ('Սուրբ Հոբ', 'Սուրբ Հոբ', (), True),
+            ('李', '李', (), True),
+            ('John the Baptist and 李', 'John the Baptist', (), False),
+            ('John the Baptist and Սուրբ Հոբ', 'John the Baptist', (), False),
+            ('John the Baptist and Սուրբ Հոբ', 'John the Baptist and Սուրբ Հոբ', (), True),
+            ('Vardan the Warrior', 'Vartan the Warrior', (), True),
+            ('Vardan (Mamikonian)', 'Vartan Mamikonian', (), True),
+            ('Vardan (Nisibis)', 'Vartan (Jerusalem)', (), False),
+            ('Vardan the Warrior', 'Vartan', (), False),
+            ('Vardan (Nisibis)', 'Vartan (Jerusalem)', ('Vardan Nisibis',), False),
+        )
+        for request_text, title, tags, assignable in cases:
+            with self.subTest(request=request_text, title=title):
+                candidates = generate_icon_candidates(
+                    [fake_icon(1, title, *tags)],
+                    IconMatchRequest(kind='feast', primary_text=request_text),
+                )
+                self.assertEqual(any(c.match_tier == 'direct_exact' for c in candidates), assignable)
+                if candidates and not assignable:
+                    self.assertFalse(candidates[0].complete_coverage)
 
-        self.assertEqual(validate_interpreted_concepts(payload, request, vocabulary), {})
-        payload['concepts'][0]['metadata_concept'] = 'literal:not supplied'
-        self.assertEqual(validate_interpreted_concepts(payload, request, vocabulary), {})
+    def test_event_eligibility_and_portrait_fallback(self):
+        request = IconMatchRequest(kind='feast', primary_text='Beheading of John the Baptist')
+        for title, tags, expected in (
+            ('John the Baptist', (), 'depiction:subject_portrait'),
+            ('Decollation of John the Forerunner', (), 'depiction:event_exact'),
+            ('Nativity of John the Baptist', ('John the Baptist',), None),
+            ('John the Baptist', ('Nativity of John the Baptist',), None),
+            ('Nativity', ('John the Baptist',), None),
+            ('Unknown miracle', ('John the Baptist',), None),
+            ('John the Apostle', (), None),
+        ):
+            with self.subTest(title=title, tags=tags):
+                candidates = generate_icon_candidates([fake_icon(1, title, *tags)], request)
+                if expected:
+                    self.assertEqual(candidates[0].match_tier, 'direct_exact')
+                    self.assertIn(expected, candidates[0].evidence_refs)
+                else:
+                    self.assertEqual(candidates, [])
 
-    def test_interpreted_aliases_reject_unrelated_literal_mapping(self):
-        request = IconMatchRequest(kind='feast', primary_text='Saint Vartan the Warrior')
-        vocabulary = build_metadata_vocabulary([fake_icon(1, 'St John the Apostle')])
-        payload = {
-            'concepts': [
-                {
-                    'request_concept': 'literal:vartan warrior',
-                    'metadata_concept': 'literal:john apostle',
-                    'aliases': ['Vartan the Warrior'],
-                }
-            ]
-        }
+    def test_unknown_event_modifiers_never_become_portrait_fallback(self):
+        for request_text, title, tags in (
+            ('Miracle of John the Baptist', 'John the Baptist', ()),
+            ('Beheading of John the Baptist', 'Miracle of John the Baptist', ('John the Baptist',)),
+            ('Beheading of John the Baptist (Unknown)', 'John the Baptist', ()),
+        ):
+            with self.subTest(request=request_text, title=title):
+                self.assertEqual(generate_icon_candidates(
+                    [fake_icon(1, title, *tags)],
+                    IconMatchRequest(kind='feast', primary_text=request_text),
+                ), [])
 
-        self.assertEqual(validate_interpreted_concepts(payload, request, vocabulary), {})
+    def test_portrait_fallback_requires_whole_depiction_support(self):
+        request = IconMatchRequest(kind='feast', primary_text='Beheading of John the Baptist')
+        for title, tags in (
+            ('John the Baptist, Preaching in the Wilderness', ()),
+            ('John the Baptist', ('Preaching in the Wilderness',)),
+            ('John the Baptist', ('John of Nisibis',)),
+            ('John the Baptist, Unknown miracle', ('John the Baptist',)),
+        ):
+            with self.subTest(title=title, tags=tags):
+                self.assertEqual(generate_icon_candidates([fake_icon(1, title, *tags)], request), [])
+
+        candidates = generate_icon_candidates(
+            [fake_icon(1, 'John the Baptist', 'desert', 'prophet', 'John the Forerunner')], request)
+        self.assertEqual(candidates[0].match_tier, 'direct_exact')
+        self.assertIn('depiction:subject_portrait', candidates[0].evidence_refs)
+
+    def test_contradictory_events_across_metadata_fail_before_ranking(self):
+        request = IconMatchRequest(kind='feast', primary_text='Beheading of John the Baptist')
+        for title, tags in (
+            ('Nativity', ('Beheading of John the Baptist',)),
+            ('Nativity of Christ', ('Beheading of John the Baptist',)),
+            ('John the Baptist, Nativity', ('Beheading of John the Baptist',)),
+            ('John the Baptist', ('Beheading of John the Baptist', 'Nativity')),
+            ('Beheading of John the Baptist', ('Birth of Christ',)),
+        ):
+            with self.subTest(title=title, tags=tags):
+                contradictory = fake_icon(1, title, *tags)
+                self.assertEqual(generate_icon_candidates([contradictory], request), [])
+                # Invalid exact evidence must not suppress the valid portrait.
+                candidates = generate_icon_candidates(
+                    [contradictory, fake_icon(2, 'John the Baptist')], request)
+                self.assertEqual([candidate.icon_id for candidate in candidates], [2])
+                self.assertIn('depiction:subject_portrait', candidates[0].evidence_refs)
+
+    def test_event_composites_require_every_subject(self):
+        request = IconMatchRequest(kind='feast', primary_text='Beheading of John the Baptist and Job the Righteous')
+        for title in ('John the Baptist', 'Beheading of John the Baptist'):
+            candidates = generate_icon_candidates([fake_icon(1, title)], request)
+            self.assertEqual(candidates[0].match_tier, 'related_specific')
+        for tags in ((), ('John the Baptist', 'Job the Righteous')):
+            with self.subTest(tags=tags):
+                candidates = generate_icon_candidates(
+                    [fake_icon(1, 'John the Baptist and Job the Righteous', *tags)], request)
+                self.assertEqual(candidates[0].match_tier, 'direct_exact')
+                self.assertIn('depiction:subject_portrait', candidates[0].evidence_refs)
+
+    def test_event_preference_precedes_caps_quality_and_model_choice(self):
+        request = IconMatchRequest(kind='feast', primary_text='Beheading of John the Baptist')
+        portraits = [fake_icon(i, 'John the Baptist') for i in range(1, 30)]
+        event = fake_icon(999, 'Z depiction', 'Decollation of John the Baptist')
+        for icons in (portraits + [event], [event] + portraits[::-1]):
+            with self.subTest(order=icons[0].id):
+                candidates = generate_icon_candidates(icons, request)
+                self.assertEqual([c.icon_id for c in candidates], [999])
+        portrait_candidates = generate_icon_candidates(portraits[:1], request)
+        # Validation also enforces preference for uncapped/mixed candidate input,
+        # even if the provider approves the lower-specificity portrait.
+        results = validate_and_rank_decision(
+            approving_payload(portrait_candidates[0]), portrait_candidates + candidates, max_results=3)
+        self.assertEqual([r['id'] for r in results], [999])
+        self.assertEqual(results[0]['rationale_code'], 'explicit_event')
+        payload = approving_payload(portrait_candidates[0])
+        payload['decision']['rationale_code'] = 'explicit_event'
+        results = validate_and_rank_decision(payload, portrait_candidates)
+        self.assertEqual(results[0]['rationale_code'], 'explicit_subject')
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('openai.OpenAI')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_empty_candidates_never_construct_or_call_provider(self, completion, client):
+        self.assertEqual(_match_icons_with_llm([fake_icon(1, 'John the Apostle')], 'John the Baptist'), [])
+        completion.assert_not_called()
+        client.assert_not_called()
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_reviewed_alias_goes_directly_to_adjudication(self, completion):
+        icons = [fake_icon(1, 'Vartan the Warrior')]
+        request = IconMatchRequest(kind='feast', primary_text='Vardan the Warrior')
+        candidate = generate_icon_candidates(icons, request)[0]
+        completion.return_value.choices[0].message.content = json.dumps(approving_payload(candidate))
+        self.assertEqual(_match_icons_with_llm(icons, request)[0]['id'], 1)
+        completion.assert_called_once()
+        self.assertEqual(completion.call_args.kwargs['response_format']['json_schema']['name'], 'icon_matches')
 
     @override_settings(OPENAI_API_KEY='')
     def test_missing_provider_fails_closed_without_simple_fallback(self):
@@ -377,6 +490,36 @@ class FeastIconMatchingTaskTests(TestCase):
             return Feast.objects.create(**kwargs)
         finally:
             post_save.connect(handle_feast_save, sender=Feast)
+
+    @override_settings(OPENAI_API_KEY='test-key')
+    @patch('hub.tasks.icon_tasks.openai_chat_completion')
+    def test_real_matcher_assigns_event_then_portrait_when_event_unavailable(self, completion):
+        portrait = Icon.objects.create(title='John the Baptist', church=self.church, image='portrait.jpg')
+        event = Icon.objects.create(title='Decollation of John the Baptist', church=self.church, image='event.jpg')
+        feast = self._create_feast_without_signal(church=self.church, name='Beheading of John the Baptist')
+
+        def approve_supplied(*args, **kwargs):
+            supplied = json.loads(kwargs['messages'][1]['content'])['candidates']
+            self.assertEqual(len(supplied), 1)
+            candidate = supplied[0]
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+                'decision': {
+                    'id': candidate['id'], 'match_tier': candidate['evidence_tier'],
+                    'confidence': 'high', 'matched_concepts': candidate['matched_concepts'],
+                    'evidence_refs': candidate['evidence_refs'], 'rationale_code': 'explicit_subject',
+                }
+            })))])
+
+        completion.side_effect = approve_supplied
+        match_icon_to_feast_task(feast.id)
+        feast.refresh_from_db()
+        self.assertEqual(feast.icon_id, event.id)
+        Feast.objects.filter(pk=feast.pk).update(icon=None)
+        event.delete()
+        match_icon_to_feast_task(feast.id)
+        feast.refresh_from_db()
+        self.assertEqual(feast.icon_id, portrait.id)
+        self.assertEqual(completion.call_count, 2)
 
     @patch('hub.signals.match_icon_to_feast_task.delay')
     def test_create_feast_without_signal_does_not_enqueue_icon_task(self, mock_delay):

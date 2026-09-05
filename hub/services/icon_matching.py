@@ -35,6 +35,7 @@ class IconMatchRequest:
 class RequestConcept:
     key: str
     aliases: tuple[str, ...]
+    events: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class CandidateEvidence:
     requested_concepts: tuple[str, ...]
     evidence_refs: tuple[str, ...]
     evidence_quality: int
+    specificity: int = 0
 
     @property
     def coverage(self) -> int:
@@ -54,15 +56,14 @@ class CandidateEvidence:
 
     @property
     def complete_coverage(self) -> bool:
-        return bool(self.requested_concepts) and set(self.matched_concepts) == set(
-            self.requested_concepts
-        )
+        return bool(self.requested_concepts) and set(self.matched_concepts) == set(self.requested_concepts)
 
     @property
     def sort_key(self):
         return (
             -TIER_ORDER[self.match_tier],
             -self.coverage,
+            -self.specificity,
             -self.evidence_quality,
             normalize_text(self.title),
             self.icon_id,
@@ -79,6 +80,7 @@ CONCEPTS = {
             "john forerunner",
             "st john the baptist",
             "st john the forerunner",
+            "john forerunner baptist",
         ),
         "negative_aliases": (
             "john apostle",
@@ -169,7 +171,7 @@ def normalize_text(value: str) -> str:
     value = unicodedata.normalize("NFKD", str(value)).casefold()
     value = "".join(character for character in value if not unicodedata.combining(character))
     value = re.sub(r"\b(?:saints|saint|sts?)\.?\b", "st", value)
-    value = re.sub(r"[^a-z0-9]+", " ", value)
+    value = "".join(character if character.isalnum() else " " for character in value)
     return " ".join(value.split())
 
 
@@ -187,103 +189,75 @@ def _contains_phrase(text: str, phrase: str) -> bool:
 
 def _meaningful_tokens(value: str) -> tuple[str, ...]:
     tokens = tuple(
-        token
-        for token in normalize_text(value).split()
-        if token not in GENERIC_TERMS and not token.isdigit() and len(token) >= 3
+        token for token in normalize_text(value).split() if token not in GENERIC_TERMS and not token.isdigit()
     )
-    if tokens and set(tokens).issubset(IDENTITY_QUALIFIERS):
-        return ()
     return tokens
 
 
 def _literal_key(value: str) -> str:
-    tokens = _meaningful_tokens(value)
+    tokens = tuple(REVIEWED_NAME_ALIASES.get(token, token) for token in _meaningful_tokens(value))
     subjects = [token for token in tokens if token not in IDENTITY_QUALIFIERS]
     qualifiers = sorted(token for token in tokens if token in IDENTITY_QUALIFIERS)
     return f"literal:{' '.join((*subjects, *qualifiers))}"
 
 
+# Reviewed spelling equivalence for the Armenian saint's name. Qualifiers are
+# retained in the key: Vardan the Warrior never becomes Vardan of another place.
+# No other transliterations or first-name equivalences are inferred.
+REVIEWED_NAME_ALIASES = {"vardan": "vartan"}
+EVENT_ALIASES = {
+    "beheading": ("beheading", "decollation"),
+    "nativity": ("nativity", "birth"),
+}
+
+
 def _registered_concept_for(value: str) -> str | None:
-    normalized = normalize_text(value)
-    matches = []
+    key = _literal_key(value)
     for concept, definition in CONCEPTS.items():
-        aliases = tuple(normalize_text(alias) for alias in definition["aliases"])
-        matching = [alias for alias in aliases if _contains_phrase(normalized, alias)]
-        if matching:
-            matches.append((max(len(alias.split()) for alias in matching), concept))
-    return max(matches)[1] if matches else None
+        if any(key == _literal_key(alias) for alias in definition["aliases"]):
+            return concept
+    return None
 
 
 def _split_concrete_phrases(value: str) -> tuple[str, ...]:
-    """Split explicit metadata into independently coverable concepts."""
-    value = unicodedata.normalize("NFKD", str(value)).casefold()
-
-    def preserve_identity_parenthetical(match):
-        parenthetical = match.group(1)
-        tokens = set(normalize_text(parenthetical).split())
-        return f" {parenthetical} " if tokens & IDENTITY_QUALIFIERS else " "
-
-    value = re.sub(r"\(([^)]*)\)", preserve_identity_parenthetical, value)
+    """Preserve parenthetical identities and every Unicode subject clause."""
+    value = unicodedata.normalize("NFKC", str(value)).casefold()
+    # Honorific periods are not clause boundaries. Other punctuation separates
+    # explicit subjects/metadata; parentheses only group, never erase, text.
+    value = re.sub(r"\b(sts?|saints?)\.", r"\1", value)
+    value = re.sub(r"[()]", " ", value)
     value = re.sub(r"\b(?:and|with)\b|[,:;&/+]|\.(?=\s|$)", "|", value)
-    phrases = []
-    for part in value.split("|"):
-        tokens = _meaningful_tokens(part)
-        if not tokens:
-            continue
-        phrase = " ".join(tokens)
-        if phrase not in phrases:
-            phrases.append(phrase)
-    return tuple(phrases)
+    return tuple(dict.fromkeys(" ".join(tokens) for part in value.split("|") if (tokens := _meaningful_tokens(part))))
+
+
+def _phrase_concept(phrase: str) -> RequestConcept:
+    tokens = list(_meaningful_tokens(phrase))
+    events = tuple(sorted(event for event, aliases in EVENT_ALIASES.items() if set(tokens) & set(aliases)))
+    subject = " ".join(token for token in tokens if not any(token in aliases for aliases in EVENT_ALIASES.values()))
+    # Standalone events remain concrete concepts rather than empty subjects.
+    if not subject:
+        subject = " ".join(events)
+        events = ()
+    registered = _registered_concept_for(subject)
+    key = registered or _literal_key(subject)
+    return RequestConcept(key, (subject,), events)
 
 
 def _request_concepts(request: IconMatchRequest) -> tuple[RequestConcept, ...]:
-    """Retain every concrete identity/event in primary text, additively."""
-    registered = []
-    occupied_alias_tokens: set[str] = set()
-    normalized = normalize_text(request.primary_text)
-    for concept, definition in CONCEPTS.items():
-        matching_aliases = tuple(
-            normalize_text(alias)
-            for alias in definition["aliases"]
-            if _contains_phrase(normalized, alias)
-        )
-        if matching_aliases:
-            registered.append(RequestConcept(concept, tuple(definition["aliases"])))
-            for alias in matching_aliases:
-                occupied_alias_tokens.update(_meaningful_tokens(alias))
-
-    concepts = {concept.key: concept for concept in registered}
+    concepts = {}
     for phrase in _split_concrete_phrases(request.primary_text):
-        phrase_tokens = set(_meaningful_tokens(phrase))
-        if phrase_tokens and phrase_tokens.issubset(occupied_alias_tokens):
-            continue
-        registered_key = _registered_concept_for(phrase)
-        if registered_key:
-            definition = CONCEPTS[registered_key]
-            concepts.setdefault(
-                registered_key,
-                RequestConcept(registered_key, tuple(definition["aliases"])),
-            )
-            continue
-        key = _literal_key(phrase)
-        if key != "literal:":
-            concepts.setdefault(key, RequestConcept(key, (phrase,)))
+        # Content themes are context, not additional saint identities.
+        if request.kind == "content":
+            theme_words = {word for aliases in THEME_ALIASES.values() for word in aliases}
+            phrase = " ".join(word for word in phrase.split() if word not in theme_words)
+            if not phrase:
+                continue
+        concept = _phrase_concept(phrase)
+        previous = concepts.get(concept.key)
+        if previous:
+            concept = RequestConcept(concept.key, concept.aliases, tuple(sorted(set(previous.events + concept.events))))
+        concepts[concept.key] = concept
     return tuple(concepts[key] for key in sorted(concepts))
-
-
-def build_metadata_vocabulary(icons) -> tuple[str, ...]:
-    """Build the bounded concept vocabulary exposed to optional interpretation."""
-    vocabulary = set(CONCEPTS)
-    for icon in icons:
-        for value in (str(icon.title), *_icon_tags(icon)):
-            registered = _registered_concept_for(value)
-            if registered:
-                vocabulary.add(registered)
-            for phrase in _split_concrete_phrases(value):
-                key = _literal_key(phrase)
-                if key != "literal:":
-                    vocabulary.add(key)
-    return tuple(sorted(vocabulary))
 
 
 def _recognized_themes(values: tuple[str, ...]) -> set[str]:
@@ -295,41 +269,51 @@ def _recognized_themes(values: tuple[str, ...]) -> set[str]:
     }
 
 
-def _metadata_concepts(title: str, tags: tuple[str, ...]) -> dict[str, tuple[str, int]]:
+def _metadata_concepts(title: str, tags: tuple[str, ...], requested_keys: tuple[str, ...]):
     evidence = {}
+    title_concepts = [_phrase_concept(phrase) for phrase in _split_concrete_phrases(title)]
+    title_tokens = [
+        set(_literal_key(concept.aliases[0]).removeprefix("literal:").split()) for concept in title_concepts
+    ]
+    events_by_key = {}
     for source, value in (("title", title), *(("tag", tag) for tag in tags)):
-        registered = _registered_concept_for(value)
-        if registered:
-            quality = 5 if source == "title" else 4
-            previous = evidence.get(registered, (source, 0))
-            evidence[registered] = max(previous, (source, quality), key=lambda item: item[1])
         for phrase in _split_concrete_phrases(value):
-            key = _literal_key(phrase)
-            if key == "literal:":
-                continue
-            if source == "tag" and len(key.removeprefix("literal:").split()) == 1:
-                # Bare-name tags are useful search hints but not sufficient
-                # identity evidence (for example ``john`` on Transfiguration).
-                continue
-            quality = 3 if source == "title" else 2
-            previous = evidence.get(key, (source, 0))
-            evidence[key] = max(previous, (source, quality), key=lambda item: item[1])
-    return evidence
-
-
-def _matches_request_concept(
-    request_concept: RequestConcept,
-    metadata: dict[str, tuple[str, int]],
-    interpreted_aliases: dict[str, tuple[str, ...]],
-) -> tuple[str, int] | None:
-    if request_concept.key in metadata:
-        return metadata[request_concept.key]
-    request_alias_keys = {_literal_key(alias) for alias in request_concept.aliases}
-    request_alias_keys.update(interpreted_aliases.get(request_concept.key, ()))
-    for metadata_key, source_quality in metadata.items():
-        if metadata_key in request_alias_keys:
-            return source_quality
-    return None
+            concept = _phrase_concept(phrase)
+            key = concept.key
+            if source == "tag":
+                tokens = set(_literal_key(concept.aliases[0]).removeprefix("literal:").split()) - IDENTITY_QUALIFIERS
+                # Search tags cannot erase a title's distinguishing identity or
+                # unknown event modifier, even when the tag is a registered alias.
+                if any(
+                    tokens & title_words and other.key != key
+                    for other, title_words in zip(title_concepts, title_tokens)
+                ):
+                    continue
+                if key.startswith("literal:") and len(tokens) == 1:
+                    continue
+            quality = (5 if source == "title" else 4) if key in CONCEPTS else (3 if source == "title" else 2)
+            if quality > evidence.get(key, ("", 0))[1]:
+                evidence[key] = (source, quality)
+            events_by_key.setdefault(key, set()).update(concept.events)
+    # Portrait fallback needs affirmative title identity evidence. A saint search
+    # tag on an unknown scene is insufficient, and any event metadata prevents
+    # us from reclassifying that depiction as a generic portrait.
+    all_events = set()
+    for value in (title, *tags):
+        words = set(normalize_text(value).split())
+        all_events.update(event for event, aliases in EVENT_ALIASES.items() if words & set(aliases))
+    # Every title clause must describe a requested subject. Multiword tags also
+    # constrain the depiction; one-word search hints do not establish a scene.
+    # This check is limited to portrait fallback, preserving ordinary related
+    # matches on titles that include artist metadata.
+    portrait_supported = all(concept.key in requested_keys for concept in title_concepts) and all(
+        _phrase_concept(phrase).key in requested_keys
+        for tag in tags
+        for phrase in _split_concrete_phrases(tag)
+        if len(_meaningful_tokens(phrase)) > 1
+    )
+    portraits = {concept.key for concept in title_concepts} if portrait_supported and not all_events else set()
+    return evidence, events_by_key, portraits, all_events
 
 
 def generate_icon_candidates(
@@ -338,25 +322,37 @@ def generate_icon_candidates(
     interpreted_aliases: dict[str, tuple[str, ...]] | None = None,
 ) -> list[CandidateEvidence]:
     """Generate deterministic tiered candidates with explicit request coverage."""
-    interpreted_aliases = interpreted_aliases or {}
+    # Kept as a compatibility argument; model-inferred identities are not trusted.
     request_concepts = _request_concepts(request)
     requested_keys = tuple(concept.key for concept in request_concepts)
+    requested_events = {event for concept in request_concepts for event in concept.events}
     request_themes = (
-        _recognized_themes((request.primary_text, *request.context_terms))
-        if request.kind == "content"
-        else set()
+        _recognized_themes((request.primary_text, *request.context_terms)) if request.kind == "content" else set()
     )
     candidates = []
 
     for icon in icons:
         title = str(icon.title)
         tags = _icon_tags(icon)
-        metadata = _metadata_concepts(title, tags)
+        metadata, depiction_events, portraits, all_events = _metadata_concepts(title, tags, requested_keys)
+        # Check all metadata before matching: a saint-specific event tag cannot
+        # override a contradictory event in the title or another tag.
+        if requested_events and all_events - requested_events:
+            continue
+        event_exact = True
         matched = []
         refs = []
         qualities = []
         for concept in request_concepts:
-            match = _matches_request_concept(concept, metadata, interpreted_aliases)
+            match = metadata.get(concept.key)
+            if concept.events:
+                actual_events = depiction_events.get(concept.key, set())
+                if actual_events and actual_events != set(concept.events):
+                    match = None
+                if not actual_events:
+                    event_exact = False
+                    if concept.key not in portraits:
+                        match = None
             if match:
                 source, quality = match
                 matched.append(concept.key)
@@ -365,6 +361,10 @@ def generate_icon_candidates(
 
         if matched:
             complete = len(matched) == len(requested_keys)
+            has_event_evidence = any(concept.events and concept.key in matched for concept in request_concepts)
+            specificity = 2 if has_event_evidence and event_exact else 1 if has_event_evidence else 0
+            if has_event_evidence:
+                refs.append("depiction:event_exact" if event_exact else "depiction:subject_portrait")
             candidates.append(
                 CandidateEvidence(
                     icon.id,
@@ -375,6 +375,7 @@ def generate_icon_candidates(
                     requested_keys,
                     tuple(sorted(refs)),
                     min(qualities),
+                    specificity,
                 )
             )
             continue
@@ -421,6 +422,7 @@ def generate_icon_candidates(
                 )
             )
 
+    candidates = _prefer_event_depictions(candidates)
     capped = []
     for tier in ("direct_exact", "related_specific", "thematic"):
         bucket = sorted(
@@ -431,61 +433,18 @@ def generate_icon_candidates(
     return capped
 
 
-def validate_interpreted_concepts(
-    payload,
-    request: IconMatchRequest,
-    vocabulary: tuple[str, ...],
-):
-    """Validate alias-only model output against request text and bounded metadata."""
-    if (
-        not isinstance(payload, dict)
-        or set(payload) != {"concepts"}
-        or not isinstance(payload["concepts"], list)
-    ):
-        return {}
-    request_concepts = {concept.key: concept for concept in _request_concepts(request)}
-    allowed_vocabulary = set(vocabulary)
-    result: dict[str, list[str]] = {}
-    for item in payload["concepts"]:
-        if (
-            not isinstance(item, dict)
-            or set(item) != {"request_concept", "metadata_concept", "aliases"}
-        ):
-            return {}
-        request_key = item["request_concept"]
-        metadata_key = item["metadata_concept"]
-        aliases = item["aliases"]
-        if request_key not in request_concepts or metadata_key not in allowed_vocabulary:
-            return {}
-        if metadata_key != request_key:
-            # The interpreter may recognize an already-bounded alias, but it
-            # may not assert a new semantic equivalence between unrelated
-            # request and metadata concepts.
-            return {}
-        negative_aliases = CONCEPTS.get(request_key, {}).get("negative_aliases", ())
-        metadata_label = metadata_key.removeprefix("literal:")
-        if any(_contains_phrase(metadata_label, alias) for alias in negative_aliases):
-            return {}
-        if (
-            not isinstance(aliases, list)
-            or not aliases
-            or not all(isinstance(alias, str) for alias in aliases)
-        ):
-            return {}
-        if len(aliases) != len(set(aliases)):
-            return {}
-        request_concept = request_concepts[request_key]
-        approved_aliases = {normalize_text(alias) for alias in request_concept.aliases}
-        if request_key.startswith("literal:"):
-            aliases_are_approved = all(_literal_key(alias) == request_key for alias in aliases)
-        else:
-            aliases_are_approved = all(normalize_text(alias) in approved_aliases for alias in aliases)
-        if not aliases_are_approved or not all(
-            _contains_phrase(normalize_text(request.primary_text), alias) for alias in aliases
-        ):
-            return {}
-        result.setdefault(request_key, []).append(metadata_key)
-    return {key: tuple(sorted(set(values))) for key, values in result.items()}
+def _prefer_event_depictions(candidates):
+    if any(item.match_tier == "direct_exact" and item.specificity == 2 for item in candidates):
+        return [item for item in candidates if not (item.match_tier == "direct_exact" and item.specificity == 1)]
+    return candidates
+
+
+def _candidate_rationale(candidate):
+    if candidate.match_tier == "direct_exact":
+        if candidate.specificity == 2:
+            return "explicit_event"
+        return "full_composite" if candidate.coverage > 1 else "explicit_subject"
+    return {"related_specific": "specific_related_subject", "thematic": "defensible_theme"}[candidate.match_tier]
 
 
 def validate_and_rank_decision(payload, candidates, max_results=1):
@@ -523,9 +482,7 @@ def validate_and_rank_decision(payload, candidates, max_results=1):
         return []
     if not all(isinstance(item, str) for item in (*matched_concepts, *evidence_refs)):
         return []
-    if len(set(matched_concepts)) != len(matched_concepts) or len(set(evidence_refs)) != len(
-        evidence_refs
-    ):
+    if len(set(matched_concepts)) != len(matched_concepts) or len(set(evidence_refs)) != len(evidence_refs):
         return []
     if not set(matched_concepts).issubset(selected.matched_concepts):
         return []
@@ -539,19 +496,19 @@ def validate_and_rank_decision(payload, candidates, max_results=1):
         "related_specific": {"specific_related_subject", "specific_related_event"},
         "thematic": {"defensible_theme"},
     }
-    if decision["rationale_code"] not in rationale_by_tier[tier]:
+    if not isinstance(decision["rationale_code"], str) or decision["rationale_code"] not in rationale_by_tier[tier]:
         return []
 
     highest_tier = max(candidates, key=lambda item: TIER_ORDER[item.match_tier]).match_tier
     if tier != highest_tier:
         return []
 
+    candidates = _prefer_event_depictions(candidates)
     ranked = sorted(
         (
             candidate
             for candidate in candidates
-            if candidate.match_tier == tier
-            and set(candidate.matched_concepts) & set(matched_concepts)
+            if candidate.match_tier == tier and set(candidate.matched_concepts) & set(matched_concepts)
         ),
         key=lambda item: item.sort_key,
     )
@@ -562,7 +519,7 @@ def validate_and_rank_decision(payload, candidates, max_results=1):
             "confidence": TIER_CONFIDENCE[candidate.match_tier],
             "matched_concepts": list(candidate.matched_concepts),
             "evidence_refs": list(candidate.evidence_refs),
-            "rationale_code": decision["rationale_code"],
+            "rationale_code": _candidate_rationale(candidate),
         }
         for candidate in ranked[:max_results]
     ]
