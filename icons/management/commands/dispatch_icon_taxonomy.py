@@ -1,5 +1,6 @@
 """Explicit durable dispatch; does not install a scheduler."""
 
+from argparse import RawDescriptionHelpFormatter
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 
@@ -31,11 +32,26 @@ def configure_budget(options):
 
 
 def add_dispatch_arguments(parser):
-    parser.add_argument("--budget")
-    parser.add_argument("--max-calls", type=int)
-    parser.add_argument("--max-tokens", type=int)
-    parser.add_argument("--max-spend", type=Decimal, help="USD, cumulative conservative reservations")
-    parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--budget", help="Enabled cumulative budget name; defaults to ICON_TAXONOMY_BUDGET.")
+    parser.add_argument(
+        "--max-calls",
+        type=int,
+        help="Positive cumulative wire-call cap; provision with both other caps, never reset counters.",
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, help="Positive cumulative reserved-token cap; requires both other caps."
+    )
+    parser.add_argument(
+        "--max-spend",
+        type=Decimal,
+        help="Positive cumulative USD reservation cap; requires both other caps, no refunds.",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="Inline worker threads, 1..4 (default 1); ignored for enqueue/Celery, not a budget cap.",
+    )
 
 
 def run_inline(ids, *, budget, concurrency):
@@ -55,13 +71,57 @@ def run_inline(ids, *, budget, concurrency):
         return list(pool.map(run, ids))
 
 
-class Command(BaseCommand):
-    help = "Dispatch pending/retry/expired-lease taxonomy work; disabled until configured."
+class CatalogueCommand(BaseCommand):
+    def create_parser(self, prog_name, subcommand, **kwargs):
+        kwargs["formatter_class"] = RawDescriptionHelpFormatter
+        return super().create_parser(prog_name, subcommand, **kwargs)
+
+
+COMMON_HELP = "Private catalogue taxonomy/evidence only: no title/tag/image selection or existing\nfeast/prayer assignment changes. Calendar independent; non-festal icons included.\nDispatch requires ICON_TAXONOMY_DISPATCH_ENABLED=true (default false), an enabled\n--budget or ICON_TAXONOMY_BUDGET, provider credentials, and a positive conservative\nICON_TAXONOMY_MAX_USD_PER_MILLION_TOKENS (default zero). Model/release settings are\nICON_TAXONOMY_MODEL and ICON_TAXONOMY_RELEASE; ICON_TAXONOMY_TIMEOUT bounds calls.\nICON_TAXONOMY_BEAT_ENABLED optionally enables recovery on existing Celery beat.\nProvision with ALL THREE positive cumulative calls/tokens/USD caps. Reservations\nacross stages, retries and timeouts are never reset, refunded or implicitly\nincreased. Existing budget caps must match; omit caps to reuse an enabled budget.\n--concurrency 1..4 limits inline threads only, not Celery workers or total calls.\nSee docs/ICON_TAXONOMY.md for storage, budgets, recovery and outcome inspection.\n"
+
+
+class Command(CatalogueCommand):
+    help = (
+        """Dispatch pending/retry/expired-lease catalogue taxonomy work; disabled by default.
+Optional --church limits dispatched rows; omission includes all churches. Due work
+is ordered by availability then work PK, bounded by positive --limit (default 20).
+Version reconciliation scans a bounded all-church batch before dispatch selection.
+--inline runs synchronously here; omission queues Celery tasks and can be billable.
+Output is processed/states for inline execution or dispatched count for Celery.
+This command has no dry-run/checkpoint: use sibling backfill_icon_taxonomy.
+Budget-blocked rows require backfill_icon_taxonomy --resume-budget-blocked; that
+resets work attempts only, never budget counters, and cannot bypass exhausted caps.
+
+Examples (dispatch examples require the settings and authorized budget below):
+  python manage.py backfill_icon_taxonomy --dry-run --limit 100 --after-id 0
+  python manage.py backfill_icon_taxonomy --limit 100 --after-id 0
+  python manage.py backfill_icon_taxonomy --limit 100 --after-id "$NEXT_AFTER_ID"
+  python manage.py dispatch_icon_taxonomy --inline --budget "$BUDGET_NAME" --limit 20
+  # Provisioning placeholders: set BUDGET_NAME and all CAP_* to authorized values.
+  python manage.py dispatch_icon_taxonomy --inline --budget "$BUDGET_NAME" --max-calls "$CAP_CALLS" --max-tokens "$CAP_TOKENS" --max-spend "$CAP_USD" --concurrency 1
+
+Backfill JSON rows/next_after_id/states: pass next_after_id as exclusive --after-id;
+stop when rows is empty. Dry-run writes nothing/calls no provider but may read
+private storage. Backfill without --dispatch makes no direct provider calls, but
+enqueue may wake enabled background workers and become billable.
+"""
+        + COMMON_HELP
+    )
 
     def add_arguments(self, parser):
-        parser.add_argument("--limit", type=int, default=20)
-        parser.add_argument("--church", type=int)
-        parser.add_argument("--inline", action="store_true", help="Process directly without a broker")
+        parser.add_argument(
+            "--limit", type=int, default=20, help="Positive maximum due work rows per invocation (default 20)."
+        )
+        parser.add_argument(
+            "--church",
+            type=int,
+            help="Optional church PK for dispatch; omit for all churches (reconciliation remains global).",
+        )
+        parser.add_argument(
+            "--inline",
+            action="store_true",
+            help="Process synchronously in this process; otherwise queue Celery tasks (billable when enabled).",
+        )
         add_dispatch_arguments(parser)
 
     def handle(self, **options):

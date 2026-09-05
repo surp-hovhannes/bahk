@@ -6,7 +6,7 @@ import json
 
 from django.conf import settings
 
-from hub.services.icon_match_service import array, obj, validate_schema, STRING, INT, BOOL
+from icons.services.taxonomy_schema import array, obj, validate_schema, STRING, INT, BOOL
 
 OBSERVATION_SCHEMA = obj(
     depiction={"type": "string", "enum": ["portrait", "scene", "symbol", "unknown"]},
