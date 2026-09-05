@@ -1,9 +1,8 @@
 """Tests for feast icon matching functionality."""
-import json
 from datetime import date
 from types import SimpleNamespace
 from unittest import TestCase as SimpleTestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from django.test import TestCase, override_settings
 from django.test.utils import tag
 from django.db.models.signals import post_save
@@ -11,6 +10,7 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from hub.models import Church, Day, Feast
+from hub.services.icon_match_service import IconMatchOutcome
 from hub.services.icon_matching import (
     CANDIDATE_LIMIT_PER_TIER,
     IconMatchRequest,
@@ -18,7 +18,6 @@ from hub.services.icon_matching import (
     validate_and_rank_decision,
 )
 from hub.tasks.icon_tasks import (
-    _match_icons_with_llm,
     match_icon_to_feast_task,
 )
 from hub.signals import handle_feast_save
@@ -385,89 +384,6 @@ class IconMatchHierarchyTests(SimpleTestCase):
         results = validate_and_rank_decision(payload, portrait_candidates)
         self.assertEqual(results[0]['rationale_code'], 'explicit_subject')
 
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('openai.OpenAI')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_empty_candidates_never_construct_or_call_provider(self, completion, client):
-        self.assertEqual(_match_icons_with_llm([fake_icon(1, 'John the Apostle')], 'John the Baptist'), [])
-        completion.assert_not_called()
-        client.assert_not_called()
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_reviewed_alias_goes_directly_to_adjudication(self, completion):
-        icons = [fake_icon(1, 'Vartan the Warrior')]
-        request = IconMatchRequest(kind='feast', primary_text='Vardan the Warrior')
-        candidate = generate_icon_candidates(icons, request)[0]
-        completion.return_value.choices[0].message.content = json.dumps(approving_payload(candidate))
-        self.assertEqual(_match_icons_with_llm(icons, request)[0]['id'], 1)
-        completion.assert_called_once()
-        self.assertEqual(completion.call_args.kwargs['response_format']['json_schema']['name'], 'icon_matches')
-
-    @override_settings(OPENAI_API_KEY='')
-    def test_missing_provider_fails_closed_without_simple_fallback(self):
-        icons = [fake_icon(10, 'Nativity')]
-        result = _match_icons_with_llm(icons, 'Nativity', max_results=1)
-        self.assertEqual(result, [])
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion', side_effect=RuntimeError('provider down'))
-    def test_provider_failure_fails_closed(self, _mock_completion):
-        self.assertEqual(
-            _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1),
-            [],
-        )
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_malformed_provider_output_fails_closed(self, mock_completion):
-        mock_completion.return_value.choices[0].message.content = 'not json'
-        self.assertEqual(
-            _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1),
-            [],
-        )
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.time.sleep')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_rate_limit_retry_after_then_success(self, mock_completion, mock_sleep):
-        from openai import RateLimitError
-
-        response = MagicMock(status_code=429, headers={'retry-after': '0.25'})
-        response.request = MagicMock()
-        rate_limit = RateLimitError('rate limited', response=response, body={'error': {}})
-        success = MagicMock()
-        success.choices[0].message.content = (
-            '{"decision":{"id":10,"match_tier":"direct_exact",'
-            '"confidence":"high","matched_concepts":["literal:nativity"],'
-            '"evidence_refs":["title:literal:nativity"],'
-            '"rationale_code":"explicit_event"}}'
-        )
-        mock_completion.side_effect = [rate_limit, success]
-
-        matches = _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1)
-
-        self.assertEqual(matches[0]['id'], 10)
-        mock_sleep.assert_called_once_with(1)
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.time.sleep')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_exhausted_rate_limits_fail_closed(self, mock_completion, mock_sleep):
-        from openai import RateLimitError
-
-        response = MagicMock(status_code=429, headers={'Retry-After': '99'})
-        response.request = MagicMock()
-        mock_completion.side_effect = RateLimitError(
-            'rate limited', response=response, body={'error': {}}
-        )
-
-        result = _match_icons_with_llm([fake_icon(10, 'Nativity')], 'Nativity', max_results=1)
-
-        self.assertEqual(result, [])
-        self.assertEqual(mock_completion.call_count, 12)
-        self.assertEqual(mock_sleep.call_count, 9)
-        self.assertTrue(all(call.args == (8.0,) for call in mock_sleep.call_args_list))
 
 
 @override_settings(
@@ -491,26 +407,17 @@ class FeastIconMatchingTaskTests(TestCase):
         finally:
             post_save.connect(handle_feast_save, sender=Feast)
 
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_real_matcher_assigns_event_then_portrait_when_event_unavailable(self, completion):
+    @patch('hub.services.icon_match_service.OpenAIIconProvider')
+    def test_real_matcher_assigns_event_then_portrait_when_event_unavailable(self, provider_factory):
+        from hub.tests.icon_match_fixtures import FixtureProvider, analysis_for, candidate
         portrait = Icon.objects.create(title='John the Baptist', church=self.church, image='portrait.jpg')
         event = Icon.objects.create(title='Decollation of John the Baptist', church=self.church, image='event.jpg')
         feast = self._create_feast_without_signal(church=self.church, name='Beheading of John the Baptist')
-
-        def approve_supplied(*args, **kwargs):
-            supplied = json.loads(kwargs['messages'][1]['content'])['candidates']
-            self.assertEqual(len(supplied), 1)
-            candidate = supplied[0]
-            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
-                'decision': {
-                    'id': candidate['id'], 'match_tier': candidate['evidence_tier'],
-                    'confidence': 'high', 'matched_concepts': candidate['matched_concepts'],
-                    'evidence_refs': candidate['evidence_refs'], 'rationale_code': 'explicit_subject',
-                }
-            })))])
-
-        completion.side_effect = approve_supplied
+        provider = FixtureProvider(analysis_for('John the Baptist', 'Beheading'), [
+            candidate(portrait.id, portrait.title, 'subject_portrait'),
+            candidate(event.id, event.title, 'exact_event'),
+        ])
+        provider_factory.return_value = provider
         match_icon_to_feast_task(feast.id)
         feast.refresh_from_db()
         self.assertEqual(feast.icon_id, event.id)
@@ -519,7 +426,7 @@ class FeastIconMatchingTaskTests(TestCase):
         match_icon_to_feast_task(feast.id)
         feast.refresh_from_db()
         self.assertEqual(feast.icon_id, portrait.id)
-        self.assertEqual(completion.call_count, 2)
+        self.assertEqual(len(provider.calls), 6)
 
     @patch('hub.signals.match_icon_to_feast_task.delay')
     def test_create_feast_without_signal_does_not_enqueue_icon_task(self, mock_delay):
@@ -554,7 +461,7 @@ class FeastIconMatchingTaskTests(TestCase):
         )
 
         # Mock the matching function to ensure it's not called
-        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
+        with patch('hub.tasks.icon_tasks.match_icons') as mock_match:
             match_icon_to_feast_task(feast.id)
             # Matching should not be called since icon is already set
             mock_match.assert_not_called()
@@ -603,10 +510,10 @@ class FeastIconMatchingTaskTests(TestCase):
             name="Nativity of Christ",
         )
 
-        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
-            mock_match.return_value = [
-                {'id': icon.id, 'match_tier': 'direct_exact', 'confidence': 'high'}
-            ]
+        with patch('hub.tasks.icon_tasks.match_icons') as mock_match:
+            mock_match.return_value = IconMatchOutcome(status="complete", matches=[
+                {'id': icon.id, 'match_tier': 'direct_exact', 'confidence': 'high', 'auto_assignable': True}
+            ])
             match_icon_to_feast_task(feast.id)
 
         feast.refresh_from_db()
@@ -631,10 +538,10 @@ class FeastIconMatchingTaskTests(TestCase):
         )
 
         # Mock the matching function to return medium confidence match
-        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
-            mock_match.return_value = [
+        with patch('hub.tasks.icon_tasks.match_icons') as mock_match:
+            mock_match.return_value = IconMatchOutcome(status="complete", matches=[
                 {'id': icon.id, 'match_tier': 'related_specific', 'confidence': 'medium'}
-            ]
+            ])
             match_icon_to_feast_task(feast.id)
 
         feast.refresh_from_db()
@@ -660,10 +567,10 @@ class FeastIconMatchingTaskTests(TestCase):
         )
 
         # Mock the matching function to return low confidence match
-        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
-            mock_match.return_value = [
+        with patch('hub.tasks.icon_tasks.match_icons') as mock_match:
+            mock_match.return_value = IconMatchOutcome(status="complete", matches=[
                 {'id': icon.id, 'match_tier': 'thematic', 'confidence': 'low'}
-            ]
+            ])
             match_icon_to_feast_task(feast.id)
 
         feast.refresh_from_db()
@@ -689,8 +596,8 @@ class FeastIconMatchingTaskTests(TestCase):
         )
 
         # Mock the matching function to return no matches
-        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
-            mock_match.return_value = []
+        with patch('hub.tasks.icon_tasks.match_icons') as mock_match:
+            mock_match.return_value = IconMatchOutcome(status="complete", matches=[])
             match_icon_to_feast_task(feast.id)
 
         feast.refresh_from_db()
@@ -739,83 +646,14 @@ class FeastIconMatchingScopeTests(TestCase):
             ),
         )
 
-        with patch('hub.tasks.icon_tasks._match_icons_with_llm') as mock_match:
-            mock_match.return_value = [
-                {'id': other_icon.id, 'match_tier': 'direct_exact', 'confidence': 'high'}
-            ]
+        with patch('hub.tasks.icon_tasks.match_icons') as mock_match:
+            mock_match.return_value = IconMatchOutcome(status="complete", matches=[
+                {'id': other_icon.id, 'match_tier': 'direct_exact', 'confidence': 'high', 'auto_assignable': True}
+            ])
             match_icon_to_feast_task(feast.id)
 
         feast.refresh_from_db()
         self.assertIsNone(feast.icon)
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_llm_parser_filters_out_of_scope_icon_ids(self, mock_completion):
-        """LLM parser should only return IDs from the provided icon list."""
-        icon = Icon.objects.create(
-            title="Local Nativity Icon",
-            church=self.church,
-            image=self.test_image,
-        )
-        other_icon = Icon.objects.create(
-            title="Other Church Nativity Icon",
-            church=self.other_church,
-            image=SimpleUploadedFile(
-                name='other_icon_parser.jpg',
-                content=b'fake image content',
-                content_type='image/jpeg'
-            ),
-        )
-        mock_choice = mock_completion.return_value.choices[0]
-        mock_choice.message.content = (
-            f'{{"decision":{{"id":{other_icon.id},"match_tier":"direct_exact",'
-            '"confidence":"high","matched_concepts":["literal:local nativity icon"],'
-            '"evidence_refs":["title:literal:local nativity icon"],'
-            '"rationale_code":"explicit_subject"}}'
-        )
-
-        matches = _match_icons_with_llm([icon], "Nativity", max_results=2)
-
-        self.assertEqual(matches, [])
-
-    @override_settings(OPENAI_API_KEY='test-key')
-    @patch('hub.tasks.icon_tasks.openai_chat_completion')
-    def test_python_tie_breaks_duplicates_independent_of_llm_choice(self, mock_completion):
-        """Equivalent direct duplicates are ordered by metadata and ID in Python."""
-        first_icon = Icon.objects.create(
-            title="St. Vartan",
-            church=self.church,
-            image=self.test_image,
-        )
-        second_icon = Icon.objects.create(
-            title="St. Vartan and St. Ghevont",
-            church=self.church,
-            image=SimpleUploadedFile(
-                name='vartan-and-ghevont.jpg',
-                content=b'fake image content',
-                content_type='image/jpeg',
-            ),
-        )
-        mock_choice = mock_completion.return_value.choices[0]
-        mock_choice.message.content = (
-            f'{{"decision":{{"id":{second_icon.id},"match_tier":"direct_exact",'
-            '"confidence":"high","matched_concepts":["literal:vartan"],'
-            '"evidence_refs":["title:literal:vartan"],'
-            '"rationale_code":"explicit_subject"}}'
-        )
-
-        matches = _match_icons_with_llm([first_icon, second_icon], "Saint Vartan", max_results=3)
-
-        self.assertEqual([match['id'] for match in matches], [first_icon.id, second_icon.id])
-        self.assertNotIn('temperature', mock_completion.call_args.kwargs)
-        self.assertEqual(mock_completion.call_args.kwargs['model'], 'gpt-4.1-mini')
-        response_format = mock_completion.call_args.kwargs['response_format']
-        self.assertEqual(response_format['type'], 'json_schema')
-        self.assertTrue(response_format['json_schema']['strict'])
-        self.assertIn(
-            'relationship hierarchy is strict',
-            mock_completion.call_args.kwargs['messages'][0]['content'],
-        )
 
 @tag('slow', 'integration')
 class FeastIconMatchingSignalTests(TestCase):

@@ -7,6 +7,7 @@ from better_profanity import profanity
 from celery import shared_task
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
@@ -15,7 +16,7 @@ from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
 from hub.services.icon_matching import IconMatchRequest
 from hub.services.llm_requests import anthropic_message
-from hub.tasks.icon_tasks import _match_icons_with_llm
+from hub.services.icon_match_service import match_icons
 from icons.models import Icon
 from prayers.models import Prayer, PrayerRequest, PrayerRequestPrayerLog
 
@@ -37,8 +38,10 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
     for prayer_id in prayer_ids:
         try:
             prayer = Prayer.objects.prefetch_related("tags").get(id=prayer_id, church_id=church_id)
+            if prayer.icon_id is not None:
+                continue
             context_terms = tuple(tag.name for tag in prayer.tags.all())
-            matched_results = _match_icons_with_llm(
+            outcome = match_icons(
                 icons,
                 IconMatchRequest(
                     kind="content",
@@ -47,21 +50,20 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
                     auto_assign_policy="content_suggest",
                     max_results=1,
                 ),
-                max_results=1,
             )
-            if not matched_results:
+            if outcome.status != 'complete':
+                logger.info("Prayer icon matching status=%s diagnostics=%s", outcome.status, outcome.diagnostics)
                 continue
-
-            first_match = matched_results[0]
-            match_confidence = first_match.get("confidence")
-            match_tier = first_match.get("match_tier")
-            if (match_tier, match_confidence) != ("direct_exact", "high"):
+            if not outcome.matches or not outcome.matches[0].get('auto_assignable'):
                 continue
-
-            matched_icon = icons_by_id.get(first_match["id"])
+            matched_icon = icons_by_id.get(outcome.matches[0]['id'])
             if matched_icon:
-                prayer.icon = matched_icon
-                prayer.save(update_fields=["icon", "updated_at"])
+                with transaction.atomic():
+                    locked = Prayer.objects.select_for_update().get(id=prayer_id, church_id=church_id)
+                    if locked.icon_id is None and locked.title == prayer.title:
+                        matched_icon = Icon.objects.select_for_update().get(pk=matched_icon.pk, church_id=church_id)
+                        locked.icon = matched_icon
+                        locked.save(update_fields=['icon', 'updated_at'])
         except Exception as exc:
             logger.exception(
                 "Failed to match icon for imported prayer %s in church %s: %s",

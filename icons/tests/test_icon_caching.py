@@ -10,9 +10,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from hub.models import Church
+from hub.services.icon_match_service import IconMatchOutcome
 from icons.cache import IconViewCache
 from icons.models import Icon
-from icons.views import IconListView, IconMatchView
+from icons.views import IconListView
 
 
 TEST_CACHE = {
@@ -29,6 +30,11 @@ class IconViewCachingTests(APITestCase):
 
     def setUp(self):
         cache.clear()
+        def complete_match(icons, request, *, limits=None):
+            return IconMatchOutcome(status='complete', catalogue_complete=True,
+                                    matches=[{'id': icons[0].id, 'confidence': 'high'}])
+        self.matcher = patch('icons.views.match_icons', side_effect=complete_match).start()
+        self.addCleanup(patch.stopall)
         self.church = Church.objects.create(name="Test Church")
         self.other_church = Church.objects.create(name="Other Church")
         self.icon1 = self._create_icon("Nativity Icon", self.church, "nativity")
@@ -135,9 +141,8 @@ class IconViewCachingTests(APITestCase):
         )
         self.assertEqual(first.status_code, status.HTTP_200_OK)
 
-        with patch.object(
-            IconMatchView,
-            "_simple_match_icons",
+        with patch(
+            "icons.views.match_icons",
             side_effect=AssertionError("match cache was not used"),
         ):
             second = self.client.post(

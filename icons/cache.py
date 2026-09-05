@@ -18,7 +18,7 @@ class IconViewCache:
 
     LIST_PREFIX = "icons:list"
     DETAIL_PREFIX = "icons:detail"
-    MATCH_PREFIX = "icons:match"
+    MATCH_PREFIX = "icons:match:semantic-v1"
     VERSION_KEY = "icons:view-cache-version"
 
     @classmethod

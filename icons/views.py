@@ -13,7 +13,8 @@ from rest_framework.throttling import AnonRateThrottle
 from icons.cache import IconViewCache
 from icons.models import Icon, IconFeedback
 from icons.serializers import IconSerializer, IconFeedbackSerializer
-from hub.services.llm_requests import openai_chat_completion
+from hub.services.icon_match_service import MatchLimits, match_icons
+from hub.services.icon_matching import IconMatchRequest
 
 class IsAdminOrReadOnly(BasePermission):
     """
@@ -254,10 +255,17 @@ class IconMatchView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if len(prompt.encode('utf-8')) > 12000:
+            return Response({'error': 'prompt is too long'}, status=400)
+
         # Normalize church_id to int or None for stable cache keys
         if church_id is not None:
             try:
+                if isinstance(church_id, (bool, float)):
+                    raise ValueError
                 church_id = int(church_id)
+                if church_id < 1:
+                    raise ValueError
             except (TypeError, ValueError):
                 return Response(
                     {'error': 'church_id must be an integer'},
@@ -282,301 +290,24 @@ class IconMatchView(views.APIView):
         
         icons = list(queryset)
         
-        if not icons:
-            response_data = {'matches': []}
-            cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
-            return Response(response_data, status=status.HTTP_200_OK)
-        
-        # Pre-filter: use simple matching to narrow candidates before sending to LLM.
-        # With 550+ icons the full list overwhelms the model; pre-filter to top 30.
-        prefilter_ids = self._simple_match_icons(icons, prompt, max_results=30)
-        if prefilter_ids:
-            icons = [icon for icon in icons if icon.id in prefilter_ids]
-
-        # Format icon data for LLM
-        icon_descriptions = []
-        for icon in icons:
-            tags = ', '.join([tag.name for tag in icon.tags.all()])
-            description = f"Icon ID: {icon.id}, Title: {icon.title}, Tags: {tags}"
-            icon_descriptions.append(description)
-        
-        # Create LLM prompt
-        system_prompt = """
-You match a user's natural-language request to the most relevant icons.
-
-INPUT:
-- A list of icons. Each icon has: ID, Title, and Tags.
-- A user request.
-- A maximum number of results (N).
-
-OUTPUT FORMAT (STRICT):
-Return a JSON array of match objects. Each object must follow this exact format:
-
-[
-  {
-    "id": 3,
-    "confidence": "high"
-  },
-  {
-    "id": 12,
-    "confidence": "medium"
-  }
-]
-
-Rules for Output:
-- Do NOT include any text outside the JSON.
-- Do NOT include extra keys or commentary.
-- If no icons are meaningfully relevant, return: []
-- Return at most N matches.
-
-CONFIDENCE SCORING:
-Assign confidence based on clarity of match:
-- "high": The icon's title or tags clearly and directly match the request, with minimal ambiguity.
-- "medium": The match is plausible and relevant, but not exact.
-- "low": Only return "low" confidence if it is still clearly related; otherwise do not return it at all.
-
-RELEVANCE RULES:
-- Prefer icons whose Title strongly matches the user request.
-- Next, consider strong Tag matches.
-- Ignore weak or tangential keyword overlap.
-- Only return IDs that appear in the provided list.
-- NEVER guess or invent icons.
-
-TIEBREAKERS:
-If multiple icons seem similar in relevance:
-1) Exact title match or near-synonym wins.
-2) More specific tags beat general tags.
-3) Well-known canonical association beats broad thematic similarity.
-
-If unsure whether an icon is relevant:
-DO NOT RETURN IT.
-"""
-        
-        allowed_ids = [icon.id for icon in icons]
-
-        user_message = f"""User request: "{prompt}"
-Allowed icon IDs: {allowed_ids}
-
-Available icons (ID, Title, Tags):
-{chr(10).join(icon_descriptions)}
-
-Return up to {max_results} most relevant icons as a JSON array of objects with "id" and "confidence" fields."""
-        
-        try:
-            # Check if OpenAI API key is configured
-            from openai import OpenAI
-            from openai import APIError
-            if not settings.OPENAI_API_KEY:
-                logger.warning("OPENAI_API_KEY not configured, falling back to simple tag matching")
-                # Fallback to simple tag/title matching
-                matched_ids = self._simple_match_icons(icons, prompt, max_results)
-                # Convert to expected format with default confidence
-                matched_results = [
-                    {'id': icon_id, 'confidence': 'medium'}
-                    for icon_id in matched_ids
-                ]
-            else:
-                client = OpenAI(api_key=settings.OPENAI_API_KEY)
-                
-                # Try models in order of preference, falling back if one fails
-                models_to_try = ['gpt-5-mini', 'gpt-4.1-nano', 'gpt-4o-mini', 'gpt-4.1-mini']
-                response = None
-                last_error = None
-                
-                for model in models_to_try:
-                    try:
-                        # Try with temperature first
-                        response = openai_chat_completion(client, model=model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_message},
-                        ],
-                        max_tokens=500)
-                        logger.info(f"Successfully used model: {model}")
-                        break
-                    except APIError as api_error:
-                        last_error = api_error
-                        error_body = getattr(api_error, 'body', {}) or {}
-                        error_code = error_body.get('error', {}).get('code', '')
-                        error_message = str(api_error)
-                        
-                        # Check if it's a model access error (403 or model_not_found)
-                        if api_error.status_code == 403 or 'model_not_found' in error_code or 'does not have access' in error_message:
-                            logger.warning(f"Model {model} not available (status: {api_error.status_code}), trying next model...")
-                            continue
-                        # Check if it's a temperature unsupported error
-                        elif api_error.status_code == 400 and ('unsupported_value' in error_code or 'temperature' in error_message.lower()):
-                            logger.warning(f"Model {model} doesn't support custom temperature, retrying without temperature parameter...")
-                            try:
-                                # Retry without temperature parameter (uses default)
-                                response = openai_chat_completion(client, model=model,
-                                messages=[
-                                    {"role": "system", "content": system_prompt},
-                                    {"role": "user", "content": user_message},
-                                ], max_tokens=500, )
-                                logger.info(f"Successfully used model: {model} (without temperature)")
-                                break
-                            except Exception as retry_error:
-                                logger.warning(f"Retry without temperature also failed for {model}, trying next model...")
-                                last_error = retry_error
-                                continue
-                        else:
-                            # For other API errors, re-raise immediately
-                            raise
-                    except Exception as model_error:
-                        last_error = model_error
-                        error_str = str(model_error)
-                        # Check if it's a model access error
-                        if 'model_not_found' in error_str or 'does not have access' in error_str:
-                            logger.warning(f"Model {model} not available, trying next model...")
-                            continue
-                        # Check if it's a temperature error
-                        elif 'temperature' in error_str.lower() and 'unsupported' in error_str.lower():
-                            logger.warning(f"Model {model} doesn't support custom temperature, retrying without temperature parameter...")
-                            try:
-                                # Retry without temperature parameter
-                                response = openai_chat_completion(client, model=model,
-                                messages=[
-                                    {"role": "system", "content": system_prompt},
-                                    {"role": "user", "content": user_message},
-                                ], max_tokens=500, )
-                                logger.info(f"Successfully used model: {model} (without temperature)")
-                                break
-                            except Exception as retry_error:
-                                logger.warning(f"Retry without temperature also failed for {model}, trying next model...")
-                                last_error = retry_error
-                                continue
-                        else:
-                            # For other errors, re-raise immediately
-                            raise
-                
-                if not response:
-                    raise last_error if last_error else Exception("No models available")
-                
-                # Parse the response
-                llm_response = response.choices[0].message.content.strip()
-                
-                # Try to parse as JSON array
-                import json
-                try:
-                    parsed_response = json.loads(llm_response)
-                    if not isinstance(parsed_response, list):
-                        parsed_response = [parsed_response]
-                    
-                    # Handle new format: array of objects with 'id' and 'confidence'
-                    matched_results = []
-                    valid_confidence_levels = {'high', 'medium', 'low'}
-                    for item in parsed_response:
-                        if isinstance(item, dict):
-                            # New format: {"id": 3, "confidence": "high"}
-                            if 'id' in item:
-                                confidence = item.get('confidence', 'medium')
-                                # Validate confidence level
-                                if confidence not in valid_confidence_levels:
-                                    logger.warning(f"Invalid confidence '{confidence}', defaulting to 'medium'")
-                                    confidence = 'medium'
-                                matched_results.append({
-                                    'id': item['id'],
-                                    'confidence': confidence
-                                })
-                        elif isinstance(item, (int, str)):
-                            # Backward compatibility: just an ID
-                            matched_results.append({
-                                'id': int(item),
-                                'confidence': 'medium'  # Default if not provided
-                            })
-                    
-                    # Limit to max_results
-                    matched_results = matched_results[:max_results]
-                    
-                except json.JSONDecodeError:
-                    # Fallback: extract numbers from response
-                    import re
-                    matched_ids = [int(x) for x in re.findall(r'\d+', llm_response)]
-                    matched_results = [
-                        {'id': icon_id, 'confidence': 'medium'}
-                        for icon_id in matched_ids[:max_results]
-                    ]
-            
-        except Exception as e:
-            logger.error(f"Error in icon matching: {e}", exc_info=True)
-            # Fallback to simple matching if LLM fails
-            try:
-                matched_ids = self._simple_match_icons(icons, prompt, max_results)
-                # Convert to expected format with default confidence
-                matched_results = [
-                    {'id': icon_id, 'confidence': 'medium'}
-                    for icon_id in matched_ids
-                ]
-            except Exception as fallback_error:
-                logger.error(f"Fallback matching also failed: {fallback_error}")
-                return Response(
-                    {'error': 'Failed to process icon matching request'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        
-        # If LLM returned no matches, fall back to simple keyword matching
-        if not matched_results:
-            logger.info("LLM returned no matches, falling back to simple matching")
-            matched_ids = self._simple_match_icons(icons, prompt, max_results)
-            matched_results = [
-                {'id': icon_id, 'confidence': 'medium'}
-                for icon_id in matched_ids
-            ]
-
-        # Build response using matched_results with confidence from LLM
+        outcome = match_icons(icons, IconMatchRequest(
+            kind='content', primary_text=prompt, max_results=max_results,
+        ), limits=MatchLimits(total_seconds=20, call_seconds=20))
+        icons_by_id = {icon.id: icon for icon in icons}
         matches = []
-        for match_result in matched_results:
-            icon_id = match_result['id']
-            confidence = match_result['confidence']
-            
-            try:
-                icon = Icon.objects.select_related('church').prefetch_related('tags').get(id=icon_id)
-                match_data = {
-                    'icon_id': icon.id,
-                    'confidence': confidence
-                }
-                
-                if return_format == 'full':
-                    serializer = IconSerializer(icon)
-                    match_data['icon'] = serializer.data
-                
-                matches.append(match_data)
-            except Icon.DoesNotExist:
-                logger.warning(f"LLM returned non-existent icon ID: {icon_id}")
+        for result in outcome.matches:
+            icon = icons_by_id.get(result['id'])
+            if icon is None:
                 continue
-        
-        response_data = {
-            'matches': matches
-        }
-        cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
-        return Response(response_data, status=status.HTTP_200_OK)
-    
-    def _simple_match_icons(self, icons, prompt, max_results):
-        """Simple fallback matching based on title and tag keywords."""
-        prompt_lower = prompt.lower()
-        scored_icons = []
-        
-        for icon in icons:
-            score = 0
-            title_lower = icon.title.lower()
-            tags_lower = [tag.name.lower() for tag in icon.tags.all()]
-            
-            # Check title matches
-            if prompt_lower in title_lower or title_lower in prompt_lower:
-                score += 10
-            
-            # Check tag matches
-            for tag in tags_lower:
-                if tag in prompt_lower or prompt_lower in tag:
-                    score += 5
-            
-            if score > 0:
-                scored_icons.append((score, icon.id))
-        
-        # Sort by score descending and return IDs
-        scored_icons.sort(reverse=True, key=lambda x: x[0])
-        return [icon_id for _, icon_id in scored_icons[:max_results]]
+            match_data = {**result, 'icon_id': icon.id}
+            if return_format == 'full':
+                match_data['icon'] = IconSerializer(icon).data
+            matches.append(match_data)
+        response_data = {**outcome.to_dict(), 'matches': matches}
+        if outcome.status == 'complete':
+            cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
+        response_status = 503 if outcome.status == 'unavailable' and not matches else 200
+        return Response(response_data, status=response_status)
 
 
 class FeedbackAnonRateThrottle(AnonRateThrottle):
