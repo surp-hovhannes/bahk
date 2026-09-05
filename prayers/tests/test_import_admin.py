@@ -129,7 +129,8 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
             church=self.church,
         )
 
-        def match_side_effect(icons, prompt, max_results=1):
+        def match_side_effect(icons, prompt, *, church_id):
+            self.assertEqual(church_id, self.church.id)
             if "healing" in prompt.primary_text.lower() or "healing" in prompt.context_terms:
                 return IconMatchOutcome(status="complete", matches=[
                     {"id": icon.id, "match_tier": "direct_exact", "confidence": "high", "auto_assignable": True}
@@ -139,6 +140,10 @@ class MatchIconsForImportedPrayersTaskTests(TestCase):
         mock_match_icons.side_effect = match_side_effect
 
         match_icons_for_imported_prayers_task([matching_prayer.id, unmatched_prayer.id], self.church.id)
+
+        self.assertEqual(mock_match_icons.call_count, 2)
+        for match_call in mock_match_icons.call_args_list:
+            self.assertEqual(match_call.kwargs, {"church_id": self.church.id})
 
         matching_prayer.refresh_from_db()
         unmatched_prayer.refresh_from_db()
