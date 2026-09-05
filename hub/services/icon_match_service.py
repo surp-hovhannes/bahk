@@ -15,7 +15,7 @@ import re
 import time
 import unicodedata
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 from hub.services.llm_requests import openai_chat_completion
 
@@ -278,10 +278,20 @@ def validate_schema(value, schema):
 class OpenAIIconProvider:
     """One configured model, no SDK retries, no nested fallback loops."""
 
-    def __init__(self):
+    def __init__(self, *, model=None, profile=None, reasoning_effort=None, wire_budget=None):
         from django.conf import settings
 
-        self.model = getattr(settings, "ICON_MATCH_MODEL", "gpt-4.1-mini")
+        self.model = (
+            model
+            if model is not None
+            else (profile.model if profile else getattr(settings, "ICON_MATCH_MODEL", "gpt-4.1-mini"))
+        )
+        self.profile = profile
+        self.reasoning_effort = (
+            reasoning_effort if reasoning_effort is not None else (profile.reasoning_effort if profile else None)
+        )
+        self.wire_budget = wire_budget
+        self.usage_records = []
         if not settings.OPENAI_API_KEY:
             raise RuntimeError("provider_unavailable")
         self.api_key = settings.OPENAI_API_KEY
@@ -289,13 +299,16 @@ class OpenAIIconProvider:
         self.wire_call_count = 0
 
     def call(self, stage, payload, schema, timeout):
-        self.wire_call_count += 1
         from openai import AsyncOpenAI
 
         async def request():
             # Nonstreaming SDK calls await the entire HTTP body. Socket timeouts
             # reset with each read; cancellation bounds even a trickling body.
             async with AsyncOpenAI(api_key=self.api_key, max_retries=0) as client:
+                if self.wire_budget is not None:
+                    self.wire_budget.consume()
+                self.wire_call_count += 1
+                self.usage_records.append(None)
                 return await openai_chat_completion(
                     client,
                     model=self.model,
@@ -303,12 +316,16 @@ class OpenAIIconProvider:
                     stream=False,
                     max_tokens=16000,
                     messages=[
-                        {"role": "system", "content": STAGE_PROMPTS[stage]},
+                        {
+                            "role": "system",
+                            "content": (self.profile.stage_prompts if self.profile else STAGE_PROMPTS)[stage],
+                        },
                         {
                             "role": "user",
                             "content": json.dumps(provider_payload(payload), ensure_ascii=False, separators=(",", ":")),
                         },
                     ],
+                    **({"reasoning_effort": self.reasoning_effort} if self.reasoning_effort is not None else {}),
                     response_format={
                         "type": "json_schema",
                         "json_schema": {"name": "icon_" + stage, "strict": True, "schema": wire_schema(schema)},
@@ -321,6 +338,8 @@ class OpenAIIconProvider:
         response = asyncio.run(bounded_request())
         if isinstance(getattr(response, "model", None), str):
             self.model_ids.add(response.model)
+        usage = getattr(response, "usage", None)
+        self.usage_records[-1] = usage.model_dump(mode="json") if usage is not None else None
         if response.choices[0].finish_reason != "stop":
             raise ValueError("output_truncated")
         result = json.loads(response.choices[0].message.content)
@@ -585,9 +604,9 @@ def _rank(match):
     )
 
 
-def match_icons(icons, request, *, provider=None, limits=None):
+def match_icons(icons, request, *, provider=None, limits=None, profile=None):
     """Assess all scoped records and verify recommendations; never persist results."""
-    limits = limits or MatchLimits()
+    limits = limits or (replace(MatchLimits(), positive_limit=profile.positive_limit) if profile else MatchLimits())
     started = time.monotonic()
     outcome = IconMatchOutcome()
 
@@ -660,7 +679,11 @@ def match_icons(icons, request, *, provider=None, limits=None):
         outcome.status, outcome.catalogue_complete, outcome.positives_complete = "complete", True, True
         return finish()
     try:
-        provider = provider or OpenAIIconProvider()
+        provider = provider or (
+            OpenAIIconProvider(model=profile.model, profile=profile, reasoning_effort=profile.reasoning_effort)
+            if profile
+            else OpenAIIconProvider()
+        )
         outcome.model = str(getattr(provider, "model", "injected"))
     except Exception:
         outcome.diagnostics.append("provider_unavailable")
@@ -794,7 +817,8 @@ def match_icons(icons, request, *, provider=None, limits=None):
         outcome.status = "partial"
     if not positives:
         return finish()
-    positives.sort(key=_rank)
+    rank = (lambda match: profile.rank(match, analysis)) if profile else _rank
+    positives.sort(key=rank)
     candidates = positives[: limits.verification_limit]
     if len(candidates) < len(positives):
         outcome.diagnostics.append("verification_shortlist")
@@ -860,7 +884,7 @@ def match_icons(icons, request, *, provider=None, limits=None):
         analysis_agrees, matches = False, candidates if verified is None else []
         originals = {m["id"]: m for m in candidates}
 
-    for match in sorted(matches, key=_rank):
+    for match in sorted(matches, key=rank):
         original = originals[match["id"]]
         full_subjects = set(range(len(analysis["subjects"])))
         identity_evidence = [e for e in match["evidence"] if e["role"] == "identity"]
