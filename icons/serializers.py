@@ -1,5 +1,5 @@
 """Serializers for the icons app."""
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from rest_framework.exceptions import APIException
 from rest_framework import serializers
 
@@ -49,6 +49,7 @@ class IconSerializer(serializers.ModelSerializer):
         """Get list of tags as strings."""
         return [tag.name for tag in obj.tags.all()]
 
+    @transaction.atomic
     def create(self, validated_data):
         """Handle tag creation on icon upload."""
         # Extract tags from validated data (comes as comma-separated string)
@@ -63,7 +64,8 @@ class IconSerializer(serializers.ModelSerializer):
             validated_data['phash'] = phash
 
         try:
-            icon = Icon.objects.create(**validated_data)
+            with transaction.atomic():
+                icon = Icon.objects.create(**validated_data)
         except DuplicateIconError as exc:
             existing_icon = exc.existing_icon
             raise DuplicateIconAPIException({
@@ -100,7 +102,17 @@ class IconSerializer(serializers.ModelSerializer):
             if tag_list:
                 icon.tags.set(tag_list)
 
+        from icons.services.ingestion import schedule
+        schedule(icon.pk)
         return icon
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        from icons.services.ingestion import ingest_icon
+        tags = validated_data.pop('tags', None)
+        return ingest_icon(icon=instance, tags=None if tags is None else [
+            tag.strip() for tag in tags.split(',') if tag.strip()
+        ], **validated_data)
 
 
 class IconFeedbackSerializer(serializers.Serializer):

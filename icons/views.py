@@ -13,7 +13,8 @@ from rest_framework.throttling import AnonRateThrottle
 from icons.cache import IconViewCache
 from icons.models import Icon, IconFeedback
 from icons.serializers import IconSerializer, IconFeedbackSerializer
-from hub.services.icon_match_service import MatchLimits, match_icons
+from hub.services.icon_match_service import MatchLimits
+from hub.services.icon_match_router import match_icons, router_mode
 from hub.services.icon_matching import IconMatchRequest
 
 class IsAdminOrReadOnly(BasePermission):
@@ -279,10 +280,13 @@ class IconMatchView(views.APIView):
             'max_results': max_results,
         }
         cache_key = IconViewCache.match_key(normalized_cache_data)
-        cached_data = cache.get(cache_key)
+        # Taxonomy reads active revisions directly; do not serve cached stale
+        # eligibility after a revision, vocabulary or rollout-policy change.
+        use_match_cache = router_mode('content', church_id) == 'baseline'
+        cached_data = cache.get(cache_key) if use_match_cache else None
         if cached_data is not None:
             return Response(cached_data, status=status.HTTP_200_OK)
-        
+
         # Get icons to match against
         queryset = Icon.objects.select_related('church').prefetch_related('tags')
         if church_id:
@@ -292,7 +296,7 @@ class IconMatchView(views.APIView):
         
         outcome = match_icons(icons, IconMatchRequest(
             kind='content', primary_text=prompt, max_results=max_results,
-        ), limits=MatchLimits(total_seconds=20, call_seconds=20))
+        ), church_id=church_id, limits=MatchLimits(total_seconds=20, call_seconds=20))
         icons_by_id = {icon.id: icon for icon in icons}
         matches = []
         for result in outcome.matches:
@@ -304,7 +308,7 @@ class IconMatchView(views.APIView):
                 match_data['icon'] = IconSerializer(icon).data
             matches.append(match_data)
         response_data = {**outcome.to_dict(), 'matches': matches}
-        if outcome.status == 'complete':
+        if outcome.status == 'complete' and use_match_cache:
             cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
         response_status = 503 if outcome.status == 'unavailable' and not matches else 200
         return Response(response_data, status=response_status)

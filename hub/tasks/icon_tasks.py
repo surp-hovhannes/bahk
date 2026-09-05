@@ -7,7 +7,8 @@ from django.db import transaction
 
 from hub.models import Feast
 from hub.services.icon_matching import IconMatchRequest
-from hub.services.icon_match_service import match_icons
+from hub.services.icon_match_router import match_icons
+from hub.services.icon_taxonomy_matching import assignment_current
 from icons.models import Icon
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ def _match_icons_with_llm(icons, request, max_results=3):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def match_icon_to_feast_task(self, feast_id: int):
+def match_icon_to_feast_task(self, feast_id: int, commemoration=None):
     """
     Match an icon to a feast using AI-powered icon matching.
 
@@ -69,6 +70,8 @@ def match_icon_to_feast_task(self, feast_id: int):
                 auto_assign_policy="feast_strict",
                 max_results=1,
             ),
+            church_id=church.id,
+            commemoration=commemoration,
         )
 
         if outcome.status != "complete":
@@ -100,6 +103,8 @@ def match_icon_to_feast_task(self, feast_id: int):
                         )
                         return
                     icon = Icon.objects.select_for_update().get(pk=icon_id, church=church)
+                    if not assignment_current(icon, first_match):
+                        return
                     locked_feast.icon = icon
                     locked_feast.save(update_fields=["icon"])
                 logger.info(
