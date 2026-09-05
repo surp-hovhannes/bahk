@@ -67,3 +67,12 @@ python manage.py test --noinput --parallel --exclude-tag=performance --exclude-t
 ```
 
 Only include `performance` or `slow` tests when the change explicitly touches those tests or performance behavior.
+
+## Independent icon catalogue backfill
+
+See [docs/ICON_TAXONOMY.md](docs/ICON_TAXONOMY.md) and run
+`python manage.py help backfill_icon_taxonomy` / `python manage.py help dispatch_icon_taxonomy`
+for checkpoints, cumulative budgets and recovery. Dry-run is read-only but may read
+private storage. Enqueue without `--dispatch` may wake enabled background workers
+and become billable; dispatch/beat default off. This pipeline changes no existing
+feast/prayer assignments or runtime matching behavior.

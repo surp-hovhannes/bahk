@@ -187,6 +187,16 @@ app.conf.beat_schedule = {
     },
 }
 
+# Reuse the existing scheduler only when explicitly enabled; never create a
+# scheduler or budget at startup. The management dispatcher needs neither beat
+# nor broker when run with --inline.
+if config('ICON_TAXONOMY_BEAT_ENABLED', default=False, cast=bool):
+    app.conf.beat_schedule['dispatch-icon-taxonomy'] = {
+        'task': 'icons.tasks.dispatch_icon_taxonomy',
+        'schedule': crontab(minute='*'),
+    }
+
+
 # ── Startup: Redis connectivity check ─────────────────────────────────────────────
 
 def _redact_url_for_logs(url):

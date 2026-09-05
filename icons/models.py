@@ -3,7 +3,7 @@ import hashlib
 import logging
 from io import BytesIO
 
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 import imagehash
 from imagekit.models import ImageSpecField
@@ -39,8 +39,12 @@ class Icon(models.Model):
     )
     image = models.ImageField(
         upload_to=icon_image_upload_path,
-        help_text='Main icon image. Thumbnail will be resized to fit within 400x300 preserving aspect ratio.'
+        help_text='Main icon image. Descriptive original filenames are preserved as metadata claims, not visual proof. Thumbnail will be resized to fit within 400x300 preserving aspect ratio.'
     )
+    image_content_digest = models.CharField(max_length=64, blank=True, editable=False)
+    image_revision = models.PositiveBigIntegerField(default=0, editable=False)
+    original_filename = models.CharField(max_length=255, blank=True, editable=False)
+    filename_provenance = models.CharField(max_length=32, default='unknown', editable=False)
     thumbnail = ImageSpecField(
         source='image',
         processors=[ResizeToFit(400, 300)],
@@ -99,14 +103,48 @@ class Icon(models.Model):
 
         return image_hash, phash
     
+    @transaction.atomic
     def save(self, *args, **kwargs):
+        from icons.services.ingestion import schedule
+        from icons.services.taxonomy_inputs import filename
+
+        update_fields = args[3] if len(args) >= 4 else kwargs.get('update_fields')
+        persists_image = update_fields is None or 'image' in update_fields
+        if not self._state.adding:
+            # Serialize supported image replacement and assignment on the icon row.
+            previous = type(self).objects.select_for_update().get(pk=self.pk)
+            self.image_revision = previous.image_revision
+            self.image_content_digest = previous.image_content_digest
+        if persists_image and self.image and not self.image._committed:
+            self.original_filename = filename(self.image.name)
+            self.filename_provenance = 'uploaded'
+            if update_fields is not None:
+                update_fields = set(update_fields) | {'original_filename', 'filename_provenance'}
+                if len(args) >= 4:
+                    args = (*args[:3], update_fields, *args[4:])
+                else:
+                    kwargs['update_fields'] = update_fields
+        self._taxonomy_computed_digest = None
+        self._save_with_footprints(*args, **kwargs)
+        if persists_image:
+            new_digest = self._taxonomy_computed_digest
+            if not self.image:
+                new_digest = ''
+            if new_digest is not None and new_digest != self.image_content_digest:
+                self.image_content_digest = new_digest
+                self.image_revision += 1
+                type(self).objects.filter(pk=self.pk).update(
+                    image_content_digest=new_digest, image_revision=self.image_revision)
+        schedule(self.pk)
+
+    def _save_with_footprints(self, *args, **kwargs):
         """Save method with image footprint and thumbnail caching logic."""
         update_fields = kwargs.get('update_fields')
         if len(args) >= 4:
             update_fields = args[3]
 
         # First check if this is a new instance or if the image field has changed
-        is_new_image = (
+        is_new_image = (update_fields is None or 'image' in update_fields) and (
             self._state.adding
             or 'image' in (update_fields or [])
             or (not self._state.adding and self.tracker.has_changed('image'))
@@ -121,6 +159,7 @@ class Icon(models.Model):
             if is_new_image:
                 try:
                     image_hash, phash = self._compute_image_footprints()
+                    self._taxonomy_computed_digest = image_hash
                     if self.image_hash != image_hash:
                         duplicate_hash_exists = type(self).objects.exclude(
                             pk=self.pk
@@ -135,6 +174,7 @@ class Icon(models.Model):
                         self.phash = phash
                         post_save_update_fields.append('phash')
                 except Exception as exc:
+                    self._taxonomy_computed_digest = ''
                     logger.error(
                         'Error computing image footprints for Icon %s: %s',
                         self.pk,
@@ -241,3 +281,10 @@ class IconFeedback(models.Model):
 
     def __str__(self):
         return f"Feedback #{self.pk} on {self.icon} ({self.feedback_type})"
+
+# Django discovers these additive models through this module.
+from icons.taxonomy_models import (  # noqa: E402,F401
+    IconAnalysis, IconAssertion, IconObservation, IconTaxonomyProjection,
+    IconTaxonomyWork, TaxonomyAlias, TaxonomyBudget, TaxonomyCall,
+    TaxonomyConcept, TaxonomyRelation, TaxonomyRelease, TaxonomyRequestInterpretation,
+)

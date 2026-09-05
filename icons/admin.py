@@ -39,6 +39,11 @@ class IconAdmin(admin.ModelAdmin):
         }),
     )
     
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        from icons.services.ingestion import schedule
+        schedule(form.instance.pk)
+
     def get_tag_list(self, obj):
         """Display tags as comma-separated list."""
         return ', '.join([tag.name for tag in obj.tags.all()])
