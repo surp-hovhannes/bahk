@@ -39,7 +39,7 @@ class FeastViewDegradedResponseTests(TestCase):
         response = view(request)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.data['feast'])
+        self.assertEqual(response.data['feasts'], [])
         self.assertIn('error', response.data)
         self.assertEqual(response.data['error'], 'Feast data temporarily unavailable')
 
@@ -58,7 +58,7 @@ class FeastViewDegradedResponseTests(TestCase):
         response = view(request)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.data['feast'])
+        self.assertEqual(response.data['feasts'], [])
         self.assertIn('error', response.data)
 
 
@@ -143,22 +143,22 @@ class FeastViewCacheTests(TestCase):
         force_authenticate(request2, user=user)
         response2 = GetFeastForDate.as_view()(request2)
         self.assertEqual(mock_get_or_create.call_count, 2)
-        self.assertEqual(response2.data['feast']['name'], "Epiphany")
+        self.assertEqual(response2.data['feasts'][0]['name'], "Epiphany")
 
         # Call for same date but a different church — should NOT use cache
         request3 = factory.get(f'/feasts/?date={self.date_str}')
         force_authenticate(request3, user=other_user)
         response3 = GetFeastForDate.as_view()(request3)
         self.assertEqual(mock_get_or_create.call_count, 3)
-        self.assertEqual(response3.data['feast']['name'], "Other Christmas")
+        self.assertEqual(response3.data['feasts'][0]['name'], "Other Christmas")
 
         # First date's cached response should still be same
         request4 = factory.get(f'/feasts/?date={self.date_str}')
         force_authenticate(request4, user=user)
         response4 = GetFeastForDate.as_view()(request4)
         self.assertEqual(mock_get_or_create.call_count, 3)  # Still cached
-        self.assertEqual(response4.data['feast']['name'], response1.data['feast']['name'])
-        self.assertEqual(response4.data['feast']['name'], "Christmas")
+        self.assertEqual(response4.data['feasts'][0]['name'], response1.data['feasts'][0]['name'])
+        self.assertEqual(response4.data['feasts'][0]['name'], "Christmas")
 
 
 class FeastAPIRouteTests(TestCase):
@@ -234,18 +234,18 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["date"], self.date_str)
-        self.assertEqual(data["feast"]["id"], feast.id)
-        self.assertEqual(data["feast"]["name"], "Christmas")
+        self.assertEqual(data["feasts"][0]["id"], feast.id)
+        self.assertEqual(data["feasts"][0]["name"], "Christmas")
         self.assertEqual(
-            data["feast"]["designation"],
+            data["feasts"][0]["designation"],
             Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
-        self.assertIsNone(data["feast"]["icon"])
-        self.assertIsNone(data["feast"]["prayer"])
-        self.assertEqual(data["feast"]["text"], "")
-        self.assertEqual(data["feast"]["short_text"], "")
-        self.assertEqual(data["feast"]["context_thumbs_up"], 0)
-        self.assertEqual(data["feast"]["context_thumbs_down"], 0)
+        self.assertIsNone(data["feasts"][0]["icon"])
+        self.assertIsNone(data["feasts"][0]["prayer"])
+        self.assertEqual(data["feasts"][0]["text"], "")
+        self.assertEqual(data["feasts"][0]["short_text"], "")
+        self.assertEqual(data["feasts"][0]["context_thumbs_up"], 0)
+        self.assertEqual(data["feasts"][0]["context_thumbs_down"], 0)
         mock_get_or_create.assert_called_once_with(
             self.test_date,
             self.church,
@@ -267,7 +267,7 @@ class FeastAPIRouteTests(TestCase):
             response.json(),
             {
                 "date": self.date_str,
-                "feast": None,
+                "feasts": [],
             },
         )
 
@@ -296,10 +296,10 @@ class FeastAPIRouteTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(data["feast"]["designation"], Feast.Designation.MARTYRS)
-        self.assertTrue(data["feast"]["context_eligible"])
-        self.assertEqual(data["feast"]["text"], "")
-        self.assertEqual(data["feast"]["short_text"], "")
+        self.assertEqual(data["feasts"][0]["designation"], Feast.Designation.MARTYRS)
+        self.assertTrue(data["feasts"][0]["context_eligible"])
+        self.assertEqual(data["feasts"][0]["text"], "")
+        self.assertEqual(data["feasts"][0]["short_text"], "")
         mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
@@ -321,10 +321,10 @@ class FeastAPIRouteTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertIsNone(data["feast"]["designation"])
-        self.assertTrue(data["feast"]["context_eligible"])
-        self.assertEqual(data["feast"]["text"], "")
-        self.assertEqual(data["feast"]["short_text"], "")
+        self.assertIsNone(data["feasts"][0]["designation"])
+        self.assertTrue(data["feasts"][0]["context_eligible"])
+        self.assertEqual(data["feasts"][0]["text"], "")
+        self.assertEqual(data["feasts"][0]["short_text"], "")
         mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
@@ -344,19 +344,27 @@ class FeastAPIRouteTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(data["feast"]["designation"], Feast.Designation.FAST)
-        self.assertFalse(data["feast"]["context_eligible"])
-        self.assertEqual(data["feast"]["text"], "")
-        self.assertEqual(data["feast"]["short_text"], "")
+        self.assertEqual(data["feasts"][0]["designation"], Feast.Designation.FAST)
+        self.assertFalse(data["feasts"][0]["context_eligible"])
+        self.assertEqual(data["feasts"][0]["text"], "")
+        self.assertEqual(data["feasts"][0]["short_text"], "")
         mock_generate_context.assert_not_called()
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
     @patch("hub.views.feasts.get_or_create_feast_for_date")
-    def test_api_route_does_not_enqueue_context_for_unclassified_generic_fast(
+    def test_eligibility_no_longer_guesses_from_a_fast_shaped_name(
         self,
         mock_get_or_create,
         mock_generate_context,
     ):
+        """A fast-shaped name on an unclassified row is no longer a reason to withhold context.
+
+        It used to be: a regex looked for "fast"/"lent" plus "day" and blocked generation. That
+        matched display text the engine is free to rewrite, which is the failure the observance
+        id layer exists to prevent -- and it is redundant now, because a row exists only for an
+        observance the engine marks as a commemoration. Whether a day is a fast is answered by
+        the designation, not by how its name reads.
+        """
         feast = self._create_feast(name="First day of the Fast")
         mock_get_or_create.return_value = ([feast], {"status": "success"})
 
@@ -364,23 +372,29 @@ class FeastAPIRouteTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertIsNone(data["feast"]["designation"])
-        self.assertFalse(data["feast"]["context_eligible"])
-        self.assertEqual(data["feast"]["text"], "")
-        self.assertEqual(data["feast"]["short_text"], "")
-        mock_generate_context.assert_not_called()
+        self.assertIsNone(data["feasts"][0]["designation"])
+        self.assertTrue(data["feasts"][0]["context_eligible"])
+        mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
     @patch("hub.views.feasts.get_or_create_feast_for_date")
     @patch("hub.signals.match_icon_to_feast_task.delay")
     @patch("hub.signals.determine_feast_designation_task.delay")
-    def test_api_route_does_not_enqueue_context_for_mijink(
+    def test_api_route_enqueues_context_for_mijink(
         self,
         mock_determine_designation,
         mock_match_icon,
         mock_get_or_create,
         mock_generate_context,
     ):
+        """Mijink gets context now, and the old code contradicted itself about it.
+
+        ``_GENERIC_FAST_DAY_TOKENS`` listed Mijink and blocked generation, while
+        ``determine_feast_designation_task`` exempted it by name as "a named feast, not a generic
+        fast day." The engine settles it: ``twenty_fourth_day_of_great_lent`` is marked both a
+        fast and a commemoration, and the marks are independent -- so it is a commemoration, and
+        commemorations get context.
+        """
         feast = self._create_feast(name="Median day of Great Lent (Mijink)")
         mock_get_or_create.return_value = ([feast], {"status": "success"})
 
@@ -388,11 +402,9 @@ class FeastAPIRouteTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertIsNone(data["feast"]["designation"])
-        self.assertFalse(data["feast"]["context_eligible"])
-        self.assertEqual(data["feast"]["text"], "")
-        self.assertEqual(data["feast"]["short_text"], "")
-        mock_generate_context.assert_not_called()
+        self.assertIsNone(data["feasts"][0]["designation"])
+        self.assertTrue(data["feasts"][0]["context_eligible"])
+        mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
     @patch("hub.views.feasts.get_or_create_feast_for_date")
@@ -412,8 +424,8 @@ class FeastAPIRouteTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertIsNone(data["feast"]["designation"])
-        self.assertTrue(data["feast"]["context_eligible"])
+        self.assertIsNone(data["feasts"][0]["designation"])
+        self.assertTrue(data["feasts"][0]["context_eligible"])
         mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
@@ -440,18 +452,18 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertEqual(data["date"], self.date_str)
-        self.assertEqual(data["feast"]["id"], feast.id)
-        self.assertEqual(data["feast"]["name"], "Christmas")
+        self.assertEqual(data["feasts"][0]["id"], feast.id)
+        self.assertEqual(data["feasts"][0]["name"], "Christmas")
         self.assertEqual(
-            data["feast"]["designation"],
+            data["feasts"][0]["designation"],
             Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
-        self.assertIsNone(data["feast"]["icon"])
-        self.assertIsNone(data["feast"]["prayer"])
-        self.assertEqual(data["feast"]["text"], "")
-        self.assertEqual(data["feast"]["short_text"], "")
-        self.assertEqual(data["feast"]["context_thumbs_up"], 0)
-        self.assertEqual(data["feast"]["context_thumbs_down"], 0)
+        self.assertIsNone(data["feasts"][0]["icon"])
+        self.assertIsNone(data["feasts"][0]["prayer"])
+        self.assertEqual(data["feasts"][0]["text"], "")
+        self.assertEqual(data["feasts"][0]["short_text"], "")
+        self.assertEqual(data["feasts"][0]["context_thumbs_up"], 0)
+        self.assertEqual(data["feasts"][0]["context_thumbs_down"], 0)
         mock_get_or_create.assert_called_once_with(
             self.test_date,
             self.church,
@@ -477,7 +489,7 @@ class FeastAPIRouteTests(TestCase):
         response = self.client.get(self.hub_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json(), {"date": today.isoformat(), "feast": None})
+        self.assertEqual(response.json(), {"date": today.isoformat(), "feasts": []})
         mock_get_or_create.assert_called_once_with(
             today,
             self.church,
@@ -512,7 +524,7 @@ class FeastAPIRouteTests(TestCase):
         icon = self._create_icon()
 
         first_response = self._get_cached_feast_response(feast)
-        self.assertIsNone(first_response.json()["feast"]["icon"])
+        self.assertIsNone(first_response.json()["feasts"][0]["icon"])
 
         feast.icon = icon
         with self.captureOnCommitCallbacks(execute=True):
@@ -520,14 +532,14 @@ class FeastAPIRouteTests(TestCase):
 
         second_response = self._get_cached_feast_response(feast)
         self.assertEqual(second_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(second_response.json()["feast"]["icon"]["id"], icon.id)
+        self.assertEqual(second_response.json()["feasts"][0]["icon"]["id"], icon.id)
 
     def test_icon_matching_task_save_invalidates_cached_response(self):
         feast = self._create_feast(name="Nativity of Christ")
         icon = self._create_icon()
 
         first_response = self._get_cached_feast_response(feast)
-        self.assertIsNone(first_response.json()["feast"]["icon"])
+        self.assertIsNone(first_response.json()["feasts"][0]["icon"])
 
         with self.captureOnCommitCallbacks(execute=True):
             with patch("hub.tasks.icon_tasks.match_icons") as mock_match:
@@ -539,7 +551,7 @@ class FeastAPIRouteTests(TestCase):
 
         feast.refresh_from_db()
         second_response = self._get_cached_feast_response(feast)
-        self.assertEqual(second_response.json()["feast"]["icon"]["id"], icon.id)
+        self.assertEqual(second_response.json()["feasts"][0]["icon"]["id"], icon.id)
 
     def test_feast_context_save_invalidates_cached_context_response(self):
         feast = self._create_feast(name="Christmas")
@@ -550,15 +562,15 @@ class FeastAPIRouteTests(TestCase):
         )
 
         first_response = self._get_cached_feast_response(feast)
-        self.assertEqual(first_response.json()["feast"]["text"], "Old context")
+        self.assertEqual(first_response.json()["feasts"][0]["text"], "Old context")
 
         context.text = "New context"
         context.short_text = "New short"
         context.save(update_fields=["text", "short_text"])
 
         second_response = self._get_cached_feast_response(feast)
-        self.assertEqual(second_response.json()["feast"]["text"], "New context")
-        self.assertEqual(second_response.json()["feast"]["short_text"], "New short")
+        self.assertEqual(second_response.json()["feasts"][0]["text"], "New context")
+        self.assertEqual(second_response.json()["feasts"][0]["short_text"], "New short")
 
     def test_feast_context_feedback_invalidates_cached_vote_counts(self):
         feast = self._create_feast(name="Christmas")
@@ -569,7 +581,7 @@ class FeastAPIRouteTests(TestCase):
         )
 
         first_response = self._get_cached_feast_response(feast)
-        self.assertEqual(first_response.json()["feast"]["context_thumbs_up"], 0)
+        self.assertEqual(first_response.json()["feasts"][0]["context_thumbs_up"], 0)
 
         feedback_response = self.client.post(
             reverse("feast-context-feedback", args=[feast.id]),
@@ -579,7 +591,7 @@ class FeastAPIRouteTests(TestCase):
 
         self.assertEqual(feedback_response.status_code, status.HTTP_200_OK)
         second_response = self._get_cached_feast_response(feast)
-        self.assertEqual(second_response.json()["feast"]["context_thumbs_up"], 1)
+        self.assertEqual(second_response.json()["feasts"][0]["context_thumbs_up"], 1)
 
     def test_icon_save_invalidates_cached_icon_payload(self):
         icon = self._create_icon(title="Old Icon Title")
@@ -587,7 +599,7 @@ class FeastAPIRouteTests(TestCase):
 
         first_response = self._get_cached_feast_response(feast)
         self.assertEqual(
-            first_response.json()["feast"]["icon"]["title"],
+            first_response.json()["feasts"][0]["icon"]["title"],
             "Old Icon Title",
         )
 
@@ -596,7 +608,7 @@ class FeastAPIRouteTests(TestCase):
 
         second_response = self._get_cached_feast_response(feast)
         self.assertEqual(
-            second_response.json()["feast"]["icon"]["title"],
+            second_response.json()["feasts"][0]["icon"]["title"],
             "New Icon Title",
         )
 
@@ -607,7 +619,7 @@ class FeastAPIRouteTests(TestCase):
 
         first_response = self._get_cached_feast_response(feast)
         self.assertEqual(
-            first_response.json()["feast"]["icon"]["tag_list"],
+            first_response.json()["feasts"][0]["icon"]["tag_list"],
             ["old-tag"],
         )
 
@@ -615,7 +627,7 @@ class FeastAPIRouteTests(TestCase):
 
         second_response = self._get_cached_feast_response(feast)
         self.assertEqual(
-            set(second_response.json()["feast"]["icon"]["tag_list"]),
+            set(second_response.json()["feasts"][0]["icon"]["tag_list"]),
             {"old-tag", "new-tag"},
         )
 
@@ -626,14 +638,14 @@ class FeastAPIRouteTests(TestCase):
         ) as mock_get_or_create:
             mock_get_or_create.return_value = ([feast], {"status": "success"})
             first_response = self.client.get("/api/feasts/", {"date": self.date_str})
-            self.assertEqual(first_response.json()["feast"]["id"], feast.id)
+            self.assertEqual(first_response.json()["feasts"][0]["id"], feast.id)
 
             feast.delete()
 
             mock_get_or_create.return_value = ([], {"status": "not_found"})
             second_response = self.client.get("/api/feasts/", {"date": self.date_str})
 
-        self.assertIsNone(second_response.json()["feast"])
+        self.assertEqual(second_response.json()["feasts"], [])
 
 
 class FeastContextFeedbackAPITests(TestCase):

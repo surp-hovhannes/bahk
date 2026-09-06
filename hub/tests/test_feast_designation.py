@@ -479,10 +479,10 @@ class FeastDesignationAPITests(TestCase):
 
         response = view(request)
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feast', response.data)
-        self.assertIn('designation', response.data['feast'])
+        self.assertIn('feasts', response.data)
+        self.assertIn('designation', response.data['feasts'][0])
         self.assertEqual(
-            response.data['feast']['designation'],
+            response.data['feasts'][0]['designation'],
             Feast.Designation.NATIVITY_MOTHER_OF_GOD
         )
 
@@ -503,9 +503,9 @@ class FeastDesignationAPITests(TestCase):
 
         response = view(request)
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feast', response.data)
-        self.assertIn('designation', response.data['feast'])
-        self.assertIsNone(response.data['feast']['designation'])
+        self.assertIn('feasts', response.data)
+        self.assertIn('designation', response.data['feasts'][0])
+        self.assertIsNone(response.data['feasts'][0]['designation'])
 
     @patch('hub.views.feasts.get_or_create_feast_for_date')
     def test_view_uses_check_fast_false(self, mock_get_or_create):

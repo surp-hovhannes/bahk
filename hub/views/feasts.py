@@ -46,21 +46,22 @@ class GetFeastForDate(generics.GenericAPIView):
         - A JSON response with the following structure:
         {
             "date": "YYYY-MM-DD",
-            "feast": {
-                "id": 1,
-                "name": "Feast Name",
-                "text": "AI-generated context text for the feast",
-                "short_text": "Short 2-sentence summary",
-                "context_thumbs_up": 10,
-                "context_thumbs_down": 2
-            }
+            "feasts": [
+                {
+                    "id": 1,
+                    "name": "Feast Name",
+                    "text": "AI-generated context text for the feast",
+                    "short_text": "Short 2-sentence summary",
+                    "context_thumbs_up": 10,
+                    "context_thumbs_down": 2
+                }
+            ]
         }
 
         A day is a list of observances, and only the ones that commemorate a person or an event
-        get a ``Feast`` row -- so a date can now resolve to two of them.  This still serves one,
-        the leading one, because serving an array is a breaking change for the app and lands with
-        it.  ``null`` where the day commemorates nobody, which is 5,070 of the engine's 9,861
-        days and is an answer, not an error.
+        appear here -- so ``feasts`` holds zero, one or two entries.  Empty is the commonest
+        answer by a wide margin (5,070 of the engine's 9,861 days) and means "nothing to show
+        today", not an error.
     """
 
     queryset = Feast.objects.all()
@@ -103,16 +104,14 @@ class GetFeastForDate(generics.GenericAPIView):
             # range, so either it resolved commemorations or there are genuinely none to show.
             feasts, _ = get_or_create_feast_for_date(date_obj, church, check_fast=False)
 
-            # The response is still one feast. A day can now name two commemorations, and both
-            # have rows, but serving them as an array is a breaking change for the app and lands
-            # with it -- so this serves the leading one, which is what the joined name was
-            # dominated by anyway.
-            feast = feasts[0] if feasts else None
-            serialized = self._serialize_feast(feast, request, lang) if feast else None
-            response_data = {"date": date_str, "feast": serialized}
+            serialized = [self._serialize_feast(feast, request, lang) for feast in feasts]
+            response_data = {
+                "date": date_str,
+                "feasts": [entry for entry in serialized if entry is not None],
+            }
 
-            # Cache successful response for 1 hour. None is a real answer on most days, so it is
-            # cached like any other.
+            # Cache successful response for 1 hour. An empty list is a real answer on most days,
+            # so it is cached like any other.
             cache.set(cache_key, response_data, 3600)
             return Response(response_data)
 
@@ -120,7 +119,7 @@ class GetFeastForDate(generics.GenericAPIView):
             # Feast may have been deleted between scheduling and execution — log and degrade gracefully
             logging.warning("Feast not found for date %s (church %s) — may have been deleted", date_obj, church)
             return Response(
-                {"date": date_obj.isoformat(), "feast": None},
+                {"date": date_obj.isoformat(), "feasts": []},
                 status=status.HTTP_200_OK,
             )
         except Exception as e:
@@ -130,7 +129,7 @@ class GetFeastForDate(generics.GenericAPIView):
             return Response(
                 {
                     "date": date_obj.isoformat(),
-                    "feast": None,
+                    "feasts": [],
                     "error": "Feast data temporarily unavailable",
                 },
                 status=status.HTTP_200_OK  # Return 200 not 500 so clients handle gracefully
