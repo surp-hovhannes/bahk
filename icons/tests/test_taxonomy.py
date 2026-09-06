@@ -67,22 +67,17 @@ class FixtureProvider:
             raise TimeoutError("synthetic timeout")
         if stage == "observe":
             assert payload == {} and image, "Image-only stage leaked metadata or omitted image"
-            observations = [
-                dict(id=f"n{i}", kind="inscription", text=name, region="upper inscription", readable=True)
-                for i, name in enumerate(self.names)
-            ]
-            observations += [
-                dict(id=f"a{i}", kind="activity", text=value, region="center action", readable=False)
-                for i, value in enumerate(self.activities)
-            ]
+            from icons.tests.taxonomy_fixtures import fresh_observations
+
+            observations = fresh_observations(self.names, self.activities)
             value = {"depiction": self.depiction, "figures": len(self.names) or 1, "observations": observations}
         elif stage == "compare":
             assert image is None
             value = {
-                "assertions": [
-                    dict(concept=pk, agrees=True, conflict=False, observation_ids=[], inference="metadata agrees")
+                "assertions": {
+                    str(pk): dict(agrees=True, conflict=False, observation_ids=[], inference="metadata agrees")
                     for pk in sorted({c["concept"] for c in payload["claims"]})
-                ]
+                }
             }
         else:
             value = {"concepts": [payload["concepts"][0]["id"]], "unresolved": []}
@@ -276,7 +271,9 @@ class TaxonomyTests(TransactionTestCase):
         self.analyze(
             icon,
             FixtureProvider(
-                names=(), depiction="scene", activities=["giving_thanks", "sharing_food", "comforting", "washing_feet"]
+                names=(),
+                depiction="scene",
+                activities=["shared_supper", "bread_and_cup", "sharing_food", "comforting", "washing_feet"],
             ),
         )
         for text in (
@@ -339,7 +336,7 @@ class TaxonomyTests(TransactionTestCase):
 
     def test_eval_reports_all_requests_without_calendar_ingestion_or_api(self):
         icon = self.icon(title="generic")
-        self.analyze(icon, FixtureProvider(names=(), depiction="scene", activities=["giving_thanks"]))
+        self.analyze(icon, FixtureProvider(names=(), depiction="scene", activities=["shared_supper", "bread_and_cup"]))
         out = StringIO()
         with patch.object(VisionProvider, "call", side_effect=AssertionError("live call")):
             call_command(

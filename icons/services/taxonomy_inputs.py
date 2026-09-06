@@ -9,11 +9,11 @@ from io import BytesIO
 from django.conf import settings
 from PIL import Image, ImageOps
 
-NORMALIZER = "nfc-qualified-v2"
-SCHEMA = "icon-evidence-v1"
-PROMPT = "observation-comparison-v1"
-RULES = "corroboration-v3"
-COMPARISON_PROMPT = "comparison-whole-sources-v2"
+NORMALIZER = "nfc-qualified-v3"
+SCHEMA = "icon-evidence-v2"
+PROMPT = "observation-literal-v2"
+RULES = "corroboration-v4"
+COMPARISON_PROMPT = "comparison-closed-v3"
 ADAPTER = "themes-only-v1"
 
 
@@ -25,6 +25,7 @@ def digest(value):
 
 def normalize(value):
     value = unicodedata.normalize("NFC", value).casefold()
+    value = re.sub(r"[_‐‑–—-]+", " ", value)
     value = re.sub(r"\b(?:saints?|sts?\.?)\s+", "", value)
     value = re.sub(r"^(?:սուրբ|սրբոց|սբ\.?)\s+", "", value)
     value = re.sub(r"[^\w\s]", " ", value)
@@ -42,8 +43,12 @@ def recover_filename(value):
 
 
 def versions():
+    from icons.services.vision_provider import MODEL_PROFILES
+
+    model = getattr(settings, "ICON_TAXONOMY_MODEL", "gpt-5.6-luna")
     return dict(
-        release=getattr(settings, "ICON_TAXONOMY_RELEASE", "catalogue-v1"),
+        profile=MODEL_PROFILES.get(model, {}).get("profile", "unsupported"),
+        release=getattr(settings, "ICON_TAXONOMY_RELEASE", "catalogue-v2"),
         model=getattr(settings, "ICON_TAXONOMY_MODEL", "gpt-5.6-luna"),
         normalizer=NORMALIZER,
         schema=SCHEMA,
@@ -67,10 +72,14 @@ def dependency_snapshot(ids=(), terms=()):
         )
     )
     terms = sorted(set(terms) | set(own_aliases))
-    aliases = list(
-        TaxonomyAlias.objects.filter(Q(concept_id__in=ids) | Q(normalized__in=terms), concept__release__version=release)
-        .order_by("pk")
-        .values("id", "concept_id", "language", "text", "normalized", "source")
+    alias_rows = TaxonomyAlias.objects.filter(
+        Q(concept_id__in=ids) | Q(normalized__in=terms), concept__release__version=release
+    ).values("concept_id", "normalized", "source")
+    # Case/language spelling variants resolving to the same sourced meaning do
+    # not alter matching semantics; new competitors or source changes still do.
+    aliases = sorted(
+        {json.dumps(row, sort_keys=True, ensure_ascii=False): row for row in alias_rows}.values(),
+        key=lambda row: (row["concept_id"], row["normalized"], digest(row["source"])),
     )
     relations = list(
         TaxonomyRelation.objects.filter(source_concept_id__in=ids)
@@ -91,14 +100,20 @@ def dependency_snapshot(ids=(), terms=()):
 
 
 def dependencies_current(snapshot):
-    return bool(snapshot and dependency_snapshot(snapshot["ids"], snapshot["terms"])["digest"] == snapshot["digest"])
+    if not isinstance(snapshot, dict) or not all(key in snapshot for key in ("ids", "terms", "digest")):
+        return False
+    if not isinstance(snapshot["ids"], list) or not all(type(pk) is int for pk in snapshot["ids"]):
+        return False
+    if not isinstance(snapshot["terms"], list) or not all(isinstance(term, str) for term in snapshot["terms"]):
+        return False
+    return dependency_snapshot(snapshot["ids"], snapshot["terms"])["digest"] == snapshot["digest"]
 
 
 def analysis_dependencies(inputs, claims, observation=None, prior=None):
     from icons.models import TaxonomyConcept, TaxonomyAlias
 
     ids = {c["concept"] for c in claims}
-    from icons.services.taxonomy_vocabulary import catalogue_sources
+    from icons.services.taxonomy_vocabulary import catalogue_sources, canonical_identity
 
     terms = {term for source in catalogue_sources(inputs) for term in source["parsed"]["lookup_terms"]}
     # Fixed code-owned scene/theme definitions can add observations absent claims.
@@ -112,7 +127,9 @@ def analysis_dependencies(inputs, claims, observation=None, prior=None):
         ids.update(prior.get("ids", []))
         terms.update(prior.get("terms", []))
     if observation:
-        terms.update(normalize(o["text"]) for o in observation["observations"] if o["kind"] == "inscription")
+        from icons.services.taxonomy_evidence import inscription_spans
+
+        terms.update(canonical_identity(span) for o in observation["observations"] for span in inscription_spans(o))
         ids.update(
             TaxonomyAlias.objects.filter(
                 normalized__in=terms, concept__release__version=versions()["release"]

@@ -7,7 +7,7 @@ from django.conf import settings
 
 from hub.services.icon_match_service import IconMatchOutcome
 from icons.models import Icon, IconTaxonomyProjection, TaxonomyAlias, TaxonomyConcept, TaxonomyRelation
-from icons.services.taxonomy_inputs import dependencies_current, digest, fingerprint, normalize, versions
+from icons.services.taxonomy_inputs import digest, normalize, versions
 from icons.services.taxonomy_vocabulary import parse, NEGATION
 
 
@@ -78,13 +78,9 @@ def interpret(request, *, church_id=None, adapter=None, deadline=None, allow_ada
 
 
 def projection_current(icon, projection, current_versions=None):
-    if projection.church_id != icon.church_id or projection.fingerprint != fingerprint(icon):
-        return False
-    if projection.analysis.state != "complete" or projection.analysis.versions != (current_versions or versions()):
-        return False
-    if not dependencies_current(projection.analysis.dependencies):
-        return False
-    return icon.taxonomy_work.revision == projection.revision and icon.taxonomy_work.state == "complete"
+    from icons.services.taxonomy_freshness import projection_diagnostics
+
+    return not projection_diagnostics(icon, projection, current_versions)
 
 
 def match_icons(icons, request, *, church_id=None, adapter=None, deadline=None, allow_adapter=True, commemoration=None):
@@ -133,7 +129,11 @@ def match_icons(icons, request, *, church_id=None, adapter=None, deadline=None, 
             outcome.diagnostics.append("deadline")
             break
         p = projections.get(icon.pk)
-        if not p or not projection_current(icon, p, current_versions):
+        from icons.services.taxonomy_freshness import projection_diagnostics
+
+        stale = projection_diagnostics(icon, p, current_versions)
+        if stale:
+            outcome.diagnostics = sorted(set(outcome.diagnostics) | set(stale))
             continue
         outcome.assessed_count += 1
         accepted = {a["concept"]: a for a in p.attributes if a["concept"] and a["status"] == "supported"}
@@ -189,8 +189,15 @@ def match_icons(icons, request, *, church_id=None, adapter=None, deadline=None, 
             eligible = False
         if any(a["status"] == "contradicted" and a["attribute"] in {"subject", "event", "group"} for a in p.attributes):
             eligible = False
+        qualified_subjects = all(
+            TaxonomyConcept.objects.get(pk=pk).definition.get("qualified", False)
+            for pk in requested
+            if TaxonomyConcept.objects.get(pk=pk).kind == "subject"
+        )
         eligible = bool(
             eligible
+            and qualified_subjects
+            and not any(e.get("weak_identity_conflict") for a in p.attributes for e in a["evidence"])
             and not parsed["unresolved"]
             and not parsed["adapter"]
             and themes <= accepted.keys()
@@ -201,8 +208,9 @@ def match_icons(icons, request, *, church_id=None, adapter=None, deadline=None, 
             if corroborated
             else (
                 "observed"
+                if (covered and all(accepted[pk]["evidence_level"] == "observed" for pk in covered))
+                else "inferred"
                 if relation == "thematic"
-                or (covered and all(accepted[pk]["evidence_level"] == "observed" for pk in covered))
                 else "metadata"
             )
         )

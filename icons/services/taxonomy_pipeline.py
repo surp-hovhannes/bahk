@@ -29,10 +29,10 @@ from icons.services.taxonomy_inputs import (
 from icons.services.taxonomy_rules import validate_assertions
 from icons.services.taxonomy_vocabulary import catalogue_claims, catalogue_sources
 from icons.services.vision_provider import (
-    COMPARISON_SCHEMA,
     OBSERVATION_SCHEMA,
     VisionProvider,
     bounded_validate,
+    comparison_schema,
 )
 
 MAX_ATTEMPTS = 3
@@ -86,7 +86,16 @@ def due_work():
 def claim(icon_id):
     if not Icon.objects.select_for_update().filter(pk=icon_id).exists():
         return None
-    work = due_work().select_for_update().filter(icon_id=icon_id).first()
+    from icons.services.ingestion import INLINE_OWNED
+
+    if INLINE_OWNED.get():
+        work = (
+            IconTaxonomyWork.objects.select_for_update()
+            .filter(icon_id=icon_id, state="inline_pending", lease_token=INLINE_OWNED.get())
+            .first()
+        )
+    else:
+        work = due_work().select_for_update().filter(icon_id=icon_id).first()
     if work is None:
         return None
     if work.attempts >= MAX_ATTEMPTS:
@@ -98,7 +107,7 @@ def claim(icon_id):
     updated = IconTaxonomyWork.objects.filter(
         pk=work.pk, revision=work.revision, lease_token=work.lease_token, state=work.state, attempts=work.attempts
     ).update(
-        state="running",
+        state="inline_running" if INLINE_OWNED.get() else "running",
         lease_token=token,
         lease_until=timezone.now() + timedelta(seconds=LEASE_SECONDS),
         attempts=work.attempts + 1,
@@ -118,7 +127,7 @@ def current(work, input_metadata, image_digest, expected_versions, *, read_image
         pk=work.pk,
         revision=work.revision,
         lease_token=work.lease_token,
-        state="running",
+        state=work.state,
         lease_until__gt=timezone.now(),
     ).exists():
         raise StaleInput("lease_or_revision_changed")
@@ -135,7 +144,17 @@ def wire_call(provider, stage, payload, schema, *, image=None, analysis=None, bu
         raise RuntimeError("provider_inside_transaction")
     if timeout is not None and timeout <= 0:
         raise TimeoutError("deadline")
-    reservation = reserve(stage, payload, image=bool(image), analysis=analysis, budget_name=budget_name)
+    from icons.services.vision_provider import HARDENED_PROMPTS
+
+    reservation = reserve(
+        stage,
+        payload,
+        image=bool(image),
+        analysis=analysis,
+        budget_name=budget_name,
+        schema=schema,
+        instructions=HARDENED_PROMPTS[stage],
+    )
     # Crash/timeout after this point retains the entire reservation as unknown.
     value, returned_model, usage = provider.call(
         stage, payload, schema, image=image, **({"timeout": timeout} if timeout is not None else {})
@@ -143,12 +162,22 @@ def wire_call(provider, stage, payload, schema, *, image=None, analysis=None, bu
     TaxonomyCall.objects.filter(pk=reservation.pk).update(
         usage=usage, returned_model=returned_model[:100], state="returned"
     )
-    bounded_validate(value, schema)
+    if stage == "compare":
+        from icons.services.taxonomy_evidence import bounded_comparison
+
+        bounded_comparison(value)
+    else:
+        bounded_validate(value, schema)
     return value, returned_model, usage
 
 
 def finish(work, state, error=""):
-    updates = dict(state=state, error=error, lease_until=None, lease_token="")
+    updates = dict(
+        state="inline_retry" if state == "retry" and work.state == "inline_running" else state,
+        error=error,
+        lease_until=None,
+        lease_token="",
+    )
     if state == "retry":
         updates["available_at"] = timezone.now() + timedelta(seconds=30 * 2 ** (work.attempts - 1))
     return IconTaxonomyWork.objects.filter(pk=work.pk, revision=work.revision, lease_token=work.lease_token).update(
@@ -164,7 +193,42 @@ def transient(exc):
     )
 
 
-def process_icon(icon_id, *, provider=None, budget_name=None):
+def compatible_retained_observation(icon, image_digest, version):
+    """Explicit recovery only; never mix model/image/church identities.
+
+    Legacy observations remain labelled legacy and pass the conservative legacy
+    reader. They are not relabelled as a response to the new observation prompt.
+    """
+    from icons.services.vision_provider import LEGACY_OBSERVATION_SCHEMA
+
+    for prior in (
+        IconAnalysis.objects.filter(
+            icon=icon,
+            church_id=icon.church_id,
+            image_digest=image_digest,
+            observation__state="complete",
+            versions__model=version["model"],
+            versions__image_processor=version["image_processor"],
+        )
+        .select_related("observation")
+        .order_by("-created_at")
+    ):
+        contract = (prior.versions.get("schema"), prior.versions.get("prompt"))
+        if contract == (version["schema"], version["prompt"]) and prior.versions.get("profile") == version["profile"]:
+            schema = OBSERVATION_SCHEMA
+        elif contract == ("icon-evidence-v1", "observation-comparison-v1") and version["profile"] == "luna-none-v1":
+            schema = LEGACY_OBSERVATION_SCHEMA
+        else:
+            continue
+        try:
+            bounded_validate(prior.observation.evidence, schema)
+        except ValueError:
+            continue
+        return prior.observation
+    return None
+
+
+def process_icon(icon_id, *, provider=None, budget_name=None, reuse_observations=False):
     if provider is None and not getattr(settings, "ICON_TAXONOMY_DISPATCH_ENABLED", False):
         return "disabled"
     if connection.in_atomic_block:
@@ -223,12 +287,16 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
                     "church": icon.church_id,
                     "image": image_digest,
                     "model": version["model"],
+                    "profile": version["profile"],
                     "prompt": version["prompt"],
                     "schema": version["schema"],
                     "processor": version["image_processor"],
                 }
             )
-            cached = independent_observation(
+            retained = None
+            if reuse_observations:
+                retained = compatible_retained_observation(icon, image_digest, version)
+            cached = retained or independent_observation(
                 observation_key,
                 icon,
                 provider,
@@ -239,13 +307,18 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
             )
             current(work, inputs, image_digest, version, dependencies=dependencies)
             analysis.observation = cached
-            analysis.save(update_fields=["observation"])
+            analysis.claims["observation_reuse"] = "retained_compatible" if retained else "current_contract"
+            analysis.claims["observation_key"] = cached.key
+            analysis.save(update_fields=["observation", "claims"])
             observation = cached.evidence
             if not dependencies_current(dependencies):
                 raise StaleInput("meaning_changed")
             dependencies = analysis_dependencies(inputs, claims, observation, prior=dependencies)
             analysis.dependencies = dependencies
             analysis.save(update_fields=["dependencies"])
+            if not claims:
+                analysis.comparison = {"assertions": []}
+                analysis.save(update_fields=["comparison"])
             if not analysis.comparison:
                 current(work, inputs, image_digest, version, dependencies=dependencies)
                 from icons.models import TaxonomyConcept
@@ -265,11 +338,22 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
                 if len(str(payload).encode()) > 64000:
                     raise ValueError("claims_too_large")
                 comparison, returned_model, usage = wire_call(
-                    provider, "compare", payload, COMPARISON_SCHEMA, analysis=analysis, budget_name=budget_name
+                    provider,
+                    "compare",
+                    payload,
+                    comparison_schema(claims, observation),
+                    analysis=analysis,
+                    budget_name=budget_name,
                 )
                 analysis.comparison = comparison
                 analysis.save(update_fields=["comparison"])
-            assertions = validate_assertions(claims, observation, analysis.comparison, sources=sources)
+            from icons.services.taxonomy_evidence import normalize_comparison
+
+            raw_comparison = {"assertions": analysis.comparison["assertions"]}
+            _, _, diagnostics = normalize_comparison(claims, observation, raw_comparison)
+            analysis.comparison = {**raw_comparison, "diagnostics": diagnostics}
+            analysis.save(update_fields=["comparison"])
+            assertions = validate_assertions(claims, observation, raw_comparison, sources=sources)
         else:
             assertions = list(
                 analysis.assertions.values("concept_id", "attribute", "status", "evidence_level", "rule", "evidence")
@@ -320,9 +404,9 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
         return "superseded"
     except ObservationBusy:
         if finish(work, "retry", "observation_leased"):
-            IconTaxonomyWork.objects.filter(pk=work.pk, revision=work.revision, state="retry").update(
-                available_at=timezone.now() + timedelta(seconds=LEASE_SECONDS), attempts=max(0, work.attempts - 1)
-            )
+            IconTaxonomyWork.objects.filter(
+                pk=work.pk, revision=work.revision, state__in=["retry", "inline_retry"]
+            ).update(available_at=timezone.now() + timedelta(seconds=LEASE_SECONDS), attempts=max(0, work.attempts - 1))
         return "retry"
     except BudgetExhausted as exc:
         finish(work, "budget_blocked", str(exc))
@@ -333,7 +417,27 @@ def process_icon(icon_id, *, provider=None, budget_name=None):
         retry = transient(exc) and work.attempts < MAX_ATTEMPTS
         state = "retry" if retry else "unavailable"
         # Codes only: exceptions can contain private URLs or model response content.
-        error = type(exc).__name__[:80]
+        allowed_errors = {
+            "schema",
+            "duplicate_json_key",
+            "legacy_release_requires_upgrade",
+            "malformed_comparison",
+            "oversized_evidence",
+            "invalid_observation",
+            "unknown_claim_concept",
+            "missing_image",
+            "image_too_large",
+            "claims_too_large",
+            "metadata_sources_too_large",
+            "incomplete_response",
+            "provider_disabled",
+            "unsupported_taxonomy_model",
+        }
+        error = (
+            str(exc)
+            if isinstance(exc, ValueError) and str(exc) in allowed_errors
+            else ("provider_transport_failure" if transient(exc) else "analysis_processing_failure")
+        )
         finish(work, state, error)
         if analysis is not None:
             IconAnalysis.objects.filter(pk=analysis.pk).exclude(state="complete").update(state=state, error=error)

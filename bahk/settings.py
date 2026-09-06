@@ -718,7 +718,7 @@ TRACK_USER_ACCOUNT_CREATED = config('TRACK_USER_ACCOUNT_CREATED', default=True, 
 # Taxonomy is opt-in. No implicit budget, scheduler or provider rollout.
 ICON_TAXONOMY_DISPATCH_ENABLED = config('ICON_TAXONOMY_DISPATCH_ENABLED', default=False, cast=bool)
 ICON_TAXONOMY_BEAT_ENABLED = config('ICON_TAXONOMY_BEAT_ENABLED', default=False, cast=bool)
-ICON_TAXONOMY_RELEASE = config('ICON_TAXONOMY_RELEASE', default='catalogue-v1')
+ICON_TAXONOMY_RELEASE = config('ICON_TAXONOMY_RELEASE', default='catalogue-v2')
 ICON_TAXONOMY_MODEL = config('ICON_TAXONOMY_MODEL', default='gpt-5.6-luna')
 ICON_TAXONOMY_BUDGET = config('ICON_TAXONOMY_BUDGET', default='')
 ICON_TAXONOMY_MAX_USD_PER_MILLION_TOKENS = config('ICON_TAXONOMY_MAX_USD_PER_MILLION_TOKENS', default=0, cast=float)
