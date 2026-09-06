@@ -285,3 +285,10 @@ Focused suites: `icons.tests.test_taxonomy`, `icons.tests.test_taxonomy_backfill
 `scripts/crabbox-validate.sh ci`, publishing and any separately authorized isolated
 paired live evaluation. No deployment, production mutation or paid calls occur as
 part of offline repair/replay.
+
+After a writable `backfill_icon_taxonomy` batch, selected complete projections whose
+only freshness issue is dependency growth are recomputed from retained observations
+and comparisons, without provider calls or budget reservations. Original analyses
+remain immutable. The final JSON rows and summary `fresh`/`stale` counts describe the
+post-reconciliation state; active, incomplete, and unselected work is not reclaimed
+by this pass. Dry-run and status remain read-only.

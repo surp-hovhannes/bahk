@@ -12,7 +12,7 @@ from PIL import Image, ImageOps
 NORMALIZER = "nfc-qualified-v3"
 SCHEMA = "icon-evidence-v2"
 PROMPT = "observation-literal-v2"
-RULES = "corroboration-v4"
+RULES = "corroboration-v5"
 COMPARISON_PROMPT = "comparison-closed-v3"
 ADAPTER = "themes-only-v1"
 

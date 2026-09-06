@@ -166,6 +166,151 @@ class HardeningTests(TransactionTestCase):
     analyze = fixtures.TaxonomyTests.analyze
     matches = fixtures.TaxonomyTests.matches
 
+    def test_single_certain_foot_washing_and_suggestive_controls(self):
+        base = dict(
+            id="a0",
+            kind="activity",
+            code="washing_feet",
+            readable=False,
+            uncertain=False,
+            literal_spans=[],
+            region="lower center",
+            text="A kneeling attendant pours water from a pitcher over the bare foot of a seated figure into a basin.",
+        )
+        event = resolve("Washing of Feet")
+        themes = {resolve("service").pk, resolve("humility").pk}
+        cases = [
+            ({}, True),
+            ({"text": "Water is being poured over a seated figure's foot into a basin."}, True),
+            ({"uncertain": True}, False),
+            ({"text": "Water is possibly poured over a seated figure's foot into a basin."}, False),
+            ({"text": "Hands are near the seated figure's feet beside a basin."}, False),
+            ({"text": "A kneeling figure has a bowed head beside seated figures."}, False),
+            ({"text": "Washing hands beside another figure whose feet are visible."}, False),
+            ({"code": "unknown", "text": "A figure seems to wash a foot beside a basin."}, False),
+        ]
+        for changes, supported in cases:
+            with self.subTest(changes=changes):
+                result = validate_assertions(
+                    [],
+                    {"depiction": "scene", "figures": 2, "observations": [{**base, **changes}]},
+                    {"assertions": []},
+                )
+                accepted = {a["concept"]: a for a in result if a["status"] == "supported"}
+                self.assertEqual(event.pk in accepted, supported)
+                self.assertEqual(themes <= accepted.keys(), supported)
+                if supported:
+                    self.assertEqual(accepted[event.pk]["evidence_level"], "observed")
+                    self.assertEqual({accepted[pk]["evidence_level"] for pk in themes}, {"inferred"})
+
+    def test_batch_growth_reconciles_retained_evidence_in_either_order(self):
+        from icons.management.commands.dispatch_icon_taxonomy import run_inline
+        from icons.services.taxonomy_reconciliation import reconcile_selected_projections
+
+        for reverse, name in ((False, "Irene of the Valley"), (True, "Julian of the Mountain")):
+            with self.subTest(reverse=reverse):
+                outside = self.icon(title="Unlabelled portrait")
+                self.analyze(outside, fixtures.FixtureProvider(names=(name,)))
+                outside_before = IconTaxonomyProjection.objects.filter(icon=outside).values().get()
+                first = self.icon(title="Unlabelled portrait")
+                second = self.icon(title="Saint " + name)
+                provider = fixtures.FixtureProvider(names=(name,))
+                before_reconciliation = {}
+
+                def ordered(ids, **kwargs):
+                    order = list(reversed(ids)) if reverse else ids
+                    outcomes = dict(zip(order, run_inline(order, **kwargs)))
+                    return [outcomes[pk] for pk in ids]
+
+                def reconcile(ids):
+                    before_reconciliation["analyses"] = list(IconAnalysis.objects.values())
+                    before_reconciliation["calls"] = len(provider.calls)
+                    self.budget.refresh_from_db()
+                    before_reconciliation["budget"] = (self.budget.calls, self.budget.tokens, self.budget.microdollars)
+                    if not reverse:
+                        self.assertFalse(
+                            dependencies_current(IconTaxonomyProjection.objects.get(icon=first).analysis.dependencies)
+                        )
+                    result = reconcile_selected_projections(ids)
+                    self.assertEqual(len(provider.calls), before_reconciliation["calls"])
+                    self.budget.refresh_from_db()
+                    self.assertEqual(
+                        (self.budget.calls, self.budget.tokens, self.budget.microdollars),
+                        before_reconciliation["budget"],
+                    )
+                    return result
+
+                out = StringIO()
+                with (
+                    patch("icons.services.taxonomy_pipeline.VisionProvider", return_value=provider),
+                    patch("icons.management.commands.backfill_icon_taxonomy.run_inline", side_effect=ordered),
+                    patch(
+                        "icons.management.commands.backfill_icon_taxonomy.reconcile_selected_projections",
+                        side_effect=reconcile,
+                    ),
+                ):
+                    call_command(
+                        "backfill_icon_taxonomy",
+                        dispatch=True,
+                        enable_inline=True,
+                        budget="offline",
+                        icon_ids=[first.pk, second.pk],
+                        stdout=out,
+                    )
+                report = json.loads(out.getvalue())
+                self.assertEqual(report["summary"], {"processed": 2, "fresh": 2})
+                self.assertEqual([row["freshness"] for row in report["rows"]], [[], []])
+                self.assertEqual([call[0] for call in provider.calls].count("observe"), 2)
+                self.assertEqual([call[0] for call in provider.calls].count("compare"), 1)
+                for row in before_reconciliation["analyses"]:
+                    self.assertEqual(IconAnalysis.objects.filter(pk=row["id"]).values().get(), row)
+                self.assertEqual(IconTaxonomyProjection.objects.filter(icon=outside).values().get(), outside_before)
+                for icon in (first, second):
+                    icon.refresh_from_db()
+                    projection = IconTaxonomyProjection.objects.get(icon=icon)
+                    self.assertEqual(projection_diagnostics(icon, projection), [])
+                    self.assertTrue(
+                        any(
+                            a["concept"] == resolve(name).pk and a["status"] == "supported"
+                            for a in projection.attributes
+                        )
+                    )
+
+    def test_dependency_reconciliation_accepts_legacy_empty_comparison(self):
+        from icons.services.taxonomy_reconciliation import reconcile_selected_projections
+
+        icon = self.icon(title="Unlabelled portrait")
+        self.analyze(icon, fixtures.FixtureProvider(names=("Irene of the Valley",)))
+        projection = IconTaxonomyProjection.objects.get(icon=icon)
+        IconAnalysis.objects.filter(pk=projection.analysis_id).update(comparison={})
+        catalogue_claims({"title": "Saint Irene of the Valley", "tags": [], "filename": ""})
+        projection.refresh_from_db()
+        self.assertEqual(projection_diagnostics(icon, projection), ["dependency_changed"])
+
+        self.assertEqual(reconcile_selected_projections([icon.pk]), [icon.pk])
+
+        projection.refresh_from_db()
+        self.assertEqual(projection_diagnostics(icon, projection), [])
+        self.assertEqual(projection.analysis.comparison, {})
+
+    def test_dependency_reconciliation_does_not_claim_active_or_incomplete_work(self):
+        from icons.services.taxonomy_reconciliation import reconcile_selected_projections
+
+        icon = self.icon(title="Unlabelled portrait")
+        self.analyze(icon, fixtures.FixtureProvider(names=("Irene of the Valley",)))
+        catalogue_claims({"title": "Saint Irene of the Valley", "tags": [], "filename": ""})
+        before = IconTaxonomyProjection.objects.filter(icon=icon).values().get()
+        for state in ("inline_running", "running", "inline_pending", "budget_blocked", "unavailable", "retry"):
+            with self.subTest(state=state):
+                IconTaxonomyWork.objects.filter(icon=icon).update(
+                    state=state, lease_token="other-owner", lease_until=timezone.now() + timedelta(minutes=5)
+                )
+                work = IconTaxonomyWork.objects.filter(icon=icon).values().get()
+                self.assertEqual(reconcile_selected_projections([icon.pk]), [])
+                self.assertEqual(IconTaxonomyWork.objects.filter(icon=icon).values().get(), work)
+                self.assertEqual(IconTaxonomyProjection.objects.filter(icon=icon).values().get(), before)
+        self.assertEqual(icon.taxonomic_analyses.count(), 1)
+
     def test_qualified_places_roles_and_provenance_holdouts(self):
         for title in ("Saint Cyril of Jerusalem", "Saint Basil of Caesarea", "Saint Julian of the Cathedral"):
             claims = catalogue_claims({"title": title, "tags": [], "filename": ""})
@@ -436,7 +581,7 @@ class HardeningTests(TransactionTestCase):
             (row["before_state"], row["after_state"], row["processing_result"]), ("missing", "complete", "complete")
         )
         self.assertEqual(row["freshness"], [])
-        self.assertEqual(report["summary"], {"processed": 1})
+        self.assertEqual(report["summary"], {"processed": 1, "fresh": 1})
         self.assertEqual(IconTaxonomyWork.objects.filter(icon=unrelated).values().get(), before_other)
         self.assertFalse(__import__("django.conf", fromlist=["settings"]).settings.ICON_TAXONOMY_DISPATCH_ENABLED)
 
@@ -454,7 +599,7 @@ class HardeningTests(TransactionTestCase):
                     icon_ids=[icon.pk],
                     stdout=out,
                 )
-            self.assertEqual(json.loads(out.getvalue())["summary"], {"failed": 1})
+            self.assertEqual(json.loads(out.getvalue())["summary"], {"failed": 1, "stale": 1})
         self.assertEqual(IconTaxonomyWork.objects.get(icon=icon).state, "inline_retry")
         self.assertNotIn(icon.pk, due_work().values_list("icon_id", flat=True))
         provider.fail_stage = None

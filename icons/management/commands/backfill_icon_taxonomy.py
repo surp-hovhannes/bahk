@@ -20,6 +20,7 @@ from icons.management.commands.dispatch_icon_taxonomy import (
 )
 from icons.models import Icon, IconTaxonomyWork
 from icons.services.ingestion import schedule, refresh_content, inline_owned, own_inline_work, INLINE_OWNED
+from icons.services.taxonomy_reconciliation import reconcile_selected_projections
 from icons.services.taxonomy_reporting import inspection, finalize_rows, budget_report
 from icons.services.taxonomy_inputs import dependencies_current, fingerprint, image_input, recover_filename, versions
 
@@ -40,7 +41,9 @@ observations may be reused only with a compatible image/model/observation contra
 --resume-inline reclaims expired inline ownership within exact selection after a crash.
 --resume-budget-blocked resets work attempts, never cumulative reservations.
 JSON rows report before_state, action, after_state, processing_result, analysis_id,
-assertion counts, freshness and sanitized diagnostics. Reservations are not actual cost.
+assertion counts, freshness and sanitized diagnostics. A final selected projection pass
+reconciles dependency growth from retained evidence without provider calls; summary
+fresh/stale counts describe that final state. Reservations are not actual cost.
 Partial execution failures emit full JSON then exit nonzero. Inspect/resume failed IDs;
 checkpoint pagination alone does not retry a failed earlier row. Disable pilot budgets
 explicitly after use; this command never silently enables an existing disabled budget.
@@ -197,7 +200,12 @@ Examples:
                 if budget
                 else []
             )
+        if not readonly:
+            reconcile_selected_projections(ids)
         summary = finalize_rows(rows, states, readonly=readonly)
+        for row in rows:
+            key = "stale" if row["freshness"] else "fresh"
+            summary[key] = summary.get(key, 0) + 1
         self.stdout.write(
             json.dumps(
                 {

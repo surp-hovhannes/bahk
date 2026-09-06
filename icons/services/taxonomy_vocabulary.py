@@ -425,10 +425,11 @@ def catalogue_sources(metadata, *, create=False):
     return sources
 
 
-def catalogue_claims(metadata):
-    seed_vocabulary()
+def catalogue_claims(metadata, *, create=True):
+    if create:
+        seed_vocabulary()
     claims = []
-    for source in catalogue_sources(metadata, create=True):
+    for source in catalogue_sources(metadata, create=create):
         parsed = source["parsed"]
         for kind in ("subjects", "themes"):
             claims.extend({"concept": pk, "source": source["source"], "text": source["text"]} for pk in parsed[kind])

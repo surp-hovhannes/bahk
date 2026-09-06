@@ -64,8 +64,9 @@ def observation_codes(obs):
     patterns = {
         "washing_feet": (
             r"\bwash(?:es|ing|ed)? " + foot + r"\b",
-            r"\bpour(?:s|ing|ed)? water (?:over|onto|on) " + foot + r"\b",
+            r"\bpour(?:s|ing|ed)? water (?:from (?:a |the )?(?:vessel|pitcher|jug) )?(?:over|onto|on) " + foot + r"\b",
             r"\b(?:feet|foot) (?:is |are |being )*(?:washed|bathed)\b",
+            r"\bwater (?:is |being )*poured (?:over|onto|on) " + foot + r"\b",
         ),
         "praying": (
             r"\bhands (?:are )?(?:joined|clasped|folded) (?:together )?in prayer\b",
