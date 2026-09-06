@@ -713,7 +713,13 @@ class Command(BaseCommand):
             )
 
     def _create_feasts(self, days):
-        """Create sample feasts for some days."""
+        """Create sample feasts, one per church that has days.
+
+        A Feast belongs to a church, not to a Day, and its real identity is an
+        ``observance_id`` from the lectionary engine. These are invented names the engine never
+        emits, so they get no id -- the same shape as any hand-made row, which is what
+        ``audit_feast_duplicates`` reports and ``get_or_create_feast_for_date`` adopts.
+        """
         feasts = []
         feast_names = [
             ("Feast of the Nativity", "Ծննդյան տոն"),
@@ -723,8 +729,13 @@ class Command(BaseCommand):
             ("Presentation of Jesus at the Temple", "Տեառնընդառաջ"),
         ]
 
-        for i, day in enumerate(days[:5]):  # Create feasts for first 5 days
+        # One row per (church, name): the feast recurs, so it is not per-day.
+        seen = set()
+        for i, day in enumerate(days[:5]):
             name_en, name_hy = feast_names[i % len(feast_names)]
+            if (day.church_id, name_en) in seen:
+                continue
+            seen.add((day.church_id, name_en))
 
             feast = models.Feast.objects.create(
                 church=day.church,

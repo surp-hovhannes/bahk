@@ -1,6 +1,10 @@
-"""Compute the feast/fast name of the day from the offline ``armenian_lectionary`` engine.
+"""Compute the day's commemorations from the offline ``armenian_lectionary`` engine.
 
-Reads the engine's ``"Liturgical Day"`` field in both ``en`` and ``hy``.
+Reads the engine's ``"Observances"`` array in both ``en`` and ``hy``.  A liturgical day is a
+list of observances, not one name: the engine joins them into ``"Liturgical Day"`` for display,
+but serves the components separately, each with the marks that say what it is.  Only the ones
+marked ``is_comm`` -- commemorating a person or an event, rather than merely locating the day in
+the calendar -- become feasts here.
 """
 import functools
 import logging
@@ -14,12 +18,22 @@ from hub.utils import SUPPORTED_CHURCHES
 logger = logging.getLogger(__name__)
 
 
-def get_feast_for_date(date_obj, church) -> dict | None:
-    """Return the day's feast name, computed offline from ``armenian_lectionary``.
+def get_feast_for_date(date_obj, church) -> list[dict] | None:
+    """Return the day's commemorations, computed offline from ``armenian_lectionary``.
 
-    Returns a dict with ``"name"``, ``"name_en"`` and ``"name_hy"`` keys, or ``None`` if there is
-    no feast to record.  Returns ``None`` for unsupported churches or dates outside the validated
-    year window.
+    One dict per commemoration, in the order the engine serves them, with ``"observance_id"``,
+    ``"name"``, ``"name_en"`` and ``"name_hy"`` keys.  ``observance_id`` is what a ``Feast`` row
+    is keyed by: a published catalog id keeps meaning the same observance across engine releases,
+    while the display text gets corrected.
+
+    Most days have none.  Of the 9,861 days the engine supports, 5,070 carry no commemoration at
+    all (the weekly Wednesday and Friday fasts alone are 1,334), 4,606 carry one and 185 carry
+    two -- so an empty list is the single most common answer, and means "nothing to show today".
+
+    ``None`` is a different fact: no answer at all, for an unsupported church, a date outside the
+    validated year window, or a day the engine could not resolve.  Callers must not collapse the
+    two -- a broken install answers ``None`` for every day, and reading that as "no commemoration"
+    would quietly serve an empty calendar.
     """
     if church not in SUPPORTED_CHURCHES:
         logger.error(
@@ -43,18 +57,33 @@ def get_feast_for_date(date_obj, church) -> dict | None:
         return None
 
     result_en = armenian_lectionary.compute_armenian_lectionary(date_obj, language="en")
-    name_en = (result_en.get("Liturgical Day") or "").strip()
-    if not name_en:
+    observances_en = result_en.get("Observances") or []
+    if not observances_en:
+        # The engine resolves its components all or nothing, so an empty array never means "a day
+        # with nothing on it" -- it means at least one component had no catalog entry, and on an
+        # install missing the catalog every day answers this way.
+        logger.warning(
+            "Engine did not resolve observances for %s; no feast returned.", date_obj)
         return None
 
     result_hy = armenian_lectionary.compute_armenian_lectionary(date_obj, language="hy")
-    name_hy = (result_hy.get("Liturgical Day") or "").strip()
+    # Paired by id, not by position: the ids are language-independent by construction, so this
+    # states the join the engine guarantees instead of assuming the two lists line up.
+    names_hy = {o["id"]: o["name"] for o in result_hy.get("Observances") or []}
 
-    return {
-        "name": name_en,
-        "name_en": name_en,
-        "name_hy": name_hy,
-    }
+    return [
+        {
+            "observance_id": observance["id"],
+            "name": observance["name"],
+            "name_en": observance["name"],
+            "name_hy": names_hy.get(observance["id"], ""),
+        }
+        # Marked per observance and human-reviewed, not inferred from the text. Shape cannot
+        # substitute: "Sixth Sunday of Great Lent: Sunday of the Advent" and "Sixth day of
+        # Nativity" read identically and answer oppositely. is_fast is deliberately not consulted
+        # -- the two marks are independent, and the six ids carrying both include Great Friday.
+        for observance in observances_en if observance["is_comm"]
+    ]
 
 
 @functools.lru_cache(maxsize=1)
@@ -68,6 +97,11 @@ def _dates_by_name():
       * the reference-data matcher in ``llm_service``, which boosts its confidence when a
         candidate in ``data/feasts.json`` falls on the same month and day.
 
+    Keyed on the name of a single OBSERVANCE, not on the day's joined ``"Liturgical Day"``.  A
+    ``Feast`` holds one component now, so the joined string would miss every day that names more
+    than one thing -- and it would miss it silently, returning no date rather than raising, which
+    is how the matcher would have quietly degraded to name-only confidence.
+
     Cached: it sweeps the engine's whole supported range, which costs a couple of seconds, and
     that result is fixed for a given engine version. Sweeping is affordable precisely because it
     happens at most once per process.
@@ -76,10 +110,11 @@ def _dates_by_name():
     day = date(MIN_YEAR, 1, 1)
     end = date(MAX_YEAR, 12, 31)
     while day <= end:
-        name = (armenian_lectionary.compute_armenian_lectionary(day)
-                .get("Liturgical Day") or "").strip()
-        if name:
-            dates.setdefault(name, []).append(day)
+        result = armenian_lectionary.compute_armenian_lectionary(day)
+        for observance in result.get("Observances") or []:
+            name = (observance.get("name") or "").strip()
+            if name:
+                dates.setdefault(name, []).append(day)
         day += timedelta(days=1)
     return dates
 

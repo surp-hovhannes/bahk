@@ -9,6 +9,16 @@ from hub.utils import get_or_create_feast_for_date
 from tests.fixtures.test_data import TestDataFactory
 
 
+def _commemoration(observance_id, name_en, name_hy=None):
+    """One entry of what ``get_feast_for_date`` returns."""
+    return {
+        "observance_id": observance_id,
+        "name": name_en,
+        "name_en": name_en,
+        "name_hy": name_hy,
+    }
+
+
 class GetOrCreateFeastForDateTests(TestCase):
     """Tests for the get_or_create_feast_for_date utility function."""
 
@@ -17,262 +27,285 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.test_date = date(2025, 12, 25)
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_create_feast_when_none_exists(self, mock_scrape):
+    def test_create_feast_when_none_exists(self, mock_engine):
         """Test creating a feast when none exists."""
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": "Christmas",
-            "name_hy": "Սուրբ Ծնունդ",
-        }
+        mock_engine.return_value = [
+            _commemoration("christmas", "Christmas", "Սուրբ Ծնունդ")]
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        feasts, status_dict = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        # Verify feast was created
-        self.assertIsNotNone(feast_obj)
-        self.assertTrue(created)
+        self.assertEqual(len(feasts), 1)
         self.assertEqual(status_dict["status"], "success")
-        self.assertEqual(status_dict["action"], "created")
-        self.assertEqual(feast_obj.name, "Christmas")
-        self.assertEqual(feast_obj.name_hy, "Սուրբ Ծնունդ")
+        self.assertEqual(status_dict["created"], 1)
+        self.assertEqual(feasts[0].name, "Christmas")
+        self.assertEqual(feasts[0].name_hy, "Սուրբ Ծնունդ")
+        self.assertEqual(feasts[0].observance_id, "christmas")
 
         # The feast belongs to the church, not to a day -- and resolving one does not mint a Day.
-        self.assertEqual(feast_obj.church, self.church)
+        self.assertEqual(feasts[0].church, self.church)
         self.assertFalse(Day.objects.filter(date=self.test_date, church=self.church).exists())
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_skip_when_feast_already_exists(self, mock_scrape):
+    def test_two_commemorations_get_a_row_each(self, mock_engine):
+        """185 days in range name two commemorations, and each is its own feast.
+
+        This is the whole point: one card per thing commemorated, rather than one card carrying a
+        joined string.
+        """
+        mock_engine.return_value = [
+            _commemoration("hermit_st_anton", "The Hermit St. Anton"),
+            _commemoration("hermit_sts_tryphon", "The Hermit Sts. Tryphon and Barsauma"),
+        ]
+
+        feasts, status_dict = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertEqual(len(feasts), 2)
+        self.assertEqual(status_dict["created"], 2)
+        self.assertEqual(
+            [feast.observance_id for feast in feasts],
+            ["hermit_st_anton", "hermit_sts_tryphon"])
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 2)
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_day_with_no_commemoration_creates_nothing(self, mock_engine):
+        """5,070 of the engine's 9,861 days commemorate nobody, and mint no rows.
+
+        An empty list is a real answer, so it is reported as a skip with its own reason rather
+        than as missing data.
+        """
+        mock_engine.return_value = []
+
+        feasts, status_dict = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertEqual(feasts, [])
+        self.assertEqual(status_dict["status"], "skipped")
+        self.assertEqual(status_dict["reason"], "no_commemorations")
+        self.assertFalse(Feast.objects.filter(church=self.church).exists())
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_skip_when_feast_already_exists(self, mock_engine):
         """An already-complete commemoration is returned untouched.
 
-        The engine is always consulted now, because the name is what identifies the row -- there
-        is no way to know which feast a date maps to without asking. What is skipped is the
-        write: the row exists and already carries its translation, so nothing is saved.
+        The engine is always consulted now, because the observance is what identifies the row --
+        there is no way to know which feast a date maps to without asking. What is skipped is the
+        write: the row exists and already carries its names, so nothing is saved.
         """
-        existing_feast = Feast.objects.create(church=self.church, name="Existing Feast")
+        existing_feast = Feast.objects.create(
+            church=self.church, name="Existing Feast", observance_id="existing_feast")
         existing_feast.name_hy = "Existing Armenian"
         existing_feast.save(update_fields=['i18n'])
 
-        mock_scrape.return_value = {
-            "name": "Existing Feast",
-            "name_en": "Existing Feast",
-            "name_hy": "Existing Armenian",
-        }
+        mock_engine.return_value = [
+            _commemoration("existing_feast", "Existing Feast", "Existing Armenian")]
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        feasts, status_dict = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        self.assertEqual(feast_obj, existing_feast)
-        self.assertFalse(created)
-        self.assertEqual(status_dict["status"], "skipped")
-        self.assertEqual(status_dict["reason"], "feast_already_exists")
+        self.assertEqual(feasts, [existing_feast])
+        self.assertEqual(status_dict["created"], 0)
+        self.assertEqual(status_dict["refreshed"], 0)
 
     def test_skip_when_fast_associated_with_check_fast_true(self):
         """Test skipping feast lookup when Fast is associated and check_fast=True."""
-        # Create a fast
         fast = TestDataFactory.create_fast(church=self.church, name="Lenten Fast")
-        
-        # Create day with fast associated
-        day = Day.objects.create(date=self.test_date, church=self.church, fast=fast)
+        Day.objects.create(date=self.test_date, church=self.church, fast=fast)
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        feasts, status_dict = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        # Verify feast lookup was skipped
-        self.assertIsNone(feast_obj)
-        self.assertFalse(created)
+        self.assertEqual(feasts, [])
         self.assertEqual(status_dict["status"], "skipped")
         self.assertEqual(status_dict["reason"], "fast_associated")
         self.assertEqual(status_dict["fast_name"], "Lenten Fast")
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_continue_when_fast_associated_with_check_fast_false(self, mock_scrape):
+    def test_continue_when_fast_associated_with_check_fast_false(self, mock_engine):
         """Test continuing feast lookup when Fast is associated but check_fast=False."""
-        # Create a fast
         fast = TestDataFactory.create_fast(church=self.church, name="Lenten Fast")
-        
-        # Create day with fast associated
-        day = Day.objects.create(date=self.test_date, church=self.church, fast=fast)
+        Day.objects.create(date=self.test_date, church=self.church, fast=fast)
 
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": "Christmas",
-            "name_hy": None,
-        }
+        mock_engine.return_value = [_commemoration("christmas", "Christmas")]
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        feasts, status_dict = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=False
         )
 
-        # Verify feast lookup continued despite Fast association
-        self.assertIsNotNone(feast_obj)
-        self.assertTrue(created)
+        self.assertEqual(len(feasts), 1)
         self.assertEqual(status_dict["status"], "success")
-        mock_scrape.assert_called_once()
+        mock_engine.assert_called_once()
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_skip_when_no_feast_data(self, mock_scrape):
-        """Test skipping when scrape_feast returns None."""
-        mock_scrape.return_value = None
+    def test_skip_when_no_feast_data(self, mock_engine):
+        """``None`` means the engine gave no answer -- unsupported church, or an unresolved day.
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        Deliberately a different outcome from the empty list above: on an install missing the
+        observance catalog every day answers ``None``, and reading that as "no commemoration"
+        would serve an empty calendar without a word.
+        """
+        mock_engine.return_value = None
+
+        feasts, status_dict = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        # Verify no feast was created
-        self.assertIsNone(feast_obj)
-        self.assertFalse(created)
+        self.assertEqual(feasts, [])
         self.assertEqual(status_dict["status"], "skipped")
         self.assertEqual(status_dict["reason"], "no_feast_data")
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_skip_when_no_feast_name(self, mock_scrape):
-        """Test skipping when feast data has no name."""
-        mock_scrape.return_value = {
-            "name": None,
-            "name_en": None,
-            "name_hy": None,
-        }
-
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
-            self.test_date, self.church, check_fast=True
-        )
-
-        # Verify no feast was created
-        self.assertIsNone(feast_obj)
-        self.assertFalse(created)
-        self.assertEqual(status_dict["status"], "skipped")
-        self.assertEqual(status_dict["reason"], "no_feast_name")
-
-    @patch('hub.services.feast_service.get_feast_for_date')
-    def test_create_feast_with_english_only(self, mock_scrape):
+    def test_create_feast_with_english_only(self, mock_engine):
         """Test creating feast with only English name."""
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": "Christmas",
-            "name_hy": None,
-        }
+        mock_engine.return_value = [_commemoration("christmas", "Christmas")]
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        feasts, _ = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        # Verify feast was created
-        self.assertIsNotNone(feast_obj)
-        self.assertTrue(created)
-        self.assertEqual(feast_obj.name, "Christmas")
-        self.assertIsNone(feast_obj.name_hy)
+        self.assertEqual(feasts[0].name, "Christmas")
+        self.assertIsNone(feasts[0].name_hy)
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_update_existing_feast_with_missing_translation(self, mock_scrape):
+    def test_update_existing_feast_with_missing_translation(self, mock_engine):
         """Test updating existing feast with missing translation."""
-        # Create existing feast without Armenian translation
-        day = Day.objects.create(date=self.test_date, church=self.church)
-        existing_feast = Feast.objects.create(church=day.church, name="Christmas")
+        existing_feast = Feast.objects.create(
+            church=self.church, name="Christmas", observance_id="christmas")
 
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": "Christmas",
-            "name_hy": "Սուրբ Ծնունդ",
-        }
+        mock_engine.return_value = [
+            _commemoration("christmas", "Christmas", "Սուրբ Ծնունդ")]
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        feasts, status_dict = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        # Verify existing feast was updated with translation
-        self.assertEqual(feast_obj, existing_feast)
-        self.assertFalse(created)
-        self.assertEqual(status_dict["status"], "success")
-        self.assertEqual(status_dict["action"], "updated")
-        
-        # Refresh from DB to get updated translation
+        self.assertEqual(feasts, [existing_feast])
+        self.assertEqual(status_dict["created"], 0)
+        self.assertEqual(status_dict["refreshed"], 1)
+
         existing_feast.refresh_from_db()
         self.assertEqual(existing_feast.name_hy, "Սուրբ Ծնունդ")
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_does_not_overwrite_existing_translation(self, mock_scrape):
-        """Test that existing translation is not overwritten."""
-        # Create existing feast with Armenian translation
-        day = Day.objects.create(date=self.test_date, church=self.church)
-        existing_feast = Feast.objects.create(church=day.church, name="Christmas")
+    def test_overwrites_a_stored_translation_that_differs_from_the_engine(self, mock_engine):
+        """The engine is the authority on both languages, so a stale hy name is replaced.
+
+        Rows the retired sacredtradition.am scrape wrote took their Armenian from ``iL=3``, which
+        is not a language code the source defines, so those values cannot be trusted; and the
+        engine corrects its own translations across releases. Keeping whatever was stored first
+        would freeze both mistakes.
+        """
+        existing_feast = Feast.objects.create(
+            church=self.church, name="Christmas", observance_id="christmas")
         existing_feast.name_hy = "Existing Armenian"
         existing_feast.save(update_fields=['i18n'])
 
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": "Christmas",
-            "name_hy": "Սուրբ Ծնունդ",  # Different translation
-        }
+        mock_engine.return_value = [
+            _commemoration("christmas", "Christmas", "Սուրբ Ծնունդ")]
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
-            self.test_date, self.church, check_fast=True
-        )
+        get_or_create_feast_for_date(self.test_date, self.church, check_fast=True)
 
-        # Verify existing translation was preserved
         existing_feast.refresh_from_db()
-        self.assertEqual(existing_feast.name_hy, "Existing Armenian")
+        self.assertEqual(existing_feast.name_hy, "Սուրբ Ծնունդ")
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_creates_day_if_not_exists(self, mock_scrape):
-        """Test that Day is created if it doesn't exist."""
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": "Christmas",
-            "name_hy": None,
-        }
+    def test_an_unkeyed_row_is_adopted_rather_than_duplicated(self, mock_engine):
+        """A row the backfill never reached must rejoin, not be shadowed by an empty twin.
 
-        self.assertFalse(Day.objects.filter(date=self.test_date, church=self.church).exists())
+        Migration 0067 keys every row it can resolve, but a seed, an admin, or a row it could not
+        place carries no id -- and an id lookup would miss it, mint a duplicate, and take its
+        designation, icon and contexts out of circulation without a word.
+        """
+        orphan = Feast.objects.create(
+            church=self.church, name="Christmas", designation="Martyrs")
+        self.assertIsNone(orphan.observance_id)
 
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
+        mock_engine.return_value = [_commemoration("christmas", "Christmas")]
+
+        feasts, status_dict = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True
         )
 
-        # Resolving a feast no longer mints calendar rows as a side effect: feasts do not hang
-        # off Day any more, so there is nothing to create one for.
-        self.assertFalse(Day.objects.filter(date=self.test_date, church=self.church).exists())
-        self.assertIsNotNone(feast_obj)
+        self.assertEqual(status_dict["created"], 0)
+        self.assertEqual(feasts[0].pk, orphan.pk)
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
+        orphan.refresh_from_db()
+        self.assertEqual(orphan.observance_id, "christmas")
+        self.assertEqual(orphan.designation, "Martyrs")
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_one_row_serves_every_recurrence(self, mock_scrape):
+    def test_adoption_does_not_steal_a_row_that_already_has_an_id(self, mock_engine):
+        """Only unkeyed rows are adoptable; a keyed one is a different observance, not a match."""
+        other = Feast.objects.create(
+            church=self.church, name="Christmas", observance_id="some_other_observance")
+
+        mock_engine.return_value = [_commemoration("christmas", "Christmas")]
+
+        feasts, status_dict = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertEqual(status_dict["created"], 1)
+        self.assertNotEqual(feasts[0].pk, other.pk)
+        other.refresh_from_db()
+        self.assertEqual(other.observance_id, "some_other_observance")
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_the_row_is_found_by_its_observance_not_its_name(self, mock_engine):
+        """The point of the re-key: a corrected display name updates the row, never orphans it."""
+        existing = Feast.objects.create(
+            church=self.church, name="Saints Cyricus and His Mother Julitta",
+            observance_id="cyricus_and_his_mother_2", designation="Martyrs")
+
+        mock_engine.return_value = [_commemoration(
+            "cyricus_and_his_mother_2", "Sts. Cyricus and His Mother Julitta")]
+
+        feasts, status_dict = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertEqual(status_dict["created"], 0)
+        self.assertEqual(feasts[0].pk, existing.pk)
+        self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
+        feasts[0].refresh_from_db()
+        self.assertEqual(feasts[0].name, "Sts. Cyricus and His Mother Julitta")
+        self.assertEqual(feasts[0].designation, "Martyrs")
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_resolving_a_feast_does_not_mint_a_day(self, mock_engine):
+        """Feasts do not hang off Day any more, so there is nothing to create one for."""
+        mock_engine.return_value = [_commemoration("christmas", "Christmas")]
+
+        self.assertFalse(Day.objects.filter(date=self.test_date, church=self.church).exists())
+
+        feasts, _ = get_or_create_feast_for_date(
+            self.test_date, self.church, check_fast=True
+        )
+
+        self.assertFalse(Day.objects.filter(date=self.test_date, church=self.church).exists())
+        self.assertEqual(len(feasts), 1)
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_one_row_serves_every_recurrence(self, mock_engine):
         """The same commemoration on two dates resolves to a single row.
 
         This replaces a test that asserted the feast reused an existing Day. That is the whole
         point of the re-key: what used to be one row per occurrence is now one row, full stop.
         """
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": "Christmas",
-            "name_hy": None,
-        }
+        mock_engine.return_value = [_commemoration("christmas", "Christmas")]
 
-        first, created_first, _ = get_or_create_feast_for_date(
+        first, first_status = get_or_create_feast_for_date(
             self.test_date, self.church, check_fast=True)
-        second, created_second, status = get_or_create_feast_for_date(
+        second, second_status = get_or_create_feast_for_date(
             self.test_date + timedelta(days=365), self.church, check_fast=True)
 
-        self.assertTrue(created_first)
-        self.assertFalse(created_second)
-        self.assertEqual(first.id, second.id)
-        self.assertEqual(status["reason"], "feast_already_exists")
+        self.assertEqual(first_status["created"], 1)
+        self.assertEqual(second_status["created"], 0)
+        self.assertEqual(first[0].id, second[0].id)
         self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
-
-    @patch('hub.services.feast_service.get_feast_for_date')
-    def test_handles_fallback_to_name_field(self, mock_scrape):
-        """Test handling when name_en is None but name field exists."""
-        mock_scrape.return_value = {
-            "name": "Christmas",
-            "name_en": None,
-            "name_hy": "Սուրբ Ծնունդ",
-        }
-
-        feast_obj, created, status_dict = get_or_create_feast_for_date(
-            self.test_date, self.church, check_fast=True
-        )
-
-        # Verify feast was created using name field
-        self.assertIsNotNone(feast_obj)
-        self.assertEqual(feast_obj.name, "Christmas")
-

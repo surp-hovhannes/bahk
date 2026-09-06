@@ -211,60 +211,21 @@ def _create_feast_context_with_translations(
     return context
 
 
-def _has_named_commemoration(feast_name: str) -> bool:
-    """Return whether a feast name appears to name a saint or feast."""
-    return bool(
-        re.search(
-            # \b does not match between a letter and a final "s", so use explicit
-            # singular|plural alternations (e.g. "Martyrs?" matches both).
-            r"\b(?:Saints?|Sts?\.?|Martyrs?|Blesseds?|Holy\s+(?!Cross)|Prophets?|"
-            r"Apostles?|Patriarchs?|Vartapets?|Bishops?|Confessors?|Evangelists?|"
-            r"Righteous(?:es)?|Prophetess(?:es)?|Lord|Translation|Relics|"
-            r"Consecration|Commemoration)\b",
-            feast_name,
-            re.IGNORECASE,
-        )
-    )
-
-
-def _looks_like_generic_fast_day(feast_name: str) -> bool:
-    """Return whether an unclassified feast name appears to be only a fast day."""
-    return bool(
-        re.search(r"\b(fast|lent)\b", feast_name, re.IGNORECASE)
-        and re.search(r"\bday\b", feast_name, re.IGNORECASE)
-        and not _has_named_commemoration(feast_name)
-    )
-
-
 def is_feast_context_generation_eligible(feast: Feast) -> bool:
-    """Return whether FeastContext generation should run for this feast."""
-    if feast.designation == Feast.Designation.FAST:
-        return False
+    """Return whether FeastContext generation should run for this feast.
 
-    if feast.designation is None and (
-        _is_known_generic_fast_day(feast.name)
-        or _looks_like_generic_fast_day(feast.name)
-    ):
-        return False
+    A ``Feast`` row now exists only for an observance the engine marks ``is_comm``, so "is there
+    anything here to write about" is already answered upstream, by a human-reviewed mark rather
+    than by reading the display name.
 
-    return True
-
-
-# Specific named feast days that should be treated as generic fast days even though their
-# rendered name does not match the "Fast day, day N of Great Lent" pattern (e.g. once the
-# day counter is rendered as a name, or named lenten landmarks). Centralized so the view
-# and the worker agree.
-_GENERIC_FAST_DAY_TOKENS = (
-    "Mijink",  # Median day of Great Lent
-    "Median day of Great Lent",
-)
-
-
-def _is_known_generic_fast_day(feast_name: str) -> bool:
-    if not feast_name:
-        return False
-    lower = feast_name.lower()
-    return any(token.lower() in lower for token in _GENERIC_FAST_DAY_TOKENS)
+    This used to guess from the name -- regexes looking for saint/martyr/prophet words, and for
+    "fast"/"lent" plus "day" -- and both halves were wrong in the same way: they pattern-matched
+    text the engine is free to rewrite, which is exactly the failure the observance id layer
+    exists to prevent. They also disagreed with each other on Mijink, which the token list
+    blocked while ``determine_feast_designation_task`` exempted as a named feast, not a generic
+    fast day. The engine marks it a commemoration; it gets context.
+    """
+    return feast.designation != Feast.Designation.FAST
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)

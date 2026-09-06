@@ -13,43 +13,37 @@ designation, icon and generated contexts are still in the database but no date l
 find them again.  That happens whenever an engine upgrade corrects a name -- exactly the sort of
 change armenian-lectionary ships regularly -- and it is silent, because nothing errors.
 
+Since the re-key onto ``observance_id`` that is mostly historical: a row identified by a stable
+id survives a text correction, and a stale name on it is a display defect rather than a lost row.
+What this reports is every way a row can still fall out of that arrangement:
+
+  * **Unreachable name** -- a stored name the engine no longer emits.  Cosmetic on a keyed row,
+    the original failure on an unkeyed one.
+  * **Pending refresh** -- a row whose id the engine now names differently, i.e. one an upgrade
+    has already moved but nothing has written yet.
+  * **No id** -- identified by display text alone, which is the arrangement the re-key ended.
+  * **Retired id** -- an ``observance_id`` this engine version does not serve.  Should be
+    impossible: a published id is a contract.  If this is ever non-empty the engine broke it.
+
+Nothing is fixed here.  ``manage.py remap_feast_names`` is the repair.
+
 Read-only.  ``--church`` scopes it; ``--verbose`` lists every stored name, not just the orphans.
 """
-import datetime
-
 from django.core.management.base import BaseCommand, CommandError
 
-import armenian_lectionary
 from armenian_lectionary import MAX_YEAR, MIN_YEAR
 
 from hub.models import Church
-
-
-def engine_names(min_year=None, max_year=None):
-    """Return every distinct English feast name the engine emits over the supported range.
-
-    This is the set a re-keyed table can actually be reached by: after the migration a feast is
-    looked up by the name the engine computes for the requested date, so a stored name outside
-    this set is unreachable no matter what enrichment hangs off it.
-    """
-    min_year = MIN_YEAR if min_year is None else min_year
-    max_year = MAX_YEAR if max_year is None else max_year
-    names = set()
-    day = datetime.date(min_year, 1, 1)
-    end = datetime.date(max_year, 12, 31)
-    while day <= end:
-        result = armenian_lectionary.compute_armenian_lectionary(day)
-        name = (result.get("Liturgical Day") or "").strip()
-        if name:
-            names.add(name)
-        day += datetime.timedelta(days=1)
-    return names
+from hub.services.feast_rename import (
+    engine_names, name_for_observance_id, observance_ids,
+)
 
 
 class Command(BaseCommand):
     help = (
         "Read-only: report stored feast names the lectionary engine no longer emits, whose "
-        "enrichment is therefore unreachable by a date lookup."
+        "enrichment is therefore unreachable by a date lookup, and names an upgrade is about "
+        "to strand. Run remap_feast_names to repair either."
     )
 
     def add_arguments(self, parser):
@@ -88,14 +82,17 @@ class Command(BaseCommand):
 
         if unreachable:
             self.stdout.write(self.style.WARNING(
-                f"  {len(unreachable)} name(s) the engine never emits, so no date lookup reaches "
-                f"them; their enrichment is stranded:"
+                f"  {len(unreachable)} stored name(s) the engine no longer emits. On a row that "
+                f"has an observance_id this is stale display text, not a lost row -- "
+                f"remap_feast_names refreshes it. On one without, it is the old failure: nothing "
+                f"reaches the row and its enrichment is stranded:"
             ))
             for name in unreachable:
                 feast = by_name[name]
-                # Say what would be lost if it were deleted, so the reader can judge whether to
-                # rename it onto a current engine name or drop it.
+                # Say what is at stake, so the reader can judge how urgently to act.
                 held = []
+                if not feast.observance_id:
+                    held.append("NO ID")
                 if feast.designation:
                     held.append(f"designation={feast.designation!r}")
                 if feast.icon_id:
@@ -109,6 +106,42 @@ class Command(BaseCommand):
                 )
         else:
             self.stdout.write("  every stored name is one the engine still emits.")
+
+        # The same failure caught before it lands. A keyed row whose id the engine now names
+        # something else is serving stale display text; the next request that resolves it corrects
+        # it, but a row nothing requests stays stale until remap_feast_names sweeps it.
+        pending = [
+            (feast, name_for_observance_id(feast.observance_id))
+            for feast in feasts
+            if feast.observance_id
+        ]
+        pending = [(f, current) for f, current in pending if current and current != f.name]
+        if pending:
+            self.stdout.write(self.style.WARNING(
+                f"  {len(pending)} name(s) the engine has already renamed under their own id; "
+                f"remap_feast_names moves them:"
+            ))
+            for feast, current in sorted(pending, key=lambda pair: pair[0].name):
+                self.stdout.write(f"      #{feast.id} {feast.name!r}")
+                self.stdout.write(f"          -> {current!r} (from {feast.observance_id})")
+
+        # A row with no id is identified only by its display text, which is the arrangement the
+        # re-key exists to end -- the next correction to that text strands it.
+        unkeyed = [f for f in feasts if not f.observance_id]
+        if unkeyed:
+            self.stdout.write(self.style.WARNING(
+                f"  {len(unkeyed)} row(s) carry no observance_id, so they are identified only by "
+                f"display text; remap_feast_names resolves what it can:"))
+            for feast in sorted(unkeyed, key=lambda f: f.name)[:20]:
+                self.stdout.write(f"      #{feast.id} {feast.name!r}")
+
+        serving = observance_ids()
+        retired = [f for f in feasts if f.observance_id and f.observance_id not in serving]
+        if retired:
+            self.stdout.write(self.style.WARNING(
+                f"  {len(retired)} row(s) hold an observance_id this engine no longer serves:"))
+            for feast in sorted(retired, key=lambda f: f.observance_id):
+                self.stdout.write(f"      #{feast.id} {feast.observance_id!r} ({feast.name!r})")
 
         if verbose:
             self.stdout.write("\n  all stored names:")

@@ -66,28 +66,81 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
 
    Env vars: `BIBLE_API_KEY`, `READING_TEXT_REFRESH_DAYS`, `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT`, `READING_REFRESH_MAX_CONSECUTIVE_FAILURES`, `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`.
 
-7. **Feast Names**: The commemoration of the day comes from the offline `armenian_lectionary`
+7. **Feast Names**: The day's commemorations come from the offline `armenian_lectionary`
    engine (`hub/services/feast_service.py`), recomputed per request. Nothing is imported ahead of
    time and there is no daily task.
 
-   **Feasts are keyed by commemoration, not by date.** `Feast` is unique on `(church, name)`; it
-   does not hang off `Day`. It exists to hold the parts the engine has no notion of — the AI
-   `designation`, the matched `icon`, and the generated `FeastContext`s — and those are properties
-   of the commemoration, not of the day it lands on. The engine emits ~424 distinct names across
-   its whole supported range, so one row serves every recurrence and the LLM context and icon
-   match behind it run **once**, not once a year. Same rule as `PassageText`: never key by date.
+   **A day is a LIST of observances, and only its commemorations become feasts.** The engine
+   serves an `Observances` array — one entry per component, each `{id, name, is_fast, is_comm}` —
+   so bahk never splits the joined `Liturgical Day` string. `is_comm` is a human-reviewed mark
+   saying the component commemorates a person or an event rather than merely locating the day in
+   the calendar; `get_feast_for_date` filters on it and returns **one dict per commemoration**.
+
+   Do not filter on `is_fast`: the two marks are independent, and the six ids carrying both
+   include Great Friday. Do not classify by name shape either — `Sixth Sunday of Great Lent:
+   Sunday of the Advent` and `Sixth day of Nativity` read identically and answer oppositely.
+
+   **Most days commemorate nobody.** Of the engine's 9,861 supported days, 5,070 carry no
+   commemoration (the weekly Wed/Fri fasts alone are 1,334), 4,606 carry one, and 185 carry two.
+   So `feasts: []` is the commonest answer and means "nothing to show today" — the API serves it,
+   caches it, and the app renders no card. It is not an error. `None` from
+   `get_feast_for_date` is the *different* fact of no answer at all (unsupported church,
+   out-of-range date, or a day the engine could not resolve); never collapse the two, because a
+   thin install with no `observance_catalog.json` answers `None` for every day.
+
+   **Feasts are keyed by observance, not by date and not by name.** `Feast` is unique on
+   `(church, observance_id)` — one published engine id, so a row is one commemoration. It does
+   not hang off `Day`. It exists to hold the parts the engine has no notion of — the AI
+   `designation`, the matched `icon`, and the generated `FeastContext`s — and those are
+   properties of the commemoration, not of the day it lands on. One row serves every recurrence,
+   so the LLM context and icon match behind it run **once**, not once a year. Same rule as
+   `PassageText`: never key by date.
+
+   **The name is display text, derived from the id and refreshed from the engine.** It used to
+   be the key, and that was the bug: display text gets corrected (1.3.0 alone folded `Saint(s)`
+   to `St(s).` and fixed 122 spellings; 2.0.0 renamed the Sunday families and retired the bare
+   `Fast day` marker), and every correction silently orphaned a row. An id, once published, keeps
+   meaning the same observance — so a correction is now an `UPDATE`.
+
+   The two are not interchangeable in the other direction either: the engine distinguishes
+   observances English conflates. `"Fast day"` was three distinct ids in range, because the source
+   heads the Fast of St. Gregory the Illuminator's days with their ordinal in Armenian and
+   flattens them all to `Fast day` in English. That is why the unique constraint had to move off
+   the name.
 
    Because a feast has no date, two things go through the engine instead:
    - `dates_for_feast_name` / `representative_date_for_feast_name` (cached range sweep) supply a
      date where one is genuinely needed — the `feasts.json` reference matcher in `llm_service`.
+     These are keyed on a single **observance** name, not the joined day name; keying them on the
+     joined string would silently return no date for every multi-component day.
    - Feast API cache invalidation bumps a **per-church generation** folded into the cache key
      (`hub/cache.py`) rather than deleting per-date keys, which would mean enumerating thousands
      of days. O(1), and correct on every cache backend rather than only where `delete_pattern`
      exists.
 
-   `audit_feast_duplicates` reports stored names the engine no longer emits: those are unreachable
-   (nothing will look them up again) while their enrichment sits in the database. Run it after any
-   engine upgrade that might rename a feast — the failure is silent otherwise.
+   **There is no `sample_date`.** It existed to answer "what observance is this row, really?" for
+   a row whose only identity was display text. The id answers that directly, and
+   `feast_rename._names_by_id` reads both languages' display text from the id with no date in the
+   loop, so the column was dropped in `0069`.
+
+   **Context eligibility does not read the name.** `is_feast_context_generation_eligible` is now
+   just `designation != FAST`. The regexes it used to run (saint/martyr words, "fast"+"day"
+   tokens, a hardcoded Mijink list) guessed at a question `is_comm` answers upstream, and they
+   contradicted `determine_feast_designation_task` on Mijink.
+
+   **After any `armenian-lectionary` bump**, run `remap_feast_names` (dry run, then `--apply`) and
+   confirm with `audit_feast_duplicates`. Nothing does this automatically — the migrations applied
+   the one-time repairs and, like every migration, run once. Under the id key this is now mostly
+   a display-text refresh rather than a rescue. The rule is `hub/services/feast_rename.py`, shared
+   verbatim by the command and migrations `0065`/`0067` so they cannot drift, and it merges
+   collisions through `feast_merge.survivor`.
+
+   One one-time bridge exists for rows that predate all of this, and it is not part of the
+   recurring path: `hub/data/feast_name_map.json`, from the retired sacredtradition.am scrape and
+   engines 1.1.x/1.2.x. **Resolve through its `sample_date`, not its `new` name** — the names were
+   a snapshot of 1.3.0's display text and 126 of the 229 stopped being emitted verbatim at 2.0.0,
+   while the dates beside them still resolve. A legacy row for a day that commemorates nobody
+   (14 of the 244 entries are position labels) correctly stays unresolved with a null id.
 
 ## Development Environment
 

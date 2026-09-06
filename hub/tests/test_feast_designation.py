@@ -428,7 +428,7 @@ class FeastDesignationAPITests(TestCase):
         from hub.services.feast_service import get_feast_for_date
         feast = Feast.objects.create(
             church=self.church,
-            name=get_feast_for_date(self.test_date, self.church)["name_en"],
+            name=get_feast_for_date(self.test_date, self.church)[0]["name_en"],
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
 
@@ -438,10 +438,10 @@ class FeastDesignationAPITests(TestCase):
 
         response = view(request)
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feast', response.data)
-        self.assertIn('designation', response.data['feast'])
+        self.assertIn('feasts', response.data)
+        self.assertIn('designation', response.data['feasts'][0])
         self.assertEqual(
-            response.data['feast']['designation'],
+            response.data['feasts'][0]['designation'],
             Feast.Designation.NATIVITY_MOTHER_OF_GOD
         )
 
@@ -462,9 +462,9 @@ class FeastDesignationAPITests(TestCase):
 
         response = view(request)
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feast', response.data)
-        self.assertIn('designation', response.data['feast'])
-        self.assertIsNone(response.data['feast']['designation'])
+        self.assertIn('feasts', response.data)
+        self.assertIn('designation', response.data['feasts'][0])
+        self.assertIsNone(response.data['feasts'][0]['designation'])
 
     @patch('hub.views.feasts.get_or_create_feast_for_date')
     def test_view_uses_check_fast_false(self, mock_get_or_create):
@@ -475,7 +475,7 @@ class FeastDesignationAPITests(TestCase):
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(church=day.church, name="Test Feast")
 
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         factory = APIRequestFactory()
         # Format date as YYYY-MM-DD string as expected by the view

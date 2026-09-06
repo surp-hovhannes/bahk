@@ -1,7 +1,7 @@
 """Tests for the offline ``get_feast_for_date`` service.
 
-Replaces the retired ``scrape_feast`` tests: feast names now come from the offline
-``armenian_lectionary`` engine (``"Liturgical Day"``, in ``en`` and ``hy``) rather than
+Replaces the retired ``scrape_feast`` tests: commemorations now come from the offline
+``armenian_lectionary`` engine (its ``"Observances"`` array, in ``en`` and ``hy``) rather than
 sacredtradition.am.
 """
 from datetime import date, datetime
@@ -13,13 +13,22 @@ from hub.models import Church
 from hub.services.feast_service import get_feast_for_date
 
 
-def _engine_stub(en_name, hy_name=None):
+def _observance(observance_id, name, is_comm=True, is_fast=False):
+    return {"id": observance_id, "name": name, "is_comm": is_comm, "is_fast": is_fast}
+
+
+def _engine_stub(observances_en, observances_hy=None):
     """Build a fake ``compute_armenian_lectionary`` that answers per ``language`` kwarg.
 
-    ``hy_name`` defaults to ``en_name`` for tests that don't care about the Armenian value.
+    ``observances_hy`` defaults to the English list for tests that don't care about Armenian.
     """
     def _compute(_date, language="en"):
-        return {"Liturgical Day": hy_name if (language == "hy" and hy_name) else en_name}
+        observances = (observances_hy if (language == "hy" and observances_hy is not None)
+                       else observances_en)
+        return {
+            "Observances": observances,
+            "Liturgical Day": " — ".join(o["name"] for o in observances),
+        }
     return _compute
 
 
@@ -32,25 +41,94 @@ class GetFeastForDateTests(TestCase):
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
     def test_returns_english_and_armenian_names(self, mock_compute):
-        """Both the English and the Armenian ``Liturgical Day`` are returned."""
+        """A commemoration comes back with its id and its name in both languages."""
         mock_compute.side_effect = _engine_stub(
-            "Nativity and Theophany of Our Lord Jesus Christ",
-            "ՏՕՆ ԾՆՆԴԵԱՆ",
+            [_observance("nativity", "Nativity and Theophany of Our Lord Jesus Christ")],
+            [_observance("nativity", "ՏՕՆ ԾՆՆԴԵԱՆ")],
         )
 
         result = get_feast_for_date(self.test_date, self.church)
 
-        self.assertIsNotNone(result)
-        self.assertEqual(result["name"], "Nativity and Theophany of Our Lord Jesus Christ")
-        self.assertEqual(result["name_en"], "Nativity and Theophany of Our Lord Jesus Christ")
-        self.assertEqual(result["name_hy"], "ՏՕՆ ԾՆՆԴԵԱՆ")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["observance_id"], "nativity")
+        self.assertEqual(result[0]["name"], "Nativity and Theophany of Our Lord Jesus Christ")
+        self.assertEqual(result[0]["name_en"], "Nativity and Theophany of Our Lord Jesus Christ")
+        self.assertEqual(result[0]["name_hy"], "ՏՕՆ ԾՆՆԴԵԱՆ")
         # Queried once per language.
         self.assertEqual(mock_compute.call_count, 2)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
+    def test_two_commemorations_come_back_in_served_order(self, mock_compute):
+        """185 days in range name two commemorations; both get an entry, in the engine's order."""
+        mock_compute.side_effect = _engine_stub(
+            [_observance("hermit_st_anton", "The Hermit St. Anton"),
+             _observance("hermit_sts_tryphon", "The Hermit Sts. Tryphon, Barsauma and Onuphrius")],
+            [_observance("hermit_st_anton", "Սրբոյն Անտոնի ճգնաւորին"),
+             _observance("hermit_sts_tryphon", "Սրբոցն Տրիփոնի")],
+        )
+
+        result = get_feast_for_date(self.test_date, self.church)
+
+        self.assertEqual([entry["observance_id"] for entry in result],
+                         ["hermit_st_anton", "hermit_sts_tryphon"])
+        self.assertEqual(result[1]["name_hy"], "Սրբոցն Տրիփոնի")
+
+    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
+    def test_armenian_names_are_paired_by_id_not_position(self, mock_compute):
+        """The hy list is joined on id, so a different order cannot mismatch the translations."""
+        mock_compute.side_effect = _engine_stub(
+            [_observance("first", "First"), _observance("second", "Second")],
+            [_observance("second", "Երկրորդ"), _observance("first", "Առաջին")],
+        )
+
+        result = get_feast_for_date(self.test_date, self.church)
+
+        by_id = {entry["observance_id"]: entry["name_hy"] for entry in result}
+        self.assertEqual(by_id, {"first": "Առաջին", "second": "Երկրորդ"})
+
+    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
+    def test_non_commemorations_are_dropped(self, mock_compute):
+        """A position label is not a commemoration, so it gets no feast."""
+        mock_compute.side_effect = _engine_stub([
+            _observance("great_friday", "Great Friday", is_comm=False, is_fast=True),
+            _observance("passion", "Remembrance of the Passion", is_comm=True),
+        ])
+
+        result = get_feast_for_date(self.test_date, self.church)
+
+        self.assertEqual([entry["observance_id"] for entry in result], ["passion"])
+
+    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
+    def test_a_fast_that_is_also_a_commemoration_is_kept(self, mock_compute):
+        """The two marks are independent -- filtering out fasts would drop Great Friday."""
+        mock_compute.side_effect = _engine_stub([
+            _observance("great_friday", "Great Friday", is_comm=True, is_fast=True),
+        ])
+
+        result = get_feast_for_date(self.test_date, self.church)
+
+        self.assertEqual([entry["observance_id"] for entry in result], ["great_friday"])
+
+    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
+    def test_day_with_no_commemoration_returns_empty_list(self, mock_compute):
+        """5,070 of the engine's 9,861 days commemorate nobody. That is an answer, not a failure.
+
+        Distinct from ``None``, which means the engine gave no answer at all -- the caller has to
+        be able to tell "nothing today" from "this install is broken".
+        """
+        mock_compute.side_effect = _engine_stub([
+            _observance("wednesday_fast", "Wednesday Fast", is_comm=False, is_fast=True),
+        ])
+
+        result = get_feast_for_date(self.test_date, self.church)
+
+        self.assertEqual(result, [])
+        self.assertIsNotNone(result)
+
+    @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
     def test_normalizes_datetime_to_date(self, mock_compute):
         """A ``datetime`` argument is reduced to a ``date`` before hitting the engine."""
-        mock_compute.side_effect = _engine_stub("Test Feast")
+        mock_compute.side_effect = _engine_stub([_observance("test", "Test Feast")])
 
         get_feast_for_date(datetime(2025, 12, 25, 9, 30), self.church)
 
@@ -58,21 +136,19 @@ class GetFeastForDateTests(TestCase):
             self.assertEqual(call.args[0], self.test_date)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_blank_names_return_none(self, mock_compute):
-        """An empty or whitespace-only ``Liturgical Day`` is treated as no feast.
+    def test_unresolved_day_returns_none(self, mock_compute):
+        """The engine resolves its components all or nothing, so ``[]`` means "did not resolve".
 
-        The engine itself guarantees no placeholder marker (e.g. "(commemoration)") ever
-        reaches a caller for a date in its validated range -- see
-        ``armenian_lectionary``'s ``test_feast_contract.py::test_no_placeholder_reaches_callers``.
+        On an install missing ``observance_catalog.json`` every day answers this way, which is
+        why it cannot be read as "no commemoration today".
         """
-        for blank in ("", "   "):
-            with self.subTest(blank=blank):
-                mock_compute.side_effect = _engine_stub(blank)
-                self.assertIsNone(get_feast_for_date(self.test_date, self.church))
+        mock_compute.side_effect = _engine_stub([])
+
+        self.assertIsNone(get_feast_for_date(self.test_date, self.church))
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_missing_liturgical_day_returns_none(self, mock_compute):
-        """A result with no ``Liturgical Day`` key yields no feast."""
+    def test_missing_observances_key_returns_none(self, mock_compute):
+        """A result with no ``Observances`` key yields no feast."""
         mock_compute.return_value = {}
         self.assertIsNone(get_feast_for_date(self.test_date, self.church))
 

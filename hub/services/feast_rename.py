@@ -1,0 +1,465 @@
+"""The rule for putting a stored ``Feast`` under the observance the engine says it is.
+
+``Feast`` is keyed by ``(church, observance_id)`` -- ONE of the engine's published observance
+ids.  An id is a contract: once armenian-lectionary publishes one it keeps meaning the same
+observance, so unlike the display name it does not move when the engine corrects its text.  That
+is what this key is for.  It used to be the name, and every correction the engine shipped
+silently orphaned rows: the row stopped being reachable while its designation, icon and generated
+contexts stayed in the database, and a date lookup minted an empty one beside it.
+
+One row per COMMEMORATION, not per day.  A liturgical day is a list of observances, and only the
+ones the engine marks ``is_comm`` get a row -- so a day naming two commemorations has two, and
+the 5,070 days in range that commemorate nobody have none.
+
+Two ways a row is placed, in order of confidence:
+
+  * **Its own id.**  Trusted as-is if the engine still serves it.  Nothing to re-derive -- the
+    point of the re-key is that this is the steady state.
+  * **Its name.**  Legacy, for rows that predate the ids: resolve the stored day name to a DATE
+    -- either a name the engine still emits, or an old spelling in
+    ``hub/data/feast_name_map.json`` (generated once by ``scripts/build_feast_name_map.py``),
+    which records the date each retired name resolved to -- then take that day's leading
+    commemoration.
+
+The date is what the map is read for, never its stored target name: those names are a snapshot
+of the engine that generated the artifact, and 126 of the 229 stopped being emitted verbatim at
+2.0.0, while the dates did not move.
+
+Display text is read from the id, never from a date -- see ``_names_by_id``.  A row's identity
+tells you its name directly, so nothing has to remember which date the row was born on, which is
+why there is no ``sample_date`` column.
+
+Every function here takes plain model instances and model classes, so the management command and
+the data migration run the identical rule -- the same arrangement ``feast_merge`` has with
+migration 0062.
+"""
+import datetime
+import functools
+import html
+import json
+import os
+import unicodedata
+
+import armenian_lectionary
+from armenian_lectionary import MAX_YEAR, MIN_YEAR
+
+from hub.services.feast_merge import survivor
+
+NAME_MAP_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "feast_name_map.json"
+)
+
+# Armenian block (U+0530-U+058F) plus the Armenian ligatures in the Alphabetic Presentation
+# Forms block (U+FB13-U+FB17), which is where "և" and friends can land.
+_ARMENIAN_RANGES = ((0x0530, 0x058F), (0xFB13, 0xFB17))
+
+
+def normalize_feast_key(name):
+    """Fold a feast name to a key that survives how the scrape mangled it.
+
+    Three separate kinds of damage have to collapse to the same key as the clean text:
+
+      * **Jammed components.**  The source packs a position label, the commemoration and an eve
+        note into one field separated by ``<br>``.  The retired scraper stripped every tag with no
+        replacement, so a stored name reads ``"Eighth day of NativityFeast of Naming..."`` where
+        the engine writes ``"Eighth day of Nativity — Feast of Naming..."``.
+      * **Un-unescaped entities.**  The scraper never called ``html.unescape``.
+      * **Cyrillic homoglyphs.**  The source occasionally types English feast text with Cyrillic
+        ``Е``/``о``; the scraper preserved them.
+
+    Dropping every character that is not Latin alphanumeric or Armenian handles all three at once
+    -- separators and spacing vanish, and a homoglyph is dropped rather than folded.  That last
+    one is only sound because the key is computed the same way on both sides: the map is keyed on
+    ``normalize_feast_key(scraped_name)`` and looked up with ``normalize_feast_key(stored_name)``,
+    and those are the same string.  Verified over all 429 names in the source corpus: no two
+    distinct names collide on a key while disagreeing about the target.
+    """
+    if not name:
+        return ""
+    text = unicodedata.normalize("NFKC", html.unescape(name))
+    kept = [ch for ch in text.lower() if _is_key_char(ch)]
+    return "".join(kept)
+
+
+def _is_key_char(ch):
+    """True for Latin alphanumerics and Armenian letters; everything else is noise."""
+    if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
+        return True
+    point = ord(ch)
+    return any(low <= point <= high for low, high in _ARMENIAN_RANGES)
+
+
+@functools.lru_cache(maxsize=2)
+def _names_by_date(language):
+    """``{date: name}`` for the whole supported range, in one language.
+
+    Cached: the sweep is a second of CPU and its result is fixed for a given engine version, so
+    every caller in a process shares one.  ``feast_service`` keeps the inverse (name -> dates) for
+    its own reasons; this direction is what a remap needs, to ask "what is this day called now".
+    """
+    names = {}
+    day = datetime.date(MIN_YEAR, 1, 1)
+    end = datetime.date(MAX_YEAR, 12, 31)
+    while day <= end:
+        result = armenian_lectionary.compute_armenian_lectionary(day, language=language)
+        name = (result.get("Liturgical Day") or "").strip()
+        if name:
+            names[day] = name
+        day += datetime.timedelta(days=1)
+    return names
+
+
+def engine_name_for_date(day, language="en"):
+    """The name the engine gives this date now, or ``""`` for a date it does not cover."""
+    if not day:
+        return ""
+    if isinstance(day, datetime.datetime):
+        day = day.date()
+    return _names_by_date(language).get(day, "")
+
+
+def engine_names(min_year=None, max_year=None):
+    """Every distinct English name the engine emits -- the set a stored name must be in.
+
+    A feast is looked up by the name the engine computes for the requested date, so a stored name
+    outside this set is unreachable no matter what enrichment hangs off it.
+    """
+    min_year = MIN_YEAR if min_year is None else min_year
+    max_year = MAX_YEAR if max_year is None else max_year
+    return {
+        name for day, name in _names_by_date("en").items()
+        if min_year <= day.year <= max_year
+    }
+
+
+@functools.lru_cache(maxsize=1)
+def load_name_map_entries():
+    """Return the checked-in artifact's entries, each with its old spellings and current name.
+
+    Missing file is not an error: the map only exists to bridge rows written before the ids, and
+    a database that never held any (a fresh install, a test) needs nothing from it.
+    """
+    if not os.path.exists(NAME_MAP_PATH):
+        return ()
+    with open(NAME_MAP_PATH, encoding="utf-8") as fh:
+        data = json.load(fh)
+    return tuple(data.get("entries", ()))
+
+
+@functools.lru_cache(maxsize=1)
+def load_name_map():
+    """Return ``{normalized old name: engine name at the time the map was built}``.
+
+    Kept for reporting what a legacy row *was* called.  It is NOT how a row is placed any more --
+    see ``load_name_map_dates``: these targets are display text from the engine version that
+    generated the artifact, and 126 of the 229 stopped being emitted verbatim at 2.0.0, which is
+    the same staleness the whole re-key exists to stop depending on.
+    """
+    return {entry["key"]: entry["new"] for entry in load_name_map_entries()}
+
+
+@functools.lru_cache(maxsize=1)
+def load_name_map_dates():
+    """Return ``{normalized old name: the date that name resolved to}``.
+
+    This is the durable half of the artifact.  A date does not go stale: whatever an old source
+    called a day, asking the *current* engine what that same day commemorates gives an answer
+    that survives every rename since.  The ``new`` name beside it in the file was only ever the
+    same question answered against the engine of the day, and answering it live is strictly
+    better than trusting a snapshot.
+    """
+    dates = {}
+    for entry in load_name_map_entries():
+        raw = entry.get("sample_date")
+        if raw:
+            dates[entry["key"]] = datetime.date.fromisoformat(raw)
+    return dates
+
+
+@functools.lru_cache(maxsize=2)
+def _observances_by_date(language):
+    """``{date: (observance, ...)}`` for the whole supported range, in one language.
+
+    The one sweep everything id-shaped in this module is derived from, cached per language
+    because the sweep is a second of CPU and its result is fixed for a given engine version.
+    """
+    by_date = {}
+    day = datetime.date(MIN_YEAR, 1, 1)
+    end = datetime.date(MAX_YEAR, 12, 31)
+    while day <= end:
+        result = armenian_lectionary.compute_armenian_lectionary(day, language=language)
+        observances = result.get("Observances") or []
+        if observances:
+            by_date[day] = tuple(observances)
+        day += datetime.timedelta(days=1)
+    return by_date
+
+
+@functools.lru_cache(maxsize=1)
+def _commemoration_ids_by_date():
+    """``{date: (observance id, ...)}`` -- the day's COMMEMORATIONS, in served order.
+
+    An id is what a ``Feast`` row is identified by.  Unlike the name it does not move when the
+    engine corrects its display text -- which is the entire reason it exists, and why the
+    name-based machinery in this module is legacy from here on: it bridges rows written before
+    the engine served ids, and nothing else.
+
+    Only ``is_comm`` components are included, because only those get a ``Feast``.  Most days have
+    none: 5,070 of the 9,861 in range commemorate nobody, 4,606 name one thing and 185 name two.
+
+    Days the engine cannot fully resolve are absent rather than partially keyed; the engine
+    already returns ``[]`` rather than a list with a hole in it.
+    """
+    return {
+        day: tuple(o["id"] for o in observances if o["is_comm"])
+        for day, observances in _observances_by_date("en").items()
+    }
+
+
+def commemoration_ids_for_date(day):
+    """The day's commemoration ids, in served order.  Empty for a day with none."""
+    if not day:
+        return ()
+    if isinstance(day, datetime.datetime):
+        day = day.date()
+    return _commemoration_ids_by_date().get(day, ())
+
+
+def primary_commemoration_id_for_date(day):
+    """The first commemoration the engine names on this date, or ``""`` if it names none.
+
+    Used to place a legacy row that was keyed to a whole day.  A day naming two commemorations
+    has one row per commemoration now, and this says which one inherits the old row: the leading
+    one, because that is the component the row's stored name and its generated enrichment were
+    dominated by.  The other is minted on demand by the ordinary request path, the same way any
+    commemoration seen for the first time is.
+    """
+    ids = commemoration_ids_for_date(day)
+    return ids[0] if ids else ""
+
+
+@functools.lru_cache(maxsize=1)
+def _names_by_id():
+    """``{observance id: {"en": name, "hy": name}}`` for every id the engine serves in range.
+
+    This is what makes the display text derivable from the identity alone, with no date in the
+    loop -- so a row's name can be refreshed from its id, and nothing has to remember which date
+    the row was born on, and why there is no date column on ``Feast``.
+    """
+    names = {}
+    for language in ("en", "hy"):
+        for observances in _observances_by_date(language).values():
+            for observance in observances:
+                names.setdefault(observance["id"], {})[language] = observance["name"]
+    return names
+
+
+def name_for_observance_id(observance_id, language="en"):
+    """The engine's current name for an observance id, or ``""`` if it serves no such id."""
+    return _names_by_id().get(observance_id, {}).get(language, "")
+
+
+def observance_ids():
+    """Every commemoration id the engine can currently produce."""
+    return {
+        observance_id
+        for ids in _commemoration_ids_by_date().values()
+        for observance_id in ids
+    }
+
+
+@functools.lru_cache(maxsize=1)
+def _dates_by_day_name():
+    """``{joined day name: earliest date the engine emits it}``.
+
+    The bridge from a legacy row's stored name to a date, and from there to a commemoration id.
+    Any date the engine names this way would do -- a fixed feast repeats on the same month and
+    day, a movable one has no canonical date -- so the earliest is chosen for determinism.
+    """
+    dates = {}
+    for day, name in sorted(_names_by_date("en").items()):
+        dates.setdefault(name, day)
+    return dates
+
+
+def resolve_observance_id(feast, reachable=None, name_map=None):
+    """Return the commemoration id this feast belongs under, or ``None`` if nothing can say.
+
+    Two routes, in order of confidence:
+
+      1. **The row already has one.**  Trusted as-is if the engine still serves it.  An id is a
+         contract -- once published it keeps meaning the same observance -- so unlike a name it
+         does not need re-deriving on every engine bump.  That is the whole point of the re-key.
+      2. **Its name**, resolved to a DATE and then to what the engine says that day
+         commemorates.  A name the engine still emits gives the date directly; otherwise
+         ``hub/data/feast_name_map.json`` records the date each retired spelling resolved to.
+         It is deliberately the date that is carried forward and not the map's stored target
+         name: those names are a snapshot of an older engine's display text, and 126 of the 229
+         stopped being emitted verbatim at 2.0.0, while the dates did not move.
+
+    Route 2 is the bridge, not the design.  Once every row carries an id, route 1 answers
+    everything and the name is display data.
+
+    A legacy row whose day named TWO commemorations resolves to the first only.  The second is
+    not this function's to invent: it gets its own row the first time the ordinary request path
+    serves that date, exactly as any newly seen commemoration does.
+    """
+    ids = observance_ids()
+
+    stored = (feast.observance_id or "").strip()
+    if stored and stored in ids:
+        return stored
+
+    if reachable is None:
+        reachable = engine_names()
+    name = (feast.name or "").strip()
+    day = _dates_by_day_name().get(name) if name in reachable else None
+    if day is None:
+        day = load_name_map_dates().get(normalize_feast_key(name))
+    if day:
+        return primary_commemoration_id_for_date(day) or None
+    return None
+
+
+def plan_renames(feasts, reachable=None, name_map=None):
+    """Group a church's feasts by the observance each belongs to, and report what that implies.
+
+    Returns ``(groups, unresolved)``.  ``groups`` is a list of ``(observance key, [feast, ...])``
+    sorted by key, with each group's feasts in ``id`` order -- which is the order
+    ``feast_merge.survivor`` reads, so the oldest row (the scrape-era one holding two years of LLM
+    contexts and curated icons) is the one that survives.  ``unresolved`` is every feast nothing
+    could place; those are reported and left alone, never deleted.
+
+    A group can hold more than two rows: production accumulated one row per *spelling* of a
+    commemoration, and they all collapse onto its single id.
+    """
+    if reachable is None:
+        reachable = engine_names()
+    if name_map is None:
+        name_map = load_name_map()
+
+    groups = {}
+    unresolved = []
+    for feast in sorted(feasts, key=lambda f: f.id):
+        observance_id = resolve_observance_id(feast, reachable, name_map)
+        if observance_id is None:
+            unresolved.append(feast)
+        else:
+            groups.setdefault(observance_id, []).append(feast)
+
+    return sorted(groups.items()), unresolved
+
+
+def describe(observance_id, group):
+    """Classify what applying this group would do, without touching anything.
+
+    ``"unchanged"`` -- one row already carrying this id.  ``"rekey"`` -- one row that has to be
+    moved onto it.  ``"merge"`` -- several rows collapsing onto one observance, the only outcome
+    that deletes anything.
+
+    A row from before 0066 cannot carry an id, so there is nothing to compare and the verdict
+    falls to whether anything else on it is stale (see ``stale_metadata``).
+    """
+    if len(group) > 1:
+        return "merge"
+    return "unchanged" if group[0].observance_id == observance_id else "rekey"
+
+
+def apply_group(observance_id, group, Feast, FeastContext):
+    """Collapse a group onto one row carrying ``observance_id``.  Returns the surviving feast.
+
+    Delegates the collapse itself to ``feast_merge.survivor``, the rule migration 0062 applied --
+    newest active context wins, thumbs are summed across the group, icon and designation are the
+    first non-null in ``id`` order.  Reimplementing it here would let the two drift.
+
+    The absorbed rows are deleted **before** the survivor is re-keyed: one of them typically
+    already holds ``observance_id`` (the empty row a post-upgrade date lookup minted alongside
+    the stale one), and writing it first would collide with
+    ``unique_feast_observance_id_per_church``.
+    """
+    keeper = group[0]
+
+    if len(group) > 1:
+        merge = survivor(group)
+        keeper = merge["keep"]
+        absorbed_ids = [f.id for f in merge["absorbed"]]
+
+        # Reparent every context before deleting its old feast; the FK cascades.
+        FeastContext.objects.filter(feast_id__in=absorbed_ids).update(feast_id=keeper.id)
+
+        kept_context = merge["context_kept"]
+        if kept_context is not None:
+            FeastContext.objects.filter(pk=kept_context.pk).update(
+                active=True,
+                thumbs_up=merge["thumbs_up"],
+                thumbs_down=merge["thumbs_down"],
+            )
+            FeastContext.objects.filter(feast_id=keeper.id).exclude(
+                pk=kept_context.pk
+            ).update(active=False, thumbs_up=0, thumbs_down=0)
+
+        if not keeper.icon_id and merge["icon_id"]:
+            keeper.icon_id = merge["icon_id"]
+        if not keeper.designation and merge["designation"]:
+            keeper.designation = merge["designation"]
+
+        Feast.objects.filter(id__in=absorbed_ids).delete()
+
+    keeper.observance_id = observance_id
+    return keeper
+
+
+def stale_metadata(feast, observance_id):
+    """Name the fields that would change if this row were brought up to date.  Mutates nothing.
+
+    ``observance_id`` is the identity; everything else on the row is *derived from it* and is
+    brought along whenever the engine's answer moves.
+
+    The id itself is reported only where the row can hold one.  Migration 0065 runs this against
+    a historical model from before 0066 added the column, so the field is checked for rather than
+    assumed -- the same "read only what both models expose" rule the module docstring sets out.
+    A row that cannot hold an id still gets its names refreshed, which is all 0065 ever did.
+
+      * ``name`` and ``name_hy``, the display text in both languages.  These are exactly what used
+        to be the key, and exactly what an engine release corrects -- which is why they are no
+        longer the key.  Both are read from the id, not from a date.
+    """
+    stale = []
+    if (feast.observance_id or "") != observance_id:
+        stale.append("observance_id")
+    if feast.name != name_for_observance_id(observance_id):
+        stale.append("name")
+    if (feast.i18n or {}).get("name_hy") != _target_hy(observance_id):
+        stale.append("name_hy")
+    return stale
+
+
+def refresh_metadata(feast, observance_id):
+    """Apply what ``stale_metadata`` reports, in memory.  The caller saves."""
+    feast.observance_id = observance_id
+    feast.name = name_for_observance_id(observance_id)
+    set_translation(feast, _target_hy(observance_id))
+    return feast
+
+
+def _target_hy(observance_id):
+    """The engine's Armenian name for an observance, or ``None`` where it has none."""
+    return name_for_observance_id(observance_id, language="hy") or None
+
+
+def set_translation(feast, name_hy):
+    """Write the Armenian name into the modeltrans ``i18n`` column directly.
+
+    The historical models a migration sees carry the ``i18n`` column but not modeltrans's
+    ``name_hy`` descriptor, so going through the JSON is what lets the command and the migration
+    share this code.  Returns True if anything changed.
+    """
+    current = dict(feast.i18n or {})
+    if current.get("name_hy") == name_hy:
+        return False
+    if name_hy:
+        current["name_hy"] = name_hy
+    else:
+        current.pop("name_hy", None)
+    feast.i18n = current
+    return True
