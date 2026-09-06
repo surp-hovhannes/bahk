@@ -14,20 +14,25 @@ class BudgetExhausted(Exception):
     pass
 
 
-def estimate_reservation(payload, *, image=False):
+def estimate_reservation(payload, *, image=False, schema=None, instructions=""):
+    wire_text = {"payload": payload, "schema": schema or {}, "instructions": instructions}
     # UTF-8 bytes bound text tokenization conservatively. Fixed overhead includes
     # instructions/schema; 65,536 image tokens bounds our <=1536px derivative.
-    tokens = len(json.dumps(payload, ensure_ascii=False).encode()) + 8192 + (65536 if image else 0)
+    tokens = len(json.dumps(wire_text, ensure_ascii=False).encode()) + 8192 + (65536 if image else 0)
     # Operator supplies a conservative MAX(input, output) USD / million tokens.
     rate = getattr(settings, "ICON_TAXONOMY_MAX_USD_PER_MILLION_TOKENS", 0)
     if rate <= 0 or not math.isfinite(rate):
         raise BudgetExhausted("pricing_not_configured")
+    from icons.services.vision_provider import model_profile
+
+    if rate < model_profile()["max_rate"]:
+        raise BudgetExhausted("model_price_underreserved")
     return tokens, math.ceil(tokens * rate)
 
 
 @transaction.atomic
-def reserve(stage, payload, *, image=False, analysis=None, budget_name=None):
-    tokens, microdollars = estimate_reservation(payload, image=image)
+def reserve(stage, payload, *, image=False, analysis=None, budget_name=None, schema=None, instructions=""):
+    tokens, microdollars = estimate_reservation(payload, image=image, schema=schema, instructions=instructions)
     name = budget_name or getattr(settings, "ICON_TAXONOMY_BUDGET", "")
     # A conditional UPDATE, rather than read-then-write, also protects SQLite.
     updated = TaxonomyBudget.objects.filter(

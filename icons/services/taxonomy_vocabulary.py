@@ -16,14 +16,14 @@ from icons.services.taxonomy_inputs import digest, normalize
 THEMES = {
     "prayer": (["prayer", "praying"], ["praying"]),
     "charity": (["charity", "generosity", "sharing bread"], ["sharing_food", "giving_alms"]),
-    "repentance": (["repentance", "penitence", "contrition"], ["kneeling_in_repentance"]),
+    "repentance": (["repentance", "penitence", "contrition"], []),
     "teaching": (["teaching", "instruction"], ["teaching"]),
     "healing": (["healing", "care for the sick"], ["caring_for_sick"]),
     "mercy": (["mercy", "compassion", "forgiveness"], ["forgiving", "comforting", "caring_for_sick"]),
     "service": (["service", "serving others"], ["washing_feet", "caring_for_sick", "giving_alms"]),
-    "gratitude": (["gratitude", "thanksgiving", "thankfulness"], ["giving_thanks"]),
+    "gratitude": (["gratitude", "thanksgiving", "thankfulness"], []),
     "humility": (["humility", "humble service"], ["washing_feet"]),
-    "trust": (["trust", "faith", "reliance on god"], ["entrusting_to_god"]),
+    "trust": (["trust", "faith", "reliance on god"], []),
     "hope": (["hope", "restoration"], ["comforting"]),
     "hospitality": (["hospitality", "welcoming strangers"], ["welcoming_stranger", "sharing_food"]),
     "love": (["love", "loving care"], ["comforting", "caring_for_sick"]),
@@ -55,7 +55,7 @@ EVENT_ACTIONS = (
 EVENT = re.compile(r"^(?:the )?(" + "|".join(EVENT_ACTIONS) + r") of (.+)$")
 NEGATION = re.compile(r"\b(not|without|except|excluding|no)\b")
 SAINT = re.compile(r"^(?:saints?|sts?\.?|սուրբ|սրբոց|սբ\.?)\s+", re.I)
-ROLE = r"(?:bishop|archbishop|catholicos|patriarch|apostle|evangelist|martyr|deacon|abbot|elder|king|queen|prophet|վարդապետ|կաթողիկոս)"
+ROLE = r"(?:bishop|archbishop|catholicos|patriarch|apostle|evangelist|martyr|deacon|priest|archangel|abbot|elder|king|queen|prophet|վարդապետ|կաթողիկոս)"
 QUALIFIER = re.compile(r"\b(?:the\s+[\w]+|of\s+(?:the\s+)?[\w]+)\b", re.I)
 UNSUITABLE = {
     "companions",
@@ -74,20 +74,22 @@ UNSUITABLE = {
 
 
 def release_version():
-    return getattr(settings, "ICON_TAXONOMY_RELEASE", "catalogue-v1")
+    return getattr(settings, "ICON_TAXONOMY_RELEASE", "catalogue-v2")
 
 
 def release():
+    if release_version() == "catalogue-v1":
+        raise ValueError("legacy_release_requires_upgrade")
     return TaxonomyRelease.objects.get_or_create(
         version=release_version(),
         defaults={
-            "source": {"rules": "qualified-label-grammar-v2", "calendar": False},
+            "source": {"rules": "qualified-label-grammar-v3", "calendar": False},
         },
     )[0]
 
 
 def concept(kind, label, definition=None, *, language="und", source=None):
-    normalized = normalize(label)
+    normalized = canonical_identity(label)
     key = kind + ":" + digest(normalized)[:40]
     obj, _ = TaxonomyConcept.objects.get_or_create(
         release=release(),
@@ -109,7 +111,7 @@ def alias(obj, label, language="und", source=None):
         language=language,
         text=label[:500],
         defaults={
-            "normalized": normalize(label)[:500],
+            "normalized": canonical_identity(label)[:500],
             "source": source or {"rule": "exact_label"},
         },
     )
@@ -134,8 +136,10 @@ def seed_vocabulary():
         {"qualified": True},
         source={"definition_set": "biblical-iconographic-scenes-v1", "references": ["Luke 1:26-38"]},
     )
-    for text in ("Mother of God", "Theotokos"):
+    for text in ("Mother of God", "Theotokos", "Mary Mother of God", "Mary the Mother of God"):
         alias(mary, text, source={"definition_set": "christian-iconographic-titles-v1"})
+    for text in ("Jesus", "Christ", "Christ Pantocrator", "Jesus Pantocrator", "Pantocrator"):
+        alias(christ, text, source={"definition_set": "christian-iconographic-titles-v2"})
     apostles = concept("group", "Twelve Apostles", {"complete": False, "members": [], "qualified": True}, source=source)
     # Conjunctions of independent activity/object observations may support scene
     # suggestions. They cannot establish named participant identity or assignment.
@@ -161,18 +165,32 @@ def seed_vocabulary():
 seed_themes = seed_vocabulary
 
 
+def descriptive_text(text):
+    """Separators precede marker/role grammar; callers retain the original source."""
+    return re.sub(r"[_‐‑–—-]+", " ", text)
+
+
 def qualified(text, *, person_context=False):
     """Full identity grammar: qualified epithet/place/role or sourced person label.
 
-    Two arbitrary words are never sufficient. A saint/person source marker plus
-    two name components is accepted; a bare Saint Peter remains unqualified.
+    Two name components or a saint marker alone do not disambiguate identity.
+    Explicit role/place/epithet grammar qualifies; other sourced names remain
+    cautious candidates whose source strength is assessed separately.
     """
-    raw = text.strip()
+    raw = descriptive_text(text).strip()
     saint = bool(SAINT.match(raw))
     stripped = SAINT.sub("", raw)
     value = normalize(stripped)
     words = value.split()
-    if re.match(r"^(?:a|an|the|prayer|reflection|meditation|thought|request)\b", value):
+    if re.search(
+        r"\b(?:maybe|possibly|unknown|unidentified|style|denomination|orthodox|catholic|at|in|to|from|with|before|after|during)\b",
+        value,
+    ):
+        return False
+    if re.match(
+        r"^(?:a|an|the|prayer|reflection|meditation|thought|request|artist|church|parish|cathedral|manuscript|collection)\b",
+        value,
+    ):
         return False
     if not 2 <= len(words) <= 12 or NEGATION.search(value) or set(words) & UNSUITABLE:
         return False
@@ -182,16 +200,67 @@ def qualified(text, *, person_context=False):
     proper_source = bool(stripped and stripped[0].isupper()) or saint or person_context
     if proper_source and QUALIFIER.search(stripped) and not re.match(r"^(?:the|of)\b", value):
         return True
-    if re.match(r"^" + ROLE + r"\s+\w+\s+\w+", value):
+    if re.fullmatch(ROLE + r"\s+\w+(?:\s+\w+)*", value):
         return True
-    if saint or person_context:
-        # At least two explicit name components, without generic label words.
-        return all(w not in {"of", "the", "and", "saint", "saints"} for w in words)
     return False
 
 
+def source_marked_name(text):
+    text = descriptive_text(text)
+    words = normalize(text).split()
+    return bool(
+        SAINT.match(text)
+        and 1 <= len(words) <= 4
+        and all(
+            word.isalpha() and word not in UNSUITABLE | {"of", "the", "and", "with", "maybe", "possibly"}
+            for word in words
+        )
+    )
+
+
+def canonical_identity(text):
+    value = normalize(text)
+    value = re.sub(r"^(?:portrait of|icon of) ", "", value)
+    value = re.sub(r" portrait$", "", value)
+    # Normalize role order, retaining role and every place/epithet/ordinal.
+    match = re.fullmatch(r"(" + ROLE + r") (\w+)(.*)", value)
+    if match:
+        value = match[2] + " the " + match[1] + match[3]
+    value = re.sub(r"\bof (" + ROLE + r") of\b", r"the \1 of", value)
+    value = re.sub(r"^(\w+) (" + ROLE + r") of\b", r"\1 the \2 of", value)
+    return value
+
+
+def source_class(text):
+    text = descriptive_text(text)
+    value = normalize(text)
+    # Explicit relational qualifiers are identity-bearing, including places whose
+    # names also occur in provenance. Role equivalence requires a sourced alias.
+    if (SAINT.match(text) or re.match(r"^" + ROLE + r"\s+", value)) and qualified(text) and QUALIFIER.search(value):
+        return "identity"
+    # A trailing short uppercase locale/catalogue token is not a second name.
+    # This is intentionally conservative without maintaining a city/state list.
+    if SAINT.match(text) and re.search(r"(?:\s|[-_])[A-Z]{2,3}$", text):
+        return "provenance"
+    if re.search(
+        r"\b(?:orthodox|catholic|church|parish|cathedral|manuscript|iconographic style|artist|photopic\w*|collection|scribe|donor)\b",
+        value,
+    ):
+        return "provenance"
+    if re.search(
+        r"\b(?:" + "|".join(EVENT_ACTIONS) + r"|agony|washing|pentecost|theophany|council|vision|supper|holy family)\b",
+        value,
+    ):
+        return "event"
+    if value in {normalize(code.replace("_", " ")) for _, codes in THEMES.values() for code in codes}:
+        return "activity"
+    if SAINT.match(text) or qualified(text):
+        return "identity"
+    return "unknown"
+
+
 def identity_constrained(text):
-    text = text.strip()
+    text = descriptive_text(text).strip()
     # Explicit person markers inside prose still constrain identity.
     if re.search(r"(?:^|\s)(?:saints?|sts?\.?|սուրբ|սրբոց|սբ\.?)\s+", text, re.I):
         return True
@@ -205,7 +274,7 @@ def identity_constrained(text):
 
 
 def resolve(text, *, kinds=None):
-    qs = TaxonomyAlias.objects.filter(concept__release__version=release_version(), normalized=normalize(text))
+    qs = TaxonomyAlias.objects.filter(concept__release__version=release_version(), normalized=canonical_identity(text))
     if kinds:
         qs = qs.filter(concept__kind__in=kinds)
     found = list(TaxonomyConcept.objects.filter(pk__in=qs.values("concept_id")).order_by("pk"))
@@ -214,7 +283,7 @@ def resolve(text, *, kinds=None):
 
 def parse(text, *, create=False, person_context=False):
     original = text
-    value = normalize(text)
+    value = canonical_identity(text)
     result = {
         "subjects": [],
         "event": None,
@@ -229,6 +298,9 @@ def parse(text, *, create=False, person_context=False):
         result["unresolved"] = [original]
         return result
     result["lookup_terms"].append(value)
+    if source_class(original) == "provenance":
+        result["unresolved"] = [original]
+        return result
     known = resolve(value)
     if known:
         if known.kind == "subject":
@@ -249,24 +321,28 @@ def parse(text, *, create=False, person_context=False):
     event = EVENT.fullmatch(value)
     if event:
         result["event_intent"] = {"action": event[1], "label": value}
+    if not event and (source_class(original) in {"event", "provenance"} or scene_hint(original, result)):
+        result["unresolved"] = [original]
+        if source_class(original) != "provenance":
+            result["event_intent"] = {"action": "unresolved_scene", "label": value}
+        return result
     subject_text = event[2] if event else value
     parts = re.split(r"\s+(?:and|և|եւ)\s+", subject_text)
     # Recover saint source markers from the original text for qualification.
-    original_parts = re.split(r"\s+(?:and|և|եւ)\s+", original, flags=re.I)
+    original_parts = re.split(r"\s+(?:and|և|եւ)\s+", descriptive_text(original), flags=re.I)
     for index, part in enumerate(parts):
         result["lookup_terms"].append(normalize(part))
+        part = canonical_identity(part)
         found = resolve(part, kinds=["subject", "group"])
         source_text = original_parts[index] if index < len(original_parts) else part
         source_text = re.sub(r"^(?:portrait of|icon of) ", "", source_text, flags=re.I)
         source_text = re.sub(r" portrait$", "", source_text, flags=re.I)
         if event:
             source_text = re.sub(r"^.*?\bof\s+", "", source_text, count=1, flags=re.I)
-        if (
-            not found
-            and create
-            and qualified(source_text, person_context=person_context or bool(SAINT.match(source_text)))
-        ):
-            found = concept("subject", part, {"qualified": True})
+        if not found and create and (qualified(source_text) or source_marked_name(source_text)):
+            found = concept(
+                "subject", part, {"qualified": qualified(source_text), "source_marked": bool(SAINT.match(source_text))}
+            )
         if found:
             result["subjects"].append(found.pk)
             result["identity_constraint"] = True
@@ -313,14 +389,30 @@ def catalogue_sources(metadata, *, create=False):
         raw.append(("filename", metadata["filename"]))
     if len(raw) > 64 or len(json.dumps(raw, ensure_ascii=False).encode()) > 16000:
         raise ValueError("metadata_sources_too_large")
-    person_context = any(normalize(tag) in {"portrait", "saint", "saints", "սուրբ"} for tag in metadata["tags"])
     sources = []
     for ref, original in raw:
-        text = re.sub(r"\.[^.]+$", "", original).replace("_", " ").replace("-", " ") if ref == "filename" else original
-        parsed = parse(text, create=create, person_context=person_context or normalize(text).startswith("portrait of "))
+        text, transformations = original, []
+        if ref == "filename":
+            for pattern, code in (
+                (r"\.(?:png|jpe?g|webp|gif)$", "file_extension"),
+                (r"_[A-Za-z0-9]{7}$", "storage_random_suffix"),
+                (r"[-_]photopic[a-zA-Z0-9]+$", "product_suffix"),
+            ):
+                cleaned = re.sub(pattern, "", text)
+                if cleaned != text:
+                    transformations.append(code)
+                    text = cleaned
+            text = text.replace("_", " ").replace("-", " ")
+        # Weak filenames resolve existing aliases but never mint identities.
+        parsed = parse(text, create=create and ref != "filename")
         sources.append(
             {
                 "source": ref,
+                "classification": source_class(text),
+                "identity_text": canonical_identity(text),
+                "qualifiers": re.findall(r"\b(?:the|of)\s+[^,;]+", normalize(text)),
+                "transformations": transformations,
+                "weak": ref == "filename",
                 "text": original,
                 "parse_text": text,
                 "parsed": parsed,
@@ -333,10 +425,11 @@ def catalogue_sources(metadata, *, create=False):
     return sources
 
 
-def catalogue_claims(metadata):
-    seed_vocabulary()
+def catalogue_claims(metadata, *, create=True):
+    if create:
+        seed_vocabulary()
     claims = []
-    for source in catalogue_sources(metadata, create=True):
+    for source in catalogue_sources(metadata, create=create):
         parsed = source["parsed"]
         for kind in ("subjects", "themes"):
             claims.extend({"concept": pk, "source": source["source"], "text": source["text"]} for pk in parsed[kind])

@@ -22,19 +22,21 @@ class RekeyFeastMigrationTests(TransactionTestCase):
     migrate_data_to = ("hub", "0062_merge_feasts_by_commemoration")
     migrate_to = ("hub", "0063_finalize_feast_rekey")
 
-    def _migrate(self, target):
+    def _migrate(self, targets):
+        if isinstance(targets, tuple):
+            targets = [targets]
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
-        executor.migrate([target])
+        executor.migrate(targets)
         executor.loader.build_graph()
-        return executor.loader.project_state([target]).apps
+        return executor.loader.project_state(targets).apps
 
     def setUp(self):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        # Capture every app's current leaf before rolling dependent migrations back.
+        self.addCleanup(self._migrate, executor.loader.graph.leaf_nodes())
         self.old_apps = self._migrate(self.migrate_from)
-
-    def tearDown(self):
-        # Leave the database on the latest schema for whatever runs next.
-        self._migrate(self.migrate_to)
 
     def _seed(self):
         """Build the duplication the migration exists to collapse.

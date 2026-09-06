@@ -1,0 +1,34 @@
+{
+  "control-v1": {
+    "profile_id": "control-v1",
+    "configured_model": "gpt-4.1-mini",
+    "reasoning_effort": null,
+    "prompt_version": "control-v1",
+    "policy_version": "control-v1",
+    "prompt_hash": "7be739f4c5ac6a9cb8162574bc21f1806c41ec72e74ad328fecc475289a6bb2a",
+    "stage_prompt_hashes": {
+      "analyze": "de426c22d3eb1801f32a3f3c813a2d507e84c95e25fd8e8730f2c2fca47427d8",
+      "assess": "01465ccf9e2b1ef03163f9f1c054a3acf7f6135b782fd3d6d4e3619ff40dace8",
+      "verify": "645816d083cb79c83ea438e7b1b0933fbfcfcc24086565082030c3ba56b6fd29"
+    },
+    "policy_hash": "ede46beb912d5a09c56081c138160f1b270e1068426972ea9bca689cd12876ac",
+    "positive_limit": 8,
+    "profile_hash": "3c77e6b2afd6d4433dbe564c50d9469ce303dbf4df11814f0443c04bbc9099d2"
+  },
+  "luna-v1": {
+    "profile_id": "luna-v1",
+    "configured_model": "gpt-5.6-luna",
+    "reasoning_effort": "none",
+    "prompt_version": "luna-v1",
+    "policy_version": "luna-event-v1",
+    "prompt_hash": "dda695503cf3dea229cabdcbe365c0103830af99a2bc79de227bfbfa764d3524",
+    "stage_prompt_hashes": {
+      "analyze": "e4a71cb6b3033bbff54573fcfaa469440978c45331505751e135c19e3e136d71",
+      "assess": "0b713e5be790686befa3e7bebc660ab1c069d7be5247caa5678fb92a9fbcdf03",
+      "verify": "5de9d2510735f271073b60b1a7e6740f91c5b5c20a071b2e53f1fc0f2443c533"
+    },
+    "policy_hash": "3fee5cf4f8ceed953177ee7c268645e5ed5ac9242aff33d7daaf6f5748634f04",
+    "positive_limit": 4,
+    "profile_hash": "c3e39a07070c6bda21fd3614c412da66bbee227687d731b5aa7b6c4281ff7c15"
+  }
+}

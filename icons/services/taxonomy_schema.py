@@ -33,5 +33,7 @@ def validate_schema(value, schema):
         for key, subschema in schema["properties"].items():
             validate_schema(value[key], subschema)
     elif kind == "array":
+        if not schema.get("minItems", 0) <= len(value) <= schema.get("maxItems", len(value)):
+            raise ValueError("schema")
         for item in value:
             validate_schema(item, schema["items"])

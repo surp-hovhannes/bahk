@@ -1,6 +1,9 @@
 """Atomic invalidation and durable outbox, shared by every write route."""
 
 import logging
+import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import timedelta
 
 from django.conf import settings
@@ -11,6 +14,49 @@ from icons.models import Icon, IconTaxonomyProjection, IconTaxonomyWork
 from icons.services.taxonomy_inputs import fingerprint
 
 logger = logging.getLogger(__name__)
+INLINE_OWNED = ContextVar("taxonomy_inline_owned", default=False)
+
+
+@contextmanager
+def inline_owned():
+    token = INLINE_OWNED.set(str(uuid.uuid4()))
+    try:
+        yield
+    finally:
+        INLINE_OWNED.reset(token)
+
+
+def own_inline_work(ids, *, resume_budget_blocked=False, resume_inline=False):
+    """Atomically reserve selected work, including explicit resumes, before I/O.
+
+    No intermediate ordinary pending state is exposed to background dispatchers.
+    A crashed invocation remains owned until explicit bounded recovery.
+    """
+    from django.db.models import Q, Case, When, F, Value, IntegerField
+
+    owner = INLINE_OWNED.get()
+    if not owner:
+        raise ValueError("inline_owner_required")
+    now = timezone.now()
+    eligible = Q(state="pending") | Q(state="retry", available_at__lte=now) | Q(state="running", lease_until__lte=now)
+    if resume_budget_blocked:
+        eligible |= Q(state="budget_blocked")
+    if resume_inline:
+        eligible |= Q(state__in=["inline_pending", "inline_running"], lease_until__lte=now) | Q(
+            state="inline_retry", available_at__lte=now
+        )
+    return (
+        IconTaxonomyWork.objects.filter(icon_id__in=ids)
+        .filter(eligible)
+        .update(
+            state="inline_pending",
+            lease_token=owner,
+            lease_until=now + timedelta(seconds=600),
+            attempts=Case(
+                When(state="budget_blocked", then=Value(0)), default=F("attempts"), output_field=IntegerField()
+            ),
+        )
+    )
 
 
 def wake_dispatcher():
@@ -38,14 +84,15 @@ def schedule(icon_id, *, force=False):
     if not created:
         work.revision += 1
     work.fingerprint = fp
-    work.state = "pending"
+    work.state = "inline_pending" if INLINE_OWNED.get() else "pending"
     work.attempts = 0
     work.error = ""
-    work.lease_token = ""
-    work.lease_until = None
+    work.lease_token = INLINE_OWNED.get() or ""
+    work.lease_until = timezone.now() + timedelta(seconds=600) if INLINE_OWNED.get() else None
     work.available_at = timezone.now() + timedelta(seconds=2)
     work.save()
-    transaction.on_commit(wake_dispatcher)
+    if not INLINE_OWNED.get():
+        transaction.on_commit(wake_dispatcher)
     return work
 
 
@@ -92,17 +139,18 @@ def refresh_content(icon):
     return actual
 
 
-def reconcile_versions(limit=100):
+def reconcile_versions(limit=100, *, church_id=None, icon_ids=None):
     """Bounded recovery for policy changes, including unavailable prior analyses."""
     from icons.services.taxonomy_inputs import versions, dependencies_current
 
     current_versions = versions()
     ids = []
-    for work in (
-        IconTaxonomyWork.objects.filter(state__in=["complete", "unavailable"])
-        .select_related("icon")
-        .order_by("available_at", "pk")[:limit]
-    ):
+    qs = IconTaxonomyWork.objects.filter(state__in=["complete", "unavailable"])
+    if church_id is not None:
+        qs = qs.filter(icon__church_id=church_id)
+    if icon_ids is not None:
+        qs = qs.filter(icon_id__in=icon_ids)
+    for work in qs.select_related("icon").order_by("available_at", "pk")[:limit]:
         latest = work.icon.taxonomic_analyses.order_by("-created_at").first()
         if latest and (latest.versions != current_versions or not dependencies_current(latest.dependencies)):
             schedule(work.icon_id, force=True)

@@ -68,22 +68,17 @@ class FixtureProvider:
             raise TimeoutError("synthetic timeout")
         if stage == "observe":
             assert payload == {} and image, "Image-only stage leaked metadata or omitted image"
-            observations = [
-                dict(id=f"n{i}", kind="inscription", text=name, region="upper inscription", readable=True)
-                for i, name in enumerate(self.names)
-            ]
-            observations += [
-                dict(id=f"a{i}", kind="activity", text=value, region="center action", readable=False)
-                for i, value in enumerate(self.activities)
-            ]
+            from icons.tests.taxonomy_fixtures import fresh_observations
+
+            observations = fresh_observations(self.names, self.activities)
             value = {"depiction": self.depiction, "figures": len(self.names) or 1, "observations": observations}
         elif stage == "compare":
             assert image is None
             value = {
-                "assertions": [
-                    dict(concept=pk, agrees=True, conflict=False, observation_ids=[], inference="metadata agrees")
+                "assertions": {
+                    str(pk): dict(agrees=True, conflict=False, observation_ids=[], inference="metadata agrees")
                     for pk in sorted({c["concept"] for c in payload["claims"]})
-                ]
+                }
             }
         else:
             raise AssertionError("unexpected catalogue provider stage")
@@ -509,12 +504,14 @@ class TaxonomyBackfillTests(TransactionTestCase):
             def call(self, stage, *args, **kwargs):
                 value, model, usage = super().call(stage, *args, **kwargs)
                 if stage == "compare":
-                    value["assertions"][0]["observation_ids"] = ["filename-is-proof"]
+                    next(iter(value["assertions"].values()))["observation_ids"] = ["filename-is-proof"]
                 return value, model, usage
 
         self.due(icon)
-        self.assertEqual(process_icon(icon.pk, provider=InventingProvider()), "unavailable")
-        self.assertFalse(IconTaxonomyProjection.objects.exists())
+        self.assertEqual(process_icon(icon.pk, provider=InventingProvider()), "complete")
+        analysis = icon.taxonomic_analyses.get(state="complete")
+        self.assertEqual(analysis.comparison["diagnostics"][0]["code"], "unknown_comparison_observation")
+        self.assertTrue(IconTaxonomyProjection.objects.exists())
 
     def test_dispatcher_and_backfill_commands_execute_complete_mocked_pipeline(self):
         icon = self.icon()
@@ -687,9 +684,11 @@ class TaxonomyBackfillTests(TransactionTestCase):
             self.assertEqual([r["id"] for r in json.loads(out.getvalue())["rows"]], [second.pk])
             out = StringIO()
             call_command("backfill_icon_taxonomy", dry_run=True, after_id=second.pk, stdout=out)
-            self.assertEqual(
-                json.loads(out.getvalue()), {"dry_run": True, "rows": [], "next_after_id": second.pk, "states": []}
-            )
+            empty = json.loads(out.getvalue())
+            self.assertEqual(empty["rows"], [])
+            self.assertEqual(empty["next_after_id"], second.pk)
+            self.assertEqual(empty["summary"], {})
+            self.assertIsNone(empty["budget_reservations"])
             provider.assert_not_called()
             wake.assert_not_called()
         self.assertEqual(before, {model: list(model.objects.order_by("pk").values()) for model in models})
@@ -770,7 +769,9 @@ class TaxonomyBackfillTests(TransactionTestCase):
         self.analyze(
             thematic,
             FixtureProvider(
-                names=(), depiction="scene", activities=["giving_thanks", "sharing_food", "comforting", "washing_feet"]
+                names=(),
+                depiction="scene",
+                activities=["shared_supper", "bread_and_cup", "sharing_food", "comforting", "washing_feet"],
             ),
         )
         assertions = thematic.taxonomic_analyses.get(state="complete").assertions
