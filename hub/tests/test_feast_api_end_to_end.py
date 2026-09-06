@@ -87,7 +87,7 @@ class FeastApiEndToEndTests(TestCase):
 
         self.assertEqual(
             sorted(feast),
-            sorted(["id", "name", "designation", "context_eligible", "icon", "text",
+            sorted(["id", "name", "designation", "icon", "text",
                     "short_text", "context_thumbs_up", "context_thumbs_down", "prayer"]),
         )
 
