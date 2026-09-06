@@ -55,6 +55,12 @@ class GetFeastForDate(generics.GenericAPIView):
                 "context_thumbs_down": 2
             }
         }
+
+        A day is a list of observances, and only the ones that commemorate a person or an event
+        get a ``Feast`` row -- so a date can now resolve to two of them.  This still serves one,
+        the leading one, because serving an array is a breaking change for the app and lands with
+        it.  ``null`` where the day commemorates nobody, which is 5,070 of the engine's 9,861
+        days and is an answer, not an error.
     """
 
     queryset = Feast.objects.all()
@@ -91,127 +97,22 @@ class GetFeastForDate(generics.GenericAPIView):
             return Response(cached_result)
 
         try:
-            # Resolve the commemoration for this date and get the row holding its enrichment.
+            # Resolve the day's commemorations and get the rows holding their enrichment.
             # check_fast=False because the view should still return feasts even if a Fast exists.
             # There is no Day fallback any more: the engine names every date in its supported
-            # range, so either it resolved a feast or there is genuinely none to show.
-            feast, _, _ = get_or_create_feast_for_date(date_obj, church, check_fast=False)
+            # range, so either it resolved commemorations or there are genuinely none to show.
+            feasts, _ = get_or_create_feast_for_date(date_obj, church, check_fast=False)
 
-            if feast is None:
-                # No feast on this day
-                response_data = {
-                    "date": date_str,
-                    "feast": None,
-                }
-                cache.set(cache_key, response_data, 3600)
-                return Response(response_data)
+            # The response is still one feast. A day can now name two commemorations, and both
+            # have rows, but serving them as an array is a breaking change for the app and lands
+            # with it -- so this serves the leading one, which is what the joined name was
+            # dominated by anyway.
+            feast = feasts[0] if feasts else None
+            serialized = self._serialize_feast(feast, request, lang) if feast else None
+            response_data = {"date": date_str, "feast": serialized}
 
-            # Get translated feast name with proper fallback
-            name_translated = getattr(feast, 'name_i18n', None)
-            if not name_translated:
-                # Fallback to base name field
-                name_translated = feast.name
-            
-            # If name is still None or empty, treat as no feast
-            if not name_translated or not name_translated.strip():
-                response_data = {
-                    "date": date_str,
-                    "feast": None,
-                }
-                cache.set(cache_key, response_data, 3600)
-                return Response(response_data)
-
-            # Check if context exists and has all translations
-            active_context = feast.active_context
-            should_trigger_generation = is_feast_context_generation_eligible(feast)
-            
-            if active_context is None:
-                # No context at all, trigger generation for all languages if appropriate
-                if should_trigger_generation:
-                    logging.warning("No context found for feast %s", str(feast))
-                    logging.info("Enqueue context generation for feast %s (all languages)", feast.id)
-                    generate_feast_context_task.delay(feast.id)
-                
-                context_dict = {
-                    "text": "",
-                    "short_text": "",
-                    "context_thumbs_up": 0,
-                    "context_thumbs_down": 0,
-                }
-            else:
-                # Get the requested language translations
-                context_text = getattr(active_context, 'text_i18n', active_context.text)
-                short_context_text = getattr(active_context, 'short_text_i18n', active_context.short_text)
-
-                # Check if all languages have translations
-                available_languages = getattr(settings, 'MODELTRANS_AVAILABLE_LANGUAGES', ['en', 'hy'])
-                all_languages_present = True
-                for available_lang in available_languages:
-                    if available_lang == 'en':
-                        lang_text = active_context.text
-                        lang_short = active_context.short_text
-                    else:
-                        lang_text = getattr(active_context, f'text_{available_lang}', None)
-                        lang_short = getattr(active_context, f'short_text_{available_lang}', None)
-                    
-                    if not lang_text or not lang_text.strip() or not lang_short or not lang_short.strip():
-                        all_languages_present = False
-                        break
-
-                # If any translation is missing, trigger generation for all languages if appropriate
-                if not all_languages_present and should_trigger_generation:
-                    logging.info(
-                        "Context translations missing for feast %s, enqueuing generation for all languages",
-                        feast.id
-                    )
-                    generate_feast_context_task.delay(feast.id)
-
-                context_dict = {
-                    "text": context_text or "",
-                    "short_text": short_context_text or "",
-                    "context_thumbs_up": active_context.thumbs_up,
-                    "context_thumbs_down": active_context.thumbs_down,
-                }
-
-            # Serialize icon if it exists
-            icon_data = None
-            if feast.icon:
-                icon_serializer = IconSerializer(feast.icon, context={'request': request})
-                icon_data = icon_serializer.data
-
-            feast_data = {
-                "id": feast.id,
-                "name": name_translated,
-                "designation": feast.designation,
-                "context_eligible": should_trigger_generation,
-                "icon": icon_data,
-                **context_dict,
-            }
-
-            # Check if feast has a prayer for its designation
-            feast_prayer_data = None
-            if feast.designation:
-                try:
-                    from prayers.models import FeastPrayer
-                    from prayers.serializers import FeastPrayerSerializer
-
-                    feast_prayer = FeastPrayer.objects.get(designation=feast.designation)
-                    serializer = FeastPrayerSerializer(
-                        feast_prayer,
-                        context={'request': request, 'lang': lang, 'feast': feast}
-                    )
-                    feast_prayer_data = serializer.data
-                except FeastPrayer.DoesNotExist:
-                    pass
-
-            feast_data['prayer'] = feast_prayer_data
-
-            response_data = {
-                "date": date_str,
-                "feast": feast_data,
-            }
-
-            # Cache successful response for 1 hour
+            # Cache successful response for 1 hour. None is a real answer on most days, so it is
+            # cached like any other.
             cache.set(cache_key, response_data, 3600)
             return Response(response_data)
 
@@ -234,6 +135,108 @@ class GetFeastForDate(generics.GenericAPIView):
                 },
                 status=status.HTTP_200_OK  # Return 200 not 500 so clients handle gracefully
             )
+
+    def _serialize_feast(self, feast, request, lang):
+        """Serialize one Feast row, or return ``None`` if it has no usable name.
+
+        Also enqueues context generation when this feast is missing text or a translation of it,
+        which is why it takes the request rather than being a plain serializer.
+        """
+        # Get translated feast name with proper fallback
+        name_translated = getattr(feast, 'name_i18n', None)
+        if not name_translated:
+            # Fallback to base name field
+            name_translated = feast.name
+
+        # If name is still None or empty, there is nothing to show for this one
+        if not name_translated or not name_translated.strip():
+            return None
+
+        # Check if context exists and has all translations
+        active_context = feast.active_context
+        should_trigger_generation = is_feast_context_generation_eligible(feast)
+
+        if active_context is None:
+            # No context at all, trigger generation for all languages if appropriate
+            if should_trigger_generation:
+                logging.warning("No context found for feast %s", str(feast))
+                logging.info("Enqueue context generation for feast %s (all languages)", feast.id)
+                generate_feast_context_task.delay(feast.id)
+
+            context_dict = {
+                "text": "",
+                "short_text": "",
+                "context_thumbs_up": 0,
+                "context_thumbs_down": 0,
+            }
+        else:
+            # Get the requested language translations
+            context_text = getattr(active_context, 'text_i18n', active_context.text)
+            short_context_text = getattr(active_context, 'short_text_i18n', active_context.short_text)
+
+            # Check if all languages have translations
+            available_languages = getattr(settings, 'MODELTRANS_AVAILABLE_LANGUAGES', ['en', 'hy'])
+            all_languages_present = True
+            for available_lang in available_languages:
+                if available_lang == 'en':
+                    lang_text = active_context.text
+                    lang_short = active_context.short_text
+                else:
+                    lang_text = getattr(active_context, f'text_{available_lang}', None)
+                    lang_short = getattr(active_context, f'short_text_{available_lang}', None)
+
+                if not lang_text or not lang_text.strip() or not lang_short or not lang_short.strip():
+                    all_languages_present = False
+                    break
+
+            # If any translation is missing, trigger generation for all languages if appropriate
+            if not all_languages_present and should_trigger_generation:
+                logging.info(
+                    "Context translations missing for feast %s, enqueuing generation for all languages",
+                    feast.id
+                )
+                generate_feast_context_task.delay(feast.id)
+
+            context_dict = {
+                "text": context_text or "",
+                "short_text": short_context_text or "",
+                "context_thumbs_up": active_context.thumbs_up,
+                "context_thumbs_down": active_context.thumbs_down,
+            }
+
+        # Serialize icon if it exists
+        icon_data = None
+        if feast.icon:
+            icon_serializer = IconSerializer(feast.icon, context={'request': request})
+            icon_data = icon_serializer.data
+
+        feast_data = {
+            "id": feast.id,
+            "name": name_translated,
+            "designation": feast.designation,
+            "context_eligible": should_trigger_generation,
+            "icon": icon_data,
+            **context_dict,
+        }
+
+        # Check if feast has a prayer for its designation
+        feast_prayer_data = None
+        if feast.designation:
+            try:
+                from prayers.models import FeastPrayer
+                from prayers.serializers import FeastPrayerSerializer
+
+                feast_prayer = FeastPrayer.objects.get(designation=feast.designation)
+                serializer = FeastPrayerSerializer(
+                    feast_prayer,
+                    context={'request': request, 'lang': lang, 'feast': feast}
+                )
+                feast_prayer_data = serializer.data
+            except FeastPrayer.DoesNotExist:
+                pass
+
+        feast_data['prayer'] = feast_prayer_data
+        return feast_data
 
 
 class FeastMatchIconView(APIView):

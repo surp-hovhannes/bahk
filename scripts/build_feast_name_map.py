@@ -54,15 +54,17 @@ DEFAULT_REFERENCE_DATA = os.path.join(
 )
 DEFAULT_OUT = os.path.join(REPO_ROOT, "hub", "data", "feast_name_map.json")
 
-# Every release that could have written a Feast row: from the scrape's retirement at 1.1.0 up to,
-# but not including, the target, which requirements.txt pins at 1.3.0. 1.0.x never shipped in bahk.
+# Every release that could have written a Feast row: from the scrape's retirement at 1.1.0 through
+# 1.3.0, the pin this branch moves off. 1.0.x never shipped in bahk, and neither did 2.0.0 -- main
+# pinned <2.0.0 right up to this bump, so no row can carry a 2.0.0-only spelling and sweeping it
+# would only add names to collide with ones 2.1.0 still emits.
 #
 # EXTEND THIS WHEN THE PIN MOVES, in the same commit. A release contributes nothing while it is
 # the target -- every name it emits is reachable and gets dropped -- so the list looks complete
 # right up until the bump makes the target's own spellings the ones most likely to be sitting in
-# a live row. Sweeping through 1.2.3 against a 2.1.0 target leaves 1.3.0 unswept, which strands
-# every row minted under the pin this file currently ships with.
-DEFAULT_VERSIONS = "1.1.0,1.1.1,1.2.0,1.2.1,1.2.2,1.2.3"
+# a live row. That is exactly why 1.3.0 joins the list here and not before: it was the target
+# until this commit, and every row minted under it is stranded by 2.1.0's renames.
+DEFAULT_VERSIONS = "1.1.0,1.1.1,1.2.0,1.2.1,1.2.2,1.2.3,1.3.0"
 
 CACHE_SOURCE = "sacredtradition-cache"
 

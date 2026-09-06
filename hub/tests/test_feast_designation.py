@@ -428,7 +428,7 @@ class FeastDesignationAPITests(TestCase):
         from hub.services.feast_service import get_feast_for_date
         feast = Feast.objects.create(
             church=self.church,
-            name=get_feast_for_date(self.test_date, self.church)["name_en"],
+            name=get_feast_for_date(self.test_date, self.church)[0]["name_en"],
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
 
@@ -475,7 +475,7 @@ class FeastDesignationAPITests(TestCase):
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(church=day.church, name="Test Feast")
 
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         factory = APIRequestFactory()
         # Format date as YYYY-MM-DD string as expected by the view
