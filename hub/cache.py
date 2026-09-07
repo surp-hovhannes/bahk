@@ -6,6 +6,20 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
+# The shape of the feast API response body, folded into its cache key. Bump this in the SAME
+# commit as any change to that body's keys.
+#
+# The generation below invalidates content; this invalidates shape, and the two need to be
+# separate because shape has to survive a rollback. Bumping the generation by hand on deploy
+# would orphan the old entries once, but a revert would then read the new-shaped entries back out
+# of the cache and serve them verbatim -- the old code returns a cached body without inspecting
+# it. Keyed on a constant that travels with the code, each version only ever reads entries it
+# wrote, in both directions, with nothing to remember at deploy time.
+#
+#   1: {"date", "feast"}
+#   2: {"date", "feasts", "feast"}  -- "feast" deprecated, see hub/views/feasts.py
+FEAST_API_RESPONSE_SHAPE = 2
+
 
 def feast_api_generation(church_id):
     """Return the current cache generation for a church's feast API entries.
@@ -33,8 +47,15 @@ def _feast_generation_key(church_id):
 
 
 def feast_api_cache_key(date_obj, church_id, lang):
-    """Return the public feast API cache key."""
-    return f"feast:{date_obj}:{church_id}:{lang}:{feast_api_generation(church_id)}"
+    """Return the public feast API cache key.
+
+    Carries both axes of staleness: ``FEAST_API_RESPONSE_SHAPE`` for the body's shape, which
+    changes with the code, and the per-church generation for its content, which changes at runtime.
+    """
+    return (
+        f"feast:s{FEAST_API_RESPONSE_SHAPE}:{date_obj}:{church_id}:{lang}"
+        f":{feast_api_generation(church_id)}"
+    )
 
 
 def invalidate_feast_api_cache_for_church(church_id):

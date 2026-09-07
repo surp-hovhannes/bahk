@@ -310,9 +310,13 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
         The question they were guessing at is now answered upstream: a ``Feast`` row exists only
         for an observance the engine marks ``is_comm``, so anything with a row has something to
-        write about. Mijink is the case that proves it -- the old token list blocked it while
-        ``determine_feast_designation_task`` exempted it as a named feast, and the engine marks
-        it a commemoration.
+        write about.
+
+        The claim holds for the pipeline and not just for this function: the fast-day regex in
+        ``determine_feast_designation_task`` went at the same time, so nothing upstream can turn
+        a name shape into the ``FAST`` designation this reads. See
+        ``FeastDesignationTaskTests.test_a_fast_shaped_name_is_classified_by_the_llm_not_by_its_shape``,
+        which is the other half of this guarantee.
         """
         fast_shaped_names = [
             "First day of the Fast",

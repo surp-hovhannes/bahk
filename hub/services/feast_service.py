@@ -20,6 +20,20 @@ from hub.utils import SUPPORTED_CHURCHES
 logger = logging.getLogger(__name__)
 
 
+class FeastDataUnavailable(RuntimeError):
+    """The engine could not answer -- as distinct from answering "nothing today".
+
+    Raised where the cause is a broken or misconfigured install rather than a property of the
+    date: a church the feast layer was never set up for, or an engine that resolved none of the
+    day's components (which on an install missing ``observance_catalog.json`` is every day).
+
+    It is an exception rather than a sentinel because the two facts kept getting collapsed.  An
+    empty list is the commonest correct answer there is, so any caller that reads "no answer" as
+    "no commemoration" serves a plausible-looking empty calendar and nothing anywhere goes red.
+    Raising makes the failure impossible to mistake for the ordinary case.
+    """
+
+
 @functools.lru_cache(maxsize=1)
 def _catalog():
     """The engine's observance catalog, loaded once per process.
@@ -61,17 +75,14 @@ def get_feast_for_date(date_obj, church) -> list[dict] | None:
     all (the weekly Wednesday and Friday fasts alone are 1,334), 4,606 carry one and 185 carry
     two -- so an empty list is the single most common answer, and means "nothing to show today".
 
-    ``None`` is a different fact: no answer at all, for an unsupported church, a date outside the
-    validated year window, or a day the engine could not resolve.  Callers must not collapse the
-    two -- a broken install answers ``None`` for every day, and reading that as "no commemoration"
-    would quietly serve an empty calendar.
+    ``None`` means the date is outside the validated year window: a fact about the date, not a
+    failure, and the caller may serve it as "nothing to show" without hiding anything.  A genuine
+    inability to answer raises :class:`FeastDataUnavailable` instead.
     """
     if church not in SUPPORTED_CHURCHES:
-        logger.error(
-            "Feast names only set up for the following churches: %r. %s not supported.",
-            SUPPORTED_CHURCHES, church,
+        raise FeastDataUnavailable(
+            f"Feast names are only set up for {SUPPORTED_CHURCHES!r}; {church} is not supported."
         )
-        return None
 
     # The engine does date arithmetic/comparisons; callers may pass datetime objects.
     if isinstance(date_obj, datetime):
@@ -92,10 +103,12 @@ def get_feast_for_date(date_obj, church) -> list[dict] | None:
     if not observances_en:
         # The engine resolves its components all or nothing, so an empty array never means "a day
         # with nothing on it" -- it means at least one component had no catalog entry, and on an
-        # install missing the catalog every day answers this way.
-        logger.warning(
-            "Engine did not resolve observances for %s; no feast returned.", date_obj)
-        return None
+        # install missing the catalog every day answers this way. That is an install fault, and
+        # it must not read as the ordinary empty answer.
+        raise FeastDataUnavailable(
+            f"Engine resolved no observances for {date_obj}; the observance catalog is missing "
+            "or incomplete."
+        )
 
     result_hy = armenian_lectionary.compute_armenian_lectionary(date_obj, language="hy")
     # Paired by id, not by position: the ids are language-independent by construction, so this

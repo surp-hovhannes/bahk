@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 
 from hub.cache import feast_api_cache_key, invalidate_feast_api_cache_for_feast
 from hub.models import Church, Feast, FeastContext
+from hub.services.feast_service import FeastDataUnavailable
 from hub.tasks import generate_feast_context_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
 from hub.tasks.llm_tasks import is_feast_context_generation_eligible
@@ -30,6 +31,11 @@ from hub.utils import get_user_profile_safe, get_or_create_feast_for_date
 from icons.serializers import IconSerializer
 from icons.models import Icon
 from icons.views import IsAdminOrReadOnly
+
+# The pre-array response key, served alongside ``feasts`` so app builds already on phones keep
+# working through the transition. Delete this and every use of it once the store release that
+# reads ``feasts`` has rolled out, and bump ``hub.cache.FEAST_API_RESPONSE_SHAPE`` when you do.
+_DEPRECATED_SINGLE_FEAST_KEY = "feast"
 
 
 class GetFeastForDate(generics.GenericAPIView):
@@ -55,13 +61,22 @@ class GetFeastForDate(generics.GenericAPIView):
                     "context_thumbs_up": 10,
                     "context_thumbs_down": 2
                 }
-            ]
+            ],
+            "feast": { ...the first entry, or null... }   # DEPRECATED, see below
         }
 
         A day is a list of observances, and only the ones that commemorate a person or an event
         appear here -- so ``feasts`` holds zero, one or two entries.  Empty is the commonest
         answer by a wide margin (5,070 of the engine's 9,861 days) and means "nothing to show
         today", not an error.
+
+        ``feast`` is the single-object shape this endpoint served before, kept alongside the array
+        so the two are not a flag-day swap.  A mobile release is not an atomic deploy: builds
+        already on phones read ``feast``, would find nothing under the new shape, and would show
+        "no feast today" for every day until their owner happens to update.  Serving both costs
+        one key and lets the server and the app ship independently.  Remove it once the store
+        release carrying ``feasts`` has rolled out -- ``_DEPRECATED_SINGLE_FEAST_KEY`` marks every
+        use -- and bump ``hub.cache.FEAST_API_RESPONSE_SHAPE`` in the same commit.
     """
 
     queryset = Feast.objects.all()
@@ -104,10 +119,17 @@ class GetFeastForDate(generics.GenericAPIView):
             # range, so either it resolved commemorations or there are genuinely none to show.
             feasts, _ = get_or_create_feast_for_date(date_obj, church, check_fast=False)
 
-            serialized = [self._serialize_feast(feast, request, lang) for feast in feasts]
+            serialized = [
+                entry
+                for feast in feasts
+                if (entry := self._serialize_feast(feast, request, lang)) is not None
+            ]
             response_data = {
                 "date": date_str,
-                "feasts": [entry for entry in serialized if entry is not None],
+                "feasts": serialized,
+                # Deprecated single-object shape for app builds predating the array. See the
+                # class docstring; delete together with the constant.
+                _DEPRECATED_SINGLE_FEAST_KEY: serialized[0] if serialized else None,
             }
 
             # Cache successful response for 1 hour. An empty list is a real answer on most days,
@@ -115,11 +137,21 @@ class GetFeastForDate(generics.GenericAPIView):
             cache.set(cache_key, response_data, 3600)
             return Response(response_data)
 
+        except FeastDataUnavailable as e:
+            # The engine could not answer: a missing observance catalog, or a church the feast
+            # layer was never set up for. Emphatically NOT the same as a day that commemorates
+            # nobody, which is most days -- so this is never cached and never served as an
+            # ordinary empty answer, or a broken install would look like a quiet calendar.
+            sentry_sdk.capture_exception(e)
+            logging.error(
+                "Feast data unavailable for date %s (church %s): %s", date_obj, church, e)
+            return Response(self._degraded_response(date_obj), status=status.HTTP_200_OK)
+
         except Feast.DoesNotExist:
             # Feast may have been deleted between scheduling and execution — log and degrade gracefully
             logging.warning("Feast not found for date %s (church %s) — may have been deleted", date_obj, church)
             return Response(
-                {"date": date_obj.isoformat(), "feasts": []},
+                {"date": date_obj.isoformat(), "feasts": [], _DEPRECATED_SINGLE_FEAST_KEY: None},
                 status=status.HTTP_200_OK,
             )
         except Exception as e:
@@ -127,13 +159,24 @@ class GetFeastForDate(generics.GenericAPIView):
             logging.error("Failed to get feast for date %s (church %s): %s", date_obj, church, e)
             # Return degraded response
             return Response(
-                {
-                    "date": date_obj.isoformat(),
-                    "feasts": [],
-                    "error": "Feast data temporarily unavailable",
-                },
+                self._degraded_response(date_obj),
                 status=status.HTTP_200_OK  # Return 200 not 500 so clients handle gracefully
             )
+
+    @staticmethod
+    def _degraded_response(date_obj):
+        """The body for "we could not answer", as opposed to "there is nothing today".
+
+        The ``error`` key is what separates the two on the wire: both carry an empty ``feasts``,
+        because there is nothing to render either way, but only this one says so. It is never
+        cached -- a degraded answer that stuck for an hour would outlast the outage that caused it.
+        """
+        return {
+            "date": date_obj.isoformat(),
+            "feasts": [],
+            _DEPRECATED_SINGLE_FEAST_KEY: None,
+            "error": "Feast data temporarily unavailable",
+        }
 
     def _serialize_feast(self, feast, request, lang):
         """Serialize one Feast row, or return ``None`` if it has no usable name.

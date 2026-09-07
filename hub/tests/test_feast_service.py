@@ -10,7 +10,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from hub.models import Church
-from hub.services.feast_service import get_feast_for_date
+from hub.services.feast_service import FeastDataUnavailable, get_feast_for_date
 
 
 def _observance(observance_id, name, is_comm=True, is_fast=False):
@@ -136,35 +136,43 @@ class GetFeastForDateTests(TestCase):
             self.assertEqual(call.args[0], self.test_date)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_unresolved_day_returns_none(self, mock_compute):
+    def test_unresolved_day_raises_rather_than_answering_empty(self, mock_compute):
         """The engine resolves its components all or nothing, so ``[]`` means "did not resolve".
 
-        On an install missing ``observance_catalog.json`` every day answers this way, which is
-        why it cannot be read as "no commemoration today".
+        On an install missing ``observance_catalog.json`` every day answers this way. Returning
+        an empty list here would be indistinguishable from the commonest correct answer there is,
+        so a broken install would serve a plausible blank calendar and nothing would go red.
         """
         mock_compute.side_effect = _engine_stub([])
 
-        self.assertIsNone(get_feast_for_date(self.test_date, self.church))
+        with self.assertRaises(FeastDataUnavailable):
+            get_feast_for_date(self.test_date, self.church)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_missing_observances_key_returns_none(self, mock_compute):
-        """A result with no ``Observances`` key yields no feast."""
+    def test_missing_observances_key_raises(self, mock_compute):
+        """A result with no ``Observances`` key is the same install fault as an empty one."""
         mock_compute.return_value = {}
-        self.assertIsNone(get_feast_for_date(self.test_date, self.church))
+
+        with self.assertRaises(FeastDataUnavailable):
+            get_feast_for_date(self.test_date, self.church)
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
     def test_date_outside_validated_range_returns_none(self, mock_compute):
-        """Dates outside the validated year window are not served, and skip the engine."""
+        """Dates outside the validated year window are not served, and skip the engine.
+
+        The one surviving ``None``: a fact about the date rather than a fault, so it degrades to
+        "nothing to show" instead of raising.
+        """
         self.assertIsNone(get_feast_for_date(date(1999, 1, 1), self.church))
         self.assertIsNone(get_feast_for_date(date(2100, 1, 1), self.church))
         mock_compute.assert_not_called()
 
     @patch("hub.services.feast_service.armenian_lectionary.compute_armenian_lectionary")
-    def test_unsupported_church_returns_none(self, mock_compute):
-        """Churches outside SUPPORTED_CHURCHES get no feast, and skip the engine."""
+    def test_unsupported_church_raises_and_skips_the_engine(self, mock_compute):
+        """A church the feast layer was never set up for is a misconfiguration, not an empty day."""
         unsupported_church = Church.objects.create(name="Unsupported Church")
 
-        result = get_feast_for_date(self.test_date, unsupported_church)
+        with self.assertRaises(FeastDataUnavailable):
+            get_feast_for_date(self.test_date, unsupported_church)
 
-        self.assertIsNone(result)
         mock_compute.assert_not_called()

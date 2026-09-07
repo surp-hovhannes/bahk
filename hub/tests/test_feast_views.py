@@ -61,6 +61,77 @@ class FeastViewDegradedResponseTests(TestCase):
         self.assertEqual(response.data['feasts'], [])
         self.assertIn('error', response.data)
 
+    @patch('hub.views.feasts.get_or_create_feast_for_date')
+    def test_unavailable_feast_data_is_flagged_and_not_cached(self, mock_get_or_create):
+        """A broken install must not look like a day that commemorates nobody.
+
+        Both answers carry ``feasts: []`` -- there is nothing to render either way -- so the
+        ``error`` key is the only thing separating them, and the response must stay out of the
+        cache or one outage would be served for an hour after it ended.
+        """
+        from hub.services.feast_service import FeastDataUnavailable
+
+        mock_get_or_create.side_effect = FeastDataUnavailable("observance catalog missing")
+
+        response = self.client.get('/api/feasts/', {'date': self.date_str})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['feasts'], [])
+        self.assertEqual(response.json()['error'], 'Feast data temporarily unavailable')
+
+        # Nothing was cached: the second call re-asks rather than replaying the outage.
+        self.client.get('/api/feasts/', {'date': self.date_str})
+        self.assertEqual(mock_get_or_create.call_count, 2)
+
+
+class FeastResponseShapeTransitionTests(TestCase):
+    """The deprecated ``feast`` key served beside ``feasts`` while old app builds catch up."""
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.date_str = "2025-12-25"
+        cache.clear()
+
+    def _feast(self, name):
+        return Feast.objects.create(church=self.church, name=name)
+
+    @patch('hub.views.feasts.get_or_create_feast_for_date')
+    def test_the_first_commemoration_is_mirrored_under_the_old_key(self, mock_get_or_create):
+        """A build that predates the array reads ``feast`` and still shows a card.
+
+        Without this it reads ``undefined`` and renders "no feast today" every day until its
+        owner updates -- a mobile release is not an atomic deploy.
+        """
+        feasts = [self._feast("The Hermit St. Anton"), self._feast("The Hermit Sts. Tryphon")]
+        mock_get_or_create.return_value = (feasts, {"status": "success"})
+
+        data = self.client.get('/api/feasts/', {'date': self.date_str}).json()
+
+        self.assertEqual([entry["name"] for entry in data["feasts"]],
+                         ["The Hermit St. Anton", "The Hermit Sts. Tryphon"])
+        self.assertEqual(data["feast"], data["feasts"][0])
+
+    @patch('hub.views.feasts.get_or_create_feast_for_date')
+    def test_a_day_with_no_commemoration_is_null_under_the_old_key(self, mock_get_or_create):
+        mock_get_or_create.return_value = ([], {"status": "skipped"})
+
+        data = self.client.get('/api/feasts/', {'date': self.date_str}).json()
+
+        self.assertEqual(data["feasts"], [])
+        self.assertIsNone(data["feast"])
+
+    def test_the_cache_key_carries_the_response_shape(self):
+        """A revert has to stop reading entries the newer shape wrote.
+
+        Bumping the per-church generation on deploy would orphan them going forward but not
+        backward: the older code returns a cached body without inspecting it, so it would serve
+        the new shape to the very clients the rollback was meant to rescue.
+        """
+        from hub.cache import FEAST_API_RESPONSE_SHAPE, feast_api_cache_key
+
+        self.assertIn(f"s{FEAST_API_RESPONSE_SHAPE}",
+                      feast_api_cache_key(date(2025, 12, 25), self.church.id, "en"))
+
 
 class FeastViewCacheTests(TestCase):
     """Tests for feast endpoint caching."""
@@ -268,6 +339,8 @@ class FeastAPIRouteTests(TestCase):
             {
                 "date": self.date_str,
                 "feasts": [],
+                # Deprecated mirror for pre-array app builds; see FeastResponseShapeTransitionTests.
+                "feast": None,
             },
         )
 
@@ -489,7 +562,10 @@ class FeastAPIRouteTests(TestCase):
         response = self.client.get(self.hub_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json(), {"date": today.isoformat(), "feasts": []})
+        self.assertEqual(
+            response.json(),
+            {"date": today.isoformat(), "feasts": [], "feast": None},
+        )
         mock_get_or_create.assert_called_once_with(
             today,
             self.church,

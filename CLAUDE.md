@@ -105,7 +105,13 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    flattens them all to `Fast day` in English. That is why the unique constraint had to move off
    the name.
 
-   **Never classify a feast by reading its name.** The corollary of the above, and it has already
+   **Nothing on the feast path classifies by name.** `is_feast_context_generation_eligible` is
+   just `designation != FAST`; the regexes it used to run — saint/martyr words, "fast"+"day"
+   tokens, a hardcoded Mijink list — guessed at a question `is_comm` answers upstream, and they
+   contradicted `determine_feast_designation_task` on Mijink. With those gone, `designation` is
+   the sole gate on context generation, which is what made the damage below permanent.
+
+   That damage is the corollary of the rule above, and it has already
    cost us. `determine_feast_designation_task` used to stamp `FAST` on "<Ordinal> day of Great
    Lent"-shaped names without asking the classifier, carving out `Saint` but never `St.` — the
    abbreviation the engine actually uses. Production ended up with St. Theodore the Tyron, Lazarus
