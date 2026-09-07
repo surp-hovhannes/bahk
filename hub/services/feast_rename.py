@@ -10,9 +10,14 @@ contexts with it, silently.
 ``scripts/build_feast_name_map.py`` against the engine the repo pins.  Each entry records an old
 spelling, the name it resolved to **and the date it resolved on**.  The date is the durable half:
 whatever an old source called a day, asking the current engine about that same day still works,
-while the recorded target names are a snapshot that goes stale with the next release -- 138 of
-the 244 entries carried over from the 1.3.0-targeted build changed their target name at 2.x, and
-only 3 changed their date.
+while the recorded target names are a snapshot that goes stale with the next release.  That is
+measured, not assumed: of the 244 entries carried over from the first 1.3.0-targeted build, 138
+changed their target NAME at 2.x and 3 changed their DATE.
+
+Coverage is measured against production rather than argued.  Sampling 183 dates across a
+liturgical year from the live API returned 153 distinct stored feast names: 90 are still emitted
+by the pinned engine and resolve without the map, and the remaining 63 are all bridged here.
+Nothing sampled was left unresolvable.
 
 This module is the artifact's reader plus the folding rule that makes a mangled stored name match
 a clean one.  Nothing consumes it yet -- it is the data layer the re-key is built on.  The reading

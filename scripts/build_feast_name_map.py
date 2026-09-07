@@ -18,11 +18,14 @@ old name spans dates the current engine now calls different things -- the source
 commemorations together in some years and not others -- the date-count majority wins and the
 entry is flagged so a human can read the rejected alternatives.
 
-Build it against the engine the repo pins, not an older one.  ``build_entries`` drops every old
-name the target still emits, so a map built against an engine older than the deployed one omits
-exactly the names that went stale in between: the 1.3.0-targeted build was missing 54 spellings
-that 2.1.0 no longer emits, and each of those is a production row the bridge would have failed to
-place.  Rebuilding on a major engine bump is cheap; the entries only ever grow.
+Build it against the engine the repo pins, and sweep every release below that as a source.  The
+two halves fail in the same direction and both are silent.  ``build_entries`` drops every old name
+the *target* still emits, so building against an engine older than the deployed one omits exactly
+the names that went stale in between; and a release missing from ``DEFAULT_VERSIONS`` contributes
+no spellings at all.  Measured against the live API -- 153 distinct stored feast names sampled
+over a liturgical year -- the original 1.3.0-targeted build left 63 of them unresolvable, 17
+carrying a matched icon or a generated context.  Retargeting 2.1.0 while still sweeping only
+through 1.2.3 fixed 36 of those and left 27.  Sweeping 1.3.0 and 2.0.0 as well leaves none.
 
 Otherwise this is a one-time artifact.  The recurring path is ``manage.py remap_feast_names``,
 which needs neither this script nor an old engine version.
@@ -53,9 +56,16 @@ DEFAULT_REFERENCE_DATA = os.path.join(
 )
 DEFAULT_OUT = os.path.join(REPO_ROOT, "hub", "data", "feast_name_map.json")
 
-# Every release that could have written a Feast row: the scrape was retired on 1.1.0 and 1.3.0 is
-# the target, so these are the versions in between. 1.0.x never shipped in bahk.
-DEFAULT_VERSIONS = "1.1.0,1.1.1,1.2.0,1.2.1,1.2.2,1.2.3"
+# Every release that could have written a Feast row: from the scrape's retirement at 1.1.0 up to,
+# but not including, the target. 1.0.x never shipped in bahk.
+#
+# EXTEND THIS WHEN THE TARGET MOVES. The rows that need bridging are the ones minted by the engine
+# deployed at the time, so the release the map is built against is exactly the one whose names are
+# already reachable and the releases just below it are the ones production was running most
+# recently -- which makes them the most likely spelling of a live row, not the least. Targeting
+# 2.1.0 while sweeping only through 1.2.3 left 1.3.0 unswept and stranded 27 of the 153 distinct
+# feast names the production API was serving.
+DEFAULT_VERSIONS = "1.1.0,1.1.1,1.2.0,1.2.1,1.2.2,1.2.3,1.3.0,2.0.0"
 
 CACHE_SOURCE = "sacredtradition-cache"
 
