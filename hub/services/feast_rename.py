@@ -103,18 +103,16 @@ def names_by_date(language="en"):
     return names
 
 
-def engine_names(min_year=None, max_year=None):
+def engine_names():
     """Every distinct English name the engine emits -- the set a stored name must be in.
 
     A feast is looked up by the name the engine computes for the requested date, so a stored name
-    outside this set is unreachable no matter what enrichment hangs off it.
+    outside this set is unreachable no matter what enrichment hangs off it.  Deliberately the
+    whole supported range and not a slice of it: a name is reachable if ANY date in range produces
+    it, so narrowing the years would report reachable names as stranded.  A caller that wants one
+    year's names is asking a different question and should filter ``names_by_date`` itself.
     """
-    min_year = MIN_YEAR if min_year is None else min_year
-    max_year = MAX_YEAR if max_year is None else max_year
-    return {
-        name for day, name in names_by_date("en").items()
-        if min_year <= day.year <= max_year
-    }
+    return set(names_by_date("en").values())
 
 
 @functools.lru_cache(maxsize=1)
