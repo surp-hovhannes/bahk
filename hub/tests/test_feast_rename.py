@@ -127,5 +127,5 @@ class NameMapTests(TestCase):
         jammed = "Forty First day of EastertideBegining of the Fast"
         self.assertEqual(
             entry_for(jammed)["new"],
-            "Forty First day of Eastertide — Beginning of the Weekly Fasts",
+            "Forty First day of Eastertide — Beginning of the Fast",
         )
