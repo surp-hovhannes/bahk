@@ -89,7 +89,7 @@ def normalize_feast_key(name):
     ``normalize_feast_key(scraped_name)`` and looked up with ``normalize_feast_key(stored_name)``,
     and those are the same string.  The fold is aggressive enough that a legacy key can equal a
     *current* name's key -- that is what happens when the only difference is a separator the fold
-    erases -- so a caller must match the stored name against ``engine_names()`` first and consult
+    erases -- so a caller must match the stored name against ``_engine_day_names()`` first and consult
     the map only when that misses.  That no two distinct names collide on a key while disagreeing
     about the target is enforced twice: by ``assert_no_conflicting_keys`` when the artifact is
     generated, and by the test suite against the artifact that actually shipped.
@@ -109,18 +109,53 @@ def _is_key_char(ch):
     return any(low <= point <= high for low, high in _ARMENIAN_RANGES)
 
 
-@functools.lru_cache(maxsize=2)
+@functools.lru_cache(maxsize=1)
+def _sweep():
+    """Walk the engine's supported range ONCE; everything English here reads from the result.
+
+    Returns ``(day_names, observances_by_date)`` -- the joined ``"Liturgical Day"`` text per date,
+    and that date's components in served order.
+
+    One traversal rather than one per question.  A sweep is ~1.5s of CPU over 9,861 days, and
+    this module used to make three of them (English day names, English observances, Armenian
+    observances) to answer questions that all come out of the same engine call.  Armenian is the
+    one thing not carried here, because it needs a second call per day and is wanted for only
+    ~390 ids -- ``_names_by_id`` samples it instead of sweeping for it.
+    """
+    day_names = {}
+    observances = {}
+    day = datetime.date(MIN_YEAR, 1, 1)
+    end = datetime.date(MAX_YEAR, 12, 31)
+    while day <= end:
+        result = armenian_lectionary.compute_armenian_lectionary(day, language="en")
+        name = (result.get("Liturgical Day") or "").strip()
+        if name:
+            day_names[day] = name
+        components = result.get("Observances") or []
+        if components:
+            observances[day] = tuple(components)
+        day += datetime.timedelta(days=1)
+    return day_names, observances
+
+
 def names_by_date(language="en"):
-    """``{date: name}`` for the whole supported range, in one language.
+    """``{date: joined day name}`` for the whole supported range, in one language.
 
     Public because ``scripts/build_feast_name_map.py`` builds the artifact against exactly this
     sweep.  A second, hand-synced copy of it there is how the generated keys would quietly stop
     describing the names the runtime compares against.
 
-    Cached: the sweep is a second of CPU and its result is fixed for a given engine version, so
-    every caller in a process shares one.  ``feast_service`` keeps the inverse (name -> dates) for
-    its own reasons; this direction is what a remap needs, to ask "what is this day called now".
+    English comes off the shared ``_sweep``; any other language pays for its own pass, which only
+    a caller outside this module would ever ask for.
     """
+    if language == "en":
+        return _sweep()[0]
+    return _day_names_in(language)
+
+
+@functools.lru_cache(maxsize=2)
+def _day_names_in(language):
+    """``{date: joined day name}`` in a language the shared English sweep does not carry."""
     names = {}
     day = datetime.date(MIN_YEAR, 1, 1)
     end = datetime.date(MAX_YEAR, 12, 31)
@@ -133,16 +168,40 @@ def names_by_date(language="en"):
     return names
 
 
-def engine_names():
-    """Every distinct English name the engine emits -- the set a stored name must be in.
+def _observances_by_date():
+    """``{date: (observance, ...)}`` -- each day's English components, in served order."""
+    return _sweep()[1]
 
-    A feast is looked up by the name the engine computes for the requested date, so a stored name
-    outside this set is unreachable no matter what enrichment hangs off it.  Deliberately the
-    whole supported range and not a slice of it: a name is reachable if ANY date in range produces
-    it, so narrowing the years would report reachable names as stranded.  A caller that wants one
-    year's names is asking a different question and should filter ``names_by_date`` itself.
+
+def _engine_day_names():
+    """Every distinct joined DAY name the engine emits.
+
+    Private, and narrowly for one job: deciding whether a LEGACY row's stored name -- written when
+    a ``Feast`` held a whole day -- can be resolved straight to a date.  It is NOT the set a
+    current ``Feast.name`` belongs to; a row holds one component now, and 44 of the 189
+    commemoration names are never a whole day's name.  Ask ``commemoration_names`` for that.
+
+    Deliberately the whole supported range and not a slice of it: a name is reachable if ANY date
+    in range produces it, so narrowing the years would report reachable names as stranded.  A
+    caller that wants one year's names is asking a different question and should filter
+    ``names_by_date`` itself.
     """
     return set(names_by_date("en").values())
+
+
+def commemoration_names(language="en"):
+    """Every name a ``Feast.name`` can currently hold -- one per commemoration the engine serves.
+
+    The set a stored name is checked against, because a row is one commemoration and its name is
+    read from its id.  Distinct from ``_engine_day_names``, which is the joined text of a whole
+    day: a day is a list of components, so most commemoration names are a substring of the day
+    name rather than equal to it, and comparing a stored name against the day names reports
+    healthy rows as unreachable.
+    """
+    return {
+        name_for_observance_id(observance_id, language)
+        for observance_id in observance_ids()
+    } - {""}
 
 
 @functools.lru_cache(maxsize=1)
@@ -180,25 +239,6 @@ def load_name_map_dates():
     return dates
 
 
-@functools.lru_cache(maxsize=2)
-def _observances_by_date(language):
-    """``{date: (observance, ...)}`` for the whole supported range, in one language.
-
-    The one sweep everything id-shaped in this module is derived from, cached per language
-    because the sweep is a second of CPU and its result is fixed for a given engine version.
-    """
-    by_date = {}
-    day = datetime.date(MIN_YEAR, 1, 1)
-    end = datetime.date(MAX_YEAR, 12, 31)
-    while day <= end:
-        result = armenian_lectionary.compute_armenian_lectionary(day, language=language)
-        observances = result.get("Observances") or []
-        if observances:
-            by_date[day] = tuple(observances)
-        day += datetime.timedelta(days=1)
-    return by_date
-
-
 @functools.lru_cache(maxsize=1)
 def _commemoration_ids_by_date():
     """``{date: (observance id, ...)}`` -- the day's COMMEMORATIONS, in served order.
@@ -216,7 +256,7 @@ def _commemoration_ids_by_date():
     """
     return {
         day: tuple(o["id"] for o in observances if o["is_comm"])
-        for day, observances in _observances_by_date("en").items()
+        for day, observances in _observances_by_date().items()
     }
 
 
@@ -249,12 +289,27 @@ def _names_by_id():
     This is what makes the display text derivable from the identity alone, with no date in the
     loop -- so a row's name can be refreshed from its id, and nothing has to remember which date
     the row was born on, and why there is no date column on ``Feast``.
+
+    English comes free with the shared sweep.  Armenian is *sampled*, one engine call per date
+    that first introduces an id, rather than swept: an id names the same observance every time it
+    appears, so its display text does not depend on which occurrence you ask about -- verified
+    across all 390 ids in range, in both languages.  That turns a second full pass over 9,861
+    days into a few hundred calls.
     """
     names = {}
-    for language in ("en", "hy"):
-        for observances in _observances_by_date(language).values():
-            for observance in observances:
-                names.setdefault(observance["id"], {})[language] = observance["name"]
+    first_seen = {}
+    for day, observances in sorted(_observances_by_date().items()):
+        for observance in observances:
+            if observance["id"] not in names:
+                names[observance["id"]] = {"en": observance["name"]}
+                first_seen[observance["id"]] = day
+
+    for day in sorted(set(first_seen.values())):
+        result = armenian_lectionary.compute_armenian_lectionary(day, language="hy")
+        for observance in result.get("Observances") or []:
+            entry = names.get(observance["id"])
+            if entry is not None:
+                entry.setdefault("hy", observance["name"])
     return names
 
 
@@ -286,7 +341,7 @@ def _dates_by_day_name():
     return dates
 
 
-def resolve_observance_id(feast, reachable=None, name_map=None):
+def resolve_observance_id(feast, day_names=None):
     """Return the commemoration id this feast belongs under, or ``None`` if nothing can say.
 
     Two routes, in order of confidence:
@@ -314,10 +369,10 @@ def resolve_observance_id(feast, reachable=None, name_map=None):
     if stored and stored in ids:
         return stored
 
-    if reachable is None:
-        reachable = engine_names()
+    if day_names is None:
+        day_names = _engine_day_names()
     name = (feast.name or "").strip()
-    day = _dates_by_day_name().get(name) if name in reachable else None
+    day = _dates_by_day_name().get(name) if name in day_names else None
     if day is None:
         day = load_name_map_dates().get(normalize_feast_key(name))
     if day:
@@ -325,7 +380,7 @@ def resolve_observance_id(feast, reachable=None, name_map=None):
     return None
 
 
-def plan_renames(feasts, reachable=None, name_map=None):
+def plan_renames(feasts, day_names=None):
     """Group a church's feasts by the observance each belongs to, and report what that implies.
 
     Returns ``(groups, unresolved)``.  ``groups`` is a list of ``(observance key, [feast, ...])``
@@ -337,15 +392,13 @@ def plan_renames(feasts, reachable=None, name_map=None):
     A group can hold more than two rows: production accumulated one row per *spelling* of a
     commemoration, and they all collapse onto its single id.
     """
-    if reachable is None:
-        reachable = engine_names()
-    if name_map is None:
-        name_map = load_name_map_dates()
+    if day_names is None:
+        day_names = _engine_day_names()
 
     groups = {}
     unresolved = []
     for feast in sorted(feasts, key=lambda f: f.id):
-        observance_id = resolve_observance_id(feast, reachable, name_map)
+        observance_id = resolve_observance_id(feast, day_names)
         if observance_id is None:
             unresolved.append(feast)
         else:
@@ -413,37 +466,58 @@ def apply_group(observance_id, group, Feast, FeastContext):
     return keeper
 
 
-def stale_metadata(feast, observance_id):
+# What each name reported by ``stale_metadata`` is stored in, for callers that save only what
+# changed.  ``name_hy`` lives inside the modeltrans JSON column rather than a column of its own.
+STALE_COLUMNS = {"observance_id": "observance_id", "name": "name", "name_hy": "i18n"}
+
+
+def stale_metadata(feast, observance_id, name_en=None, name_hy=None):
     """Name the fields that would change if this row were brought up to date.  Mutates nothing.
 
     ``observance_id`` is the identity; everything else on the row is *derived from it* and is
-    brought along whenever the engine's answer moves.
+    brought along whenever the engine's answer moves.  What can be reported:
 
-    The id itself is reported only where the row can hold one.  Migration 0065 runs this against
-    a historical model from before 0066 added the column, so the field is checked for rather than
-    assumed -- the same "read only what both models expose" rule the module docstring sets out.
-    A row that cannot hold an id still gets its names refreshed, which is all 0065 ever did.
-
+      * ``observance_id``, when the row is not yet under the observance it belongs to -- every row
+        before migration 0066 backfills, and any row a later engine release re-places.
       * ``name`` and ``name_hy``, the display text in both languages.  These are exactly what used
         to be the key, and exactly what an engine release corrects -- which is why they are no
         longer the key.  Both are read from the id, not from a date.
+
+    Every caller runs against a model that has ``observance_id``: migration 0065 adds the column
+    before 0066 calls any of this, and the command runs against the live model.
     """
+    name_en, name_hy = _target_names(observance_id, name_en, name_hy)
     stale = []
     if (feast.observance_id or "") != observance_id:
         stale.append("observance_id")
-    if feast.name != name_for_observance_id(observance_id):
+    if feast.name != name_en:
         stale.append("name")
-    if (feast.i18n or {}).get("name_hy") != _target_hy(observance_id):
+    if (feast.i18n or {}).get("name_hy") != name_hy:
         stale.append("name_hy")
     return stale
 
 
-def refresh_metadata(feast, observance_id):
+def refresh_metadata(feast, observance_id, name_en=None, name_hy=None):
     """Apply what ``stale_metadata`` reports, in memory.  The caller saves."""
+    name_en, name_hy = _target_names(observance_id, name_en, name_hy)
     feast.observance_id = observance_id
-    feast.name = name_for_observance_id(observance_id)
-    set_translation(feast, _target_hy(observance_id))
+    feast.name = name_en
+    set_translation(feast, name_hy)
     return feast
+
+
+def _target_names(observance_id, name_en=None, name_hy=None):
+    """What this observance should be called, in both languages.
+
+    Looked up from the id by default.  A caller that ALREADY has the engine's answer passes it in
+    instead: the request path computed the day it is serving, so its names came straight from the
+    engine, and asking for them again would trigger the full-range sweep behind ``_names_by_id``
+    on the first request a web worker serves.  Same rule either way -- only the source differs.
+    """
+    if name_en is None:
+        name_en = name_for_observance_id(observance_id)
+        name_hy = _target_hy(observance_id)
+    return name_en, name_hy or None
 
 
 def _target_hy(observance_id):

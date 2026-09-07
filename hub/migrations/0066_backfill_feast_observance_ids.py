@@ -23,10 +23,9 @@ Irreversible in substance: once two rows are merged, which enrichment came from 
 """
 from django.db import migrations
 
-from hub.cache import invalidate_feast_api_cache_for_feast
+from hub.cache import invalidate_feast_api_cache_for_church
 from hub.services.feast_rename import (
-    apply_group, describe, engine_names, load_name_map_dates, plan_renames, refresh_metadata,
-    stale_metadata,
+    apply_group, describe, plan_renames, refresh_metadata, stale_metadata,
 )
 
 
@@ -35,15 +34,12 @@ def backfill_observance_ids(apps, schema_editor):
     Feast = apps.get_model("hub", "Feast")
     FeastContext = apps.get_model("hub", "FeastContext")
 
-    reachable = engine_names()
-    name_map = load_name_map_dates()
-
     for church in Church.objects.all():
         feasts = list(Feast.objects.filter(church=church).prefetch_related("contexts"))
         if not feasts:
             continue
 
-        groups, _unresolved = plan_renames(feasts, reachable, name_map)
+        groups, _unresolved = plan_renames(feasts)
         touched = False
         for key, group in groups:
             if describe(key, group) == "unchanged" and not stale_metadata(group[0], key):
@@ -56,7 +52,7 @@ def backfill_observance_ids(apps, schema_editor):
         # Responses cached under the old rows would otherwise be served until they expire. One
         # generation bump per church orphans every entry it owns; see hub/cache.py.
         if touched:
-            invalidate_feast_api_cache_for_feast(feasts[0])
+            invalidate_feast_api_cache_for_church(church.pk)
 
 
 def unbackfill(apps, schema_editor):

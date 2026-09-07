@@ -21,9 +21,9 @@ from django.test import TestCase
 from hub.models import Church, Feast, FeastContext
 from hub.services import feast_rename
 from hub.services.feast_rename import (
-    apply_group, commemoration_ids_for_date, describe, engine_names,
-    name_for_observance_id, normalize_feast_key, observance_ids,
-    plan_renames, primary_commemoration_id_for_date, refresh_metadata, stale_metadata,
+    _engine_day_names, apply_group, commemoration_ids_for_date, describe,
+    name_for_observance_id, normalize_feast_key, observance_ids, plan_renames,
+    primary_commemoration_id_for_date, refresh_metadata, stale_metadata,
 )
 
 # A name the retired scrape stored, and what armenian-lectionary 1.3.0 calls the same day. The
@@ -149,7 +149,7 @@ class NameMapTests(TestCase):
         reachable name's key -- that is what happens when the only difference between the old
         spelling and the current one is a separator the fold erases.
         """
-        reachable = engine_names()
+        reachable = _engine_day_names()
         spellings = [
             spelling
             for entry in feast_rename.load_name_map_entries()
@@ -166,12 +166,32 @@ class NameMapTests(TestCase):
     def test_the_scrape_era_spelling_resolves(self):
         self.assertEqual(entry_for(SCRAPED)["new"], CURRENT)
 
-    def test_a_jammed_scrape_era_spelling_resolves_to_the_same_name(self):
-        """1.1.0 ran a day's components together exactly as the scraper did."""
+    def test_the_scrape_era_spelling_resolves_to_a_date(self):
+        """The date, not the map's stored target name: that name is a snapshot of an old engine.
+
+        The artifact check above pins what the file says; this pins what the module actually
+        reads, which is the date, resolved against the engine installed now.
+        """
+        day = feast_rename.load_name_map_dates()[normalize_feast_key(SCRAPED)]
+        self.assertEqual(feast_rename.names_by_date("en")[day], CURRENT)
+
+    def test_a_jammed_scrape_era_spelling_resolves_to_the_same_day(self):
+        """1.1.0 ran a day's components together exactly as the scraper did.
+
+        Artifact and engine agree here only because the map is rebuilt in the same commit that
+        moves the pin: 1.3.0 called this day "Beginning of the Fast" and 2.1.0 calls it
+        "Beginning of the Weekly Fasts". Skip the rebuild and the two halves drift, which is what
+        the date -- asserted second -- is carried forward to survive.
+        """
         jammed = "Forty First day of EastertideBegining of the Fast"
+        day = feast_rename.load_name_map_dates()[normalize_feast_key(jammed)]
         self.assertEqual(
             entry_for(jammed)["new"],
-            "Forty First day of Eastertide — Beginning of the Fast",
+            "Forty First day of Eastertide — Beginning of the Weekly Fasts",
+        )
+        self.assertEqual(
+            feast_rename.names_by_date("en")[day],
+            "Forty First day of Eastertide — Beginning of the Weekly Fasts",
         )
 
 
@@ -204,7 +224,7 @@ class ObservanceIdTests(TestCase):
 
     def test_the_id_survives_a_name_the_engine_no_longer_emits(self):
         """The whole point. The scrape's spelling is gone; the observance it named is not."""
-        self.assertNotIn(SCRAPED, engine_names())
+        self.assertNotIn(SCRAPED, _engine_day_names())
         self.assertIn(KEY, observance_ids())
 
     def test_display_text_is_read_from_the_id_without_a_date(self):
@@ -239,7 +259,7 @@ class FeastRenameTestCase(TestCase):
 
     def plan(self, feasts=None):
         feasts = self.church.feasts.all() if feasts is None else feasts
-        return plan_renames(list(feasts), engine_names())
+        return plan_renames(list(feasts))
 
 
 class PlanRenamesTests(FeastRenameTestCase):

@@ -2,10 +2,11 @@
 from datetime import date, timedelta
 from unittest.mock import patch
 
+from django.db.models.query import QuerySet
 from django.test import TestCase
 
 from hub.models import Church, Day, Feast
-from hub.utils import get_or_create_feast_for_date
+from hub.utils import _get_or_create_feast_for_observance, get_or_create_feast_for_date
 from tests.fixtures.test_data import TestDataFactory
 
 
@@ -309,3 +310,50 @@ class GetOrCreateFeastForDateTests(TestCase):
         self.assertEqual(second_status["created"], 0)
         self.assertEqual(first[0].id, second[0].id)
         self.assertEqual(Feast.objects.filter(church=self.church).count(), 1)
+
+
+class ConcurrentFirstSightingTests(TestCase):
+    """Two workers resolving the same uncached date must not turn the race into a 500.
+
+    ``(church, observance_id)`` is unique, so the loser's INSERT is rejected. It has to come back
+    with the winner's row; the hand-rolled filter-then-save this replaced raised IntegrityError,
+    which the view could only degrade on -- and a first sighting is exactly when a new
+    commemoration goes live.
+    """
+
+    def setUp(self):
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.commemoration = {
+            "observance_id": "annunciation_to_the_virgin",
+            "name": "Annunciation to the Virgin Mary",
+            "name_en": "Annunciation to the Virgin Mary",
+            "name_hy": "Աւետումն Ս. Աստուածածնի",
+        }
+
+    def test_the_loser_returns_the_winners_row(self):
+        winner = Feast.objects.create(
+            church=self.church,
+            observance_id="annunciation_to_the_virgin",
+            name="Annunciation to the Virgin Mary",
+        )
+
+        # The interleave: the winner has committed, but every read this worker makes ran before it
+        # did, so the row is invisible until its own INSERT is rejected by the unique constraint.
+        real_get = QuerySet.get
+        blinded = []
+
+        def blind(self, *args, **kwargs):
+            if self.model is Feast and not blinded:
+                blinded.append(True)
+                raise Feast.DoesNotExist
+            return real_get(self, *args, **kwargs)
+
+        with patch.object(Feast.objects, "filter", return_value=Feast.objects.none()), \
+                patch.object(QuerySet, "get", blind):
+            feast, created, _ = _get_or_create_feast_for_observance(
+                self.commemoration, self.church)
+
+        self.assertTrue(blinded, "the race was never simulated")
+        self.assertEqual(feast.pk, winner.pk)
+        self.assertFalse(created)
+        self.assertEqual(Feast.objects.count(), 1)

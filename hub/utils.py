@@ -5,6 +5,7 @@ import logging
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
 from django.db.models import CharField, Q, Value
+from django.db.utils import IntegrityError
 from django.db.models.functions import Cast, Concat, MD5
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -14,6 +15,9 @@ from django.core.cache import cache
 import bahk.settings as settings
 from hub.models import Church, Day, Fast, Feast, Profile
 from hub.serializers import FastSerializer
+from hub.services.feast_rename import (
+    STALE_COLUMNS, refresh_metadata, stale_metadata,
+)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -154,6 +158,32 @@ def send_fast_reminders():
             logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {earliest_fast.name}')
 
 
+def _adopt_unkeyed_row(church, observance_id, name_en):
+    """Give an unkeyed row carrying this name the id it belongs to, so it is not duplicated.
+
+    Migration 0066 keys every row it can resolve, but anything written since without going through
+    here -- a seed, an admin, a row the backfill could not place -- is invisible to a lookup by id
+    and would be silently duplicated, taking its designation, icon and contexts out of
+    circulation.  Adopting it is how such a row rejoins, and it happens once.
+
+    Called only when the observance has no row yet, so it costs nothing on the ordinary path: an
+    already-keyed row is the one that has been in service and is left alone.
+    """
+    orphan = Feast.objects.filter(
+        church=church, observance_id__isnull=True, name=name_en).order_by("id").first()
+    if orphan is None:
+        return
+    orphan.observance_id = observance_id
+    try:
+        orphan.save(update_fields=["observance_id"])
+    except IntegrityError:
+        # Another worker keyed this observance between the check and the write. The orphan stays
+        # unkeyed; the next request through here adopts it, and the audit reports it meanwhile.
+        logger.info(
+            "Lost the race adopting feast %s onto %s; leaving it unkeyed.",
+            orphan.pk, observance_id)
+
+
 def _get_or_create_feast_for_observance(commemoration, church):
     """Resolve one commemoration to its Feast row.
 
@@ -162,47 +192,43 @@ def _get_or_create_feast_for_observance(commemoration, church):
     """
     observance_id = commemoration["observance_id"]
     name_en = commemoration["name_en"]
+    name_hy = commemoration.get("name_hy") or None
 
     # Look the row up by the OBSERVANCE, not by its name. An id keeps meaning the same
     # commemoration across engine releases; the name is display text the engine corrects, and
     # keying on it is what stranded 158 rows when 1.3.0 landed.
     feast_obj = Feast.objects.filter(church=church, observance_id=observance_id).first()
-    if feast_obj is None:
-        # Adopt an unkeyed row that already carries this name before minting a new one.
-        # Migration 0067 keys every row it can resolve, but anything created since without
-        # going through here -- a seed, an admin, a row the backfill could not place -- would
-        # otherwise be invisible to this lookup and silently duplicated, taking its
-        # designation, icon and contexts out of circulation. Adopting it is how such a row
-        # rejoins, and it happens once.
-        feast_obj = Feast.objects.filter(
-            church=church, observance_id__isnull=True, name=name_en).first()
-    if feast_obj is None:
-        feast_obj = Feast(church=church, observance_id=observance_id, name=name_en)
+    feast_created = False
 
-    feast_created = feast_obj.pk is None
-    adopted = not feast_created and feast_obj.observance_id != observance_id
-    feast_obj.observance_id = observance_id
+    if feast_obj is None:
+        _adopt_unkeyed_row(church, observance_id, name_en)
+        # get_or_create rather than a bare save: two workers resolving the same uncached date race
+        # here on a commemoration's first sighting, and get_or_create retries the read when the
+        # unique constraint rejects its insert. Hand-rolling it turns that race into an
+        # IntegrityError the view can only degrade on.
+        #
+        # A row being created has no i18n to merge into, so the translation goes in whole -- which
+        # is also what lets it save in full, so post_save sees the id, the name and its
+        # translation together. That is what the designation and icon-matching tasks read.
+        feast_obj, feast_created = Feast.objects.get_or_create(
+            church=church,
+            observance_id=observance_id,
+            defaults={"name": name_en, "i18n": {"name_hy": name_hy} if name_hy else {}},
+        )
+        if feast_created:
+            return feast_obj, True, False
 
     # The name is derived from the id now, so it is refreshed rather than matched on -- an engine
     # release that corrects the display text updates the row in place instead of orphaning it.
-    # Same for the Armenian name, on which the engine is likewise the authority.
-    name_hy = commemoration.get("name_hy")
-    updated_fields = ["observance_id"] if adopted else []
-    if feast_obj.name != name_en:
-        feast_obj.name = name_en
-        updated_fields.append("name")
-    if name_hy and feast_obj.name_hy != name_hy:
-        feast_obj.name_hy = name_hy
-        updated_fields.append("i18n")
+    # The rule lives in feast_rename, shared with remap_feast_names and migration 0066, so the
+    # request path and the sweep cannot drift on what counts as stale or on how i18n is merged.
+    # The engine's answer for this day is passed in, so no full-range sweep is triggered here.
+    stale = stale_metadata(feast_obj, observance_id, name_en=name_en, name_hy=name_hy)
+    if stale:
+        refresh_metadata(feast_obj, observance_id, name_en=name_en, name_hy=name_hy)
+        feast_obj.save(update_fields=sorted({STALE_COLUMNS[field] for field in stale}))
 
-    if feast_created:
-        # A new row saves in full, so post_save sees the id, the name and its translation
-        # together -- that is what the designation and icon-matching tasks read.
-        feast_obj.save()
-    elif updated_fields:
-        feast_obj.save(update_fields=updated_fields)
-
-    return feast_obj, feast_created, bool(updated_fields) and not feast_created
+    return feast_obj, False, bool(stale)
 
 
 def get_or_create_feast_for_date(date_obj, church, check_fast=True):

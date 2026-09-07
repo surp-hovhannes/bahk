@@ -13,7 +13,7 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 
 from hub.models import Church, Feast, FeastContext
-from hub.services.feast_rename import engine_names
+from hub.services.feast_rename import _engine_day_names
 
 SCRAPED = "Saints Peter the Patriarch, Blaise the Bishop and Absalom the Deacon"
 CURRENT = "Sts. Peter the Patriarch, Blaise the Bishop and Absalom the Deacon"
@@ -139,7 +139,7 @@ class RemapFeastNamesCommandTests(TestCase):
         entry recorded lands it on the observance, whatever the engine currently calls it.
         """
         stale_target = "Commemoration of 200 Fathers of the Holy Council of Ephesus (AD 431)"
-        self.assertNotIn(stale_target, engine_names())
+        self.assertNotIn(stale_target, _engine_day_names())
 
         feast = Feast.objects.create(
             church=self.church,

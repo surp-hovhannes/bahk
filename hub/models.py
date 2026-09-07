@@ -838,11 +838,14 @@ class Feast(models.Model):
             # enforced in the database so a race between two requests for the same date cannot
             # recreate the per-occurrence duplication.
             #
-            # Keyed on observance_id rather than name, and the two are NOT interchangeable: the
-            # engine distinguishes observances English conflates. "Fast day" is three distinct
-            # ids in range -- the general fast_day plus illuminator_fast_day_3 and _5, which the
-            # source names with their ordinal in Armenian and flattens to "Fast day" in English.
-            # A unique constraint on the name would refuse to store them separately.
+            # Keyed on observance_id rather than name because only the id is a contract. A
+            # published id keeps meaning the same observance; the name is display text the engine
+            # corrects, and keying on it is what stranded 158 rows at 1.3.0 and more at 2.0.0.
+            #
+            # That no two commemorations happen to share an English name in 2.1.0 is not a reason
+            # to key on the name instead: it is a property of today's catalog, not a guarantee the
+            # engine makes, and the engine already distinguishes non-commemoration observances
+            # English would conflate.
             #
             # Partial, because a row nothing could resolve carries no id and several such rows
             # must be allowed to coexist rather than collide on NULL.

@@ -17,8 +17,11 @@ Since the re-key onto ``observance_id`` that is mostly historical: a row identif
 id survives a text correction, and a stale name on it is a display defect rather than a lost row.
 What this reports is every way a row can still fall out of that arrangement:
 
-  * **Unreachable name** -- a stored name the engine no longer emits.  Cosmetic on a keyed row,
-    the original failure on an unkeyed one.
+  * **Unreachable name** -- a stored name that is not the current name of any commemoration the
+    engine serves.  Cosmetic on a keyed row, the original failure on an unkeyed one.  Checked
+    against the COMMEMORATION names, not the joined day names: a row holds one component of a
+    day, and 44 of the 189 commemoration names are never a whole day's name, so checking against
+    day names reports healthy rows as stranded.
   * **Pending refresh** -- a row whose id the engine now names differently, i.e. one an upgrade
     has already moved but nothing has written yet.
   * **No id** -- identified by display text alone, which is the arrangement the re-key ended.
@@ -35,7 +38,7 @@ from armenian_lectionary import MAX_YEAR, MIN_YEAR
 
 from hub.models import Church
 from hub.services.feast_rename import (
-    engine_names, name_for_observance_id, observance_ids,
+    commemoration_names, name_for_observance_id, observance_ids,
 )
 
 
@@ -60,10 +63,10 @@ class Command(BaseCommand):
                 raise CommandError(f"No church named {options['church']!r}.")
 
         self.stdout.write(
-            f"Enumerating engine names for {MIN_YEAR}-{MAX_YEAR}..."
+            f"Enumerating engine commemorations for {MIN_YEAR}-{MAX_YEAR}..."
         )
-        reachable = engine_names()
-        self.stdout.write(f"  engine emits {len(reachable)} distinct names.\n")
+        reachable = commemoration_names()
+        self.stdout.write(f"  engine commemorates {len(reachable)} distinct names.\n")
 
         for church in churches:
             self._report_church(church, reachable, options["verbose"])
@@ -74,21 +77,26 @@ class Command(BaseCommand):
             self.stdout.write(f"\n{church.name}: no feasts.")
             return
 
-        by_name = {feast.name: feast for feast in feasts}
+        # A list per name, not one row: the name stopped being a key with the re-key, so several
+        # rows may legitimately share one and every one of them has enrichment worth reporting.
+        by_name = {}
+        for feast in feasts:
+            by_name.setdefault(feast.name, []).append(feast)
         unreachable = sorted(set(by_name) - reachable)
+        unreachable_rows = [feast for name in unreachable for feast in by_name[name]]
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"\n{church.name}"))
         self.stdout.write(f"  {len(feasts)} commemorations stored")
 
         if unreachable:
             self.stdout.write(self.style.WARNING(
-                f"  {len(unreachable)} stored name(s) the engine no longer emits. On a row that "
+                f"  {len(unreachable_rows)} row(s) under {len(unreachable)} stored name(s) the "
+                f"engine does not commemorate. On a row that "
                 f"has an observance_id this is stale display text, not a lost row -- "
                 f"remap_feast_names refreshes it. On one without, it is the old failure: nothing "
                 f"reaches the row and its enrichment is stranded:"
             ))
-            for name in unreachable:
-                feast = by_name[name]
+            for feast in unreachable_rows:
                 # Say what is at stake, so the reader can judge how urgently to act.
                 held = []
                 if not feast.observance_id:
@@ -101,11 +109,11 @@ class Command(BaseCommand):
                 if contexts:
                     held.append(f"{len(contexts)} context(s)")
                 self.stdout.write(
-                    f"      #{feast.id} {name!r}"
+                    f"      #{feast.id} {feast.name!r}"
                     + (f" -- {', '.join(held)}" if held else " -- no enrichment")
                 )
         else:
-            self.stdout.write("  every stored name is one the engine still emits.")
+            self.stdout.write("  every stored name is one the engine still commemorates.")
 
         # The same failure caught before it lands. A keyed row whose id the engine now names
         # something else is serving stale display text; the next request that resolves it corrects

@@ -91,11 +91,12 @@ def _dates_by_name():
     """Map each English feast name to every date in the supported range the engine gives it.
 
     Feasts are keyed by commemoration rather than by date, so a Feast row has no date of its own.
-    Two things still need dates:
+    One thing still needs dates: the reference-data matcher in ``llm_service``, which boosts its
+    confidence when a candidate in ``data/feasts.json`` falls on the same month and day.
 
-      * cache invalidation, which has to clear the API entries for every day a feast is served on;
-      * the reference-data matcher in ``llm_service``, which boosts its confidence when a
-        candidate in ``data/feasts.json`` falls on the same month and day.
+    Cache invalidation used to be the other caller. It no longer is: invalidation bumps a per-church
+    generation folded into the cache key, which orphans every entry at once without enumerating the
+    days a feast is served on.
 
     Keyed on the name of a single OBSERVANCE, not on the day's joined ``"Liturgical Day"``.  A
     ``Feast`` holds one component now, so the joined string would miss every day that names more

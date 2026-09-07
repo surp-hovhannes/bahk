@@ -19,11 +19,11 @@ that has never held a stale name.
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from hub.cache import invalidate_feast_api_cache_for_feast
+from hub.cache import invalidate_feast_api_cache_for_church
 from hub.models import Church, Feast, FeastContext
 from hub.services.feast_rename import (
-    apply_group, describe, engine_names, load_name_map_dates, observance_ids, plan_renames,
-    refresh_metadata, stale_metadata,
+    apply_group, describe, load_name_map_dates, observance_ids, plan_renames, refresh_metadata,
+    stale_metadata,
 )
 
 
@@ -46,12 +46,9 @@ class Command(BaseCommand):
             if not churches.exists():
                 raise CommandError(f"No church named {options['church']!r}.")
 
-        reachable = engine_names()
-        name_map = load_name_map_dates()
         self.stdout.write(
-            f"engine emits {len(observance_ids())} distinct observances "
-            f"({len(reachable)} distinct names); "
-            f"{len(name_map)} historical name(s) in the map."
+            f"engine commemorates {len(observance_ids())} distinct observances; "
+            f"{len(load_name_map_dates())} retired name(s) bridgeable by date."
         )
         if not options["apply"]:
             self.stdout.write(self.style.NOTICE("DRY RUN -- nothing will be written.\n"))
@@ -59,7 +56,7 @@ class Command(BaseCommand):
         totals = {"unchanged": 0, "rekey": 0, "merge": 0, "unresolved": 0, "absorbed": 0,
                   "refreshed": 0}
         for church in churches:
-            self._remap_church(church, reachable, name_map, options["apply"], totals)
+            self._remap_church(church, options["apply"], totals)
 
         self.stdout.write("")
         self.stdout.write(self.style.MIGRATE_HEADING(
@@ -71,14 +68,14 @@ class Command(BaseCommand):
         if not options["apply"] and pending:
             self.stdout.write("Re-run with --apply to write these changes.")
 
-    def _remap_church(self, church, reachable, name_map, apply, totals):
+    def _remap_church(self, church, apply, totals):
         feasts = list(church.feasts.prefetch_related("contexts"))
         self.stdout.write(self.style.MIGRATE_HEADING(f"\n{church.name}"))
         if not feasts:
             self.stdout.write("  no feasts.")
             return
 
-        groups, unresolved = plan_renames(feasts, reachable, name_map)
+        groups, unresolved = plan_renames(feasts)
 
         touched = False
         for key, group in groups:
@@ -109,7 +106,7 @@ class Command(BaseCommand):
         # One generation bump per church clears every feast API entry it owns; the per-row
         # alternative would be enumerating thousands of dates. See hub/cache.py.
         if apply and touched:
-            invalidate_feast_api_cache_for_feast(feasts[0])
+            invalidate_feast_api_cache_for_church(church.pk)
 
     def _report_group(self, action, key, group):
         if action == "rekey":
@@ -127,10 +124,10 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def _write_group(self, key, group):
-        """Apply one group, then bring its Armenian name and recorded date up to date.
+        """Apply one group, then bring its display text in both languages up to date.
 
         ``apply_group`` leaves the survivor unsaved so the row is written once, with the new key
-        and the refreshed names and date in the same statement.
+        and the refreshed names in the same statement.
         """
         keeper = apply_group(key, group, Feast, FeastContext)
         refresh_metadata(keeper, key)

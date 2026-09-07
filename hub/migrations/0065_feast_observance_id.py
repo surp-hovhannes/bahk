@@ -9,12 +9,11 @@ was the old answer; this re-keys so there is nothing to repair.
 The identity is ONE observance id, not the day's list of them: a row is a commemoration, and a
 day that names two commemorations gets two rows.
 
-The name constraint has to go *before* the backfill, not merely alongside it, and not only
-because the backfill would trip it mid-flight.  The two keys are not interchangeable: the engine
-distinguishes observances English conflates -- ``"Fast day"`` was three distinct ids inside the
-supported range, the general ``fast_day`` plus ``illuminator_fast_day_3`` and ``_5``, which the
-source heads with their ordinal in Armenian and flattens to ``Fast day`` in English.  Three rows
-must be allowed to share that name.
+The name constraint goes *before* the backfill because the backfill would trip it mid-flight:
+it re-keys rows onto ids while the old rows still hold the names, and it collapses several
+spellings of one observance onto a single row.  It is dropped rather than replaced in kind
+because the name is no longer an identity at all -- it is display text derived from the id, and
+nothing should stop two rows holding the same text if the engine ever emits it for two ids.
 
 Schema only.  0066 does the data work and 0067 takes the new constraint, each in its own
 transaction: PostgreSQL defers this column's index until this migration's schema editor closes,
