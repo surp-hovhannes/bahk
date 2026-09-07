@@ -18,10 +18,16 @@ old name spans dates the current engine now calls different things -- the source
 commemorations together in some years and not others -- the date-count majority wins and the
 entry is flagged so a human can read the rejected alternatives.
 
-This is a one-time artifact.  The recurring path after any future engine upgrade is
-``manage.py remap_feast_names``, which needs neither this script nor an old engine version.
+Build it against the engine the repo pins, not an older one.  ``build_entries`` drops every old
+name the target still emits, so a map built against an engine older than the deployed one omits
+exactly the names that went stale in between: the 1.3.0-targeted build was missing 54 spellings
+that 2.1.0 no longer emits, and each of those is a production row the bridge would have failed to
+place.  Rebuilding on a major engine bump is cheap; the entries only ever grow.
 
-Usage (from the repo root, with armenian-lectionary 1.3.0+ installed):
+Otherwise this is a one-time artifact.  The recurring path is ``manage.py remap_feast_names``,
+which needs neither this script nor an old engine version.
+
+Usage (from the repo root, with the pinned armenian-lectionary installed):
 
     python scripts/build_feast_name_map.py
     python scripts/build_feast_name_map.py --reference-data ../armenian_lectionary/dev/reference_data
@@ -39,6 +45,7 @@ from collections import Counter
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
+from hub.services import feast_rename  # noqa: E402
 from hub.services.feast_rename import normalize_feast_key  # noqa: E402
 
 DEFAULT_REFERENCE_DATA = os.path.join(
@@ -85,18 +92,13 @@ json.dump(out, sys.stdout)
 
 
 def sweep_installed():
-    """Return ``({date: name}, version)`` for the engine installed in this interpreter."""
-    import armenian_lectionary as al
+    """Return ``({date: name}, version)`` for the engine installed in this interpreter.
 
-    names = {}
-    day = datetime.date(al.MIN_YEAR, 1, 1)
-    end = datetime.date(al.MAX_YEAR, 12, 31)
-    while day <= end:
-        name = (al.compute_armenian_lectionary(day).get("Liturgical Day") or "").strip()
-        if name:
-            names[day] = name
-        day += datetime.timedelta(days=1)
-    return names, _installed_version()
+    Deliberately the *same* sweep the runtime uses rather than a second copy: the join below is
+    only sound if the target names here are the strings ``engine_names`` will later compare a
+    stored row against, and two hand-synced sweeps are exactly how that stops being true.
+    """
+    return dict(feast_rename.names_by_date("en")), _installed_version()
 
 
 def _installed_version():
@@ -170,7 +172,9 @@ def build_entries(sources, target):
             "new": current,
             # A date the CURRENT engine emits ``new`` on, so it can seed Feast.sample_date.
             "sample_date": dates[(old, current)].isoformat(),
-            "dates": counted.total(),
+            # The winning target's own support, not the total across candidates -- an entry
+            # reporting the total reads as near-unanimous exactly where the vote was closest.
+            "dates": counted[current],
             "sources": sorted(labels[old]),
             "ambiguous": len(ranked) > 1,
             "rejected": [name for name, _ in ranked[1:]],
@@ -199,7 +203,9 @@ def dedupe_by_key(entries):
         seen["dates"] += entry["dates"]
         seen["sources"] = sorted(set(seen["sources"]) | set(entry["sources"]))
         seen["ambiguous"] = seen["ambiguous"] or entry["ambiguous"]
-        seen["rejected"] = sorted(set(seen["rejected"]) | set(entry["rejected"]))
+        # Preserve _rank's best-first order; a merged entry's rejects should read the same way
+        # an unmerged one's do.
+        seen["rejected"] += [r for r in entry["rejected"] if r not in seen["rejected"]]
         seen["sample_date"] = min(seen["sample_date"], entry["sample_date"])
         if len(entry["old"]) > len(seen["old"]):
             seen["old"] = entry["old"]
@@ -253,6 +259,8 @@ def main(argv=None):
     parser.add_argument("--versions", default=DEFAULT_VERSIONS,
                         help="comma-separated old engine releases to sweep from PyPI")
     parser.add_argument("--out", default=DEFAULT_OUT, help="where to write the map")
+    parser.add_argument("--allow-missing-cache", action="store_true",
+                        help="build without the scrape era instead of refusing to (see below)")
     args = parser.parse_args(argv)
 
     target, target_version = sweep_installed()
@@ -263,9 +271,18 @@ def main(argv=None):
     if os.path.isdir(args.reference_data):
         sources[CACHE_SOURCE] = sweep_reference_cache(args.reference_data)
         print(f"{CACHE_SOURCE}: {len(set(sources[CACHE_SOURCE].values()))} distinct names")
-    else:
+    elif args.allow_missing_cache:
         print(f"WARNING: no reference cache at {args.reference_data}; skipping the scrape era.",
               file=sys.stderr)
+    else:
+        raise SystemExit(
+            f"No reference cache at {args.reference_data}.\n"
+            "It is the scrape era -- the largest single source and the only one for the names "
+            "no engine release ever emitted -- so building without it quietly produces a map "
+            "that is missing entries rather than one that is wrong, which is the harder failure "
+            "to notice. Point --reference-data at the lectionary checkout, or pass "
+            "--allow-missing-cache if you really mean to."
+        )
 
     versions = [v.strip() for v in args.versions.split(",") if v.strip()]
     if versions:
@@ -279,6 +296,12 @@ def main(argv=None):
     entries = build_entries(sources, target)
     assert_no_conflicting_keys(entries)
     entries = dedupe_by_key(entries)
+    if not entries:
+        raise SystemExit(
+            "No sources resolved to a single entry; refusing to overwrite the map with an empty "
+            "one. The artifact bridges rows that cannot be reconstructed any other way, and this "
+            "script's normal exit is what would destroy it."
+        )
 
     ambiguous = [e for e in entries if e["ambiguous"]]
     print(f"\n{len(entries)} name(s) need remapping; {len(ambiguous)} resolved by date-count "
