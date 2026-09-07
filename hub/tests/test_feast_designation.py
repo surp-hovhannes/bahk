@@ -48,6 +48,47 @@ class FeastDesignationTaskTests(TestCase):
         feast.refresh_from_db()
         self.assertEqual(feast.designation, Feast.Designation.NATIVITY_MOTHER_OF_GOD)
 
+    def test_a_fast_shaped_name_is_classified_by_the_llm_not_by_its_shape(self):
+        """No name shortcut to ``FAST``. The classifier decides, or nothing does.
+
+        This guards a regex that used to sit here, stamping ``FAST`` on anything shaped like
+        "<Ordinal> day of Great Lent" to save an LLM call, with hardcoded carve-outs for saint
+        words and for Mijink. It has to stay gone, and production shows why rather than theory:
+
+          * the carve-out spelled ``Saint`` and never ``St.``, so St. Theodore the Tyron, Lazarus
+            Saturday and St. Gregory's Descent into the Pit were all stamped generic fasts;
+          * ``designation`` is never overwritten once set, and it gates context generation, so
+            each of those was permanent and silent until migration ``0068`` cleared it.
+
+        A row only exists for an observance the engine marks ``is_comm``, so there is nothing
+        here for a name screen to usefully filter anyway.
+        """
+        feast = Feast.objects.create(
+            church=self.church, name="Twenty Fourth day of Great Lent")
+
+        mock_service = MagicMock()
+        mock_service.determine_feast_designation.return_value = Feast.Designation.MARTYRS
+        with patch('hub.tasks.llm_tasks.get_llm_service', return_value=mock_service) as get_service:
+            determine_feast_designation_task(feast.id)
+
+        get_service.assert_called_once()
+        feast.refresh_from_db()
+        self.assertEqual(feast.designation, Feast.Designation.MARTYRS)
+
+    def test_a_saint_named_lenten_day_is_not_stamped_a_generic_fast(self):
+        """The exact production failure: `St.` was never on the carve-out list."""
+        feast = Feast.objects.create(
+            church=self.church, name="Sixth day of Great Lent — St. Theodore the Tyron")
+
+        mock_service = MagicMock()
+        mock_service.determine_feast_designation.return_value = Feast.Designation.MARTYRS
+        with patch('hub.tasks.llm_tasks.get_llm_service', return_value=mock_service):
+            determine_feast_designation_task(feast.id)
+
+        feast.refresh_from_db()
+        self.assertNotEqual(feast.designation, Feast.Designation.FAST)
+        self.assertEqual(feast.designation, Feast.Designation.MARTYRS)
+
     def test_determine_designation_task_with_valid_response(self):
         """Test that task sets designation when LLM returns valid response."""
         day = Day.objects.create(date=self.test_date, church=self.church)

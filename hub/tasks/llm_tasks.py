@@ -350,7 +350,19 @@ def generate_feast_context_task(
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def determine_feast_designation_task(self, feast_id: int):
     """Determine and set the designation for a Feast instance using AI.
-    
+
+    Every row reaching here is a commemoration -- the engine's ``is_comm`` mark is what mints it --
+    so there is nothing left for a name regex to screen out.  This used to short-circuit
+    "<Ordinal> day of Great Lent"-shaped names straight to ``FAST`` without asking the LLM, with
+    hardcoded carve-outs for saint words and for Mijink.  The carve-out spelled out ``Saint`` and
+    never ``St.``, which is the abbreviation the engine's display text overwhelmingly uses, so
+    days plainly naming a saint were stamped as generic fasts anyway -- St. Theodore the Tyron,
+    Lazarus Saturday and St. Gregory's Descent into the Pit among them on production.
+
+    That is not a cost the classifier can undo later: ``designation`` is never overwritten once
+    set, and it is what stands between a feast and its generated context.  Migration ``0068``
+    repairs the rows this already wrote; removing it is what stops new ones.
+
     Args:
         feast_id: ID of the Feast to determine designation for
     """
@@ -363,22 +375,6 @@ def determine_feast_designation_task(self, feast_id: int):
     # Skip if designation is already set (don't overwrite manual assignments)
     if feast.designation:
         logger.info("Feast %s already has designation '%s', skipping.", feast_id, feast.designation)
-        return
-
-    # Short-circuit for generic numbered fast days — pattern like "Seventeenth day of Great Lent"
-    # These never commemorate a specific saint so the LLM is not needed.
-    # Require "fast" or "lent" in the name to avoid false positives.
-    # Explicitly exclude Mijink (Median day of Great Lent) — a named feast, not a generic fast day.
-    if re.match(r'^[\w\s]+ day of ', feast.name, re.IGNORECASE) and re.search(
-        r'fast|lent', feast.name, re.IGNORECASE
-    ) and not re.search(
-        r'Mijink|Median', feast.name, re.IGNORECASE
-    ) and not re.search(
-        r'Saint|Martyr|Blessed|Holy\s+(?!Cross)|Prophet|Apostle|Patriarch|Vartapet', feast.name, re.IGNORECASE
-    ):
-        feast.designation = Feast.Designation.FAST
-        feast.save(update_fields=['designation'])
-        logger.info("Regex fast-day pattern matched, assigned 'Fast' to Feast %s (%s)", feast_id, feast.name)
         return
 
     # Determine which LLM service to use based on active prompt or default

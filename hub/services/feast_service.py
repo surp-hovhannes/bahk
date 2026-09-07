@@ -12,10 +12,41 @@ from datetime import date, datetime, timedelta
 
 import armenian_lectionary
 from armenian_lectionary import MAX_YEAR, MIN_YEAR
+from armenian_lectionary.engine import OBSERVANCE_CATALOG_PATH
+from armenian_lectionary.observance_catalog import ObservanceCatalog
 
 from hub.utils import SUPPORTED_CHURCHES
 
 logger = logging.getLogger(__name__)
+
+
+@functools.lru_cache(maxsize=1)
+def _catalog():
+    """The engine's observance catalog, loaded once per process.
+
+    Loaded through the public class rather than reaching for the engine's module-level instance,
+    so this does not depend on a private name. A thin checkout with no catalog file loads empty,
+    which every caller here must treat as "says nothing", never as "says no".
+    """
+    return ObservanceCatalog.load(OBSERVANCE_CATALOG_PATH)
+
+
+def is_commemoration_and_not_a_fast(observance_id):
+    """Whether the engine marks this id as commemorating something and as not being a fast.
+
+    The two marks are independent and they overlap -- six ids carry both, the named Lenten
+    Sundays and Mijink -- so this deliberately answers only for the unambiguous case, where the
+    engine says "commemoration" and does not say "fast". That is the one combination a Fast
+    designation flatly contradicts.
+
+    False for an unknown id and for every id on an install with no catalog, so a caller
+    weighing a repair against this never acts on silence.
+    """
+    if not observance_id:
+        return False
+    catalog = _catalog()
+    return (observance_id in catalog.commemoration_ids
+            and observance_id not in catalog.fast_ids)
 
 
 def get_feast_for_date(date_obj, church) -> list[dict] | None:
