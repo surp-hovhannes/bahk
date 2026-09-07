@@ -759,10 +759,12 @@ class Reading(models.Model):
 class Feast(models.Model):
     """A commemoration, and the enrichment the app keeps for it.
 
-    Keyed by ``(church, name)``, not by date.  The name of the day comes from the
-    ``armenian_lectionary`` engine and is recomputed per request, so nothing here needs to be
-    pre-populated for a date to resolve; what this row exists to hold is the part the engine has
-    no notion of -- the AI ``designation``, the matched ``icon``, and the generated ``contexts``.
+    Keyed by ``(church, observance_id)`` -- one published engine id, so a row is exactly one
+    commemoration -- and not by date, nor by the name, which is display text the engine corrects
+    between releases.  The day's commemorations come from the ``armenian_lectionary`` engine and
+    are recomputed per request, so nothing here needs to be pre-populated for a date to resolve;
+    what this row exists to hold is the part the engine has no notion of -- the AI
+    ``designation``, the matched ``icon``, and the generated ``contexts``.
 
     Those are properties of the commemoration, not of the day it lands on.  This model used to
     hang off ``Day``, which meant the same feast earned a new row, a new LLM context and a new
