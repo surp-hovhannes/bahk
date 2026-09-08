@@ -84,8 +84,8 @@ class FeastViewDegradedResponseTests(TestCase):
         self.assertEqual(mock_get_or_create.call_count, 2)
 
 
-class FeastResponseShapeTransitionTests(TestCase):
-    """The deprecated ``feast`` key served beside ``feasts`` while old app builds catch up."""
+class FeastResponseShapeTests(TestCase):
+    """``feasts`` is the only shape served, and the cache key says which shape wrote an entry."""
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
@@ -96,11 +96,14 @@ class FeastResponseShapeTransitionTests(TestCase):
         return Feast.objects.create(church=self.church, name=name)
 
     @patch('hub.views.feasts.get_or_create_feast_for_date')
-    def test_the_first_commemoration_is_mirrored_under_the_old_key(self, mock_get_or_create):
-        """A build that predates the array reads ``feast`` and still shows a card.
+    def test_the_deprecated_single_feast_key_is_gone(self, mock_get_or_create):
+        """The transitional mirror is removed, not merely unused.
 
-        Without this it reads ``undefined`` and renders "no feast today" every day until its
-        owner updates -- a mobile release is not an atomic deploy.
+        It existed so builds predating the array kept showing a card while the store release
+        rolled out. Leaving it in place after that would keep a shape alive that nothing reads and
+        that the next person has to reason about -- and it is only safe to drop because the shape
+        constant in the cache key means no client, on either side of a rollback, is handed an
+        entry a different version wrote.
         """
         feasts = [self._feast("The Hermit St. Anton"), self._feast("The Hermit Sts. Tryphon")]
         mock_get_or_create.return_value = (feasts, {"status": "success"})
@@ -109,16 +112,17 @@ class FeastResponseShapeTransitionTests(TestCase):
 
         self.assertEqual([entry["name"] for entry in data["feasts"]],
                          ["The Hermit St. Anton", "The Hermit Sts. Tryphon"])
-        self.assertEqual(data["feast"], data["feasts"][0])
+        self.assertNotIn("feast", data)
 
     @patch('hub.views.feasts.get_or_create_feast_for_date')
-    def test_a_day_with_no_commemoration_is_null_under_the_old_key(self, mock_get_or_create):
+    def test_a_day_with_no_commemoration_serves_an_empty_array_and_nothing_else(
+            self, mock_get_or_create):
         mock_get_or_create.return_value = ([], {"status": "skipped"})
 
         data = self.client.get('/api/feasts/', {'date': self.date_str}).json()
 
         self.assertEqual(data["feasts"], [])
-        self.assertIsNone(data["feast"])
+        self.assertNotIn("feast", data)
 
     def test_the_cache_key_carries_the_response_shape(self):
         """A revert has to stop reading entries the newer shape wrote.
@@ -339,8 +343,6 @@ class FeastAPIRouteTests(TestCase):
             {
                 "date": self.date_str,
                 "feasts": [],
-                # Deprecated mirror for pre-array app builds; see FeastResponseShapeTransitionTests.
-                "feast": None,
             },
         )
 
@@ -558,7 +560,7 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.json(),
-            {"date": today.isoformat(), "feasts": [], "feast": None},
+            {"date": today.isoformat(), "feasts": []},
         )
         mock_get_or_create.assert_called_once_with(
             today,
