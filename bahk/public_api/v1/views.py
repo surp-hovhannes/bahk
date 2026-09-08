@@ -2,10 +2,11 @@
 
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
-from rest_framework.views import APIView
+
+from bahk.public_api.v1.validation import PublicApiView
 
 
-class PublicApiRootView(APIView):
+class PublicApiRootView(PublicApiView):
     """Return the stable service descriptor for the public v1 API."""
 
     authentication_classes = []
