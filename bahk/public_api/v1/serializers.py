@@ -323,10 +323,10 @@ class FastPublicSerializer(serializers.ModelSerializer):
         return _localized(obj, "name", self.context)
 
     def get_description(self, obj):
-        return _localized(obj, "description", self.context)
+        return _localized(obj, "description", self.context) or None
 
     def get_culmination_feast(self, obj):
-        return _localized(obj, "culmination_feast", self.context)
+        return _localized(obj, "culmination_feast", self.context) or None
 
     def get_image_url(self, obj):
         return _image_url(obj, "image")

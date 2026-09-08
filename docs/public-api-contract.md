@@ -24,6 +24,7 @@ V1 is anonymous and read-only. The following is the initial inventory and a floo
 | Fasts | `/api/v1/fasts/` | planned | #494, #497, #496, #498 |
 | Feasts | `/api/v1/feasts/` | planned | #494, #497, #496, #498 |
 | Icons | `/api/v1/icons/` | planned | #494, #497, #496, #498 |
+| Calendar | `/api/v1/calendar/` | planned | #499 |
 
 A resource cannot be mounted until it has a presentation-neutral serializer (#497), consistent validation and errors (#496), anonymous traffic protections (#498), and contract coverage. It becomes stable only after verified reference documentation is published (#500).
 

@@ -439,6 +439,20 @@ class FastPublicSerializerContractTests(TestCase):
         )
         self.assertIsNone(data["image_url"])
 
+    def test_empty_description_serializes_as_null(self):
+        fast = self._make_fast(description="")
+
+        data = FastPublicSerializer(fast).data
+
+        self.assertIsNone(data["description"])
+
+    def test_empty_culmination_feast_serializes_as_null(self):
+        fast = self._make_fast(culmination_feast="")
+
+        data = FastPublicSerializer(fast).data
+
+        self.assertIsNone(data["culmination_feast"])
+
     def test_dates_are_null_when_unannotated(self):
         fast = self._make_fast()
 
