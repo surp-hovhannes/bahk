@@ -49,9 +49,9 @@ If a successor version is required, its deprecation of v1 is announced in the pu
 
 Normally, no more than two public major versions are supported concurrently. Supporting additional overlap requires explicit maintainer approval and a retirement plan.
 
-## Errors
+## Errors and request validation
 
-V1 reserves this error envelope; #496 defines the resource-level codes, validation, and status conventions:
+Every public-v1 error uses this envelope:
 
 ```json
 {
@@ -61,7 +61,26 @@ V1 reserves this error envelope; #496 defines the resource-level codes, validati
 }
 ```
 
-`code` is stable. `message` may change. `details` is optional and resource-specific.
+`code` and the documented `details` keys are stable public contract. `message`
+may change. `details` is always an object; it is empty when no structured
+context applies.
+
+Public resource routes validate only the parameters they accept. Missing
+optional parameters retain the route's documented default; a supplied invalid
+parameter never falls back to that default.
+
+| Parameter | Valid values | Failure code | Details |
+| --- | --- | --- | --- |
+| `date`, `start_date`, `end_date` | Exact ISO `YYYY-MM-DD` calendar date | `invalid_date` | `parameter`, `value` |
+| `start_date` + `end_date` | `start_date <= end_date` | `invalid_date_range` | `start_date`, `end_date` |
+| `lang` | `en` or `hy` | `unsupported_language` | `parameter`, `value`, `supported` |
+| `tz` | IANA timezone name, e.g. `America/Los_Angeles` | `invalid_timezone` | `parameter`, `value` |
+| Required `church_id` | Positive canonical integer | `missing_parameter` or `invalid_church_id` | `parameter` (and `value` for invalid) |
+
+Routes that resolve a church return `church_not_found` with `details.church_id`
+when the syntactically valid ID is unknown. Unknown public resources use
+`resource_not_found` with `details.resource`. Both use HTTP 404. Validation
+errors use HTTP 400.
 
 ## Schema (presentation-neutral serializers)
 
@@ -172,6 +191,7 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 | Date | Change |
 | --- | --- |
 | 2026-09-11 | Review follow-up: restored the general excluded `feedback` family (covering the reading and feast context-feedback routes) and spelled out the icon families; documented view-resolved language passing (`context['lang']`; serializers never read the request), the `with_dates()` / `select_related("icon")` queryset preconditions, and empty localized values serializing as `null`; added a read-only serializer base whose `create()`/`update()` refuse. (Issue #497 review.) |
+| 2026-09-08 | Defined v1's shared validation rules and stable error envelope for dates, ranges, languages, timezones, and church IDs. (Issue #496.) |
 | 2026-09-08 | Added Icons to the initial planned v1 inventory; narrowed the icon exclusion to icon upload, feedback, matching, and admin families; defined exact serializer field/type/nullability/localization/media rules for Church, Fast, Reading, Feast, and Icon; pinned public thumbnail behavior to the cached URL only and forbade `ImageSpecField.url` access during serialization. (Issue #497.) |
 
 ## Release gate

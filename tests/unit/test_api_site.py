@@ -103,6 +103,14 @@ class PublicApiV1Tests(SimpleTestCase):
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response["Allow"], "GET, HEAD, OPTIONS")
         self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "method_not_allowed",
+                "message": 'Method "POST" not allowed.',
+                "details": {},
+            },
+        )
 
     def test_root_remains_anonymous_with_stale_authorization(self):
         response = self.client.get(
@@ -118,6 +126,14 @@ class PublicApiV1Tests(SimpleTestCase):
         self.assertEqual(response.status_code, 406)
         self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
         self.assertNotIn("text/html", response["Content-Type"])
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "not_acceptable",
+                "message": "Could not satisfy the request Accept header.",
+                "details": {},
+            },
+        )
 
     def test_public_v1_does_not_expose_unready_or_internal_routes(self):
         for path in (
