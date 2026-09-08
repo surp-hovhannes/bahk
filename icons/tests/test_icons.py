@@ -2,6 +2,7 @@
 
 import hashlib
 from io import BytesIO, StringIO
+from unittest.mock import patch
 
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -11,6 +12,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 
 from hub.models import Church
+from hub.services.icon_match_service import IconMatchOutcome
 from icons.models import Icon, IconFeedback
 from icons.serializers import IconSerializer
 
@@ -272,6 +274,7 @@ class IconAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 1)
     
+    @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
     def test_icon_match_endpoint(self):
         """Test the AI-powered icon matching endpoint."""
         data = {
@@ -279,21 +282,63 @@ class IconAPITests(APITestCase):
             'return_format': 'id',
             'max_results': 1
         }
-        response = self.client.post('/api/icons/match/', data, format='json')
+        match = {'id': self.icon1.id, 'confidence': 'high', 'relation': 'exact_event',
+                 'reason': 'Depicts the Nativity.', 'auto_assignable': False}
+        outcome = IconMatchOutcome(
+            status='complete', catalogue_complete=True, positives_complete=True,
+            assessed_count=2, catalogue_count=2, matches=[match],
+        )
+        with patch('icons.views.match_icons', return_value=outcome) as matcher:
+            response = self.client.post('/api/icons/match/', data, format='json')
+        matcher.assert_called_once()
+        icons, request = matcher.call_args.args
+        self.assertCountEqual([icon.id for icon in icons], [self.icon1.id, self.icon2.id])
+        self.assertEqual(request.kind, 'content')
+        self.assertEqual(request.primary_text, data['prompt'])
+        self.assertIs(type(request.max_results), int)
+        self.assertEqual(request.max_results, 1)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('matches', response.data)
+        self.assertEqual(response.data['status'], 'complete')
+        self.assertTrue(response.data['catalogue_complete'])
+        self.assertTrue(response.data['positives_complete'])
+        self.assertEqual(response.data['assessed_count'], 2)
+        self.assertEqual(response.data['catalogue_count'], 2)
+        self.assertEqual(response.data['matches'], [{**match, 'icon_id': self.icon1.id}])
 
+    @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
     def test_icon_match_accepts_form_encoded_max_results_string(self):
         """Test that numeric form max_results is normalized before matching."""
+        other_church = Church.objects.create(name='Other Church')
+        Icon.objects.create(title='Foreign Nativity', church=other_church, image='foreign.jpg')
         data = {
             'prompt': 'nativity',
+            'church_id': str(self.church.id),
             'return_format': 'id',
             'max_results': '2'
         }
-        response = self.client.post('/api/icons/match/', data, format='multipart')
+        match = {'id': self.icon1.id, 'confidence': 'high', 'relation': 'exact_event',
+                 'reason': 'Depicts the Nativity.', 'auto_assignable': False}
+        outcome = IconMatchOutcome(
+            status='complete', catalogue_complete=True, positives_complete=True,
+            assessed_count=2, catalogue_count=2, matches=[match],
+        )
+        with patch('icons.views.match_icons', return_value=outcome) as matcher:
+            response = self.client.post('/api/icons/match/', data, format='multipart')
+        matcher.assert_called_once()
+        icons, request = matcher.call_args.args
+        self.assertCountEqual([icon.id for icon in icons], [self.icon1.id, self.icon2.id])
+        self.assertTrue(all(icon.church_id == self.church.id for icon in icons))
+        self.assertEqual(request.kind, 'content')
+        self.assertEqual(request.primary_text, data['prompt'])
+        self.assertIs(type(request.max_results), int)
+        self.assertEqual(request.max_results, 2)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('matches', response.data)
-        self.assertLessEqual(len(response.data['matches']), 2)
+        self.assertEqual(response.data['status'], 'complete')
+        self.assertTrue(response.data['catalogue_complete'])
+        self.assertTrue(response.data['positives_complete'])
+        self.assertEqual(response.data['assessed_count'], 2)
+        self.assertEqual(response.data['catalogue_count'], 2)
+        self.assertEqual(response.data['matches'], [{**match, 'icon_id': self.icon1.id}])
 
     def test_icon_match_rejects_negative_max_results(self):
         """Test that negative max_results is rejected."""

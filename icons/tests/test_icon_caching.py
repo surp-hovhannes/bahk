@@ -10,9 +10,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from hub.models import Church
+from hub.services.icon_match_service import IconMatchOutcome
 from icons.cache import IconViewCache
 from icons.models import Icon
-from icons.views import IconListView, IconMatchView
+from icons.views import IconListView
 
 
 TEST_CACHE = {
@@ -29,6 +30,11 @@ class IconViewCachingTests(APITestCase):
 
     def setUp(self):
         cache.clear()
+        def complete_match(icons, request, *, limits=None, church_id=None):
+            return IconMatchOutcome(status='complete', catalogue_complete=True,
+                                    matches=[{'id': icons[0].id, 'confidence': 'high'}])
+        self.matcher = patch('icons.views.match_icons', side_effect=complete_match).start()
+        self.addCleanup(patch.stopall)
         self.church = Church.objects.create(name="Test Church")
         self.other_church = Church.objects.create(name="Other Church")
         self.icon1 = self._create_icon("Nativity Icon", self.church, "nativity")
@@ -42,13 +48,13 @@ class IconViewCachingTests(APITestCase):
     def tearDown(self):
         cache.clear()
 
-    def _create_icon(self, title, church, filename_prefix):
+    def _create_icon(self, title, church, filename_prefix, **kwargs):
         image = SimpleUploadedFile(
             name=f"{filename_prefix}.jpg",
             content=b"fake image content",
             content_type="image/jpeg",
         )
-        return Icon.objects.create(title=title, church=church, image=image)
+        return Icon.objects.create(title=title, church=church, image=image, **kwargs)
 
     def test_list_cache_key_uses_stable_query_param_hash(self):
         params_a = QueryDict(f"church={self.church.id}&search=nativity")
@@ -116,8 +122,7 @@ class IconViewCachingTests(APITestCase):
         missing = self.client.get(f"/api/icons/{missing_id}/")
         self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
 
-        created = self._create_icon("Late Icon", self.church, "late")
-        Icon.objects.filter(pk=created.pk).update(id=missing_id)
+        self._create_icon("Late Icon", self.church, "late", pk=missing_id)
 
         found = self.client.get(f"/api/icons/{missing_id}/")
         self.assertEqual(found.status_code, status.HTTP_200_OK)
@@ -135,9 +140,8 @@ class IconViewCachingTests(APITestCase):
         )
         self.assertEqual(first.status_code, status.HTTP_200_OK)
 
-        with patch.object(
-            IconMatchView,
-            "_simple_match_icons",
+        with patch(
+            "icons.views.match_icons",
             side_effect=AssertionError("match cache was not used"),
         ):
             second = self.client.post(

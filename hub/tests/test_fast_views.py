@@ -693,16 +693,22 @@ class FastParticipantsViewTest(TestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.json()), 2)
-        first_participant = response.json()[0]
-        self.assertEqual(first_participant["id"], self.participant_profile.id)
-        self.assertEqual(first_participant["name"], "Participant One")
-        self.assertEqual(first_participant["location"], "Glendale, CA")
-        self.assertEqual(first_participant["abbreviation"], "P")
-        self.assertEqual(first_participant["user"], "Participant One")
-        self.assertEqual(first_participant["intention"], "Pray for the parish")
-        self.assertIn("profile_image", first_participant)
-        self.assertIn("thumbnail", first_participant)
+        payload = response.json()
+        self.assertEqual(len(payload), 2)
+
+        # Participant order is a stable daily per-fast shuffle, not insertion
+        # order, so look up by id rather than asserting position.
+        by_id = {participant["id"]: participant for participant in payload}
+        self.assertEqual(set(by_id), {self.participant_profile.id, self.other_profile.id})
+
+        participant_one = by_id[self.participant_profile.id]
+        self.assertEqual(participant_one["name"], "Participant One")
+        self.assertEqual(participant_one["location"], "Glendale, CA")
+        self.assertEqual(participant_one["abbreviation"], "P")
+        self.assertEqual(participant_one["user"], "Participant One")
+        self.assertEqual(participant_one["intention"], "Pray for the parish")
+        self.assertIn("profile_image", participant_one)
+        self.assertIn("thumbnail", participant_one)
 
     def test_fast_participants_returns_not_found_for_missing_fast(self):
         self.client.force_login(self.user)
@@ -792,13 +798,30 @@ class PaginatedFastParticipantsViewTest(TestCase):
         self.assertIsNotNone(payload["next"])
         self.assertIsNone(payload["previous"])
         self.assertEqual(len(payload["results"]), 1)
+
+        # Participant order is a stable daily per-fast shuffle, not insertion
+        # order, so validate whichever profile lands first by its own id
+        # rather than asserting a fixed position.
+        expected_by_id = {
+            self.participant_profile.id: {
+                "name": "Paginated Participant One",
+                "location": "Glendale, CA",
+                "intention": "Pray for the parish",
+            },
+            self.other_profile.id: {
+                "name": "Paginated Participant Two",
+                "location": "Pasadena, CA",
+                "intention": None,
+            },
+        }
         first_participant = payload["results"][0]
-        self.assertEqual(first_participant["id"], self.participant_profile.id)
-        self.assertEqual(first_participant["name"], "Paginated Participant One")
-        self.assertEqual(first_participant["location"], "Glendale, CA")
+        self.assertIn(first_participant["id"], expected_by_id)
+        expected = expected_by_id[first_participant["id"]]
+        self.assertEqual(first_participant["name"], expected["name"])
+        self.assertEqual(first_participant["location"], expected["location"])
         self.assertEqual(first_participant["abbreviation"], "P")
-        self.assertEqual(first_participant["user"], "Paginated Participant One")
-        self.assertEqual(first_participant["intention"], "Pray for the parish")
+        self.assertEqual(first_participant["user"], expected["name"])
+        self.assertEqual(first_participant["intention"], expected["intention"])
         self.assertIn("profile_image", first_participant)
         self.assertIn("thumbnail", first_participant)
 
