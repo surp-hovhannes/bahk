@@ -153,10 +153,7 @@ urlpatterns += [
 # Public, versioned contract boundary. It intentionally does not re-export
 # internal `/api/` URLconfs.
 urlpatterns += [
-    path(
-        "api/v1/",
-        include(("bahk.public_api_urls", "public_api"), namespace="public_api"),
-    ),
+    path("api/", include("bahk.public_api.urls")),
 ]
 
 # Learning resources endpoints are handled by the include above

@@ -1,7 +1,8 @@
 from django.test import SimpleTestCase
-from django.urls import NoReverseMatch, resolve, reverse
 from django.test.client import Client
-from bahk.public_api_urls import urlpatterns as public_api_urlpatterns
+from django.urls import NoReverseMatch, resolve, reverse
+
+from bahk.public_api.v1.urls import urlpatterns as public_api_urlpatterns
 
 from bahk.views import ApiDocsView, LandingPageView
 
@@ -75,20 +76,19 @@ class PublicApiV1Tests(SimpleTestCase):
             {
                 "service": "fast-and-pray",
                 "version": "v1",
-                "base_url": "/api/v1/",
-                "status": "planned",
+                "base_path": "/api/v1/",
+                "status": "pre-release",
             },
         )
 
     def test_root_uses_an_isolated_public_api_namespace(self):
         match = resolve("/api/v1/")
 
-        self.assertEqual(match.namespace, "public_api")
+        self.assertEqual(match.namespace, "public_api_v1")
         self.assertEqual(match.url_name, "root")
-        self.assertEqual(reverse("public_api:root"), "/api/v1/")
+        self.assertEqual(reverse("public_api_v1:root"), "/api/v1/")
         with self.assertRaises(NoReverseMatch):
-            reverse("public_api:fast-list")
-
+            reverse("public_api_v1:fast-list")
 
     def test_root_is_the_only_v1_route_until_resources_are_ready(self):
         self.assertEqual(
@@ -102,6 +102,23 @@ class PublicApiV1Tests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response["Allow"], "GET, HEAD, OPTIONS")
+        self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
+
+    def test_root_remains_anonymous_with_stale_authorization(self):
+        response = self.client.get(
+            "/api/v1/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["service"], "fast-and-pray")
+
+    def test_root_uses_json_for_html_accept(self):
+        response = self.client.get("/api/v1/", HTTP_ACCEPT="text/html")
+
+        self.assertEqual(response.status_code, 406)
+        self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
+        self.assertNotIn("text/html", response["Content-Type"])
+
     def test_public_v1_does_not_expose_unready_or_internal_routes(self):
         for path in (
             "/api/v1/fasts/",
