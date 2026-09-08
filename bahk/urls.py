@@ -150,6 +150,12 @@ urlpatterns += [
     path("api/icons/", include("icons.urls")),
 ]
 
+# Public, versioned contract boundary. It intentionally does not re-export
+# internal `/api/` URLconfs.
+urlpatterns += [
+    path("api/", include("bahk.public_api.urls")),
+]
+
 # Learning resources endpoints are handled by the include above
 # Individual endpoints are defined in learning_resources/urls.py
 
