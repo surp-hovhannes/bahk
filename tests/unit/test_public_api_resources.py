@@ -180,6 +180,7 @@ class PublicApiResourceTests(TestCase):
             ("fasts/by-feast-date/", dated),
             ("readings/", dated),
             ("feasts/", dated),
+            ("calendar/", dated),
         ]
 
     @patch("hub.services.feast_service.get_feast_for_date", return_value=None)
@@ -209,6 +210,8 @@ class PublicApiResourceTests(TestCase):
                 cases += [("church_id", ""), ("church_id", "-1")]
             if "date" in params:
                 cases += [("date", ""), ("date", "2026-02-30")]
+            if route == "calendar/":
+                cases += [("tz", ""), ("tz", "Bad/Zone")]
             if route == "fasts/":
                 cases += [
                     ("tz", ""),
@@ -231,6 +234,8 @@ class PublicApiResourceTests(TestCase):
     def test_routes_ignore_parameters_they_do_not_accept(self):
         for route, params in self.resource_requests():
             ignored = {"start_date": "bad", "end_date": "bad", "tz": "bad"} if route != "fasts/" else {}
+            if route == "calendar/":
+                ignored.pop("tz", None)
             if route in ("churches/", "icons/"):
                 ignored["lang"] = "invalid"
                 ignored["date"] = "bad"
@@ -368,6 +373,7 @@ class PublicApiResourceTests(TestCase):
                 "fast-detail",
                 "reading-by-date",
                 "feast-by-date",
+                "calendar",
                 "not-found",
             ],
         )

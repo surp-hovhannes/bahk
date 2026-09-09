@@ -17,7 +17,7 @@ from django.core.management.base import CommandError
 from django.db import connection as database
 from django.http import HttpResponse, QueryDict
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings, tag
-from django.urls import include, path
+from django.urls import include, path, resolve
 from redis.exceptions import ConnectionError
 from rest_framework.exceptions import Throttled
 
@@ -106,6 +106,20 @@ class PublicTrafficPolicyTests(SimpleTestCase):
         finally:
             importlib.reload(urls)
 
+    @patch.object(traffic, "connection")
+    def test_calendar_is_registered_in_both_urlconfs_and_has_bounded_metric_label(self, connection):
+        request = self.factory.get("/api/v1/calendar/?secret=never-export-this")
+        for urlconf in ("tests.unit.public_api_urls_enabled", "tests.unit.public_api_traffic_urls"):
+            with self.subTest(urlconf=urlconf):
+                request.resolver_match = resolve("/api/v1/calendar/", urlconf=urlconf)
+                self.assertEqual(request.resolver_match.url_name, "calendar")
+        traffic.record(request, HttpResponse(), 0.1)
+        args = connection.return_value.eval.call_args.args
+        fields = dict(zip(args[3::2], args[4::2]))
+        self.assertEqual(fields['requests_total{route="calendar",status="200"}'], 1)
+        self.assertEqual(fields['duration_seconds_count{route="calendar"}'], 1)
+        self.assertNotIn("never-export-this", str(args))
+
     @patch("bahk.public_api.v1.validation.timezone.localdate", return_value=date(2026, 3, 1))
     def test_effective_range_checks_defaults_and_inclusive_limit(self, today):
         start, end = PublicApiQuery(QueryDict()).effective_date_range()
@@ -177,6 +191,7 @@ class PublicReadBoundaryTests(TestCase):
     def test_session_and_bearer_credentials_cannot_write_profiles_or_events(self):
         from rest_framework_simplejwt.tokens import AccessToken
 
+        church = Church.objects.create(name="Read Boundary Church")
         user = get_user_model().objects.create_user(username="public-reader", password="test")
         token = str(AccessToken.for_user(user))
         self.client.force_login(user)
@@ -193,8 +208,13 @@ class PublicReadBoundaryTests(TestCase):
             ),
         ):
             for headers in ({}, {"HTTP_AUTHORIZATION": f"Bearer {token}"}):
-                response = self.client.get("/api/v1/churches/?tz=Europe/Paris&utm_source=public", **headers)
-                self.assertEqual(response.status_code, 200)
+                for url in (
+                    "/api/v1/churches/?tz=Europe/Paris&utm_source=public",
+                    f"/api/v1/calendar/?church_id={church.pk}&date=2026-03-01&tz=Europe/Paris",
+                ):
+                    with patch("hub.services.feast_service.get_feast_for_date", return_value=[]):
+                        response = self.client.get(url, **headers)
+                    self.assertEqual(response.status_code, 200)
 
 
 class PublicCostBoundaryTests(SimpleTestCase):
@@ -398,6 +418,69 @@ class PublicRedisResponseTests(RedisIsolation, TestCase):
         Church.objects.create(name="Second Cache Church")
         self.fast = Fast.objects.create(church=self.church, name="Cache Fast")
         Day.objects.create(church=self.church, fast=self.fast, date=date(2026, 3, 1))
+
+    @patch("hub.services.feast_service.get_feast_for_date", return_value=[])
+    def test_calendar_cache_equivalence_dimensions_validation_and_metrics(self, lookup):
+        params = {"church_id": self.church.pk, "date": "2026-03-01", "lang": "en"}
+        first = self.client.get("/api/v1/calendar/", params)
+        self.assertEqual(first.status_code, 200)
+        with self.assertNumQueries(0):
+            cached = self.client.get("/api/v1/calendar/", {**params, "tz": "UTC", "ignored": "x"})
+        self.assertEqual(cached.json(), first.json())
+        self.assertEqual(cached["Cache-Control"], "no-store")
+        lookup.assert_called_once()
+        for key, value in (
+            ("lang", "hy"),
+            ("tz", "Asia/Yerevan"),
+            ("date", "2026-03-02"),
+            ("church_id", Church.objects.exclude(pk=self.church.pk).get().pk),
+        ):
+            response = self.client.get("/api/v1/calendar/", {**params, key: value})
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.redis.zcard(f"{self.prefix}:responses:index"), 5)
+        calls = lookup.call_count
+        for key, value in (("lang", "invalid"), ("tz", "Bad/Zone"), ("date", "bad"), ("church_id", "01")):
+            with self.subTest(key=key), self.assertNumQueries(0):
+                response = self.client.get("/api/v1/calendar/", {**params, key: value})
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(lookup.call_count, calls)
+        metrics = self.redis.hgetall(f"{self.prefix}:metrics")
+        self.assertEqual(metrics['requests_total{route="calendar",status="200"}'], "6")
+        self.assertEqual(metrics['cache_total{outcome="hit"}'], "1")
+
+    @patch("hub.services.feast_service.get_feast_for_date", return_value=[])
+    def test_calendar_cache_hits_consume_allowance(self, lookup):
+        params = {"church_id": self.church.pk, "date": "2026-03-01"}
+        with override_settings(PUBLIC_API_RATE_MINUTE=2):
+            for expected in (200, 200, 429):
+                self.assertEqual(self.client.get("/api/v1/calendar/", params).status_code, expected)
+        lookup.assert_called_once()
+
+    def test_calendar_partial_success_is_cached_but_errors_release_reservations(self):
+        class FeastDataUnavailable(RuntimeError):
+            pass
+
+        params = {"church_id": self.church.pk, "date": "2026-03-01"}
+        with (
+            patch("hub.services.feast_service.FeastDataUnavailable", FeastDataUnavailable, create=True),
+            patch("hub.services.feast_service.get_feast_for_date", side_effect=FeastDataUnavailable) as lookup,
+        ):
+            first = self.client.get("/api/v1/calendar/", params)
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.json()["partial_failures"], [{"component": "feasts", "code": "data_unavailable"}])
+            with self.assertNumQueries(0):
+                second = self.client.get("/api/v1/calendar/", params)
+            self.assertEqual(second.json(), first.json())
+            lookup.assert_called_once()
+        self.client.raise_request_exception = False
+        with patch("hub.services.feast_service.get_feast_for_date", side_effect=RuntimeError("private")) as lookup:
+            for _ in range(2):
+                response = self.client.get("/api/v1/calendar/", {**params, "date": "2026-03-02"})
+                self.assertEqual(response.status_code, 503)
+                self.assertNotIn(b"private", response.content)
+            self.assertEqual(lookup.call_count, 2)
+        self.assertEqual(self.redis.zcard(f"{self.prefix}:responses:index"), 1)
+        self.assertFalse(list(self.redis.scan_iter(match=f"{self.prefix}:responses:*:lease")))
 
     def test_equivalent_requests_reuse_data_but_rebuild_pagination_links(self):
         first = self.client.get("/api/v1/churches/?limit=1&tracking=one")

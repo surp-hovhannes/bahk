@@ -24,7 +24,7 @@ V1 is anonymous and read-only. The following is the initial inventory and a floo
 | Fasts | `/api/v1/fasts/` | default-disabled | #494, #497, #496, #498 |
 | Feasts | `/api/v1/feasts/` | default-disabled | #494, #497, #496, #498 |
 | Icons | `/api/v1/icons/` | default-disabled | #494, #497, #496, #498 |
-| Calendar | `/api/v1/calendar/` | planned | #499 |
+| Calendar | `/api/v1/calendar/` | default-disabled | #499 |
 
 A resource cannot be mounted until it has a presentation-neutral serializer (#497), consistent validation and errors (#496), anonymous traffic protections (#498), and contract coverage. It becomes stable only after verified reference documentation is published (#500).
 
@@ -128,9 +128,10 @@ and the maximum is 100; collections are ordered by ascending ID; `next` and `pre
 | `GET /api/v1/fasts/by-feast-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects with that culmination-feast date. |
 | `GET /api/v1/readings/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "readings": [Reading] }`. Returns only stored citations; an unimported calendar day has an empty list. |
 | `GET /api/v1/feasts/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "feasts": [Feast] }`. The date resolves offline; only stored commemorations are returned, in service order; zero matches return `feasts: []`. Legacy service dictionaries and future lists are normalized. When the model supports `observance_id`, lookup uses that stable ID; otherwise it uses the legacy name. No rows are created. |
+| `GET /api/v1/calendar/` | required `church_id`, `date`; optional `lang`, `tz` | One combined stored-day response: `{date, church, readings, fast, feasts, partial_failures}`. `fast` is the lowest-ID active Fast or `null`; `feasts` is always an array. The endpoint never retrieves passage text or creates data. `tz` defaults to `UTC` and does not shift the explicit date. |
 
 Church and Icon routes ignore `lang`; their canonical text does not vary by
-language. Fast, Reading, and Feast routes validate `lang` before database or
+language. Fast, Reading, Feast, and Calendar routes validate `lang` before database or
 service work, including when the requested resource is absent.
 
 Effective Fast ranges, after filling omitted endpoints, must be ordered and span
@@ -171,8 +172,8 @@ response is cacheable (`Cache-Control: no-store`), including 429 and 503. CDN
 response caching must remain disabled so it cannot bypass admission.
 
 Application caching reuses successful public data for up to five minutes, after
-validation and admission. Keys include effective language, dates, church, resource,
-and pagination; unknown parameters do not create additional cache entries.
+validation and admission. Keys include effective language, dates, church, timezone, resource,
+and pagination where those values affect the route; unknown parameters do not create additional cache entries.
 Pagination links are rebuilt for the current request. Error responses are not
 cached. Responses larger than 256 KiB bypass the cache; at most 10,000 entries or
 fill reservations are admitted. A full cache serves bounded uncached reads.
@@ -282,6 +283,7 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-09-09 | Added the default-disabled combined Calendar endpoint with church/date/language/timezone cache isolation, stored citation/Fast/Feast composition, and narrow Feast partial-failure semantics. (Issue #499.) |
 | 2026-09-09 | Default-disabled resource registration pending #498; made accepted parameter validation eager, isolated Fast dates by owning church, and aligned Feast responses with the pending observance-ID/`feasts[]` migration. Added route contracts. (Issue #494 / PR #539.) |
 | 2026-09-09 | Made the anonymous, JSON-only boundary shared by v1 views; defined JSON `not_found` responses for unmatched v1 paths and JSON `not_acceptable` responses for unsupported Accept headers on mounted views. (Issue #496.) |
 | 2026-09-08 | Implemented the pre-release Church, Icon, Fast, Reading, and Feast resource routes under `/api/v1/`; documented strict route parameters, consistent collection pagination, read-only calendar lookup behavior, and the explicitly unsupported Fast-days route. (Issue #494.) |

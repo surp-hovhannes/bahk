@@ -100,6 +100,8 @@ def canonical_parameters(view, request):
             values[name] = query.church_id(required=view.church_required)
         elif name == "date":
             values[name] = query.date("date", required=True).isoformat()
+        elif name == "tz":
+            values[name] = str(query.timezone() or "UTC")
         elif name == "range":
             values["start_date"], values["end_date"] = [item.isoformat() for item in query.effective_date_range()]
     paginator = getattr(view, "paginator", None)
