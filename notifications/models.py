@@ -13,6 +13,46 @@ from django.utils.html import strip_tags
 
 User = get_user_model()
 
+
+class PostFastEncouragementEmail(models.Model):
+    """Editable copy for one fast. Legacy unassigned rows are never sent."""
+
+    fast = models.OneToOneField(
+        'hub.Fast', null=True, blank=True, on_delete=models.CASCADE,
+        help_text='Leave blank to customize the default for all other fasts.',
+    )
+    subject = models.CharField(max_length=255)
+    message = models.TextField(help_text='Plain text; separate paragraphs with blank lines.')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                models.Value(1), condition=models.Q(fast__isnull=True),
+                name='unique_default_post_fast_email',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Encouragement: {self.fast}' if self.fast_id else 'Unassigned encouragement (not sent)'
+
+    def clean(self):
+        super().clean()
+        if not self.fast_id:
+            raise ValidationError({'fast': 'Select the fast that should receive this message.'})
+
+
+class PostFastEmailDelivery(models.Model):
+    """Durable deduplication for encouragement after a completed fast."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    fast = models.ForeignKey('hub.Fast', on_delete=models.CASCADE)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'fast'], name='unique_post_fast_email'),
+        ]
+
 # Create your models here.
 
 class DeviceToken(models.Model):

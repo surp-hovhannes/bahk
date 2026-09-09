@@ -34,6 +34,79 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 
+@shared_task
+def send_post_fast_encouragement_task(completed_on=None):
+    """Encourage remaining participants the day after the final scheduled day."""
+    from django.db import transaction
+    from django.db.models import Max
+    from .models import PostFastEmailDelivery, PostFastEncouragementEmail
+
+    # Keep the completion date when a rate-limited batch resumes after midnight.
+    from datetime import date
+
+    yesterday = date.fromisoformat(completed_on) if completed_on else timezone.localdate() - timedelta(days=1)
+    fasts = Fast.objects.annotate(completed_on=Max('days__date')).filter(
+        completed_on=yesterday,
+    )
+    sent = 0
+    for fast in fasts.iterator():
+        email_copy = PostFastEncouragementEmail.objects.filter(fast=fast).first()
+        if not email_copy or not email_copy.message.strip() or not email_copy.subject.strip():
+            continue
+        profiles = Profile.objects.filter(
+            fasts=fast, receive_promotional_emails=True, user__is_active=True,
+        ).exclude(user__email='').select_related('user')
+        for profile in profiles.iterator():
+            try:
+                # Serialize overlapping daily runs using the durable delivery row.
+                with transaction.atomic():
+                    delivery, _ = PostFastEmailDelivery.objects.get_or_create(
+                        user=profile.user, fast=fast,
+                    )
+                    delivery = PostFastEmailDelivery.objects.select_for_update().get(pk=delivery.pk)
+                    if delivery.sent_at is not None:
+                        continue
+                    if not Profile.objects.filter(
+                        pk=profile.pk, fasts=fast, receive_promotional_emails=True,
+                        user__is_active=True,
+                    ).exists():
+                        continue
+                    if get_email_count() >= settings.EMAIL_RATE_LIMIT:
+                        send_post_fast_encouragement_task.apply_async(
+                            kwargs={'completed_on': yesterday.isoformat()},
+                            countdown=settings.EMAIL_RATE_LIMIT_WINDOW,
+                        )
+                        return sent
+                    token = TimestampSigner().sign(str(profile.user_id))
+                    context = {
+                        'name': profile.name or profile.user.first_name or 'friend',
+                        'fast': fast,
+                        'custom_message': email_copy.message,
+                        'subject': email_copy.subject,
+                        'site_url': settings.FRONTEND_URL,
+                        'unsubscribe_url': (
+                            f"{settings.BACKEND_URL}{reverse('notifications:unsubscribe')}?token={token}"
+                        ),
+                    }
+                    html = render_to_string('email/post_fast_encouragement.html', context)
+                    text = strip_tags(render_to_string('email/post_fast_encouragement_body.html', context))
+                    email = EmailMultiAlternatives(
+                        email_copy.subject,
+                        text,
+                        f'Fast and Pray <{settings.EMAIL_HOST_USER}>', [profile.user.email],
+                    )
+                    email.attach_alternative(html, 'text/html')
+                    if email.send() != 1:
+                        continue
+                    delivery.sent_at = timezone.now()
+                    delivery.save(update_fields=['sent_at'])
+                    increment_email_count()
+                    sent += 1
+            except Exception:
+                logger.exception('Post-fast email failed for profile %s, fast %s', profile.pk, fast.pk)
+    return sent
+
+
 # TODO: These tasks are not functional if the app has more than one church with active fasts.
 # We need to update the tasks to send notifications to all churches when there are multiple churches.
 
