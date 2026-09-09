@@ -172,6 +172,7 @@ class PublicReadinessTests(SimpleTestCase):
             call_command("check_public_api_readiness")
 
 
+@override_settings(ROOT_URLCONF="tests.unit.public_api_traffic_urls")
 class PublicReadBoundaryTests(TestCase):
     def test_session_and_bearer_credentials_cannot_write_profiles_or_events(self):
         from rest_framework_simplejwt.tokens import AccessToken
