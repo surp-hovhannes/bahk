@@ -406,16 +406,20 @@ class PublicApiResourceTests(TestCase):
         self.assertEqual([row["id"] for row in response.json()["results"]], [own_icon.id])
         other_day = Day.objects.create(church=self.other_church, date=self.fast_day.date)
         readings = []
-        for day, sequence in ((self.fast_day, 2), (other_day, 1), (self.fast_day, 1)):
+        for day, sequence, start_verse in (
+            (self.fast_day, 2, 1),
+            (other_day, 1, 1),
+            (self.fast_day, 1, 3),
+        ):
             readings.append(
                 Reading.objects.create(
                     day=day,
                     sequence=sequence,
                     book="Matthew",
                     start_chapter=1,
-                    start_verse=1,
+                    start_verse=start_verse,
                     end_chapter=1,
-                    end_verse=2,
+                    end_verse=start_verse + 1,
                 )
             )
         with self.assertNumQueries(2):
