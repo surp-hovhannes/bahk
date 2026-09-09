@@ -30,7 +30,8 @@ A resource cannot be mounted until it has a presentation-neutral serializer (#49
 
 Resource registration defaults off (`PUBLIC_API_RESOURCES_ENABLED=false`). Enable
 it only after completing the [traffic-control runbook](public-api-operations.md).
-The root descriptor remains registered and is subject to admission control.
+The root descriptor remains registered. While resources are disabled it requires
+no Redis; after activation it is subject to admission control.
 
 The `/api/v1/` root descriptor is live with `status: "pre-release"`, but the resource endpoints are not publicly released until issues #494, #496, #497, #498, #499, and #500 satisfy their gates. Each mounted resource also requires a golden contract test asserting its exact response key set and relevant nullability and URL rules, in addition to serializer, validation, documentation, and traffic-control readiness.
 
@@ -170,7 +171,11 @@ cache fill can return the same code with a one-second retry hint. No public HTTP
 response is cacheable (`Cache-Control: no-store`), including 429 and 503. CDN
 response caching must remain disabled so it cannot bypass admission.
 
-Application caching reuses successful public data for up to five minutes, after
+Shared-store launch mode uses best-effort quotas: memory eviction may reset
+counters. Redis errors still fail closed. This mode disables response caching;
+dedicated noeviction Redis is available when strict counter retention is needed.
+
+Optional application caching (off by default) reuses successful public data for up to five minutes, after
 validation and admission. Keys include effective language, dates, church, resource,
 and pagination; unknown parameters do not create additional cache entries.
 Pagination links are rebuilt for the current request. Error responses are not

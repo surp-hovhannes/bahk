@@ -15,13 +15,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         errors = []
-        if not settings.PUBLIC_API_TRAFFIC_ENABLED or not settings.PUBLIC_API_RESPONSE_CACHE_ENABLED:
-            errors.append("Public traffic and response caching must be enabled.")
+        shared = settings.PUBLIC_API_REDIS_MODE == 'shared'
+        if not settings.PUBLIC_API_TRAFFIC_ENABLED:
+            errors.append("Public traffic controls must be enabled.")
+        if shared and settings.PUBLIC_API_RESPONSE_CACHE_ENABLED:
+            errors.append("Shared Redis requires response caching to be disabled.")
         if not settings.PUBLIC_API_REDIS_URL:
-            errors.append("Configure a dedicated PUBLIC_API_REDIS_URL.")
+            errors.append("Configure PUBLIC_API_REDIS_URL (or REDIS_URL in shared mode).")
         public_store = urlsplit(settings.PUBLIC_API_REDIS_URL)
         application_store = urlsplit(settings.REDIS_URL)
-        if public_store.hostname and (public_store.hostname, public_store.port or 6379) == (
+        if not shared and public_store.hostname and (public_store.hostname, public_store.port or 6379) == (
             application_store.hostname,
             application_store.port or 6379,
         ):
@@ -41,8 +44,16 @@ class Command(BaseCommand):
             try:
                 client = connection()
                 config = client.config_get("maxmemory*")
-                if config.get("maxmemory-policy") != "noeviction":
+                policy = config.get("maxmemory-policy")
+                if not shared and policy != "noeviction":
                     errors.append("Public Redis must use maxmemory-policy noeviction.")
+                if shared:
+                    if policy not in ('allkeys-lru', 'noeviction'):
+                        errors.append('Shared Redis supports allkeys-lru or noeviction.')
+                    memory = client.info('memory')
+                    ceiling = int(config.get('maxmemory', 0))
+                    if ceiling <= 0 or int(memory['used_memory']) >= ceiling * 0.8:
+                        errors.append('Shared Redis requires at least 20% free memory before activation.')
                 if int(config.get("maxmemory", 0)) <= 0:
                     errors.append("Public Redis needs an explicit maxmemory ceiling.")
                 client.ping()
@@ -51,6 +62,12 @@ class Command(BaseCommand):
         if errors:
             raise CommandError("\n".join(errors))
         self.stdout.write(self.style.SUCCESS("Public API configuration and Redis checks passed."))
+        if shared:
+            self.stdout.write(self.style.WARNING(
+                'Shared mode: eviction can reset quotas and telemetry; limits are best-effort. '
+                'Monitor aggregate Redis memory, evictions, latency and Celery health. '
+                'Headroom is a point-in-time check, not reserved capacity.'
+            ))
         self.stdout.write(
             "Before enabling resources, verify trusted forwarding/origin access, CDN bypass, "
             "the metrics scrape, alert delivery, and upstream traffic protection. "

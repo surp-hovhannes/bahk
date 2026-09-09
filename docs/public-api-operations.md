@@ -6,11 +6,50 @@ Deploying the code does not certify proxy trust, CDN policy, or alert delivery.
 
 ## Configuration and activation
 
+### Low-usage launch on existing Render Redis
+
+Resource registration remains off by default. While it is off, the static root
+descriptor and unmounted-resource 404s do not use Redis admission or telemetry;
+the placeholder can be deployed without provisioning a store.
+
+For a low-volume launch, set `PUBLIC_API_REDIS_MODE=shared` and keep
+`PUBLIC_API_RESPONSE_CACHE_ENABLED=false` (the default). `PUBLIC_API_REDIS_URL`
+then defaults to the existing `REDIS_URL`; no Render eviction-policy change or
+new instance is needed. Public requests store only expiring quota counters and
+aggregate telemetry, not response payloads or fill locks. Use the deployment's
+unique `PUBLIC_API_REDIS_PREFIX`. Prefixes do not reserve memory or isolate failures.
+
+Shared mode supports `allkeys-lru` and `noeviction`; readiness checks require an
+explicit memory ceiling and at least 20% free memory at inspection time. Inspect
+aggregate usage, evictions, latency and Celery health before activation and during
+rollout. This headroom check is not a reservation or a guarantee against bursts.
+Client counters expire within their windows, but distinct clients can still grow
+memory consumption. Upstream traffic protection remains necessary.
+
+**Shared-mode quotas are best-effort:** LRU eviction can reset counters and
+telemetry. Redis connection/write errors still fail closed with 503. Work guards,
+query bounds, trusted-proxy checks and deployment attestation are unchanged.
+Under `noeviction`, memory exhaustion affects writes for every shared workload.
+Do not change the existing instance policy merely to enable this feature.
+
+Render CLI inspection on 2026-09-09 showed `bahk-redis` is Starter/Oregon with
+`allkeys_lru`. Live memory headroom must still be checked. For this launch use
+steps 3–9 below; the shared-mode checks replace dedicated provisioning in steps
+1–2. Verify the metrics scrape and alert delivery before attesting readiness.
+
+Move to dedicated mode when strict non-evicting quotas are needed, shared-store
+pressure affects the app/queue, or measured traffic justifies response caching.
+Set `PUBLIC_API_REDIS_MODE=dedicated`, provision the store below, and optionally
+enable `PUBLIC_API_RESPONSE_CACHE_ENABLED=true`. Repeat readiness and restart
+workers. The large cache ceilings describe worst-case bounds, not initial RAM needs.
+
+### Dedicated mode and common activation steps
+
 1. Provision a dedicated Redis instance with an explicit memory ceiling and
    `maxmemory-policy noeviction`. Do not use the application cache or Celery broker
    instance, even with another logical database: Redis eviction is instance-wide.
-   Set `PUBLIC_API_REDIS_URL` via the deployment secret store. This is needed for
-   the root descriptor too; without it, public requests return 503 and retry later.
+   Set `PUBLIC_API_REDIS_URL` via the deployment secret store. Once resources are
+   enabled, the root descriptor is also admitted; store failure returns 503.
 2. Capacity-plan the store. The configured response ceiling is 10,000 entries of
    up to 256 KiB (about 2.44 GiB of payload at the theoretical maximum), plus index,
    lease, limiter, and telemetry overhead. Most catalogue responses should be far
@@ -100,7 +139,7 @@ propagating and retaining the public-read safety context (for example with
 
 ## Smoke checks and testing
 
-- With registration off, resource routes return 404 when admission is available;
+- With registration off, resource routes return 404 without Redis admission;
   the root returns the pre-release descriptor. No resource URL is registered.
 - In a staging deployment with registration on, check anonymous GET and HEAD,
   required parameters, limit/offset errors, equivalent requests, EN/HY responses,
@@ -121,7 +160,8 @@ propagating and retaining the public-read safety context (for example with
 
 ## Cache behavior and rollback
 
-Only serialized public data and collection counts are cached. The cache does not
+Response caching is optional, off by default, and prohibited in shared mode.
+When enabled, only serialized public data and collection counts are cached. The cache does not
 store headers, credential state, or pagination URLs. Language follows Django's
 effective locale; omitted date ranges resolve once per request. Equivalent inputs
 share a key, and midnight produces a different key. Validation precedes cache hits.

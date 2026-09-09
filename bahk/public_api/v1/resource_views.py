@@ -119,6 +119,7 @@ class FastListView(PublicApiListView):
 
 
 class FastDetailView(PublicApiResourceView, RetrieveAPIView):
+    pagination_class = None
     language_parameter = True
     serializer_class = FastPublicSerializer
 
