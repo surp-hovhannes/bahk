@@ -37,6 +37,25 @@ class PublicApiResourceTests(TestCase):
             {"id": self.other_church.id, "name": self.other_church.name}, response.json()["results"]
         )
 
+    def test_collection_pagination_rejects_invalid_values(self):
+        for parameter, value in (
+            ("limit", ""),
+            ("limit", "abc"),
+            ("limit", "0"),
+            ("limit", "101"),
+            ("offset", "abc"),
+            ("offset", "-1"),
+        ):
+            with self.subTest(parameter=parameter, value=value):
+                response = self.client.get(f"/api/v1/churches/?{parameter}={value}")
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["code"], "invalid_pagination")
+                self.assertEqual(
+                    response.json()["details"],
+                    {"parameter": parameter, "value": value},
+                )
+
     def test_fast_routes_expose_only_the_public_serializer_contract(self):
         list_response = self.client.get(
             f"/api/v1/fasts/?church_id={self.church.id}&start_date=2026-03-01&end_date=2026-03-01"

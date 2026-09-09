@@ -76,6 +76,8 @@ parameter never falls back to that default.
 | `lang` | `en` or `hy` | `unsupported_language` | `parameter`, `value`, `supported` |
 | `tz` | IANA timezone name, e.g. `America/Los_Angeles` | `invalid_timezone` | `parameter`, `value` |
 | Required `church_id` | Positive canonical integer | `missing_parameter` or `invalid_church_id` | `parameter` (and `value` for invalid) |
+| `limit` | Whole number from 1 through 100 | `invalid_pagination` | `parameter`, `value` |
+| `offset` | Non-negative whole number | `invalid_pagination` | `parameter`, `value` |
 
 Routes that resolve a church return `church_not_found` with `details.church_id`
 when the syntactically valid ID is unknown. Unknown public resources use
