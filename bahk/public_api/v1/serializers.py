@@ -241,13 +241,19 @@ class FeastPublicSerializer(serializers.ModelSerializer):
         * ``id`` (int)
         * ``name`` (string): localized name with canonical fallback
         * ``icon`` (object|null): nested IconPublicSerializer or ``None``
-          when no icon is matched
+          when no icon is matched or its church differs from the Feast
 
     Excluded: ``church``, ``church_id``, ``designation``, context/votes/LLM/
     prayer fields, and any other internal metadata.
     """
 
-    icon = IconPublicSerializer(read_only=True)
+    icon = serializers.SerializerMethodField()
+
+    def get_icon(self, instance):
+        icon = instance.icon
+        if icon is None or icon.church_id != instance.church_id:
+            return None
+        return IconPublicSerializer(icon, context=self.context).data
 
     class Meta:
         model = Feast

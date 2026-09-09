@@ -2,7 +2,7 @@
 
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.db import DatabaseError, connection
 from django.test import RequestFactory, TestCase, override_settings
@@ -12,6 +12,7 @@ from rest_framework.request import Request
 
 from bahk.public_api.v1.cache import canonical_parameters
 from bahk.public_api.v1.resource_views import CalendarDayView
+from bahk.public_api.v1.serializers import FeastPublicSerializer
 from hub.models import Church, Day, Fast, Feast, Reading
 from hub.services import feast_service
 from icons.models import Icon
@@ -195,6 +196,64 @@ class PublicCalendarTests(TestCase):
         self.assertEqual(data["feasts"], [{"id": feast.pk, "name": "Stored name", "icon": None}])
         stored.assert_called_once_with(church=self.church, observance_id__in=["stable-id"])
 
+    def test_legacy_only_results_after_observance_field_exists(self):
+        first = Feast.objects.create(church=self.church, name="First")
+        second = Feast.objects.create(church=self.church, name="Second")
+        self.lookup.return_value = [{"name": "Second"}, {"name_en": "First"}, {"name": "Second"}]
+        fields = (*Feast._meta.get_fields(), SimpleNamespace(name="observance_id"))
+        with patch.object(Feast._meta, "get_fields", return_value=fields):
+            response = self.get()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.json()["feasts"]], [second.pk, first.pk])
+
+    def test_mixed_transition_results_preserve_order_and_deduplicate_rows(self):
+        first = Feast.objects.create(church=self.church, name="First")
+        second = Feast.objects.create(church=self.church, name="Second")
+        Feast.objects.create(church=self.church, name="Must not match by name")
+        first.observance_id = "first-id"
+        self.lookup.return_value = [
+            {"name": "Second"},
+            {"observance_id": "first-id", "name_en": "Changed name"},
+            {"name_en": "First"},
+            {"observance_id": "first-id"},
+            {"observance_id": "missing-id", "name_en": "Must not match by name"},
+        ]
+        fields = (*Feast._meta.get_fields(), SimpleNamespace(name="observance_id"))
+        original_filter = Feast.objects.filter
+
+        def stored_feasts(**kwargs):
+            if "observance_id__in" in kwargs:
+                self.assertEqual(kwargs, {"church": self.church, "observance_id__in": ["first-id", "missing-id"]})
+                result = Mock()
+                result.select_related.return_value.order_by.return_value = [first]
+                return result
+            return original_filter(**kwargs)
+
+        with (
+            patch.object(Feast._meta, "get_fields", return_value=fields),
+            patch.object(Feast.objects, "filter", side_effect=stored_feasts),
+        ):
+            response = self.get()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.json()["feasts"]], [second.pk, first.pk])
+
+    def test_cross_church_nested_icon_is_null_without_mutation(self):
+        icon = Icon.objects.create(church=self.other, title="Other church private icon")
+        feast = Feast.objects.create(church=self.church, name="First", icon=icon)
+        self.lookup.return_value = {"name_en": feast.name}
+        with self.assertNumQueries(0):
+            self.assertIsNone(FeastPublicSerializer(feast).data["icon"])
+            self.assertIs(feast.icon, icon)
+            self.assertEqual(feast.icon_id, icon.pk)
+        for route in ("/api/v1/calendar/", "/api/v1/feasts/"):
+            with self.subTest(route=route), CaptureQueriesContext(connection) as queries:
+                response = self.client.get(route, self.params)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["feasts"], [{"id": feast.pk, "name": feast.name, "icon": None}])
+            self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in queries))
+        feast.refresh_from_db()
+        self.assertEqual(feast.icon_id, icon.pk)
+
     def test_only_explicit_pending_unavailability_is_partial(self):
         self.populate(self.church)
         self.lookup.side_effect = PendingFeastDataUnavailable("private engine details")
@@ -204,6 +263,10 @@ class PublicCalendarTests(TestCase):
         data = response.json()
         self.assertEqual(data["feasts"], [])
         self.assertEqual(data["partial_failures"], [{"component": "feasts", "code": "data_unavailable"}])
+        self.assertIsInstance(data["partial_failures"], list)
+        for failure in data["partial_failures"]:
+            self.assertEqual(set(failure), {"component", "code"})
+            self.assertEqual((failure["component"], failure["code"]), ("feasts", "data_unavailable"))
         self.assertIsNotNone(data["fast"])
         self.assertEqual(len(data["readings"]), 1)
         self.assertNotIn("private", response.content.decode())

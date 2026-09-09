@@ -127,8 +127,15 @@ and the maximum is 100; collections are ordered by ascending ID; `next` and `pre
 | `GET /api/v1/fasts/by-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects active on the inclusive ISO date. |
 | `GET /api/v1/fasts/by-feast-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects with that culmination-feast date. |
 | `GET /api/v1/readings/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "readings": [Reading] }`. Returns only stored citations; an unimported calendar day has an empty list. |
-| `GET /api/v1/feasts/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "feasts": [Feast] }`. The date resolves offline; only stored commemorations are returned, in service order; zero matches return `feasts: []`. Legacy service dictionaries and future lists are normalized. When the model supports `observance_id`, lookup uses that stable ID; otherwise it uses the legacy name. No rows are created. |
+| `GET /api/v1/feasts/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "feasts": [Feast] }`. The date resolves offline; only stored commemorations are returned, in service order; zero matches return `feasts: []`. Legacy service dictionaries and future lists are normalized. Each service item uses `observance_id` when supplied and supported by the model; otherwise it falls back to `name_en`/`name`, including mixed transition results. Repeated resolved Feasts are de-duplicated. Nested icons from a different church are returned as `null`. No rows are created. |
 | `GET /api/v1/calendar/` | required `church_id`, `date`; optional `lang`, `tz` | One combined stored-day response: `{date, church, readings, fast, feasts, partial_failures}`. `fast` is the lowest-ID active Fast or `null`; `feasts` is always an array. The endpoint never retrieves passage text or creates data. `tz` defaults to `UTC` and does not shift the explicit date. |
+
+Calendar `partial_failures` is an array of objects with exactly two string fields:
+`{ "component": "feasts", "code": "data_unavailable" }` is currently the only
+allowed entry, emitted only for explicit feast-data unavailability. Ordinary
+empty readings, fasts, or feasts are not failures and leave the array empty.
+Invalid input fails the whole request with HTTP 400; unexpected errors or database
+failures fail the whole request with HTTP 503, rather than returning partial data.
 
 Church and Icon routes ignore `lang`; their canonical text does not vary by
 language. Fast, Reading, Feast, and Calendar routes validate `lang` before database or

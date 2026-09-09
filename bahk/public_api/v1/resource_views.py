@@ -50,20 +50,30 @@ def feasts_for_date(church, target_date):
     feast_data = get_feast_for_date(target_date, church) or []
     commemorations = [feast_data] if isinstance(feast_data, dict) else feast_data
     stable_ids = any(field.name == "observance_id" for field in Feast._meta.get_fields())
-    field = "observance_id" if stable_ids else "name"
-    keys = [
-        item.get("observance_id") if stable_ids else item.get("name_en") or item.get("name") for item in commemorations
-    ]
-    keys = list(dict.fromkeys(key for key in keys if key))
-    stored = (
-        Feast.objects.filter(church=church, **{f"{field}__in": keys}).select_related("icon").order_by("id")
-        if keys
-        else []
-    )
+    keys = []
+    for item in commemorations:
+        if stable_ids and item.get("observance_id"):
+            keys.append(("observance_id", item["observance_id"]))
+        else:
+            name = item.get("name_en") or item.get("name")
+            if name:
+                keys.append(("name", name))
+    keys = list(dict.fromkeys(keys))
     by_key = {}
-    for feast in stored:
-        by_key.setdefault(getattr(feast, field), feast)
-    return [by_key[key] for key in keys if key in by_key]
+    for field in ("observance_id", "name"):
+        values = [value for key_field, value in keys if key_field == field]
+        if not values:
+            continue
+        stored = Feast.objects.filter(church=church, **{f"{field}__in": values}).select_related("icon").order_by("id")
+        for feast in stored:
+            by_key.setdefault((field, getattr(feast, field)), feast)
+    # A mixed result can refer to the same row by both ID and legacy name.
+    resolved = {}
+    for key in keys:
+        if key in by_key:
+            feast = by_key[key]
+            resolved.setdefault(feast.pk, feast)
+    return list(resolved.values())
 
 
 class PublicApiResourceView(PublicApiView):
