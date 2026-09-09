@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 from django.test.client import Client
-from django.urls import NoReverseMatch, resolve, reverse
+from django.urls import resolve, reverse
 
 from bahk.public_api.v1.urls import urlpatterns as public_api_urlpatterns
 
@@ -87,13 +87,22 @@ class PublicApiV1Tests(SimpleTestCase):
         self.assertEqual(match.namespace, "public_api_v1")
         self.assertEqual(match.url_name, "root")
         self.assertEqual(reverse("public_api_v1:root"), "/api/v1/")
-        with self.assertRaises(NoReverseMatch):
-            reverse("public_api_v1:fast-list")
+        self.assertEqual(reverse("public_api_v1:fast-list"), "/api/v1/fasts/")
 
-    def test_root_is_the_only_v1_route_until_resources_are_ready(self):
+    def test_public_resource_routes_use_the_isolated_v1_namespace(self):
         self.assertEqual(
             [(pattern.name, str(pattern.pattern)) for pattern in public_api_urlpatterns],
-            [("root", "")],
+            [
+                ("root", ""),
+                ("church-list", "churches/"),
+                ("icon-list", "icons/"),
+                ("fast-list", "fasts/"),
+                ("fast-by-date", "fasts/by-date/"),
+                ("fast-by-feast-date", "fasts/by-feast-date/"),
+                ("fast-detail", "fasts/<int:pk>/"),
+                ("reading-by-date", "readings/"),
+                ("feast-by-date", "feasts/"),
+            ],
         )
 
     def test_unsupported_method_returns_api_appropriate_405(self):
@@ -135,15 +144,12 @@ class PublicApiV1Tests(SimpleTestCase):
             },
         )
 
-    def test_public_v1_does_not_expose_unready_or_internal_routes(self):
+    def test_public_v1_does_not_expose_internal_routes(self):
         for path in (
-            "/api/v1/fasts/",
-            "/api/v1/churches/",
-            "/api/v1/readings/",
-            "/api/v1/feasts/",
             "/api/v1/user/fasts/",
             "/api/v1/profile/",
             "/api/v1/s3-upload/upload-initialize/",
+            "/api/v1/fasts/1/days/",
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 404)

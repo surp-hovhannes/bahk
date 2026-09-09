@@ -17,13 +17,13 @@ This is the approved contract boundary for the Fast & Pray public API. The API m
 
 V1 is anonymous and read-only. The following is the initial inventory and a floor, not a closed list; later resources may be added to v1 after readiness review:
 
-| Resource | Planned route | Status | Follow-on work |
+| Resource | Route | Status | Follow-on work |
 | --- | --- | --- | --- |
-| Churches | `/api/v1/churches/` | planned | #494, #497, #496, #498 |
-| Readings | `/api/v1/readings/` | planned | #494, #497, #496, #498 |
-| Fasts | `/api/v1/fasts/` | planned | #494, #497, #496, #498 |
-| Feasts | `/api/v1/feasts/` | planned | #494, #497, #496, #498 |
-| Icons | `/api/v1/icons/` | planned | #494, #497, #496, #498 |
+| Churches | `/api/v1/churches/` | mounted, pre-release | #494, #497, #496, #498 |
+| Readings | `/api/v1/readings/` | mounted, pre-release | #494, #497, #496, #498 |
+| Fasts | `/api/v1/fasts/` | mounted, pre-release | #494, #497, #496, #498 |
+| Feasts | `/api/v1/feasts/` | mounted, pre-release | #494, #497, #496, #498 |
+| Icons | `/api/v1/icons/` | mounted, pre-release | #494, #497, #496, #498 |
 | Calendar | `/api/v1/calendar/` | planned | #499 |
 
 A resource cannot be mounted until it has a presentation-neutral serializer (#497), consistent validation and errors (#496), anonymous traffic protections (#498), and contract coverage. It becomes stable only after verified reference documentation is published (#500).
@@ -81,6 +81,40 @@ Routes that resolve a church return `church_not_found` with `details.church_id`
 when the syntactically valid ID is unknown. Unknown public resources use
 `resource_not_found` with `details.resource`. Both use HTTP 404. Validation
 errors use HTTP 400.
+
+## Mounted pre-release routes
+
+All routes below are anonymous, read-only JSON endpoints. A required
+`church_id` is a canonical positive integer discovered through
+`GET /api/v1/churches/`.
+
+Collection endpoints use one limit/offset envelope. The default `limit` is 25
+and the maximum is 100; `next` and `previous` are URLs or `null`.
+
+```json
+{
+  "count": 123,
+  "next": "https://example.test/api/v1/churches/?limit=25&offset=25",
+  "previous": null,
+  "results": []
+}
+```
+
+| Route | Parameters | Response |
+| --- | --- | --- |
+| `GET /api/v1/churches/` | `limit`, `offset` | Paginated Church objects. Use `id` as `church_id` for church-scoped routes. |
+| `GET /api/v1/icons/` | optional `church_id`, `limit`, `offset` | Paginated Icon objects. |
+| `GET /api/v1/fasts/` | required `church_id`; optional `start_date`, `end_date`, `tz`, `lang`, `limit`, `offset` | Paginated Fast objects whose days overlap the inclusive range. Omit the range for 180 days before through 180 days after today in `tz`. |
+| `GET /api/v1/fasts/{id}/` | optional `lang` | One Fast object, or `resource_not_found` (404). |
+| `GET /api/v1/fasts/by-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects active on the inclusive ISO date. |
+| `GET /api/v1/fasts/by-feast-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects with that culmination-feast date. |
+| `GET /api/v1/readings/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "readings": [Reading] }`. Returns only stored citations; an unimported calendar day has an empty list. |
+| `GET /api/v1/feasts/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "feast": Feast-or-null }`. The date resolves offline; it is `null` until the commemoration has a stored public Feast record. |
+
+The public route layer does not create calendar rows, retrieve passage text,
+generate contexts, write caches, or enqueue background jobs. `/api/v1/fasts/{id}/days/`
+and every other internal `/api/` or `/hub/` route remain unsupported: v1 has
+no public Day schema, so the product route is not republished as a shortcut.
 
 ## Schema (presentation-neutral serializers)
 
@@ -182,6 +216,7 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-09-08 | Mounted the pre-release Church, Icon, Fast, Reading, and Feast resource routes under `/api/v1/`; documented strict route parameters, consistent collection pagination, read-only calendar lookup behavior, and the explicitly unsupported Fast-days route. (Issue #494.) |
 | 2026-09-08 | Defined v1's shared validation rules and stable error envelope for dates, ranges, languages, timezones, and church IDs. (Issue #496.) |
 | 2026-09-08 | Added Icons to the initial planned v1 inventory; narrowed the icon exclusion to icon upload, feedback, matching, and admin families; defined exact serializer field/type/nullability/localization/media rules for Church, Fast, Reading, Feast, and Icon; pinned public thumbnail behavior to the cached URL only and forbade `ImageSpecField.url` access during serialization. (Issue #497.) |
 
