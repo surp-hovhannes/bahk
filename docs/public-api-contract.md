@@ -36,7 +36,7 @@ All route families not listed in the inventory are excluded by default. In parti
 
 - authentication, accounts, profiles, password reset, token, and registration routes;
 - fast participation, user-fast, user-day, participant, map, stats, intention, and legacy fast routes;
-- devotionals, patristic quotes, feedback, notifications, admin helpers, events, prayers, prayer requests, unsupported icon upload, feedback, matching, and admin families, learning resources, uploads, system tags, and all `/hub/` routes;
+- devotionals, patristic quotes, notifications, admin helpers, events, prayers, prayer requests, unsupported icon upload, feedback, matching, and admin families, learning resources, uploads, system tags, and all `/hub/` routes;
 - the S3 upload helpers at `/api/s3-upload/`.
 
 Internal URLconfs must never be mounted under `/api/v1/` as a shortcut for publishing a resource.
