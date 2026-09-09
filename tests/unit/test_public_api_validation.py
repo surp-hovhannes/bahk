@@ -5,6 +5,7 @@ import datetime
 import pytz
 from django.http import QueryDict
 from django.test import SimpleTestCase, TestCase
+from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 
 from bahk.public_api.v1.validation import (
@@ -146,7 +147,37 @@ class ErroringPublicView(PublicApiView):
         )
 
 
+class MinimalPublicView(PublicApiView):
+    def get(self, request):
+        return Response({"anonymous": request.user.is_anonymous, "auth": request.auth})
+
+
 class PublicApiErrorEnvelopeTests(SimpleTestCase):
+    def test_derived_view_ignores_stale_authorization(self):
+        request = APIRequestFactory().get("/api/v1/test/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token")
+        response = MinimalPublicView.as_view()(request)
+        response.render()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.data, {"anonymous": True, "auth": None})
+
+    def test_derived_view_returns_json_not_acceptable_for_html(self):
+        request = APIRequestFactory().get("/api/v1/test/", HTTP_ACCEPT="text/html")
+        response = MinimalPublicView.as_view()(request)
+        response.render()
+
+        self.assertEqual(response.status_code, 406)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(
+            response.data,
+            {
+                "code": "not_acceptable",
+                "message": "Could not satisfy the request Accept header.",
+                "details": {},
+            },
+        )
+
     def test_public_api_view_returns_stable_error_envelope(self):
         request = APIRequestFactory().get("/api/v1/test/")
         response = ErroringPublicView.as_view()(request)

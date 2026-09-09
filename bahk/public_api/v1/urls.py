@@ -1,7 +1,7 @@
 """URL configuration for public API version 1."""
 
 from django.conf import settings
-from django.urls import path
+from django.urls import path, re_path
 
 from bahk.public_api.v1.resource_views import (
     ChurchListView,
@@ -13,7 +13,7 @@ from bahk.public_api.v1.resource_views import (
     IconListView,
     ReadingByDateView,
 )
-from bahk.public_api.v1.views import PublicApiRootView
+from bahk.public_api.v1.views import PublicApiRootView, public_api_not_found
 
 
 app_name = "public_api_v1"
@@ -35,3 +35,6 @@ resource_urlpatterns = [
 
 if settings.PUBLIC_API_RESOURCES_ENABLED:
     urlpatterns += resource_urlpatterns
+
+# Keep last so resource routes take precedence, including nested paths.
+urlpatterns += [re_path(r"^", public_api_not_found, name="not-found")]

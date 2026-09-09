@@ -10,9 +10,9 @@ os.environ.setdefault('OPENAI_API_KEY', 'test-openai-api-key')
 
 from bahk.settings import *  # Import all default settings
 
-# Ordinary tests exercise public contracts without shared Redis state. Dedicated
-# traffic tests explicitly enable the real limiter and isolated cache namespaces.
-PUBLIC_API_RESOURCES_ENABLED = True
+# Resource and traffic suites use isolated enabled URLconfs; ordinary tests
+# retain the production default-off registration without shared Redis state.
+PUBLIC_API_RESOURCES_ENABLED = False
 PUBLIC_API_TRAFFIC_ENABLED = False
 PUBLIC_API_RESPONSE_CACHE_ENABLED = False
 

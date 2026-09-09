@@ -28,6 +28,7 @@ from bahk.public_api.v1.validation import PublicApiError, PublicApiQuery, Public
 from hub.models import Church, Day, Fast
 
 
+@override_settings(ROOT_URLCONF="tests.unit.public_api_traffic_urls")
 class PublicTrafficPolicyTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -94,14 +95,14 @@ class PublicTrafficPolicyTests(SimpleTestCase):
 
         try:
             with override_settings(PUBLIC_API_RESOURCES_ENABLED=False):
-                self.assertEqual([p.name for p in importlib.reload(urls).urlpatterns], ["root"])
+                self.assertEqual([p.name for p in importlib.reload(urls).urlpatterns], ["root", "not-found"])
                 urlconf = ModuleType("public_api_gate_test")
                 urlconf.urlpatterns = [path("api/v1/", include(urls.urlpatterns))]
                 with override_settings(ROOT_URLCONF=urlconf):
                     self.assertEqual(self.client.get("/api/v1/").status_code, 200)
                     response = self.client.get("/api/v1/churches/")
                     self.assertEqual(response.status_code, 404)
-                    self.assertEqual(response.json()["code"], "resource_not_found")
+                    self.assertEqual(response.json()["code"], "not_found")
         finally:
             importlib.reload(urls)
 
@@ -287,6 +288,7 @@ class RedisIsolation:
         super().setUp()
         self.prefix = "bahk:test:public:" + uuid.uuid4().hex
         overrides = override_settings(
+            ROOT_URLCONF="tests.unit.public_api_traffic_urls",
             PUBLIC_API_REDIS_URL=REDIS_URL,
             PUBLIC_API_REDIS_PREFIX=self.prefix,
             PUBLIC_API_TRAFFIC_ENABLED=True,
@@ -407,8 +409,25 @@ class PublicRedisResponseTests(RedisIsolation, TestCase):
 
     def test_cached_data_does_not_bypass_validation(self):
         self.client.get("/api/v1/churches/")
-        for query in ("limit=0", "lang=fr", "offset=10001"):
+        for query in ("limit=0", "offset=10001"):
             self.assertEqual(self.client.get("/api/v1/churches/?" + query).status_code, 400)
+
+    def test_ignored_language_reuses_canonical_resource_cache(self):
+        for route in ("churches", "icons"):
+            first = self.client.get(f"/api/v1/{route}/")
+            with self.assertNumQueries(0):
+                second = self.client.get(f"/api/v1/{route}/?lang=invalid", HTTP_ACCEPT_LANGUAGE="hy")
+            self.assertEqual(second.status_code, 200)
+            self.assertEqual(first.json(), second.json())
+        self.assertEqual(self.redis.zcard(f"{self.prefix}:responses:index"), 2)
+
+    def test_localized_cache_hit_still_validates_language(self):
+        url = f"/api/v1/fasts/{self.fast.pk}/"
+        self.assertEqual(self.client.get(url).status_code, 200)
+        with self.assertNumQueries(0):
+            response = self.client.get(url + "?lang=invalid")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "unsupported_language")
 
     def test_cache_hits_still_consume_allowance(self):
         with override_settings(PUBLIC_API_RATE_MINUTE=2):
@@ -420,7 +439,7 @@ class PublicRedisResponseTests(RedisIsolation, TestCase):
         Church.objects.filter(pk=self.church.pk).update(name="Renamed")
         before = self.client.get("/api/v1/churches/").json()
         self.assertIn("Cache Church", [row["name"] for row in before["results"]])
-        for key in self.redis.scan_iter(match=f"{self.prefix}:responses:v1:*"):
+        for key in self.redis.scan_iter(match=f"{self.prefix}:responses:v2:*"):
             self.redis.expire(key, 0)
         after = self.client.get("/api/v1/churches/").json()
         self.assertIn("Renamed", [row["name"] for row in after["results"]])
@@ -436,8 +455,8 @@ class PublicRedisResponseTests(RedisIsolation, TestCase):
         self.assertEqual(self.redis.zcard(f"{self.prefix}:responses:index"), 0)
 
     def test_effective_language_is_part_of_the_key(self):
-        self.client.get("/api/v1/churches/", HTTP_ACCEPT_LANGUAGE="en")
-        self.client.get("/api/v1/churches/", HTTP_ACCEPT_LANGUAGE="hy")
+        self.client.get(f"/api/v1/fasts/{self.fast.pk}/", HTTP_ACCEPT_LANGUAGE="en")
+        self.client.get(f"/api/v1/fasts/{self.fast.pk}/", HTTP_ACCEPT_LANGUAGE="hy")
         self.assertEqual(self.redis.zcard(f"{self.prefix}:responses:index"), 2)
 
     @patch("bahk.public_api.v1.validation.timezone.localdate")

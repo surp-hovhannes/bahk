@@ -5,10 +5,9 @@ never reuse the product API views: those routes cache, create calendar rows,
 fetch passage text, or schedule background work.
 """
 
-from django.db.models import Exists, Max, Min, OuterRef
+from django.db.models import Exists, F, Max, Min, OuterRef, Q
 from django.http import Http404
 from rest_framework.generics import ListAPIView, RetrieveAPIView
-from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 
 from bahk.public_api.v1.cache import cached_public_get
@@ -28,23 +27,42 @@ from icons.models import Icon
 def annotated_fasts(queryset):
     """Add the only Fast date fields allowed by the public serializer."""
     return queryset.annotate(
-        start_date=Min("days__date"),
-        end_date=Max("days__date"),
+        start_date=Min("days__date", filter=Q(days__church_id=F("church_id"))),
+        end_date=Max("days__date", filter=Q(days__church_id=F("church_id"))),
     ).order_by("id")
 
 
 class PublicApiResourceView(PublicApiView):
     """Shared anonymous JSON-only behavior for public resource views."""
 
-    authentication_classes = []
-    permission_classes = []
-    renderer_classes = [JSONRenderer]
     public_parameters = ()
+    language_parameter = False
+    church_parameter = False
     church_required = False
+    date_required = False
+    range_parameters = False
 
     @cached_public_get
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if request.method not in ("GET", "HEAD"):
+            return
+        # Validate syntax before any database lookup or pagination count.
+        query = self.public_query()
+        if self.language_parameter:
+            query.language()
+        if self.church_parameter:
+            query.church_id(required=self.church_required)
+        if self.date_required:
+            query.date("date", required=True)
+        if self.range_parameters:
+            query.effective_date_range()
+        if isinstance(self, PublicApiListView):
+            self.paginator.get_limit(request)
+            self.paginator.get_offset(request)
 
     def public_query(self):
         if not hasattr(self, "_public_query"):
@@ -53,7 +71,7 @@ class PublicApiResourceView(PublicApiView):
 
     def serializer_context(self):
         query = self.public_query()
-        return {"request": self.request, "lang": query.language()}
+        return {"request": self.request, "lang": query.language() if self.language_parameter else None}
 
     def get_serializer_context(self):
         return self.serializer_context()
@@ -71,6 +89,7 @@ class ChurchListView(PublicApiListView):
 
 
 class IconListView(PublicApiListView):
+    church_parameter = True
     serializer_class = IconPublicSerializer
     public_parameters = ("church_id",)
 
@@ -84,19 +103,23 @@ class IconListView(PublicApiListView):
 
 
 class FastListView(PublicApiListView):
+    language_parameter = True
+    church_parameter = True
+    church_required = True
+    range_parameters = True
     serializer_class = FastPublicSerializer
     public_parameters = ("church_id", "range")
-    church_required = True
 
     def get_queryset(self):
         query = self.public_query()
         church = query.church(required=True)
         start_date, end_date = query.effective_date_range()
-        days_in_range = Day.objects.filter(fast=OuterRef("pk"), date__gte=start_date, date__lte=end_date)
+        days_in_range = Day.objects.filter(church=church, fast=OuterRef("pk"), date__gte=start_date, date__lte=end_date)
         return annotated_fasts(Fast.objects.filter(church=church).filter(Exists(days_in_range)))
 
 
 class FastDetailView(PublicApiResourceView, RetrieveAPIView):
+    language_parameter = True
     serializer_class = FastPublicSerializer
 
     def get_queryset(self):
@@ -105,25 +128,27 @@ class FastDetailView(PublicApiResourceView, RetrieveAPIView):
     def get_object(self):
         try:
             return super().get_object()
-        except Exception as exc:
-            if isinstance(exc, Http404):
-                raise resource_not_found("fast")
-            raise
+        except Http404:
+            raise resource_not_found("fast")
 
 
 class FastByDateView(FastListView):
     public_parameters = ("church_id", "date")
+    range_parameters = False
+    date_required = True
 
     def get_queryset(self):
         query = self.public_query()
         church = query.church(required=True)
         target_date = query.date("date", required=True)
-        matching_day = Day.objects.filter(fast=OuterRef("pk"), date=target_date)
+        matching_day = Day.objects.filter(church=church, fast=OuterRef("pk"), date=target_date)
         return annotated_fasts(Fast.objects.filter(church=church).filter(Exists(matching_day)))
 
 
 class FastByFeastDateView(FastListView):
     public_parameters = ("church_id", "date")
+    range_parameters = False
+    date_required = True
 
     def get_queryset(self):
         query = self.public_query()
@@ -140,7 +165,10 @@ class ReadingByDateView(PublicApiResourceView):
     """
 
     public_parameters = ("church_id", "date")
+    language_parameter = True
+    church_parameter = True
     church_required = True
+    date_required = True
 
     @cached_public_get
     def get(self, request, *args, **kwargs):
@@ -160,7 +188,10 @@ class FeastByDateView(PublicApiResourceView):
     """Resolve a date through the offline lectionary without creating a Feast."""
 
     public_parameters = ("church_id", "date")
+    language_parameter = True
+    church_parameter = True
     church_required = True
+    date_required = True
 
     @cached_public_get
     def get(self, request, *args, **kwargs):
@@ -170,16 +201,27 @@ class FeastByDateView(PublicApiResourceView):
 
         from hub.services.feast_service import get_feast_for_date
 
-        feast_data = get_feast_for_date(target_date, church) or {}
-        name = feast_data.get("name_en") or feast_data.get("name")
-        feast = None
-        if name:
-            feast = Feast.objects.filter(church=church, name=name).select_related("icon").first()
+        feast_data = get_feast_for_date(target_date, church) or []
+        commemorations = [feast_data] if isinstance(feast_data, dict) else feast_data
+        stable_ids = any(field.name == "observance_id" for field in Feast._meta.get_fields())
+        field = "observance_id" if stable_ids else "name"
+        keys = [
+            item.get("observance_id") if stable_ids else item.get("name_en") or item.get("name")
+            for item in commemorations
+        ]
+        keys = list(dict.fromkeys(key for key in keys if key))
+        stored = (
+            Feast.objects.filter(church=church, **{f"{field}__in": keys}).select_related("icon").order_by("id")
+            if keys
+            else []
+        )
+        by_key = {}
+        for feast in stored:
+            by_key.setdefault(getattr(feast, field), feast)
+        feasts = [by_key[key] for key in keys if key in by_key]
         return Response(
             {
                 "date": target_date.isoformat(),
-                "feast": FeastPublicSerializer(feast, context=self.serializer_context()).data
-                if feast is not None
-                else None,
+                "feasts": FeastPublicSerializer(feasts, many=True, context=self.serializer_context()).data,
             }
         )

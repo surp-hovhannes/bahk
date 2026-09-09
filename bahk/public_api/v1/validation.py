@@ -8,6 +8,7 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import APIException, Throttled
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -38,7 +39,11 @@ def error_response(code, message, *, details=None, status_code=400):
 
 
 class PublicApiView(APIView):
-    """APIView base class which serializes public errors using the v1 envelope."""
+    """Anonymous, JSON-only APIView with the public v1 error envelope."""
+
+    authentication_classes = []
+    permission_classes = []
+    renderer_classes = [JSONRenderer]
 
     def handle_exception(self, exc):
         if isinstance(exc, PublicApiError):

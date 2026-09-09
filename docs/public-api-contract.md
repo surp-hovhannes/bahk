@@ -19,11 +19,11 @@ V1 is anonymous and read-only. The following is the initial inventory and a floo
 
 | Resource | Route | Status | Follow-on work |
 | --- | --- | --- | --- |
-| Churches | `/api/v1/churches/` | gated, pre-release | #494, #497, #496, #498 |
-| Readings | `/api/v1/readings/` | gated, pre-release | #494, #497, #496, #498 |
-| Fasts | `/api/v1/fasts/` | gated, pre-release | #494, #497, #496, #498 |
-| Feasts | `/api/v1/feasts/` | gated, pre-release | #494, #497, #496, #498 |
-| Icons | `/api/v1/icons/` | gated, pre-release | #494, #497, #496, #498 |
+| Churches | `/api/v1/churches/` | default-disabled | #494, #497, #496, #498 |
+| Readings | `/api/v1/readings/` | default-disabled | #494, #497, #496, #498 |
+| Fasts | `/api/v1/fasts/` | default-disabled | #494, #497, #496, #498 |
+| Feasts | `/api/v1/feasts/` | default-disabled | #494, #497, #496, #498 |
+| Icons | `/api/v1/icons/` | default-disabled | #494, #497, #496, #498 |
 | Calendar | `/api/v1/calendar/` | planned | #499 |
 
 A resource cannot be mounted until it has a presentation-neutral serializer (#497), consistent validation and errors (#496), anonymous traffic protections (#498), and contract coverage. It becomes stable only after verified reference documentation is published (#500).
@@ -69,9 +69,18 @@ Every public-v1 error uses this envelope:
 may change. `details` is always an object; it is empty when no structured
 context applies.
 
+Public views ignore Authorization headers and render JSON only. An unsupported
+Accept header (for example, `text/html`) returns HTTP 406 with code
+`not_acceptable` and empty `details`, also as JSON. Unmatched paths under
+`/api/v1/` return HTTP 404 with code `not_found` and empty `details`, with
+`application/json` content type regardless of the request method or Accept
+header. Non-v1 Django 404 behavior is unchanged.
+
 Public resource routes validate only the parameters they accept. Missing
 optional parameters retain the route's documented default; a supplied invalid
-parameter never falls back to that default.
+parameter never falls back to that default. Accepted parameters are validated before
+any resource lookup, including empty results and unknown IDs. Unknown parameters
+are ignored.
 
 | Parameter | Valid values | Failure code | Details |
 | --- | --- | --- | --- |
@@ -88,14 +97,17 @@ when the syntactically valid ID is unknown. Unknown public resources use
 `resource_not_found` with `details.resource`. Both use HTTP 404. Validation
 errors use HTTP 400.
 
-## Gated pre-release routes
+## Default-disabled pre-release routes
 
-All routes below are anonymous, read-only JSON endpoints. A required
+All routes below are anonymous, read-only JSON endpoints, registered only when
+`PUBLIC_API_RESOURCES_ENABLED=true` (default: `false`). Activation requires the deployment attestation and
+#498 traffic readiness checks described below. The root and
+final JSON not-found fallback remain live in either state. A required
 `church_id` is a canonical positive integer discovered through
 `GET /api/v1/churches/`.
 
 Collection endpoints use one limit/offset envelope. The default `limit` is 25
-and the maximum is 100; `next` and `previous` are URLs or `null`.
+and the maximum is 100; collections are ordered by ascending ID; `next` and `previous` are URLs or `null`.
 
 ```json
 {
@@ -108,14 +120,18 @@ and the maximum is 100; `next` and `previous` are URLs or `null`.
 
 | Route | Parameters | Response |
 | --- | --- | --- |
-| `GET /api/v1/churches/` | `limit`, `offset` | Paginated Church objects. Use `id` as `church_id` for church-scoped routes. |
+| `GET /api/v1/churches/` | optional `limit`, `offset` | Paginated Church objects. Use `id` as `church_id` for church-scoped routes. |
 | `GET /api/v1/icons/` | optional `church_id`, `limit`, `offset` | Paginated Icon objects. |
 | `GET /api/v1/fasts/` | required `church_id`; optional `start_date`, `end_date`, `tz`, `lang`, `limit`, `offset` | Paginated Fast objects whose days overlap the inclusive range. Omit the range for 180 days before through 180 days after today in `tz`. |
 | `GET /api/v1/fasts/{id}/` | optional `lang` | One Fast object, or `resource_not_found` (404). |
 | `GET /api/v1/fasts/by-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects active on the inclusive ISO date. |
 | `GET /api/v1/fasts/by-feast-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects with that culmination-feast date. |
 | `GET /api/v1/readings/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "readings": [Reading] }`. Returns only stored citations; an unimported calendar day has an empty list. |
-| `GET /api/v1/feasts/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "feast": Feast-or-null }`. The date resolves offline; it is `null` until the commemoration has a stored public Feast record. |
+| `GET /api/v1/feasts/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "feasts": [Feast] }`. The date resolves offline; only stored commemorations are returned, in service order; zero matches return `feasts: []`. Legacy service dictionaries and future lists are normalized. When the model supports `observance_id`, lookup uses that stable ID; otherwise it uses the legacy name. No rows are created. |
+
+Church and Icon routes ignore `lang`; their canonical text does not vary by
+language. Fast, Reading, and Feast routes validate `lang` before database or
+service work, including when the requested resource is absent.
 
 Effective Fast ranges, after filling omitted endpoints, must be ordered and span
 at most 366 inclusive days. Violations return `invalid_date_range` (400), with
@@ -266,8 +282,10 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-09-09 | Default-disabled resource registration pending #498; made accepted parameter validation eager, isolated Fast dates by owning church, and aligned Feast responses with the pending observance-ID/`feasts[]` migration. Added route contracts. (Issue #494 / PR #539.) |
+| 2026-09-09 | Made the anonymous, JSON-only boundary shared by v1 views; defined JSON `not_found` responses for unmatched v1 paths and JSON `not_acceptable` responses for unsupported Accept headers on mounted views. (Issue #496.) |
+| 2026-09-08 | Implemented the pre-release Church, Icon, Fast, Reading, and Feast resource routes under `/api/v1/`; documented strict route parameters, consistent collection pagination, read-only calendar lookup behavior, and the explicitly unsupported Fast-days route. (Issue #494.) |
 | 2026-09-08 | Added default-off registration, atomic anonymous quotas, retry/outage semantics, bounded five-minute data caching, query-work limits, and credential-independent read/cost boundaries. Deployment activation remains gated on the #498 operations checks. |
-| 2026-09-08 | Mounted the pre-release Church, Icon, Fast, Reading, and Feast resource routes under `/api/v1/`; documented strict route parameters, consistent collection pagination, read-only calendar lookup behavior, and the explicitly unsupported Fast-days route. (Issue #494.) |
 | 2026-09-08 | Defined v1's shared validation rules and stable error envelope for dates, ranges, languages, timezones, and church IDs. (Issue #496.) |
 | 2026-09-08 | Added Icons to the initial planned v1 inventory; narrowed the icon exclusion to icon upload, feedback, matching, and admin families; defined exact serializer field/type/nullability/localization/media rules for Church, Fast, Reading, Feast, and Icon; pinned public thumbnail behavior to the cached URL only and forbade `ImageSpecField.url` access during serialization. (Issue #497.) |
 

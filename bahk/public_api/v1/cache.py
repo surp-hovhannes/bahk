@@ -92,8 +92,9 @@ class FillHeartbeat:
 
 def canonical_parameters(view, request):
     query = view.public_query()
-    # All resource serializers validate lang, including those with canonical text.
-    values = {"lang": query.language() or get_language() or "en", **view.kwargs}
+    values = dict(view.kwargs)
+    if view.language_parameter:
+        values["lang"] = query.language() or get_language() or "en"
     for name in view.public_parameters:
         if name == "church_id":
             values[name] = query.church_id(required=view.church_required)
@@ -117,8 +118,8 @@ def cached_public_get(handler):
         raw = json.dumps([view.__class__.__name__, parameters], sort_keys=True)
         digest = hashlib.sha256(raw.encode()).hexdigest()
         prefix = f"{namespace()}:responses"
-        # Bump v1 when cached public data changes shape, in the same code change.
-        key = f"{prefix}:v1:{digest}"
+        # Bump the version when cached public data changes shape.
+        key = f"{prefix}:v2:{digest}"
         keys = [f"{prefix}:index", key, f"{key}:lease"]
         token = uuid.uuid4().hex
         try:

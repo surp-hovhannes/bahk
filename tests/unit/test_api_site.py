@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 from django.test.client import Client
-from django.urls import resolve, reverse
+from django.urls import NoReverseMatch, resolve, reverse
 
 from bahk.public_api.v1.urls import urlpatterns as public_api_urlpatterns
 
@@ -87,23 +87,60 @@ class PublicApiV1Tests(SimpleTestCase):
         self.assertEqual(match.namespace, "public_api_v1")
         self.assertEqual(match.url_name, "root")
         self.assertEqual(reverse("public_api_v1:root"), "/api/v1/")
-        self.assertEqual(reverse("public_api_v1:fast-list"), "/api/v1/fasts/")
+        with self.assertRaises(NoReverseMatch):
+            reverse("public_api_v1:fast-list")
 
-    def test_public_resource_routes_use_the_isolated_v1_namespace(self):
+    def test_v1_routes_contain_only_root_and_final_not_found_fallback(self):
         self.assertEqual(
             [(pattern.name, str(pattern.pattern)) for pattern in public_api_urlpatterns],
-            [
-                ("root", ""),
-                ("church-list", "churches/"),
-                ("icon-list", "icons/"),
-                ("fast-list", "fasts/"),
-                ("fast-by-date", "fasts/by-date/"),
-                ("fast-by-feast-date", "fasts/by-feast-date/"),
-                ("fast-detail", "fasts/<int:pk>/"),
-                ("reading-by-date", "readings/"),
-                ("feast-by-date", "feasts/"),
-            ],
+            [("root", ""), ("not-found", "^")],
         )
+
+    def test_resource_routes_are_absent_by_default(self):
+        for route in (
+            "churches/",
+            "icons/",
+            "fasts/",
+            "fasts/1/",
+            "fasts/by-date/",
+            "fasts/by-feast-date/",
+            "readings/",
+            "feasts/",
+        ):
+            with self.subTest(route=route):
+                response = self.client.get(f"/api/v1/{route}")
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.json()["code"], "not_found")
+                self.assertEqual(resolve(f"/api/v1/{route}").url_name, "not-found")
+
+    def test_unmatched_v1_paths_return_json_not_found(self):
+        client = Client(enforce_csrf_checks=True)
+        for path in ("/api/v1/unknown", "/api/v1/unknown/", "/api/v1/unknown/nested/", "/api/v1/unknown%0Apath/"):
+            for method in ("get", "post", "options"):
+                for accept in ("application/json", "text/html"):
+                    with self.subTest(path=path, method=method, accept=accept):
+                        response = getattr(client, method)(
+                            path,
+                            HTTP_ACCEPT=accept,
+                            HTTP_AUTHORIZATION="Bearer definitely-not-a-token",
+                        )
+                        self.assertEqual(response.status_code, 404)
+                        self.assertEqual(response["Content-Type"], "application/json")
+                        self.assertEqual(
+                            response.json(),
+                            {
+                                "code": "not_found",
+                                "message": "The requested route does not exist.",
+                                "details": {},
+                            },
+                        )
+
+    def test_unmatched_non_v1_paths_keep_django_html_404(self):
+        for path in ("/unknown/", "/api/unknown/", "/api/v10/unknown/"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response["Content-Type"].split(";")[0], "text/html")
 
     def test_unsupported_method_returns_api_appropriate_405(self):
         client = Client(enforce_csrf_checks=True)
@@ -122,9 +159,7 @@ class PublicApiV1Tests(SimpleTestCase):
         )
 
     def test_root_remains_anonymous_with_stale_authorization(self):
-        response = self.client.get(
-            "/api/v1/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token"
-        )
+        response = self.client.get("/api/v1/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["service"], "fast-and-pray")
