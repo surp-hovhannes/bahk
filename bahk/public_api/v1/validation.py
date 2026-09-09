@@ -1,12 +1,13 @@
 """Shared query validation and error responses for public API v1 views."""
 
 import re
-from datetime import date
+from datetime import date, timedelta
 
 import pytz
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, Throttled
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -41,18 +42,28 @@ class PublicApiView(APIView):
 
     def handle_exception(self, exc):
         if isinstance(exc, PublicApiError):
-            return error_response(
+            response = error_response(
                 exc.public_code,
                 exc.public_message,
                 details=exc.public_details,
                 status_code=exc.status_code,
             )
+            if "retry_after" in exc.public_details:
+                response["Retry-After"] = str(exc.public_details["retry_after"])
+            return response
         if isinstance(exc, APIException):
-            return error_response(
+            details = {}
+            if isinstance(exc, Throttled) and exc.wait is not None:
+                details["retry_after"] = exc.wait
+            response = error_response(
                 exc.default_code,
                 str(exc.detail),
+                details=details,
                 status_code=exc.status_code,
             )
+            if details:
+                response["Retry-After"] = str(details["retry_after"])
+            return response
         return super().handle_exception(exc)
 
 
@@ -98,6 +109,28 @@ class PublicApiQuery:
             )
         return start_date, end_date
 
+    def effective_date_range(self):
+        """Apply defaults before validating the work budget, including one-sided ranges."""
+        if hasattr(self, "_effective_range"):
+            return self._effective_range
+        start_date, end_date = self.date_range()
+        tz = self.timezone() or timezone.get_current_timezone()
+        today = timezone.localdate(timezone=tz)
+        try:
+            start_date = start_date or today - timedelta(days=180)
+            end_date = end_date or today + timedelta(days=180)
+        except OverflowError:
+            raise PublicApiError("invalid_date_range", "The effective date range is invalid.")
+        maximum = settings.PUBLIC_API_MAX_RANGE_DAYS
+        if start_date > end_date or (end_date - start_date).days + 1 > maximum:
+            raise PublicApiError(
+                "invalid_date_range",
+                f"The effective range must cover 1 through {maximum} days.",
+                details={"start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "max_days": maximum},
+            )
+        self._effective_range = start_date, end_date
+        return self._effective_range
+
     def language(self):
         value = self.query_params.get("lang")
         if value is None:
@@ -134,11 +167,17 @@ class PublicApiQuery:
                     details={"parameter": "church_id"},
                 )
             return None
+        if len(value) > 19:
+            raise PublicApiError(
+                "invalid_church_id",
+                "church_id must be a positive database integer.",
+                details={"parameter": "church_id", "value": value},
+            )
         try:
             church_id = int(value)
         except (TypeError, ValueError):
             church_id = 0
-        if church_id <= 0 or str(church_id) != value:
+        if church_id <= 0 or church_id > 9223372036854775807 or str(church_id) != value:
             raise PublicApiError(
                 "invalid_church_id",
                 "church_id must be a positive integer.",

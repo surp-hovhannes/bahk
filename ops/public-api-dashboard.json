@@ -1,0 +1,47 @@
+{
+  "uid": "bahk-public-api",
+  "title": "Bahk public API",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {"list": [{"name": "prometheus", "type": "datasource", "query": "prometheus", "label": "Prometheus"}]},
+  "panels": [
+    {
+      "id": 1, "title": "Requests / second by status", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${prometheus}"},
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "expr": "sum by (status) (rate(public_api_requests_total[5m]))", "legendFormat": "{{status}}"}]
+    },
+    {
+      "id": 2, "title": "p95 application latency (seconds)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${prometheus}"},
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(public_api_duration_seconds_bucket[5m])))"}]
+    },
+    {
+      "id": 3, "title": "Response cache outcomes / second", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${prometheus}"},
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "expr": "sum by (outcome) (rate(public_api_cache_total[5m]))", "legendFormat": "{{outcome}}"}]
+    },
+    {
+      "id": 4, "title": "Live cache entries (cap 10,000)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${prometheus}"},
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "expr": "public_api_cache_entries"}]
+    },
+    {
+      "id": 5, "title": "Redis read/write health and metrics scrape", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${prometheus}"},
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "expr": "public_api_store_up", "legendFormat": "Redis"}, {"refId": "B", "expr": "up{job=\"bahk-public-api\"}", "legendFormat": "Scrape"}]
+    },
+    {
+      "id": 6, "title": "Blocked costly work attempts (expected zero)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${prometheus}"},
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "expr": "sum by (kind) (increase(public_api_blocked_work_total[5m]))", "legendFormat": "{{kind}}"}]
+    }
+  ]
+}

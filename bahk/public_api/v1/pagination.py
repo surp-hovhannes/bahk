@@ -1,5 +1,6 @@
 """Stable pagination for public v1 collection endpoints."""
 
+from django.conf import settings
 from rest_framework.pagination import LimitOffsetPagination
 
 from bahk.public_api.v1.validation import PublicApiError
@@ -13,7 +14,7 @@ class PublicApiPagination(LimitOffsetPagination):
 
     def _integer_parameter(self, request, parameter, *, minimum, maximum=None):
         value = request.query_params.get(parameter)
-        if not value or not value.isascii() or not value.isdecimal():
+        if not value or len(value) > 10 or not value.isascii() or not value.isdecimal():
             raise PublicApiError(
                 "invalid_pagination",
                 f"{parameter} must be a whole number.",
@@ -21,11 +22,7 @@ class PublicApiPagination(LimitOffsetPagination):
             )
         integer = int(value)
         if integer < minimum or (maximum is not None and integer > maximum):
-            range_description = (
-                f"from {minimum} through {maximum}"
-                if maximum is not None
-                else f"at least {minimum}"
-            )
+            range_description = f"from {minimum} through {maximum}" if maximum is not None else f"at least {minimum}"
             raise PublicApiError(
                 "invalid_pagination",
                 f"{parameter} must be {range_description}.",
@@ -50,5 +47,5 @@ class PublicApiPagination(LimitOffsetPagination):
             request,
             self.offset_query_param,
             minimum=0,
+            maximum=settings.PUBLIC_API_MAX_OFFSET,
         )
-

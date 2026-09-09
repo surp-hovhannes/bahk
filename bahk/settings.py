@@ -131,10 +131,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'bahk.public_api.traffic.PublicApiTrafficMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -225,6 +226,30 @@ CACHES = {
 # Cache middleware settings
 CACHE_MIDDLEWARE_SECONDS = 60 * 15  # 15 minutes
 CACHE_MIDDLEWARE_KEY_PREFIX = 'bahk'
+
+# Public v1 is opt-in until its deployment/monitoring gates are verified.
+PUBLIC_API_RESOURCES_ENABLED = config('PUBLIC_API_RESOURCES_ENABLED', default=False, cast=bool)
+PUBLIC_API_TRAFFIC_ENABLED = True
+PUBLIC_API_RESPONSE_CACHE_ENABLED = True
+PUBLIC_API_REDIS_URL = config('PUBLIC_API_REDIS_URL', default='')
+PUBLIC_API_REDIS_PREFIX = config('PUBLIC_API_REDIS_PREFIX', default='bahk:public-api')
+PUBLIC_API_TRUSTED_PROXIES = config('PUBLIC_API_TRUSTED_PROXIES', default='', cast=Csv())
+PUBLIC_API_RATE_MINUTE = config('PUBLIC_API_RATE_MINUTE', default=60, cast=int)
+PUBLIC_API_RATE_HOUR = config('PUBLIC_API_RATE_HOUR', default=1000, cast=int)
+PUBLIC_API_CACHE_TTL = 300
+PUBLIC_API_CACHE_MAX_ENTRIES = 10000
+PUBLIC_API_CACHE_MAX_BYTES = 256 * 1024
+PUBLIC_API_MAX_OFFSET = 10000
+PUBLIC_API_MAX_RANGE_DAYS = 366
+PUBLIC_API_METRICS_TOKEN = config('PUBLIC_API_METRICS_TOKEN', default='')
+if not 0 < PUBLIC_API_RATE_MINUTE <= PUBLIC_API_RATE_HOUR:
+    raise ImproperlyConfigured('Public API limits require 0 < minute <= hour.')
+if PUBLIC_API_RESOURCES_ENABLED and (
+    not PUBLIC_API_REDIS_URL or len(PUBLIC_API_METRICS_TOKEN) < 32
+):
+    raise ImproperlyConfigured(
+        'Enabling public resources requires PUBLIC_API_REDIS_URL and a metrics token of at least 32 characters.'
+    )
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -507,6 +532,7 @@ else:
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ORIGIN_ALLOW_ALL', default=False, cast=bool)
 CORS_ORIGIN_ALLOW_ALL = CORS_ALLOW_ALL_ORIGINS  # deprecated alias, kept for backward compatibility
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
+CORS_EXPOSE_HEADERS = ['Retry-After']
 
 # Allow analytics tracking headers for frontend apps
 # Can be customized via CORS_ALLOW_HEADERS environment variable
@@ -644,6 +670,11 @@ LOGGING = {
         },
     },
     'loggers': {
+        'bahk.public_api': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': True,
+        },
         'django': {
             'handlers': ['console'],
             'level': 'INFO',

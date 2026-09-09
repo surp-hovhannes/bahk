@@ -1,5 +1,6 @@
 """URL configuration for public API version 1."""
 
+from django.conf import settings
 from django.urls import path
 
 from bahk.public_api.v1.resource_views import (
@@ -19,6 +20,9 @@ app_name = "public_api_v1"
 
 urlpatterns = [
     path("", PublicApiRootView.as_view(), name="root"),
+]
+
+resource_urlpatterns = [
     path("churches/", ChurchListView.as_view(), name="church-list"),
     path("icons/", IconListView.as_view(), name="icon-list"),
     path("fasts/", FastListView.as_view(), name="fast-list"),
@@ -28,3 +32,6 @@ urlpatterns = [
     path("readings/", ReadingByDateView.as_view(), name="reading-by-date"),
     path("feasts/", FeastByDateView.as_view(), name="feast-by-date"),
 ]
+
+if settings.PUBLIC_API_RESOURCES_ENABLED:
+    urlpatterns += resource_urlpatterns
