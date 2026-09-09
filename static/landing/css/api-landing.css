@@ -449,6 +449,42 @@ a:focus-visible {
   border-left: 3px solid var(--fp-accent-alt);
 }
 
+.endpoint {
+  margin-top: 54px;
+  scroll-margin-top: 30px;
+}
+
+.endpoint .table-scroll {
+  margin-top: 22px;
+}
+
+.endpoint > pre + h3,
+.endpoint > .table-scroll + h3 {
+  margin-top: 30px;
+}
+
+.docs-nav a:focus-visible,
+.table-scroll:focus-visible {
+  outline: 3px solid var(--fp-focus);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  z-index: 100;
+  padding: 12px 16px;
+  border-radius: 6px;
+  color: var(--fp-text);
+  background: #ffffff;
+  box-shadow: 0 6px 24px rgb(38 3 12 / 24%);
+}
+
+.skip-link:focus {
+  top: 16px;
+}
+
 @media (max-width: 720px) {
   .site-header__inner {
     padding: 0 24px;
@@ -642,4 +678,16 @@ a:focus-visible {
   .button {
     transition: none;
   }
+}
+
+/* Reference content wraps within the existing responsive docs grid. */
+.docs-content .parameter-table { min-width: 0; table-layout: fixed; margin-top: 24px; }
+.docs-content .parameter-table caption { text-align: left; padding: 12px 0; font-weight: 700; }
+.docs-content .parameter-table th,
+.docs-content .parameter-table td { overflow-wrap: anywhere; }
+.docs-content .endpoint__route { white-space: normal; overflow-wrap: anywhere; }
+.docs-content pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .docs-content .parameter-table th,
+  .docs-content .parameter-table td { padding: 10px 6px; }
 }

@@ -290,6 +290,8 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-09-09 | #500: Added the semantic public reference at `/docs/`, gated by `PUBLIC_API_RESOURCES_ENABLED`, with exact routes, parameters, JSON examples, error/retry policy, freshness, and compatibility guidance. Added publication-state, route-sync, serializer-field, and accessibility regression coverage. |
+| 2026-09-09 | Added a gated, accessible public v1 reference at `/docs/`; it remains Coming soon while resource registration is disabled and publishes the complete contract when deployment readiness enables resources. (Issue #500.) |
 | 2026-09-09 | Added the default-disabled combined Calendar endpoint with church/date/language/timezone cache isolation, stored citation/Fast/Feast composition, and narrow Feast partial-failure semantics. (Issue #499.) |
 | 2026-09-09 | Default-disabled resource registration pending #498; made accepted parameter validation eager, isolated Fast dates by owning church, and aligned Feast responses with the pending observance-ID/`feasts[]` migration. Added route contracts. (Issue #494 / PR #539.) |
 | 2026-09-09 | Made the anonymous, JSON-only boundary shared by v1 views; defined JSON `not_found` responses for unmatched v1 paths and JSON `not_acceptable` responses for unsupported Accept headers on mounted views. (Issue #496.) |
@@ -300,4 +302,4 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 ## Release gate
 
-`/docs/` remains in its Coming soon state until #494 and #496–#500 satisfy their respective readiness criteria. The current `/api/v1/` root is a live service descriptor, but it does not imply any planned resource is publicly released or available.
+`/docs/` renders its Coming soon state while `PUBLIC_API_RESOURCES_ENABLED=false`. The complete reference is code-complete but is published only when the existing deployment-readiness gate enables resources. The current `/api/v1/` root is a live service descriptor, but it does not imply any planned resource is publicly released or available.
