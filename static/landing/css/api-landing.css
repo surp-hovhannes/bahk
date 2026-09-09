@@ -605,6 +605,14 @@ a:focus-visible {
     font-size: 0.82rem;
   }
 
+  .site-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .page-shell {
     width: min(100% - 32px, 1180px);
   }
