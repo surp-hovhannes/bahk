@@ -229,6 +229,7 @@ CACHE_MIDDLEWARE_KEY_PREFIX = 'bahk'
 
 # Public v1 is opt-in until its deployment/monitoring gates are verified.
 PUBLIC_API_RESOURCES_ENABLED = config('PUBLIC_API_RESOURCES_ENABLED', default=False, cast=bool)
+PUBLIC_API_DEPLOYMENT_READY = config('PUBLIC_API_DEPLOYMENT_READY', default=False, cast=bool)
 PUBLIC_API_TRAFFIC_ENABLED = True
 PUBLIC_API_RESPONSE_CACHE_ENABLED = True
 PUBLIC_API_REDIS_URL = config('PUBLIC_API_REDIS_URL', default='')
@@ -237,6 +238,8 @@ PUBLIC_API_TRUSTED_PROXIES = config('PUBLIC_API_TRUSTED_PROXIES', default='', ca
 PUBLIC_API_RATE_MINUTE = config('PUBLIC_API_RATE_MINUTE', default=60, cast=int)
 PUBLIC_API_RATE_HOUR = config('PUBLIC_API_RATE_HOUR', default=1000, cast=int)
 PUBLIC_API_CACHE_TTL = 300
+PUBLIC_API_CACHE_LEASE_SECONDS = config('PUBLIC_API_CACHE_LEASE_SECONDS', default=30, cast=int)
+PUBLIC_API_CACHE_HEARTBEAT_SECONDS = config('PUBLIC_API_CACHE_HEARTBEAT_SECONDS', default=5, cast=float)
 PUBLIC_API_CACHE_MAX_ENTRIES = 10000
 PUBLIC_API_CACHE_MAX_BYTES = 256 * 1024
 PUBLIC_API_MAX_OFFSET = 10000
@@ -244,11 +247,17 @@ PUBLIC_API_MAX_RANGE_DAYS = 366
 PUBLIC_API_METRICS_TOKEN = config('PUBLIC_API_METRICS_TOKEN', default='')
 if not 0 < PUBLIC_API_RATE_MINUTE <= PUBLIC_API_RATE_HOUR:
     raise ImproperlyConfigured('Public API limits require 0 < minute <= hour.')
+if not (
+    1 <= PUBLIC_API_CACHE_LEASE_SECONDS <= 300
+    and 0.1 <= PUBLIC_API_CACHE_HEARTBEAT_SECONDS <= PUBLIC_API_CACHE_LEASE_SECONDS / 3
+):
+    raise ImproperlyConfigured('Public API cache lease must be 1–300s; heartbeat must be 0.1s–lease/3.')
 if PUBLIC_API_RESOURCES_ENABLED and (
-    not PUBLIC_API_REDIS_URL or len(PUBLIC_API_METRICS_TOKEN) < 32
+    not PUBLIC_API_DEPLOYMENT_READY or not PUBLIC_API_REDIS_URL or len(PUBLIC_API_METRICS_TOKEN) < 32
 ):
     raise ImproperlyConfigured(
-        'Enabling public resources requires PUBLIC_API_REDIS_URL and a metrics token of at least 32 characters.'
+        'Enabling public resources requires PUBLIC_API_DEPLOYMENT_READY, PUBLIC_API_REDIS_URL '
+        'and a metrics token of at least 32 characters.'
     )
 
 # Password validation

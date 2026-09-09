@@ -3,7 +3,9 @@
 import hashlib
 import json
 import uuid
+from contextvars import copy_context
 from functools import wraps
+from threading import Event, Thread
 
 from django.conf import settings
 from django.utils.translation import get_language
@@ -39,13 +41,53 @@ if ARGV[2] ~= '' then
     local now = tonumber(clock[1]) + tonumber(clock[2]) / 1000000
     redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
     redis.call('ZADD', KEYS[1], now + tonumber(ARGV[3]), KEYS[2])
-    redis.call('EXPIRE', KEYS[1], math.max(tonumber(ARGV[3]), 30) + 1)
+    redis.call('EXPIRE', KEYS[1], math.max(tonumber(ARGV[3]) + 1, redis.call('TTL', KEYS[1])))
 else
     redis.call('ZREM', KEYS[1], KEYS[2])
 end
 redis.call('DEL', KEYS[3])
 return 1
 """
+
+
+RENEW = """
+if redis.call('GET', KEYS[3]) ~= ARGV[1] then return 0 end
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) + tonumber(clock[2]) / 1000000
+redis.call('EXPIRE', KEYS[3], ARGV[2])
+redis.call('ZADD', KEYS[1], now + tonumber(ARGV[2]), KEYS[2])
+redis.call('EXPIRE', KEYS[1], math.max(tonumber(ARGV[2]) + 1, redis.call('TTL', KEYS[1])))
+return 1
+"""
+
+
+class FillHeartbeat:
+    """Keep ownership through rendering; stop and join before owner-checked finish."""
+
+    def __init__(self, client, keys, token):
+        self.client, self.keys, self.token = client, keys, token
+        self.lease = settings.PUBLIC_API_CACHE_LEASE_SECONDS
+        self.interval = settings.PUBLIC_API_CACHE_HEARTBEAT_SECONDS
+        self.stopped = Event()
+        self.lost = Event()
+        self.thread = Thread(target=copy_context().run, args=(self.run,), daemon=True)
+
+    def run(self):
+        while not self.stopped.wait(self.interval):
+            try:
+                if self.client.eval(RENEW, 3, *self.keys, self.token, self.lease):
+                    continue
+            except RedisError:
+                pass
+            self.lost.set()
+            report_failure("response_cache")
+            return
+
+    def stop(self):
+        self.stopped.set()
+        # Redis connections have bounded socket timeouts and no retries.
+        if self.thread.ident is not None:
+            self.thread.join()
 
 
 def canonical_parameters(view, request):
@@ -87,7 +129,7 @@ def cached_public_get(handler):
                 *keys,
                 settings.PUBLIC_API_CACHE_MAX_ENTRIES,
                 token,
-                30,
+                settings.PUBLIC_API_CACHE_LEASE_SECONDS,
                 settings.PUBLIC_API_CACHE_TTL,
             )
         except RedisError:
@@ -116,7 +158,9 @@ def cached_public_get(handler):
             # Admission and query bounds still protect uncached reads.
             return handler(view, request, *args, **kwargs)
         encoded = ""
+        heartbeat = FillHeartbeat(client, keys, token)
         try:
+            heartbeat.thread.start()
             response = handler(view, request, *args, **kwargs)
             if response.status_code == 200:
                 data = response.data
@@ -129,8 +173,16 @@ def cached_public_get(handler):
                     request._request.public_cache_outcome = "oversize"
             return response
         finally:
+            heartbeat.stop()
             try:
-                client.eval(FINISH, 3, *keys, token, encoded, settings.PUBLIC_API_CACHE_TTL)
+                client.eval(
+                    FINISH,
+                    3,
+                    *keys,
+                    token,
+                    "" if heartbeat.lost.is_set() else encoded,
+                    settings.PUBLIC_API_CACHE_TTL,
+                )
             except RedisError:
                 report_failure("response_cache")
 

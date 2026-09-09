@@ -40,9 +40,17 @@ Deploying the code does not certify proxy trust, CDN policy, or alert delivery.
    The command checks configuration and Redis policy read-only; managed Redis may
    require an operator to grant inspection or independently verify a rejected CONFIG
    command. Do not treat a failed inspection as proof of readiness.
-8. Complete the smoke checks below, then set `PUBLIC_API_RESOURCES_ENABLED=true`
-   and restart/redeploy application workers. Startup rejects missing Redis/token
-   configuration. URL registration is evaluated at process startup.
+8. Set `PUBLIC_API_DEPLOYMENT_READY=true` only after
+   `check_public_api_readiness` passes, trusted proxy/origin/CDN validation is
+   complete, a metrics scrape succeeds, alert rules are validated, and test alert
+   delivery is verified. Record the evidence in the deployment change. This
+   explicit operator attestation defaults to false; Redis URL and metrics token
+   alone cannot activate resources. Settings import performs no network checks.
+9. Complete the smoke checks below, then set `PUBLIC_API_RESOURCES_ENABLED=true`
+   and restart/redeploy application workers. Startup rejects missing attestation,
+   Redis, or token configuration. URL registration is evaluated at process startup.
+   Clear the attestation when deployment topology or monitoring changes and repeat
+   verification before enabling resources again.
 
 Defaults are 60 requests/minute and 1,000/hour. Optional rate environment variables
 are `PUBLIC_API_RATE_MINUTE` and `PUBLIC_API_RATE_HOUR`; changing them requires a
@@ -83,8 +91,12 @@ health signal and logs cover that gap. Monitor Redis memory and service-wide
 Celery/provider spend through existing infrastructure monitoring as well. The
 blocked-work metric measures prevented attempts, not provider billing or jobs
 initiated by unrelated workers. The guards cover the shared LLM request wrappers,
-Bible passage client, and this application's normal/eager Celery dispatch paths;
-new provider integrations must preserve this boundary and add tests.
+Bible passage client, and this application's Celery `delay`/`apply_async`, `apply`,
+and direct task invocation paths. Normal workers outside public-read context
+continue to execute tasks. New provider integrations must preserve this boundary
+and add tests. Public route code must not hand costly work to a raw thread without
+propagating and retaining the public-read safety context (for example with
+`contextvars.copy_context().run`); raw threads do not inherit ContextVars.
 
 ## Smoke checks and testing
 
@@ -100,7 +112,7 @@ new provider integrations must preserve this boundary and add tests.
   Restore it and confirm recovery. Simulate a blocked work attempt with the unit
   tests; do not trigger real billable operations to test the guard.
 - In the project runtime, run focused integration tests with an isolated Redis:
-  `PUBLIC_API_TEST_REDIS_URL=redis://redis:6379/15 python manage.py test tests.unit.test_public_api_traffic --noinput --settings=tests.test_settings`.
+  `PUBLIC_API_TEST_REDIS_URL=redis://redis:6379/15 python manage.py test tests.unit.test_public_api_traffic tests.unit.test_public_api_security --noinput --settings=tests.test_settings`.
   Test keys use random prefixes and cleanup only those keys. Without that variable,
   Redis integration tests explicitly skip. Regular contract tests keep traffic
   and caching disabled to avoid cross-worker contamination.
@@ -117,8 +129,17 @@ Five-minute TTLs bound ordinary data staleness; there are no model invalidation
 signals in this change. Cache schema `v1` is code-owned: bump it in the same change
 as a cached payload change so an older deployment cannot read incompatible data.
 
-Fill leases last 30 seconds. Other callers get a one-second 503 retry hint instead
-of duplicating the fill. A full index or oversized result bypasses caching under
+Fill leases default to 30 seconds and renew every 5 seconds for the entire handler
+and serialization lifetime. `PUBLIC_API_CACHE_LEASE_SECONDS` accepts 1–300 seconds;
+`PUBLIC_API_CACHE_HEARTBEAT_SECONDS` accepts 0.1 seconds through one third of the
+lease. Choose a lease with headroom for scheduling delays and Redis's bounded
+socket timeouts. Renewal atomically verifies the owner and extends both the lease
+and admission-index reservation. Cleanup stops and joins the heartbeat before
+owner-checked publication/removal; a stale owner cannot renew or finish a new
+owner's lease. Renewal failure is reported and suppresses cache publication.
+As with any expiring distributed lease, process suspension or Redis failure longer
+than the lease can lose ownership; recovery does not resurrect the old lease.
+Other callers get a one-second 503 retry hint instead of duplicating a healthy fill. A full index or oversized result bypasses caching under
 the normal quota and query bounds. Payloads and leases expire, and expired index
 members are pruned atomically on admission. Successful fills refresh the index's
 TTL; a crashed fill cannot retain capacity indefinitely.

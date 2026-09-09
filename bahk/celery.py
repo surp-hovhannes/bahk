@@ -14,6 +14,18 @@ logger = logging.getLogger('bahk.celery')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bahk.settings')
 
 class PublicReadSafeTask(Task):
+    def __call__(self, *args, **kwargs):
+        from bahk.public_api.work import reject_public_work
+
+        reject_public_work("task")
+        return super().__call__(*args, **kwargs)
+
+    def apply(self, *args, **kwargs):
+        from bahk.public_api.work import reject_public_work
+
+        reject_public_work("task")
+        return super().apply(*args, **kwargs)
+
     def apply_async(self, *args, **kwargs):
         from bahk.public_api.work import reject_public_work
 

@@ -222,13 +222,37 @@ class PublicCostBoundaryTests(SimpleTestCase):
         service.session.get.assert_not_called()
 
     def test_direct_and_eager_task_dispatch_are_blocked(self):
+        from celery import shared_task
+
         from bahk.celery import PublicReadSafeTask, app
+
+        body = Mock(return_value=42)
+
+        @shared_task(name="test.public.forbidden", lazy=False)
+        def forbidden():
+            return body()
+
+        self.addCleanup(app.tasks.pop, forbidden.name, None)
+        self.assertIsInstance(forbidden, PublicReadSafeTask)
 
         with self.assertRaises(RuntimeError):
             app.send_task("test.public.forbidden")
-        with self.assertRaises(RuntimeError):
-            PublicReadSafeTask().apply_async()
-        self.assertEqual(self.request.public_blocked_work, {"task": 2})
+        for invoke in (forbidden.delay, forbidden.apply_async, forbidden.apply, forbidden):
+            with self.subTest(invoke=invoke), self.assertRaises(RuntimeError):
+                invoke()
+        body.assert_not_called()
+        self.assertEqual(self.request.public_blocked_work, {"task": 5})
+
+        token = public_request.set(None)
+        try:
+            self.assertEqual(forbidden(), 42)
+            self.assertEqual(forbidden.apply().get(), 42)
+            with patch("celery.app.task.Task.apply_async", return_value="queued") as dispatch:
+                self.assertEqual(forbidden.delay(), "queued")
+                self.assertEqual(forbidden.apply_async(), "queued")
+                self.assertEqual(dispatch.call_count, 2)
+        finally:
+            public_request.reset(token)
 
     def test_guard_is_context_local(self):
         from bahk.public_api.work import reject_public_work
