@@ -219,10 +219,34 @@ class ReferenceParser(HTMLParser):
         self.elements = []
         self.examples = {}
         self.example = None
+        self.stack = []
+        self.table_parents = []
+        self.caption_ids = []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         self.elements.append((tag, attrs))
+        if tag == "table":
+            self.table_parents.append(self.stack[-1] if self.stack else None)
+        if tag == "caption":
+            self.caption_ids.append(attrs.get("id"))
+        if tag not in {
+            "area",
+            "base",
+            "br",
+            "col",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "link",
+            "meta",
+            "param",
+            "source",
+            "track",
+            "wbr",
+        }:
+            self.stack.append((tag, attrs))
         if tag == "pre" and "data-example" in attrs:
             self.example = attrs["data-example"]
             self.examples[self.example] = ""
@@ -232,6 +256,8 @@ class ReferenceParser(HTMLParser):
             self.examples[self.example] += data
 
     def handle_endtag(self, tag):
+        if self.stack and self.stack[-1][0] == tag:
+            self.stack.pop()
         if tag == "pre":
             self.example = None
 
@@ -338,10 +364,28 @@ class PublishedApiDocsTests(SimpleTestCase):
         self.assertEqual(sum(tag == "table" for tag, _ in elements), sum(tag == "caption" for tag, _ in elements))
         self.assertContains(self.response, 'class="skip-link"')
 
+    def test_every_reference_table_has_a_named_keyboard_scroll_region(self):
+        tables = self.document.table_parents
+        self.assertGreater(len(tables), 0)
+        wrappers = [attrs for _, attrs in self.document.elements if "table-scroll" in attrs.get("class", "").split()]
+        self.assertEqual(len(wrappers), len(tables))
+        self.assertEqual(len(self.document.caption_ids), len(tables))
+        for parent, caption_id in zip(tables, self.document.caption_ids):
+            with self.subTest(caption=caption_id):
+                self.assertIsNotNone(parent)
+                tag, attrs = parent
+                self.assertEqual(tag, "div")
+                self.assertIn("table-scroll", attrs.get("class", "").split())
+                self.assertEqual(attrs.get("tabindex"), "0")
+                self.assertEqual(attrs.get("role"), "region")
+                self.assertTrue(caption_id)
+                self.assertEqual(attrs.get("aria-labelledby"), caption_id)
+
     def test_no_authentication_or_quota_misinformation(self):
         self.assertContains(self.response, "anonymous and read-only")
         self.assertContains(self.response, "No account, API key, or token is required.")
         self.assertContains(self.response, "Authorization headers are ignored.")
         self.assertContains(self.response, "Credentials do not raise quotas.")
+        self.assertContains(self.response, "it is null when absent or when its church differs from the Feast.")
         for text in ("Authorization: Bearer", "X-API-Key", "/api/token/", "higher authenticated limits"):
             self.assertNotContains(self.response, text)

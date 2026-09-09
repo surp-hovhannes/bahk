@@ -15,7 +15,7 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'admin/brand/favicon.svg' %}">
   <link rel="stylesheet" href="{% static 'landing/css/api-landing.css' %}">
 </head>
-<body>
+<body{% block body_attributes %}{% endblock %}>
   {% block skip_link %}{% endblock %}
   <header class="site-header">
     <div class="site-header__inner">

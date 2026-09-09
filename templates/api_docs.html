@@ -2,6 +2,7 @@
 
 {% block title %}API Docs | Fast &amp; Pray{% endblock %}
 {% block fonts %}{% endblock %}
+{% block body_attributes %} class="api-docs"{% endblock %}
 {% block skip_link %}<a class="skip-link" href="#main-content">Skip to reference</a>{% endblock %}
 {% block meta_description %}{% if public_api_published %}Fast &amp; Pray public API v1 reference: routes, parameters, examples and fair use.{% else %}Fast &amp; Pray public API documentation is coming soon.{% endif %}{% endblock %}
 
@@ -52,8 +53,9 @@
         <p class="endpoint__route"><span class="method">GET</span> <code>{{ route.path }}</code></p>
         <p>{{ route.purpose }}</p>
         {% if route.parameters %}
+        <div class="table-scroll" tabindex="0" role="region" aria-labelledby="{{ route.name }}-parameters">
         <table class="parameter-table">
-          <caption>{{ route.title }} parameters</caption>
+          <caption id="{{ route.name }}-parameters">{{ route.title }} parameters</caption>
           <thead><tr><th scope="col">Parameter</th><th scope="col">Required?</th><th scope="col">Values and defaults</th></tr></thead>
           <tbody>{% for parameter in route.parameters %}<tr>
             <th scope="row"><code>{{ parameter.name }}</code></th>
@@ -61,6 +63,7 @@
             <td>{{ parameter.description }}</td>
           </tr>{% endfor %}</tbody>
         </table>
+        </div>
         {% else %}<p>No parameters.</p>{% endif %}
         <h3>Example request</h3>
         <pre><code>{{ route.request }}</code></pre>
@@ -73,7 +76,7 @@
         <p>Examples show the exact current field sets. IDs are integers. Church <code>name</code>,
           Icon <code>title</code>, Feast <code>name</code>, and Fast <code>name</code> are strings.
           Icon image and thumbnail URLs are strings or null; thumbnails are returned only when already cached.
-          Feast <code>icon</code> is an Icon object or null, including when its church differs.</p>
+          Feast <code>icon</code> is an Icon object or null; it is null when absent or when its church differs from the Feast.</p>
         <p>Fast <code>church_id</code> is an integer; <code>description</code> and <code>culmination_feast</code>
           are strings or null; <code>year</code> is an integer or null. All three Fast date fields are ISO dates
           or null. Fast image, thumbnail, and learn-more URLs are strings or null. Date bounds come from stored fast days.</p>
@@ -91,8 +94,9 @@
         <h2 id="errors">Errors</h2>
         <p>Every error has <code>code</code>, <code>message</code>, and an object-valued <code>details</code>.
           Codes and documented details keys are stable; message wording may change.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-labelledby="validation-errors">
         <table class="parameter-table">
-          <caption>Validation and lookup errors</caption>
+          <caption id="validation-errors">Validation and lookup errors</caption>
           <thead><tr><th scope="col">Status and code</th><th scope="col">Details keys</th></tr></thead>
           <tbody>
             <tr><th scope="row">400 · missing_parameter</th><td>parameter</td></tr>
@@ -103,6 +107,7 @@
             <tr><th scope="row">404 · resource_not_found</th><td>resource (fast)</td></tr>
           </tbody>
         </table>
+        </div>
         <p>Unknown v1 paths return 404 JSON regardless of method or Accept header. Unsupported methods
           return 405 with <code>Allow: GET, HEAD, OPTIONS</code>; an unsupported Accept header returns 406 JSON.</p>
         {% for error in errors %}
