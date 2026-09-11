@@ -727,3 +727,6 @@ ICON_TAXONOMY_TIMEOUT = 60
 ICON_MATCH_ROUTER_MODE = config('ICON_MATCH_ROUTER_MODE', default='baseline')
 ICON_MATCH_ROUTER_SCOPES = {}
 ICON_TAXONOMY_REQUEST_ADAPTER_ENABLED = config('ICON_TAXONOMY_REQUEST_ADAPTER_ENABLED', default=False, cast=bool)
+
+# Resource routes remain unavailable until public traffic readiness (#498).
+PUBLIC_API_RESOURCES_ENABLED = config("PUBLIC_API_RESOURCES_ENABLED", default=False, cast=bool)

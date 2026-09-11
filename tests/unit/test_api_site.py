@@ -96,6 +96,17 @@ class PublicApiV1Tests(SimpleTestCase):
             [("root", ""), ("not-found", "^")],
         )
 
+    def test_resource_routes_are_absent_by_default(self):
+        for route in (
+            "churches/", "icons/", "fasts/", "fasts/1/", "fasts/by-date/",
+            "fasts/by-feast-date/", "readings/", "feasts/",
+        ):
+            with self.subTest(route=route):
+                response = self.client.get(f"/api/v1/{route}")
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.json()["code"], "not_found")
+                self.assertEqual(resolve(f"/api/v1/{route}").url_name, "not-found")
+
     def test_unmatched_v1_paths_return_json_not_found(self):
         client = Client(enforce_csrf_checks=True)
         for path in (
@@ -166,15 +177,12 @@ class PublicApiV1Tests(SimpleTestCase):
             },
         )
 
-    def test_public_v1_does_not_expose_unready_or_internal_routes(self):
+    def test_public_v1_does_not_expose_internal_routes(self):
         for path in (
-            "/api/v1/fasts/",
-            "/api/v1/churches/",
-            "/api/v1/readings/",
-            "/api/v1/feasts/",
             "/api/v1/user/fasts/",
             "/api/v1/profile/",
             "/api/v1/s3-upload/upload-initialize/",
+            "/api/v1/fasts/1/days/",
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 404)
