@@ -36,7 +36,7 @@ All route families not listed in the inventory are excluded by default. In parti
 
 - authentication, accounts, profiles, password reset, token, and registration routes;
 - fast participation, user-fast, user-day, participant, map, stats, intention, and legacy fast routes;
-- devotionals, patristic quotes, notifications, admin helpers, events, prayers, prayer requests, unsupported icon upload, feedback, matching, and admin families, learning resources, uploads, system tags, and all `/hub/` routes;
+- devotionals, patristic quotes, feedback, notifications, admin helpers, events, prayers, prayer requests, unsupported icon upload, icon feedback, icon matching, and icon admin families, learning resources, uploads, system tags, and all `/hub/` routes;
 - the S3 upload helpers at `/api/s3-upload/`.
 
 Internal URLconfs must never be mounted under `/api/v1/` as a shortcut for publishing a resource.
@@ -83,6 +83,14 @@ column; the public field serializes to `null` when that cache is empty.
 `image_url` uses the original image field's URL only when an image is
 present, otherwise `null`.
 
+Implementers' preconditions: mounted views validate `?lang` and pass the
+language to serializers as `context['lang']` — serializers never read the
+request. Fast `start_date`/`end_date` require querysets built with
+`Fast.objects.with_dates()`, and Feast serialization requires
+`select_related("icon")`; both preconditions are pinned by zero-query
+contract tests. Localized fields whose canonical value is empty serialize
+as `null` under the rule above.
+
 ### Church
 
 | Field | Type | Nullable | Notes |
@@ -96,7 +104,7 @@ present, otherwise `null`.
 | --- | --- | --- | --- |
 | `id` | integer | no | Primary key. |
 | `church_id` | integer | no | Owning church. |
-| `name` | string | no | Localized name. |
+| `name` | string | no | Localized name. `null` when the stored value is empty (no-empty-string rule). |
 | `description` | string | yes | Localized description. |
 | `start_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
 | `end_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
@@ -121,7 +129,7 @@ and the nested `church` object.
 | --- | --- | --- | --- |
 | `id` | integer | no | Primary key. |
 | `sequence` | integer | yes | Order within the day's readings. |
-| `book` | string | no | Localized book name. |
+| `book` | string | no | Localized book name. `null` when the stored value is empty (no-empty-string rule). |
 | `start_chapter` | integer | no | |
 | `start_verse` | integer | no | |
 | `end_chapter` | integer | no | |
@@ -136,7 +144,7 @@ Excluded (non-exhaustive): legacy `text*` and `text_hy*` fields,
 | Field | Type | Nullable | Notes |
 | --- | --- | --- | --- |
 | `id` | integer | no | Primary key. |
-| `name` | string | no | Localized name. |
+| `name` | string | no | Localized name. `null` when the stored value is empty (no-empty-string rule). |
 | `icon` | object (IconPublicSerializer) | yes | Nested icon, or `null` when no icon is matched. |
 
 Excluded (non-exhaustive): `church`, `church_id`, `designation`,
@@ -163,6 +171,7 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-09-11 | Review follow-up: restored the general excluded `feedback` family (covering the reading and feast context-feedback routes) and spelled out the icon families; documented view-resolved language passing (`context['lang']`; serializers never read the request), the `with_dates()` / `select_related("icon")` queryset preconditions, and empty localized values serializing as `null`; added a read-only serializer base whose `create()`/`update()` refuse. (Issue #497 review.) |
 | 2026-09-08 | Added Icons to the initial planned v1 inventory; narrowed the icon exclusion to icon upload, feedback, matching, and admin families; defined exact serializer field/type/nullability/localization/media rules for Church, Fast, Reading, Feast, and Icon; pinned public thumbnail behavior to the cached URL only and forbade `ImageSpecField.url` access during serialization. (Issue #497.) |
 
 ## Release gate
