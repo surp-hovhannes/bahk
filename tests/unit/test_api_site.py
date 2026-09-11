@@ -98,8 +98,14 @@ class PublicApiV1Tests(SimpleTestCase):
 
     def test_resource_routes_are_absent_by_default(self):
         for route in (
-            "churches/", "icons/", "fasts/", "fasts/1/", "fasts/by-date/",
-            "fasts/by-feast-date/", "readings/", "feasts/",
+            "churches/",
+            "icons/",
+            "fasts/",
+            "fasts/1/",
+            "fasts/by-date/",
+            "fasts/by-feast-date/",
+            "readings/",
+            "feasts/",
         ):
             with self.subTest(route=route):
                 response = self.client.get(f"/api/v1/{route}")
@@ -109,9 +115,7 @@ class PublicApiV1Tests(SimpleTestCase):
 
     def test_unmatched_v1_paths_return_json_not_found(self):
         client = Client(enforce_csrf_checks=True)
-        for path in (
-            "/api/v1/unknown", "/api/v1/unknown/", "/api/v1/unknown/nested/", "/api/v1/unknown%0Apath/"
-        ):
+        for path in ("/api/v1/unknown", "/api/v1/unknown/", "/api/v1/unknown/nested/", "/api/v1/unknown%0Apath/"):
             for method in ("get", "post", "options"):
                 for accept in ("application/json", "text/html"):
                     with self.subTest(path=path, method=method, accept=accept):
@@ -155,9 +159,7 @@ class PublicApiV1Tests(SimpleTestCase):
         )
 
     def test_root_remains_anonymous_with_stale_authorization(self):
-        response = self.client.get(
-            "/api/v1/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token"
-        )
+        response = self.client.get("/api/v1/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["service"], "fast-and-pray")

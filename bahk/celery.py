@@ -2,7 +2,7 @@ from __future__ import absolute_import, unicode_literals
 import logging
 import os
 from urllib.parse import urlsplit, urlunsplit
-from celery import Celery
+from celery import Celery, Task
 from celery.schedules import crontab
 from celery.signals import celeryd_init, beat_init, worker_ready
 import sentry_sdk
@@ -13,7 +13,35 @@ logger = logging.getLogger('bahk.celery')
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bahk.settings')
 
-app = Celery('bahk')
+class PublicReadSafeTask(Task):
+    def __call__(self, *args, **kwargs):
+        from bahk.public_api.work import reject_public_work
+
+        reject_public_work("task")
+        return super().__call__(*args, **kwargs)
+
+    def apply(self, *args, **kwargs):
+        from bahk.public_api.work import reject_public_work
+
+        reject_public_work("task")
+        return super().apply(*args, **kwargs)
+
+    def apply_async(self, *args, **kwargs):
+        from bahk.public_api.work import reject_public_work
+
+        reject_public_work("task")
+        return super().apply_async(*args, **kwargs)
+
+
+class BahkCelery(Celery):
+    def send_task(self, *args, **kwargs):
+        from bahk.public_api.work import reject_public_work
+
+        reject_public_work("task")
+        return super().send_task(*args, **kwargs)
+
+
+app = BahkCelery('bahk', task_cls=PublicReadSafeTask)
 
 # Basic configuration from Django settings
 app.config_from_object('django.conf:settings', namespace='CELERY')

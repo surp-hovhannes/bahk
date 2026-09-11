@@ -76,6 +76,9 @@ class BibleAPIService:
         Raises:
             requests.HTTPError: On API errors (401, 403, 404, etc.)
         """
+        from bahk.public_api.work import reject_public_work
+
+        reject_public_work("passage")
         bible_id, version = self._bible_id_for_book(usfm_book_id)
         passage_id = self._build_passage_id(
             usfm_book_id, start_chapter, start_verse, end_chapter, end_verse

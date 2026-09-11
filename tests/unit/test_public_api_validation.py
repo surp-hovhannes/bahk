@@ -154,9 +154,7 @@ class MinimalPublicView(PublicApiView):
 
 class PublicApiErrorEnvelopeTests(SimpleTestCase):
     def test_derived_view_ignores_stale_authorization(self):
-        request = APIRequestFactory().get(
-            "/api/v1/test/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token"
-        )
+        request = APIRequestFactory().get("/api/v1/test/", HTTP_AUTHORIZATION="Bearer definitely-not-a-token")
         response = MinimalPublicView.as_view()(request)
         response.render()
 
