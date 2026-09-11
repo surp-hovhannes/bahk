@@ -140,6 +140,7 @@ ROUTES = frozenset(
         "fast-by-feast-date",
         "reading-by-date",
         "feast-by-date",
+        "calendar",
     }
 )
 BUCKETS = (0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)

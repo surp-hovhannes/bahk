@@ -299,7 +299,7 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
         * ``name`` (string): localized name with canonical fallback;
           ``null`` when empty
         * ``icon`` (object|null): nested IconPublicSerializer or ``None``
-          when no icon is matched
+          when no icon is matched or its church differs from the Feast
 
     Queryset precondition: the nested ``icon`` is read from the instance's
     cached relation, so querysets feeding this serializer must use
@@ -311,8 +311,14 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
     prayer fields, and any other internal metadata.
     """
 
-    icon = IconPublicSerializer(read_only=True)
+    icon = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
+
+    def get_icon(self, instance):
+        icon = instance.icon
+        if icon is None or icon.church_id != instance.church_id:
+            return None
+        return IconPublicSerializer(icon, context=self.context).data
 
     class Meta:
         model = Feast
