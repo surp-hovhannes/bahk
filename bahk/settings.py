@@ -231,8 +231,13 @@ CACHE_MIDDLEWARE_KEY_PREFIX = 'bahk'
 PUBLIC_API_RESOURCES_ENABLED = config('PUBLIC_API_RESOURCES_ENABLED', default=False, cast=bool)
 PUBLIC_API_DEPLOYMENT_READY = config('PUBLIC_API_DEPLOYMENT_READY', default=False, cast=bool)
 PUBLIC_API_TRAFFIC_ENABLED = True
-PUBLIC_API_RESPONSE_CACHE_ENABLED = True
-PUBLIC_API_REDIS_URL = config('PUBLIC_API_REDIS_URL', default='')
+PUBLIC_API_REDIS_MODE = config('PUBLIC_API_REDIS_MODE', default='dedicated')
+if PUBLIC_API_REDIS_MODE not in ('dedicated', 'shared'):
+    raise ImproperlyConfigured('PUBLIC_API_REDIS_MODE must be dedicated or shared.')
+PUBLIC_API_RESPONSE_CACHE_ENABLED = config('PUBLIC_API_RESPONSE_CACHE_ENABLED', default=False, cast=bool)
+if PUBLIC_API_REDIS_MODE == 'shared' and PUBLIC_API_RESPONSE_CACHE_ENABLED:
+    raise ImproperlyConfigured('Shared public Redis requires response caching to be disabled.')
+PUBLIC_API_REDIS_URL = config('PUBLIC_API_REDIS_URL', default=REDIS_URL if PUBLIC_API_REDIS_MODE == 'shared' else '')
 PUBLIC_API_REDIS_PREFIX = config('PUBLIC_API_REDIS_PREFIX', default='bahk:public-api')
 PUBLIC_API_TRUSTED_PROXIES = config('PUBLIC_API_TRUSTED_PROXIES', default='', cast=Csv())
 PUBLIC_API_RATE_MINUTE = config('PUBLIC_API_RATE_MINUTE', default=60, cast=int)

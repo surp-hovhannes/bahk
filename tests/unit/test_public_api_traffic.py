@@ -30,6 +30,20 @@ from hub.models import Church, Day, Fast
 
 @override_settings(ROOT_URLCONF="tests.unit.public_api_traffic_urls")
 class PublicTrafficPolicyTests(SimpleTestCase):
+    @override_settings(PUBLIC_API_RESOURCES_ENABLED=False, PUBLIC_API_TRAFFIC_ENABLED=True,
+                       PUBLIC_API_REDIS_URL='')
+    @patch.object(traffic, 'record')
+    @patch.object(traffic, 'admit')
+    def test_disabled_descriptor_needs_no_redis(self, admit, record):
+        from django.http import JsonResponse
+
+        inner = Mock(return_value=JsonResponse({'status': 'pre-release'}))
+        response = traffic.PublicApiTrafficMiddleware(inner)(RequestFactory().get('/api/v1/'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        admit.assert_not_called()
+        record.assert_not_called()
+
     def setUp(self):
         self.factory = RequestFactory()
 
@@ -56,7 +70,7 @@ class PublicTrafficPolicyTests(SimpleTestCase):
     def test_ipv6_addresses_are_normalized(self):
         self.assertEqual(self.identity("2001:db8::1"), self.identity("2001:0db8:0:0:0:0:0:1"))
 
-    @override_settings(PUBLIC_API_TRAFFIC_ENABLED=True)
+    @override_settings(PUBLIC_API_TRAFFIC_ENABLED=True, PUBLIC_API_RESOURCES_ENABLED=True)
     @patch.object(traffic, "record")
     @patch.object(traffic, "admit", return_value=12)
     def test_rejected_requests_do_not_execute_inner_middleware(self, admit, record):
@@ -67,7 +81,7 @@ class PublicTrafficPolicyTests(SimpleTestCase):
         self.assertEqual(response["Retry-After"], "12")
         self.assertEqual(response["Cache-Control"], "no-store")
 
-    @override_settings(PUBLIC_API_TRAFFIC_ENABLED=True)
+    @override_settings(PUBLIC_API_TRAFFIC_ENABLED=True, PUBLIC_API_RESOURCES_ENABLED=True)
     @patch.object(traffic, "record")
     @patch.object(traffic, "admit", side_effect=ConnectionError)
     def test_limiter_outage_fails_closed(self, admit, record):
@@ -165,6 +179,26 @@ class PublicTrafficPolicyTests(SimpleTestCase):
     PUBLIC_API_METRICS_TOKEN="a" * 32,
 )
 class PublicReadinessTests(SimpleTestCase):
+    @override_settings(PUBLIC_API_REDIS_MODE='shared', PUBLIC_API_RESPONSE_CACHE_ENABLED=False,
+                       REDIS_URL='redis://public-redis:6379/1')
+    @patch('hub.management.commands.check_public_api_readiness.connection')
+    def test_shared_lru_checks_headroom_and_warns_without_writes(self, connection):
+        client = connection.return_value
+        client.config_get.return_value = {'maxmemory-policy': 'allkeys-lru', 'maxmemory': 100000000}
+        client.info.return_value = {'used_memory': 10000000}
+        output = io.StringIO()
+        call_command('check_public_api_readiness', stdout=output)
+        self.assertIn('best-effort', output.getvalue())
+        self.assertEqual([call[0] for call in client.mock_calls], ['config_get', 'info', 'ping'])
+        client.info.return_value = {'used_memory': 85000000}
+        with self.assertRaisesMessage(CommandError, '20% free'):
+            call_command('check_public_api_readiness')
+
+    @override_settings(PUBLIC_API_REDIS_MODE='shared', PUBLIC_API_RESPONSE_CACHE_ENABLED=True)
+    def test_shared_mode_rejects_response_cache(self):
+        with self.assertRaisesMessage(CommandError, 'caching to be disabled'):
+            call_command('check_public_api_readiness')
+
     @patch("hub.management.commands.check_public_api_readiness.connection")
     def test_checks_configuration_without_writes(self, connection):
         client = connection.return_value
@@ -313,6 +347,7 @@ class RedisIsolation:
             PUBLIC_API_REDIS_URL=REDIS_URL,
             PUBLIC_API_REDIS_PREFIX=self.prefix,
             PUBLIC_API_TRAFFIC_ENABLED=True,
+            PUBLIC_API_RESOURCES_ENABLED=True,
             PUBLIC_API_RESPONSE_CACHE_ENABLED=True,
             PUBLIC_API_RATE_MINUTE=1000,
             PUBLIC_API_RATE_HOUR=10000,

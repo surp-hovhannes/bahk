@@ -1,7 +1,7 @@
 """Atomic public-API admission control and bounded telemetry.
 
 This Redis connection is deliberately independent of Django's response caches.
-Production must use a bounded, noeviction Redis instance (see the runbook).
+Shared launch mode accepts best-effort quotas under eviction (see the runbook).
 """
 
 import hashlib
@@ -191,7 +191,8 @@ class PublicApiTrafficMiddleware:
             return self.get_response(request)
         started = time.monotonic()
         response = None
-        if settings.PUBLIC_API_TRAFFIC_ENABLED:
+        traffic_enabled = settings.PUBLIC_API_TRAFFIC_ENABLED and settings.PUBLIC_API_RESOURCES_ENABLED
+        if traffic_enabled:
             try:
                 wait = admit(request)
                 if wait:
@@ -215,7 +216,7 @@ class PublicApiTrafficMiddleware:
             elif response.status_code >= 500:
                 response = public_error("service_unavailable", "Please retry shortly.", 503, 5)
         response["Cache-Control"] = "no-store"
-        if settings.PUBLIC_API_TRAFFIC_ENABLED:
+        if traffic_enabled:
             record(request, response, time.monotonic() - started)
         return response
 
