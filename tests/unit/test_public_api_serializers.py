@@ -12,6 +12,11 @@ promises. They must:
 * assert citation-only fields for Reading
 * exercise the nested Feast Icon present/absent paths
 * exercise media mappings (cached thumbnails, original images, learn_more_url)
+* pin that every public serializer refuses create()/update()/save()
+* pin the queryset preconditions: ``with_dates()`` Fast dates and
+  ``select_related("icon")`` Feast icons serialize with zero extra queries
+* pin that serializer context — not the request — resolves the language,
+  and that unknown languages fall back to canonical values
 * verify excluded fields never leak into the public response
 * verify that ``thumbnail_url`` never accesses ``ImageSpecField.url`` or
   triggers thumbnail generation / cache writes / model writes
@@ -26,6 +31,7 @@ view would do anyway.
 
 import datetime
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -112,9 +118,7 @@ class IconPublicSerializerContractTests(TestCase):
     def test_returns_exact_id_title_image_url_thumbnail_url_keys(self):
         icon = self._create_icon(title="Nativity")
         # Pin a deterministic cached URL after the post-save hook has run.
-        Icon.objects.filter(pk=icon.pk).update(
-            cached_thumbnail_url="https://cdn.example.com/icon-thumb.jpg"
-        )
+        Icon.objects.filter(pk=icon.pk).update(cached_thumbnail_url="https://cdn.example.com/icon-thumb.jpg")
         icon.refresh_from_db()
 
         data = IconPublicSerializer(icon).data
@@ -186,9 +190,7 @@ class IconPublicSerializerContractTests(TestCase):
             pass
 
         def _explode(_self):
-            raise _Forbidden(
-                "Public Icon serializer must not read ImageSpecField.url"
-            )
+            raise _Forbidden("Public Icon serializer must not read ImageSpecField.url")
 
         with patch.object(type(icon), "thumbnail", new=property(_explode)):
             data = IconPublicSerializer(icon).data
@@ -205,8 +207,6 @@ class IconPublicSerializerContractTests(TestCase):
         self.assertIsInstance(data["image_url"], str)
 
 
-
-
 # ---------------------------------------------------------------------------
 # Reading (citation-only)
 # ---------------------------------------------------------------------------
@@ -217,9 +217,7 @@ class ReadingPublicSerializerContractTests(TestCase):
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
-        self.day = Day.objects.create(
-            date=datetime.date(2026, 3, 1), church=self.church
-        )
+        self.day = Day.objects.create(date=datetime.date(2026, 3, 1), church=self.church)
 
     def _make_reading(self, **kwargs):
         defaults = dict(
@@ -264,6 +262,13 @@ class ReadingPublicSerializerContractTests(TestCase):
         data = ReadingPublicSerializer(reading).data
 
         self.assertIsNone(data["sequence"])
+
+    def test_empty_book_serializes_as_null(self):
+        reading = self._make_reading(book="")
+
+        data = ReadingPublicSerializer(reading).data
+
+        self.assertIsNone(data["book"])
 
     def test_excludes_text_context_and_fetch_fields(self):
         reading = self._make_reading()
@@ -336,13 +341,9 @@ class FeastPublicSerializerContractTests(TestCase):
         # supplied value cannot survive ``create()``. Pin a deterministic
         # cached URL via queryset update after the post-save hook has
         # run, mirroring the Icon serializer tests.
-        Icon.objects.filter(pk=icon.pk).update(
-            cached_thumbnail_url="https://cdn.example.com/nativity-thumb.jpg"
-        )
+        Icon.objects.filter(pk=icon.pk).update(cached_thumbnail_url="https://cdn.example.com/nativity-thumb.jpg")
         icon.refresh_from_db()
-        feast = Feast.objects.create(
-            church=self.church, name="Christmas", icon=icon
-        )
+        feast = Feast.objects.create(church=self.church, name="Christmas", icon=icon)
 
         data = FeastPublicSerializer(feast).data
 
@@ -357,6 +358,41 @@ class FeastPublicSerializerContractTests(TestCase):
             data["icon"]["thumbnail_url"],
             "https://cdn.example.com/nativity-thumb.jpg",
         )
+
+    def test_empty_name_serializes_as_null(self):
+        feast = Feast.objects.create(church=self.church, name="")
+
+        data = FeastPublicSerializer(feast).data
+
+        self.assertIsNone(data["name"])
+
+    def test_icon_serialization_needs_no_queries_when_icon_selected(self):
+        """Queryset precondition: the nested icon comes from the cached
+        relation. With ``select_related("icon")`` satisfied, serializing
+        any number of feasts costs zero additional queries.
+        """
+        icon = Icon.objects.create(
+            title="Shared",
+            church=self.church,
+            image=_png_upload("shared.png"),
+        )
+        Icon.objects.filter(pk=icon.pk).update(cached_thumbnail_url="https://cdn.example.com/shared-thumb.jpg")
+        for index in range(3):
+            Feast.objects.create(church=self.church, name=f"Feast {index}", icon=icon)
+
+        feasts = list(Feast.objects.select_related("icon").order_by("id"))
+
+        with self.assertNumQueries(0):
+            data = [FeastPublicSerializer(feast).data for feast in feasts]
+
+        self.assertEqual(len(data), 3)
+        for payload in data:
+            self.assertEqual(payload["icon"]["id"], icon.id)
+            self.assertEqual(payload["icon"]["title"], "Shared")
+            self.assertEqual(
+                payload["icon"]["thumbnail_url"],
+                "https://cdn.example.com/shared-thumb.jpg",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -391,9 +427,7 @@ class FastPublicSerializerContractTests(TestCase):
             "https://cdn.example.com/lent-thumb.jpg",
         )
         fast = Fast.objects.create(**defaults)
-        Fast.objects.filter(pk=fast.pk).update(
-            cached_thumbnail_url=cached_thumbnail_url
-        )
+        Fast.objects.filter(pk=fast.pk).update(cached_thumbnail_url=cached_thumbnail_url)
         fast.refresh_from_db()
         return fast
 
@@ -434,9 +468,7 @@ class FastPublicSerializerContractTests(TestCase):
         self.assertEqual(data["culmination_feast_date"], "2026-04-12")
         self.assertEqual(data["year"], 2026)
         self.assertEqual(data["learn_more_url"], "https://example.com/lent")
-        self.assertEqual(
-            data["thumbnail_url"], "https://cdn.example.com/lent-thumb.jpg"
-        )
+        self.assertEqual(data["thumbnail_url"], "https://cdn.example.com/lent-thumb.jpg")
         self.assertIsNone(data["image_url"])
 
     def test_empty_description_serializes_as_null(self):
@@ -453,6 +485,13 @@ class FastPublicSerializerContractTests(TestCase):
 
         self.assertIsNone(data["culmination_feast"])
 
+    def test_empty_name_serializes_as_null(self):
+        fast = self._make_fast(name="")
+
+        data = FastPublicSerializer(fast).data
+
+        self.assertIsNone(data["name"])
+
     def test_dates_are_null_when_unannotated(self):
         fast = self._make_fast()
 
@@ -462,28 +501,35 @@ class FastPublicSerializerContractTests(TestCase):
         self.assertIsNone(data["end_date"])
 
     def test_dates_consume_pre_annotated_values_only(self):
-        """Sentinel: the serializer must NOT query ``obj.days``.
-
-        We annotate the queryset with sentinel start/end dates and assert
-        the serializer surfaces them verbatim, with no related-day queries
-        triggered on read. ``assertNumQueries`` would not isolate the
-        serializer call, so we patch the related manager to explode if
-        touched.
+        """Sentinel: the serializer reads annotations verbatim and issues
+        no queries of its own during serialization. Wrapping only the
+        ``.data`` access in ``assertNumQueries(0)`` isolates precisely the
+        serialization call.
         """
         fast = self._make_fast()
         # Pre-annotate as the public view would.
-        annotated_start = datetime.date(2026, 2, 15)
-        annotated_end = datetime.date(2026, 4, 4)
-        fast.start_date = annotated_start
-        fast.end_date = annotated_end
+        fast.start_date = datetime.date(2026, 2, 15)
+        fast.end_date = datetime.date(2026, 4, 4)
 
-        def _explode(*_args, **_kwargs):
-            raise AssertionError(
-                "Public Fast serializer must not query Fast.days"
-            )
-
-        with patch.object(Fast, "days", new=_explode):
+        with self.assertNumQueries(0):
             data = FastPublicSerializer(fast).data
+
+        self.assertEqual(data["start_date"], "2026-02-15")
+        self.assertEqual(data["end_date"], "2026-04-04")
+
+    def test_with_dates_manager_satisfies_the_date_precondition(self):
+        """``Fast.objects.with_dates()`` produces exactly the annotations
+        the serializer consumes, and serialization adds no queries on top.
+        """
+        fast = self._make_fast()
+        Day.objects.create(date=datetime.date(2026, 2, 15), fast=fast, church=self.church)
+        Day.objects.create(date=datetime.date(2026, 2, 20), fast=fast, church=self.church)
+        Day.objects.create(date=datetime.date(2026, 4, 4), fast=fast, church=self.church)
+
+        annotated = Fast.objects.with_dates().get(pk=fast.pk)
+
+        with self.assertNumQueries(0):
+            data = FastPublicSerializer(annotated).data
 
         self.assertEqual(data["start_date"], "2026-02-15")
         self.assertEqual(data["end_date"], "2026-04-04")
@@ -518,16 +564,12 @@ class FastPublicSerializerContractTests(TestCase):
         fast = self._make_fast()
 
         def _explode(_):
-            raise AssertionError(
-                "Public Fast serializer must not read ImageSpecField.url"
-            )
+            raise AssertionError("Public Fast serializer must not read ImageSpecField.url")
 
         with patch.object(type(fast), "image_thumbnail", new=property(_explode)):
             data = FastPublicSerializer(fast).data
 
-        self.assertEqual(
-            data["thumbnail_url"], "https://cdn.example.com/lent-thumb.jpg"
-        )
+        self.assertEqual(data["thumbnail_url"], "https://cdn.example.com/lent-thumb.jpg")
 
     def test_thumbnail_url_does_not_trigger_generation_or_model_writes(self):
         """Sentinel: serialization must not generate thumbnails or save.
@@ -537,6 +579,7 @@ class FastPublicSerializerContractTests(TestCase):
         if the serializer ever reads it. We also patch ``Fast.save`` to
         raise if called during serialization.
         """
+
         class _Forbidden(Exception):
             pass
 
@@ -545,21 +588,19 @@ class FastPublicSerializerContractTests(TestCase):
         fast.refresh_from_db()
 
         def _spec_explode(_self):
-            raise _Forbidden(
-                "ImageSpecField accessed during public serialization"
-            )
+            raise _Forbidden("ImageSpecField accessed during public serialization")
 
         def _save_explode(*_a, **_kw):
             raise _Forbidden("Fast.save called during serialization")
 
-        with patch.object(Fast, "save", side_effect=_save_explode), \
-             patch.object(Fast, "image_thumbnail", new=property(_spec_explode)):
+        with (
+            patch.object(Fast, "save", side_effect=_save_explode),
+            patch.object(Fast, "image_thumbnail", new=property(_spec_explode)),
+        ):
             data = FastPublicSerializer(fast).data
 
         self.assertIsNone(data["thumbnail_url"])
         self.assertIsNone(data["image_url"])  # no image uploaded
-
-
 
     def test_image_url_is_null_when_no_image_uploaded(self):
         fast = self._make_fast()
@@ -625,16 +666,12 @@ class PublicSerializerLocalizationTests(TestCase):
         )
         # No Armenian translation is registered; expected to fall back to
         # the canonical English name.
-        data = FastPublicSerializer(
-            fast, context={"lang": "hy"}
-        ).data
+        data = FastPublicSerializer(fast, context={"lang": "hy"}).data
         self.assertEqual(data["name"], "Lent")
         self.assertEqual(data["description"], "Forty-day fast.")
 
     def test_reading_falls_back_to_canonical_when_no_translation_registered(self):
-        day = Day.objects.create(
-            date=datetime.date(2026, 3, 1), church=self.church
-        )
+        day = Day.objects.create(date=datetime.date(2026, 3, 1), church=self.church)
         reading = Reading.objects.create(
             day=day,
             book="Genesis",
@@ -643,16 +680,12 @@ class PublicSerializerLocalizationTests(TestCase):
             end_chapter=1,
             end_verse=5,
         )
-        data = ReadingPublicSerializer(
-            reading, context={"lang": "hy"}
-        ).data
+        data = ReadingPublicSerializer(reading, context={"lang": "hy"}).data
         self.assertEqual(data["book"], "Genesis")
 
     def test_feast_falls_back_to_canonical_when_no_translation_registered(self):
         feast = Feast.objects.create(church=self.church, name="Easter")
-        data = FeastPublicSerializer(
-            feast, context={"lang": "hy"}
-        ).data
+        data = FeastPublicSerializer(feast, context={"lang": "hy"}).data
         self.assertEqual(data["name"], "Easter")
 
     def test_fast_returns_armenian_name_when_translation_registered(self):
@@ -667,9 +700,7 @@ class PublicSerializerLocalizationTests(TestCase):
         fast.name_hy = "Մեծ Պահք"
         fast.save(update_fields=["i18n"])
 
-        data = FastPublicSerializer(
-            fast, context={"lang": "hy"}
-        ).data
+        data = FastPublicSerializer(fast, context={"lang": "hy"}).data
         self.assertEqual(data["name"], "Մեծ Պահք")
 
     def test_fast_returns_armenian_description_when_translation_registered(self):
@@ -684,12 +715,8 @@ class PublicSerializerLocalizationTests(TestCase):
         fast.description_hy = "Քառասունօրյա պահք՝ Զատիկից առաջ:"
         fast.save(update_fields=["i18n"])
 
-        data = FastPublicSerializer(
-            fast, context={"lang": "hy"}
-        ).data
-        self.assertEqual(
-            data["description"], "Քառասունօրյա պահք՝ Զատիկից առաջ:"
-        )
+        data = FastPublicSerializer(fast, context={"lang": "hy"}).data
+        self.assertEqual(data["description"], "Քառասունօրյա պահք՝ Զատիկից առաջ:")
 
     def test_fast_returns_armenian_culmination_feast_when_translation_registered(self):
         fast = Fast.objects.create(
@@ -703,15 +730,11 @@ class PublicSerializerLocalizationTests(TestCase):
         fast.culmination_feast_hy = "Զատիկ"
         fast.save(update_fields=["i18n"])
 
-        data = FastPublicSerializer(
-            fast, context={"lang": "hy"}
-        ).data
+        data = FastPublicSerializer(fast, context={"lang": "hy"}).data
         self.assertEqual(data["culmination_feast"], "Զատիկ")
 
     def test_reading_returns_armenian_book_when_translation_registered(self):
-        day = Day.objects.create(
-            date=datetime.date(2026, 3, 1), church=self.church
-        )
+        day = Day.objects.create(date=datetime.date(2026, 3, 1), church=self.church)
         reading = Reading.objects.create(
             day=day,
             book="Genesis",
@@ -723,9 +746,7 @@ class PublicSerializerLocalizationTests(TestCase):
         reading.book_hy = "Ծննդոց"
         reading.save(update_fields=["i18n"])
 
-        data = ReadingPublicSerializer(
-            reading, context={"lang": "hy"}
-        ).data
+        data = ReadingPublicSerializer(reading, context={"lang": "hy"}).data
         self.assertEqual(data["book"], "Ծննդոց")
 
     def test_feast_returns_armenian_name_when_translation_registered(self):
@@ -733,9 +754,7 @@ class PublicSerializerLocalizationTests(TestCase):
         feast.name_hy = "Զատիկ"
         feast.save(update_fields=["i18n"])
 
-        data = FeastPublicSerializer(
-            feast, context={"lang": "hy"}
-        ).data
+        data = FeastPublicSerializer(feast, context={"lang": "hy"}).data
         self.assertEqual(data["name"], "Զատիկ")
 
     def test_fast_uses_active_request_language_when_context_lacks_lang(self):
@@ -766,6 +785,95 @@ class PublicSerializerLocalizationTests(TestCase):
         self.assertEqual(data["name"], "Մեծ Պահք")
         self.assertEqual(translation.get_language(), before)
 
+    def test_context_lang_takes_precedence_over_request_query_params(self):
+        """Regression pin: serializers must never read the request.
+
+        Views validate ``?lang`` and pass the result as ``context['lang']``.
+        If the serializer ever re-read the raw query param, a normalization
+        change in the view would desynchronize the response cache key from
+        the localized body.
+        """
+        fast = Fast.objects.create(
+            church=self.church,
+            name="Lent",
+            description="Forty-day fast.",
+        )
+        fast.name_hy = "Մեծ Պահք"
+        fast.save(update_fields=["i18n"])
+        request = SimpleNamespace(query_params={"lang": "en"})
+
+        data = FastPublicSerializer(fast, context={"request": request, "lang": "hy"}).data
+
+        self.assertEqual(data["name"], "Մեծ Պահք")
+
+    def test_unknown_context_lang_falls_back_to_canonical(self):
+        """A language outside the registered set yields the canonical
+        value, never an error or an empty string.
+        """
+        fast = Fast.objects.create(
+            church=self.church,
+            name="Lent",
+            description="Forty-day fast.",
+        )
+
+        data = FastPublicSerializer(fast, context={"lang": "fr"}).data
+
+        self.assertEqual(data["name"], "Lent")
+
+    def test_translation_failure_logs_warning_and_falls_back_to_canonical(self):
+        """If the translation override or accessor raises, the failure is
+        logged and the canonical value is served.
+        """
+        fast = Fast.objects.create(
+            church=self.church,
+            name="Lent",
+            description="Forty-day fast.",
+        )
+
+        with patch(
+            "bahk.public_api.v1.serializers.override",
+            side_effect=RuntimeError("override exploded"),
+        ):
+            with self.assertLogs("bahk.public_api.v1.serializers", level="WARNING") as logs:
+                data = FastPublicSerializer(fast, context={"lang": "hy"}).data
+
+        self.assertEqual(data["name"], "Lent")
+        self.assertTrue(any("translation lookup failed" in message for message in logs.output))
+
+
+class ReadOnlySerializerContractTests(TestCase):
+    """Every public serializer is read-only by construction."""
+
+    def test_save_refused_instead_of_persisting_an_empty_row(self):
+        """Reviewer reproduction: with every field read-only, DRF
+        validates any payload vacuously, so ``save()`` must refuse rather
+        than persist an empty model row.
+        """
+        count_before = Church.objects.count()
+        serializer = ChurchPublicSerializer(data={"name": "Injected"})
+
+        self.assertTrue(serializer.is_valid())
+        with self.assertRaises(NotImplementedError):
+            serializer.save()
+
+        self.assertEqual(Church.objects.count(), count_before)
+        self.assertFalse(Church.objects.filter(name__in=("", "Injected")).exists())
+
+    def test_create_and_update_refused_for_every_public_serializer(self):
+        for serializer_cls in (
+            ChurchPublicSerializer,
+            IconPublicSerializer,
+            ReadingPublicSerializer,
+            FeastPublicSerializer,
+            FastPublicSerializer,
+        ):
+            with self.subTest(serializer=serializer_cls.__name__):
+                with self.assertRaises(NotImplementedError):
+                    serializer_cls().create({})
+                with self.assertRaises(NotImplementedError):
+                    serializer_cls().update(None, {})
+
+
 # ---------------------------------------------------------------------------
 # Media helpers (unit-level sanity checks)
 # ---------------------------------------------------------------------------
@@ -785,3 +893,24 @@ class MediaHelperTests(TestCase):
         Fast.objects.filter(pk=fast.pk).update(cached_thumbnail_url=None)
         fast.refresh_from_db()
         self.assertIsNone(_cached_thumbnail_url(fast))
+
+    def test_image_url_logs_warning_and_degrades_when_storage_raises(self):
+        church = Church.objects.create(name="Helper Church 3")
+        fast = Fast.objects.create(
+            church=church,
+            name="Broken Storage Fast",
+            image=_png_upload("broken.png"),
+        )
+
+        class _Boom(Exception):
+            pass
+
+        def _raise(_self):
+            raise _Boom("storage exploded")
+
+        with patch.object(type(fast.image), "url", new=property(_raise)):
+            with self.assertLogs("bahk.public_api.v1.serializers", level="WARNING") as logs:
+                data = FastPublicSerializer(fast).data
+
+        self.assertIsNone(data["image_url"])
+        self.assertTrue(any("resolving image URL failed for Fast" in message for message in logs.output))
