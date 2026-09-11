@@ -7,13 +7,16 @@
   {% block robots %}{% endblock %}
   <meta name="description" content="{% block meta_description %}Fast & Pray API service and public documentation.{% endblock %}">
   <title>{% block title %}Fast &amp; Pray API{% endblock %}</title>
+  {% block fonts %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap">
+  {% endblock %}
   <link rel="icon" type="image/svg+xml" href="{% static 'admin/brand/favicon.svg' %}">
   <link rel="stylesheet" href="{% static 'landing/css/api-landing.css' %}">
 </head>
-<body>
+<body{% block body_attributes %}{% endblock %}>
+  {% block skip_link %}{% endblock %}
   <header class="site-header">
     <div class="site-header__inner">
       <a class="brand" href="{% url 'api-home' %}" aria-label="Fast & Pray API home">
