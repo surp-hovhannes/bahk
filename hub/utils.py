@@ -5,6 +5,7 @@ import logging
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
 from django.db.models import CharField, Q, Value
+from django.db.utils import IntegrityError
 from django.db.models.functions import Cast, Concat, MD5
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -14,6 +15,9 @@ from django.core.cache import cache
 import bahk.settings as settings
 from hub.models import Church, Day, Fast, Feast, Profile
 from hub.serializers import FastSerializer
+from hub.services.feast_rename import (
+    STALE_COLUMNS, refresh_metadata, stale_metadata,
+)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -154,29 +158,103 @@ def send_fast_reminders():
             logger.info(f'Reminder Email: Fast reminder sent to {profile.user.email} for {earliest_fast.name}')
 
 
+def _adopt_unkeyed_row(church, observance_id, name_en):
+    """Give an unkeyed row carrying this name the id it belongs to, so it is not duplicated.
+
+    Migration 0066 keys every row it can resolve, but anything written since without going through
+    here -- a seed, an admin, a row the backfill could not place -- is invisible to a lookup by id
+    and would be silently duplicated, taking its designation, icon and contexts out of
+    circulation.  Adopting it is how such a row rejoins, and it happens once.
+
+    Called only when the observance has no row yet, so it costs nothing on the ordinary path: an
+    already-keyed row is the one that has been in service and is left alone.
+    """
+    orphan = Feast.objects.filter(
+        church=church, observance_id__isnull=True, name=name_en).order_by("id").first()
+    if orphan is None:
+        return
+    orphan.observance_id = observance_id
+    try:
+        orphan.save(update_fields=["observance_id"])
+    except IntegrityError:
+        # Another worker keyed this observance between the check and the write. The orphan stays
+        # unkeyed; the next request through here adopts it, and the audit reports it meanwhile.
+        logger.info(
+            "Lost the race adopting feast %s onto %s; leaving it unkeyed.",
+            orphan.pk, observance_id)
+
+
+def _get_or_create_feast_for_observance(commemoration, church):
+    """Resolve one commemoration to its Feast row.
+
+    Returns ``(feast_obj, created, refreshed)`` -- ``refreshed`` being whether an existing row's
+    display text had drifted from the engine and was rewritten.
+    """
+    observance_id = commemoration["observance_id"]
+    name_en = commemoration["name_en"]
+    name_hy = commemoration.get("name_hy") or None
+
+    # Look the row up by the OBSERVANCE, not by its name. An id keeps meaning the same
+    # commemoration across engine releases; the name is display text the engine corrects, and
+    # keying on it is what stranded 158 rows when 1.3.0 landed.
+    feast_obj = Feast.objects.filter(church=church, observance_id=observance_id).first()
+    feast_created = False
+
+    if feast_obj is None:
+        _adopt_unkeyed_row(church, observance_id, name_en)
+        # get_or_create rather than a bare save: two workers resolving the same uncached date race
+        # here on a commemoration's first sighting, and get_or_create retries the read when the
+        # unique constraint rejects its insert. Hand-rolling it turns that race into an
+        # IntegrityError the view can only degrade on.
+        #
+        # A row being created has no i18n to merge into, so the translation goes in whole -- which
+        # is also what lets it save in full, so post_save sees the id, the name and its
+        # translation together. That is what the designation and icon-matching tasks read.
+        feast_obj, feast_created = Feast.objects.get_or_create(
+            church=church,
+            observance_id=observance_id,
+            defaults={"name": name_en, "i18n": {"name_hy": name_hy} if name_hy else {}},
+        )
+        if feast_created:
+            return feast_obj, True, False
+
+    # The name is derived from the id now, so it is refreshed rather than matched on -- an engine
+    # release that corrects the display text updates the row in place instead of orphaning it.
+    # The rule lives in feast_rename, shared with remap_feast_names and migration 0066, so the
+    # request path and the sweep cannot drift on what counts as stale or on how i18n is merged.
+    # The engine's answer for this day is passed in, so no full-range sweep is triggered here.
+    stale = stale_metadata(feast_obj, observance_id, name_en=name_en, name_hy=name_hy)
+    if stale:
+        refresh_metadata(feast_obj, observance_id, name_en=name_en, name_hy=name_hy)
+        feast_obj.save(update_fields=sorted({STALE_COLUMNS[field] for field in stale}))
+
+    return feast_obj, False, bool(stale)
+
+
 def get_or_create_feast_for_date(date_obj, church, check_fast=True):
-    """Resolve the commemoration for a date, and return its Feast row.
+    """Resolve the day's commemorations, and return their Feast rows.
 
-    The name of the day comes from the ``armenian_lectionary`` engine, recomputed per call, so
-    nothing has to be imported ahead of time for a date to resolve.  The Feast row this returns is
-    keyed by ``(church, name)``, not by date: it is where the app keeps the parts the engine has
-    no notion of -- designation, icon, generated contexts -- and one row serves every recurrence
-    of that commemoration.
+    The day comes from the ``armenian_lectionary`` engine, recomputed per call, so nothing has to
+    be imported ahead of time for a date to resolve.  A liturgical day is a LIST of observances,
+    and only the ones the engine marks ``is_comm`` become feasts -- so this returns zero, one or
+    two rows, and zero is the commonest answer of the three.
 
-    ``created`` therefore means "this commemoration was seen for the first time", not "a row was
-    made for this date".  After the first year of a full cycle it is almost always ``False``, and
-    that is the point: the LLM context and icon match behind it run once, not once a year.
+    Each Feast row is keyed by ``(church, observance_id)``, not by date and not by name: it is
+    where the app keeps the parts the engine has no notion of -- designation, icon, generated
+    contexts -- and one row serves every recurrence of that commemoration.  So "created" means
+    "this commemoration was seen for the first time", not "a row was made for this date"; after
+    the first year of a full cycle it is almost always false, and that is the point: the LLM
+    context and icon match behind it run once, not once a year.
 
     Args:
         date_obj: datetime.date for the date
         church: Church object
-        check_fast: If True, return no feast when a Fast is associated with the day
+        check_fast: If True, return no feasts when a Fast is associated with the day
 
     Returns:
-        Tuple of (feast_obj, created, status_dict) where:
-        - feast_obj: Feast instance, or None if there is no feast to record
-        - created: True only when the commemoration had no row in this church yet
-        - status_dict: Dict with status information (status, reason, etc.)
+        Tuple of (feasts, status_dict) where:
+        - feasts: list of Feast instances, empty when there is nothing to record
+        - status_dict: Dict with status information (status, reason, created count, etc.)
     """
     # A Fast on the day outranks the feast in the UI. Look the Day up without creating one --
     # resolving a feast name should not mint calendar rows as a side effect.
@@ -184,8 +262,7 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
         day = Day.objects.filter(date=date_obj, church=church).select_related("fast").first()
         if day and day.fast:
             return (
-                None,
-                False,
+                [],
                 {
                     "status": "skipped",
                     "reason": "fast_associated",
@@ -197,58 +274,39 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
     # Imported lazily to avoid a circular import (feast_service imports SUPPORTED_CHURCHES here).
     from hub.services.feast_service import get_feast_for_date
 
-    feast_data = get_feast_for_date(date_obj, church)
-    if not feast_data:
+    commemorations = get_feast_for_date(date_obj, church)
+    if commemorations is None:
+        # No answer at all -- unsupported church, out-of-range date, or a day the engine could
+        # not resolve. Distinct from an answer of "nothing today", which is the empty list below.
         return (
-            None,
-            False,
+            [],
             {"status": "skipped", "reason": "no_feast_data", "date": str(date_obj)}
         )
 
-    name_en = feast_data.get("name_en") or feast_data.get("name")
-    if not name_en:
+    if not commemorations:
         return (
-            None,
-            False,
-            {"status": "skipped", "reason": "no_feast_name", "date": str(date_obj)}
+            [],
+            {"status": "skipped", "reason": "no_commemorations", "date": str(date_obj)}
         )
 
-    feast_obj, feast_created = Feast.objects.get_or_create(church=church, name=name_en)
-
-    # Fill in the Armenian name if the engine has one and this row does not. Engine releases add
-    # translations over time, so an existing row can still be upgraded.
-    name_hy = feast_data.get("name_hy")
-    translation_updated = False
-    if name_hy and not feast_obj.name_hy:
-        feast_obj.name_hy = name_hy
-        translation_updated = True
-        # A freshly created row saves in full so post_save sees the name and its translation
-        # together; an existing one touches only the translation column.
-        feast_obj.save(**({} if feast_created else {"update_fields": ["i18n"]}))
-
-    if feast_created:
-        action = "created"
-    elif translation_updated:
-        action = "updated"
-    else:
-        return (
-            feast_obj,
-            False,
-            {
-                "status": "skipped",
-                "reason": "feast_already_exists",
-                "date": str(date_obj),
-            }
-        )
+    feasts = []
+    created_count = 0
+    refreshed_count = 0
+    for commemoration in commemorations:
+        feast_obj, feast_created, refreshed = _get_or_create_feast_for_observance(
+            commemoration, church)
+        feasts.append(feast_obj)
+        created_count += int(feast_created)
+        refreshed_count += int(refreshed)
 
     return (
-        feast_obj,
-        feast_created,
+        feasts,
         {
             "status": "success",
-            "action": action,
-            "feast_id": feast_obj.id,
-            "feast_name": feast_obj.name,
+            "created": created_count,
+            "refreshed": refreshed_count,
+            "feast_ids": [feast.id for feast in feasts],
+            "feast_names": [feast.name for feast in feasts],
             "date": str(date_obj),
         }
     )

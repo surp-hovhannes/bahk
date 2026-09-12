@@ -37,16 +37,19 @@ def feast_api_cache_key(date_obj, church_id, lang):
     return f"feast:{date_obj}:{church_id}:{lang}:{feast_api_generation(church_id)}"
 
 
-def invalidate_feast_api_cache_for_feast(feast):
-    """Invalidate every feast API entry for this feast's church.
+def invalidate_feast_api_cache_for_church(church_id):
+    """Invalidate every feast API entry for a church.
 
     A feast is a commemoration served on many dates, so there is no single entry to drop. Bumping
     the church's generation orphans them all in one operation -- see :func:`feast_api_generation`.
 
     Over-invalidating a church is deliberate and cheap: feast enrichment changes are rare (an
     admin action, or an LLM context finishing) and the entries rebuild from one engine call.
+
+    Takes the id rather than a row, so a caller that has just merged rows away -- the backfill in
+    migration 0066 -- has something valid to pass.
     """
-    key = _feast_generation_key(feast.church_id)
+    key = _feast_generation_key(church_id)
     try:
         try:
             cache.incr(key)
@@ -54,4 +57,10 @@ def invalidate_feast_api_cache_for_feast(feast):
             # incr requires the key to exist; if it has expired, any generation is fresh enough.
             cache.set(key, 1, None)
     except Exception:
-        logger.warning("Failed to invalidate feast API cache for feast %s", feast.pk, exc_info=True)
+        logger.warning(
+            "Failed to invalidate feast API cache for church %s", church_id, exc_info=True)
+
+
+def invalidate_feast_api_cache_for_feast(feast):
+    """Invalidate every feast API entry for this feast's church."""
+    invalidate_feast_api_cache_for_church(feast.church_id)

@@ -861,7 +861,7 @@ class FeastIconAPITests(TestCase):
         from hub.services.feast_service import get_feast_for_date
         feast = Feast.objects.create(
             church=self.church,
-            name=get_feast_for_date(self.test_date, self.church)["name_en"],
+            name=get_feast_for_date(self.test_date, self.church)[0]["name_en"],
             icon=icon,
         )
 

@@ -759,10 +759,12 @@ class Reading(models.Model):
 class Feast(models.Model):
     """A commemoration, and the enrichment the app keeps for it.
 
-    Keyed by ``(church, name)``, not by date.  The name of the day comes from the
-    ``armenian_lectionary`` engine and is recomputed per request, so nothing here needs to be
-    pre-populated for a date to resolve; what this row exists to hold is the part the engine has
-    no notion of -- the AI ``designation``, the matched ``icon``, and the generated ``contexts``.
+    Keyed by ``(church, observance_id)`` -- one published engine id, so a row is exactly one
+    commemoration -- and not by date, nor by the name, which is display text the engine corrects
+    between releases.  The day's commemorations come from the ``armenian_lectionary`` engine and
+    are recomputed per request, so nothing here needs to be pre-populated for a date to resolve;
+    what this row exists to hold is the part the engine has no notion of -- the AI
+    ``designation``, the matched ``icon``, and the generated ``contexts``.
 
     Those are properties of the commemoration, not of the day it lands on.  This model used to
     hang off ``Day``, which meant the same feast earned a new row, a new LLM context and a new
@@ -798,6 +800,18 @@ class Feast(models.Model):
         )
 
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="feasts")
+    observance_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "The identity of this commemoration: one of the engine's published observance ids. "
+            "Stable across engine releases in a way the name is not -- a published id keeps "
+            "meaning the same observance, while the display text gets corrected. Null only on "
+            "rows nothing could resolve."
+        ),
+    )
     # 512 instead of 256 because two feast names in the Armenian lectionary exceed 256 characters:
     # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257)
     name = models.CharField(max_length=512)
@@ -822,11 +836,25 @@ class Feast(models.Model):
 
     class Meta:
         constraints = [
-            # One row per commemoration per church: the invariant the whole re-key exists to
-            # establish, enforced in the database so a race between two requests for the same
-            # date cannot recreate the per-occurrence duplication.
+            # One row per observance per church: the invariant the re-key exists to establish,
+            # enforced in the database so a race between two requests for the same date cannot
+            # recreate the per-occurrence duplication.
+            #
+            # Keyed on observance_id rather than name because only the id is a contract. A
+            # published id keeps meaning the same observance; the name is display text the engine
+            # corrects, and keying on it is what stranded 158 rows at 1.3.0 and more at 2.0.0.
+            #
+            # That no two commemorations happen to share an English name in 2.1.0 is not a reason
+            # to key on the name instead: it is a property of today's catalog, not a guarantee the
+            # engine makes, and the engine already distinguishes non-commemoration observances
+            # English would conflate.
+            #
+            # Partial, because a row nothing could resolve carries no id and several such rows
+            # must be allowed to coexist rather than collide on NULL.
             models.UniqueConstraint(
-                fields=["church", "name"], name="unique_feast_per_church"
+                fields=["church", "observance_id"],
+                condition=models.Q(observance_id__isnull=False),
+                name="unique_feast_observance_id_per_church",
             ),
         ]
 

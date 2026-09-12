@@ -78,7 +78,7 @@ class FeastViewCacheTests(TestCase):
 
         day = Day.objects.create(date=self.test_date, church=self.church)
         feast = Feast.objects.create(church=day.church, name="Christmas")
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         factory = APIRequestFactory()
 
@@ -124,8 +124,7 @@ class FeastViewCacheTests(TestCase):
 
         def get_feast_for_request(date_obj, church, check_fast=False):
             return (
-                feasts_by_date_and_church[(date_obj, church.id)],
-                False,
+                [feasts_by_date_and_church[(date_obj, church.id)]],
                 {"status": "success"},
             )
 
@@ -196,7 +195,7 @@ class FeastAPIRouteTests(TestCase):
     def _get_cached_feast_response(self, feast):
         with patch("hub.views.feasts.generate_feast_context_task.delay"), patch(
             "hub.views.feasts.get_or_create_feast_for_date",
-            return_value=(feast, False, {"status": "success"}),
+            return_value=([feast], {"status": "success"}),
         ):
             return self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -228,7 +227,7 @@ class FeastAPIRouteTests(TestCase):
             name="Christmas",
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -259,7 +258,7 @@ class FeastAPIRouteTests(TestCase):
         mock_get_or_create,
     ):
         Day.objects.create(date=self.test_date, church=self.church)
-        mock_get_or_create.return_value = (None, False, {"status": "not_found"})
+        mock_get_or_create.return_value = ([], {"status": "not_found"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -291,7 +290,7 @@ class FeastAPIRouteTests(TestCase):
             ),
             designation=Feast.Designation.MARTYRS,
         )
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -316,7 +315,7 @@ class FeastAPIRouteTests(TestCase):
                 "Patriarch, and his three disciples"
             ),
         )
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -339,7 +338,7 @@ class FeastAPIRouteTests(TestCase):
             name="First day of the Fast",
             designation=Feast.Designation.FAST,
         )
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -359,7 +358,7 @@ class FeastAPIRouteTests(TestCase):
         mock_generate_context,
     ):
         feast = self._create_feast(name="First day of the Fast")
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -383,7 +382,7 @@ class FeastAPIRouteTests(TestCase):
         mock_generate_context,
     ):
         feast = self._create_feast(name="Median day of Great Lent (Mijink)")
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -407,7 +406,7 @@ class FeastAPIRouteTests(TestCase):
         mock_generate_context,
     ):
         feast = self._create_feast(name="Commemoration of Sts. Martyrs")
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get("/api/feasts/", {"date": self.date_str})
 
@@ -434,7 +433,7 @@ class FeastAPIRouteTests(TestCase):
             name="Christmas",
             designation=Feast.Designation.NATIVITY_MOTHER_OF_GOD,
         )
-        mock_get_or_create.return_value = (feast, False, {"status": "success"})
+        mock_get_or_create.return_value = ([feast], {"status": "success"})
 
         response = self.client.get(self.hub_url, {"date": self.date_str})
 
@@ -473,7 +472,7 @@ class FeastAPIRouteTests(TestCase):
     ):
         today = date.today()
         Day.objects.create(date=today, church=self.church)
-        mock_get_or_create.return_value = (None, False, {"status": "not_found"})
+        mock_get_or_create.return_value = ([], {"status": "not_found"})
 
         response = self.client.get(self.hub_url)
 
@@ -625,13 +624,13 @@ class FeastAPIRouteTests(TestCase):
         with patch("hub.views.feasts.generate_feast_context_task.delay"), patch(
             "hub.views.feasts.get_or_create_feast_for_date"
         ) as mock_get_or_create:
-            mock_get_or_create.return_value = (feast, False, {"status": "success"})
+            mock_get_or_create.return_value = ([feast], {"status": "success"})
             first_response = self.client.get("/api/feasts/", {"date": self.date_str})
             self.assertEqual(first_response.json()["feast"]["id"], feast.id)
 
             feast.delete()
 
-            mock_get_or_create.return_value = (None, False, {"status": "not_found"})
+            mock_get_or_create.return_value = ([], {"status": "not_found"})
             second_response = self.client.get("/api/feasts/", {"date": self.date_str})
 
         self.assertIsNone(second_response.json()["feast"])
