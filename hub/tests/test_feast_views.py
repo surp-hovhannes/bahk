@@ -370,7 +370,6 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertEqual(data["feasts"][0]["designation"], Feast.Designation.MARTYRS)
-        self.assertTrue(data["feasts"][0]["context_eligible"])
         self.assertEqual(data["feasts"][0]["text"], "")
         self.assertEqual(data["feasts"][0]["short_text"], "")
         mock_generate_context.assert_called_once_with(feast.id)
@@ -395,7 +394,6 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feasts"][0]["designation"])
-        self.assertTrue(data["feasts"][0]["context_eligible"])
         self.assertEqual(data["feasts"][0]["text"], "")
         self.assertEqual(data["feasts"][0]["short_text"], "")
         mock_generate_context.assert_called_once_with(feast.id)
@@ -418,7 +416,6 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertEqual(data["feasts"][0]["designation"], Feast.Designation.FAST)
-        self.assertFalse(data["feasts"][0]["context_eligible"])
         self.assertEqual(data["feasts"][0]["text"], "")
         self.assertEqual(data["feasts"][0]["short_text"], "")
         mock_generate_context.assert_not_called()
@@ -446,7 +443,6 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feasts"][0]["designation"])
-        self.assertTrue(data["feasts"][0]["context_eligible"])
         mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
@@ -476,7 +472,6 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feasts"][0]["designation"])
-        self.assertTrue(data["feasts"][0]["context_eligible"])
         mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")
@@ -498,7 +493,6 @@ class FeastAPIRouteTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIsNone(data["feasts"][0]["designation"])
-        self.assertTrue(data["feasts"][0]["context_eligible"])
         mock_generate_context.assert_called_once_with(feast.id)
 
     @patch("hub.views.feasts.generate_feast_context_task.delay")

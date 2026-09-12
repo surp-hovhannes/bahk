@@ -133,6 +133,14 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    contradicted `determine_feast_designation_task` on Mijink. That leaves `designation` as the
    only gate, which is why `0068` had to repair the rows a regex wrote into it.
 
+   **Eligibility is a scheduling decision, not a payload field.** `context_eligible` used to be
+   served so the app could hide a feast whose context would never arrive. The app stopped reading
+   it in the same commit that adopted `feasts: []`, and once the rule collapsed to
+   `designation != FAST` the field only restated `designation`, which is served beside it. Old
+   builds reading the deprecated `feast` key are safe: their check was `context_eligible !==
+   false`, so an absent field reads as eligible. The helper still gates the enqueue in the view
+   and the worker.
+
    Because a feast has no date, two things go through the engine instead:
    - `dates_for_feast_name` / `representative_date_for_feast_name` (cached range sweep) supply a
      date where one is genuinely needed — the `feasts.json` reference matcher in `llm_service`.
