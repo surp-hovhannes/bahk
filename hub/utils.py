@@ -274,13 +274,15 @@ def get_or_create_feast_for_date(date_obj, church, check_fast=True):
     # Imported lazily to avoid a circular import (feast_service imports SUPPORTED_CHURCHES here).
     from hub.services.feast_service import get_feast_for_date
 
+    # FeastDataUnavailable propagates: a broken install or an unsupported church is not something
+    # to paper over with an empty list, which is what "nothing to show today" already looks like.
     commemorations = get_feast_for_date(date_obj, church)
     if commemorations is None:
-        # No answer at all -- unsupported church, out-of-range date, or a day the engine could
-        # not resolve. Distinct from an answer of "nothing today", which is the empty list below.
+        # Outside the engine's validated year window. A fact about the date rather than a
+        # failure, so it degrades to "nothing to show" like any other dateless day.
         return (
             [],
-            {"status": "skipped", "reason": "no_feast_data", "date": str(date_obj)}
+            {"status": "skipped", "reason": "date_out_of_range", "date": str(date_obj)}
         )
 
     if not commemorations:

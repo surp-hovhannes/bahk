@@ -207,11 +207,11 @@ class FeastPrayerAPITests(TestCase):
         response = self.client.get('/api/feasts/', {'date': '2026-01-06', 'lang': 'en'})
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feast', response.data)
+        self.assertIn('feasts', response.data)
 
         # If there's a feast, verify it has a prayer field
-        if response.data['feast']:
-            self.assertIn('prayer', response.data['feast'])
+        if response.data['feasts']:
+            self.assertIn('prayer', response.data['feasts'][0])
             # Prayer can be None if there's no matching prayer for the designation
             # This is expected behavior
 
@@ -231,12 +231,12 @@ class FeastPrayerAPITests(TestCase):
         response = self.client.get('/api/feasts/', {'date': '2026-01-07', 'lang': 'en'})
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feast', response.data)
-        self.assertIsNotNone(response.data['feast'])
-        self.assertIn('prayer', response.data['feast'])
+        self.assertIn('feasts', response.data)
+        self.assertTrue(response.data['feasts'])
+        self.assertIn('prayer', response.data['feasts'][0])
 
         # Prayer should be None for feasts without a prayer
-        prayer = response.data['feast']['prayer']
+        prayer = response.data['feasts'][0]['prayer']
         self.assertIsNone(prayer)
 
     def test_feast_endpoint_armenian_translation(self):
@@ -244,7 +244,7 @@ class FeastPrayerAPITests(TestCase):
         response = self.client.get('/api/feasts/', {'date': '2026-01-06', 'lang': 'hy'})
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feast', response.data)
+        self.assertIn('feasts', response.data)
 
         # Verify the endpoint accepts Armenian language parameter
         # The actual translation rendering is tested in model tests

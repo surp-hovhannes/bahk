@@ -6,6 +6,7 @@ from django.db.models.query import QuerySet
 from django.test import TestCase
 
 from hub.models import Church, Day, Feast
+from hub.services.feast_service import FeastDataUnavailable
 from hub.utils import _get_or_create_feast_for_observance, get_or_create_feast_for_date
 from tests.fixtures.test_data import TestDataFactory
 
@@ -144,12 +145,11 @@ class GetOrCreateFeastForDateTests(TestCase):
         mock_engine.assert_called_once()
 
     @patch('hub.services.feast_service.get_feast_for_date')
-    def test_skip_when_no_feast_data(self, mock_engine):
-        """``None`` means the engine gave no answer -- unsupported church, or an unresolved day.
+    def test_skip_when_date_is_outside_the_engines_range(self, mock_engine):
+        """``None`` now means only "outside the validated year window".
 
-        Deliberately a different outcome from the empty list above: on an install missing the
-        observance catalog every day answers ``None``, and reading that as "no commemoration"
-        would serve an empty calendar without a word.
+        That is a fact about the date rather than a failure, so it degrades to the same empty
+        list as a day that simply commemorates nobody.
         """
         mock_engine.return_value = None
 
@@ -159,7 +159,19 @@ class GetOrCreateFeastForDateTests(TestCase):
 
         self.assertEqual(feasts, [])
         self.assertEqual(status_dict["status"], "skipped")
-        self.assertEqual(status_dict["reason"], "no_feast_data")
+        self.assertEqual(status_dict["reason"], "date_out_of_range")
+
+    @patch('hub.services.feast_service.get_feast_for_date')
+    def test_unavailable_data_propagates_instead_of_becoming_an_empty_day(self, mock_engine):
+        """A broken install must not be indistinguishable from "nothing to show today".
+
+        An empty list is the commonest correct answer there is, so swallowing this here would
+        serve a plausible-looking empty calendar with nothing anywhere going red.
+        """
+        mock_engine.side_effect = FeastDataUnavailable("catalog missing")
+
+        with self.assertRaises(FeastDataUnavailable):
+            get_or_create_feast_for_date(self.test_date, self.church, check_fast=True)
 
     @patch('hub.services.feast_service.get_feast_for_date')
     def test_create_feast_with_english_only(self, mock_engine):

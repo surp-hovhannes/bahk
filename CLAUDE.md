@@ -82,8 +82,8 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
 
    **Most days commemorate nobody.** Of the engine's 9,861 supported days, 5,070 carry no
    commemoration (the weekly Wed/Fri fasts alone are 1,334), 4,606 carry one, and 185 carry two.
-   So an empty list is the commonest answer `get_feast_for_date` gives, and it means "nothing to
-   show today" — not an error.
+   So `feasts: []` is the commonest answer and means "nothing to show today" — the API serves it,
+   caches it, and the app renders no card. It is not an error.
 
    **Feasts are keyed by observance, not by date and not by name.** `Feast` is unique on
    `(church, observance_id)` — one published engine id, so a row is one commemoration. It does
@@ -105,7 +105,13 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    flattens them all to `Fast day` in English. That is why the unique constraint had to move off
    the name.
 
-   **Never classify a feast by reading its name.** The corollary of the above, and it has already
+   **Nothing on the feast path classifies by name.** `is_feast_context_generation_eligible` is
+   just `designation != FAST`; the regexes it used to run — saint/martyr words, "fast"+"day"
+   tokens, a hardcoded Mijink list — guessed at a question `is_comm` answers upstream, and they
+   contradicted `determine_feast_designation_task` on Mijink. With those gone, `designation` is
+   the sole gate on context generation, which is what made the damage below permanent.
+
+   That damage is the corollary of the rule above, and it has already
    cost us. `determine_feast_designation_task` used to stamp `FAST` on "<Ordinal> day of Great
    Lent"-shaped names without asking the classifier, carving out `Saint` but never `St.` — the
    abbreviation the engine actually uses. Production ended up with St. Theodore the Tyron, Lazarus
@@ -120,6 +126,12 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    the repair leaves the damaged rows blank forever. Six ids carry both marks (the named Lenten
    Sundays, and Mijink) and are left alone, because there `FAST` may be considered rather than an
    artifact.
+
+   **Context eligibility does not read the name.** `is_feast_context_generation_eligible` is now
+   just `designation != FAST`. The regexes it used to run (saint/martyr words, "fast"+"day"
+   tokens, a hardcoded Mijink list) guessed at a question `is_comm` answers upstream, and they
+   contradicted `determine_feast_designation_task` on Mijink. That leaves `designation` as the
+   only gate, which is why `0068` had to repair the rows a regex wrote into it.
 
    Because a feast has no date, two things go through the engine instead:
    - `dates_for_feast_name` / `representative_date_for_feast_name` (cached range sweep) supply a
