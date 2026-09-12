@@ -85,6 +85,15 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    So `feasts: []` is the commonest answer and means "nothing to show today" — the API serves it,
    caches it, and the app renders no card. It is not an error.
 
+   **`feasts` is the only shape.** A single `feast` object rode alongside the array through the
+   app transition, because a mobile release is not an atomic deploy and builds already on phones
+   read that key; it was removed once the store release carrying `feasts` had rolled out. What
+   makes such a change safe in both directions is `FEAST_API_RESPONSE_SHAPE` in `hub/cache.py`,
+   folded into the cache key: each code version only ever reads entries it wrote, so there is
+   nothing to bump by hand on deploy and a rollback cannot serve the newer shape out of the
+   cache. **Bump it in the same commit as any change to the body's keys — including the keys of
+   an entry inside `feasts`.**
+
    **Feasts are keyed by observance, not by date and not by name.** `Feast` is unique on
    `(church, observance_id)` — one published engine id, so a row is one commemoration. It does
    not hang off `Day`. It exists to hold the parts the engine has no notion of — the AI
@@ -136,10 +145,10 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
    **Eligibility is a scheduling decision, not a payload field.** `context_eligible` used to be
    served so the app could hide a feast whose context would never arrive. The app stopped reading
    it in the same commit that adopted `feasts: []`, and once the rule collapsed to
-   `designation != FAST` the field only restated `designation`, which is served beside it. Old
-   builds reading the deprecated `feast` key are safe: their check was `context_eligible !==
-   false`, so an absent field reads as eligible. The helper still gates the enqueue in the view
-   and the worker.
+   `designation != FAST` the field only restated `designation`, which is served beside it. It was
+   dropped while the deprecated `feast` key was still served, and old builds reading that key were
+   safe: their check was `context_eligible !== false`, so an absent field reads as eligible. The
+   helper still gates the enqueue in the view and the worker.
 
    Because a feast has no date, two things go through the engine instead:
    - `dates_for_feast_name` / `representative_date_for_feast_name` (cached range sweep) supply a
