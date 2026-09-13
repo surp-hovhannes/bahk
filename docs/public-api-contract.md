@@ -104,7 +104,7 @@ as `null` under the rule above.
 | --- | --- | --- | --- |
 | `id` | integer | no | Primary key. |
 | `church_id` | integer | no | Owning church. |
-| `name` | string | no | Localized name. `null` when the stored value is empty (no-empty-string rule). |
+| `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
 | `description` | string | yes | Localized description. |
 | `start_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
 | `end_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
@@ -129,7 +129,7 @@ and the nested `church` object.
 | --- | --- | --- | --- |
 | `id` | integer | no | Primary key. |
 | `sequence` | integer | yes | Order within the day's readings. |
-| `book` | string | no | Localized book name. `null` when the stored value is empty (no-empty-string rule). |
+| `book` | string | yes | Localized book name. `null` when the stored value is empty (no-empty-string rule). |
 | `start_chapter` | integer | no | |
 | `start_verse` | integer | no | |
 | `end_chapter` | integer | no | |
@@ -144,7 +144,7 @@ Excluded (non-exhaustive): legacy `text*` and `text_hy*` fields,
 | Field | Type | Nullable | Notes |
 | --- | --- | --- | --- |
 | `id` | integer | no | Primary key. |
-| `name` | string | no | Localized name. `null` when the stored value is empty (no-empty-string rule). |
+| `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
 | `icon` | object (IconPublicSerializer) | yes | Nested icon, or `null` when no icon is matched. |
 
 Excluded (non-exhaustive): `church`, `church_id`, `designation`,

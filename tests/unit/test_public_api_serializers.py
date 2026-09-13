@@ -534,6 +534,26 @@ class FastPublicSerializerContractTests(TestCase):
         self.assertEqual(data["start_date"], "2026-02-15")
         self.assertEqual(data["end_date"], "2026-04-04")
 
+    def test_with_dates_ignores_days_from_other_churches(self):
+        fast = self._make_fast()
+        other_church = Church.objects.create(name="Other Fast Church")
+        Day.objects.create(date=datetime.date(2026, 1, 1), fast=fast, church=other_church)
+        Day.objects.create(date=datetime.date(2026, 12, 31), fast=fast, church=other_church)
+
+        annotated = Fast.objects.with_dates().get(pk=fast.pk)
+        self.assertIsNone(annotated.start_date)
+        self.assertIsNone(annotated.end_date)
+
+        Day.objects.create(date=datetime.date(2026, 2, 15), fast=fast, church=self.church)
+        Day.objects.create(date=datetime.date(2026, 4, 4), fast=fast, church=self.church)
+
+        annotated = Fast.objects.with_dates().get(pk=fast.pk)
+        with self.assertNumQueries(0):
+            data = FastPublicSerializer(annotated).data
+
+        self.assertEqual(data["start_date"], "2026-02-15")
+        self.assertEqual(data["end_date"], "2026-04-04")
+
     def test_learn_more_url_maps_from_fast_url(self):
         fast = self._make_fast(url="https://learn.example.org/x")
         data = FastPublicSerializer(fast).data
