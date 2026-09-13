@@ -90,11 +90,42 @@ class PublicApiV1Tests(SimpleTestCase):
         with self.assertRaises(NoReverseMatch):
             reverse("public_api_v1:fast-list")
 
-    def test_root_is_the_only_v1_route_until_resources_are_ready(self):
+    def test_v1_routes_contain_only_root_and_final_not_found_fallback(self):
         self.assertEqual(
             [(pattern.name, str(pattern.pattern)) for pattern in public_api_urlpatterns],
-            [("root", "")],
+            [("root", ""), ("not-found", "^")],
         )
+
+    def test_unmatched_v1_paths_return_json_not_found(self):
+        client = Client(enforce_csrf_checks=True)
+        for path in (
+            "/api/v1/unknown", "/api/v1/unknown/", "/api/v1/unknown/nested/", "/api/v1/unknown%0Apath/"
+        ):
+            for method in ("get", "post", "options"):
+                for accept in ("application/json", "text/html"):
+                    with self.subTest(path=path, method=method, accept=accept):
+                        response = getattr(client, method)(
+                            path,
+                            HTTP_ACCEPT=accept,
+                            HTTP_AUTHORIZATION="Bearer definitely-not-a-token",
+                        )
+                        self.assertEqual(response.status_code, 404)
+                        self.assertEqual(response["Content-Type"], "application/json")
+                        self.assertEqual(
+                            response.json(),
+                            {
+                                "code": "not_found",
+                                "message": "The requested route does not exist.",
+                                "details": {},
+                            },
+                        )
+
+    def test_unmatched_non_v1_paths_keep_django_html_404(self):
+        for path in ("/unknown/", "/api/unknown/", "/api/v10/unknown/"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response["Content-Type"].split(";")[0], "text/html")
 
     def test_unsupported_method_returns_api_appropriate_405(self):
         client = Client(enforce_csrf_checks=True)
@@ -103,6 +134,14 @@ class PublicApiV1Tests(SimpleTestCase):
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response["Allow"], "GET, HEAD, OPTIONS")
         self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "method_not_allowed",
+                "message": 'Method "POST" not allowed.',
+                "details": {},
+            },
+        )
 
     def test_root_remains_anonymous_with_stale_authorization(self):
         response = self.client.get(
@@ -118,6 +157,14 @@ class PublicApiV1Tests(SimpleTestCase):
         self.assertEqual(response.status_code, 406)
         self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
         self.assertNotIn("text/html", response["Content-Type"])
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "not_acceptable",
+                "message": "Could not satisfy the request Accept header.",
+                "details": {},
+            },
+        )
 
     def test_public_v1_does_not_expose_unready_or_internal_routes(self):
         for path in (
