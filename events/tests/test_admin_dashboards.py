@@ -544,7 +544,12 @@ class AdminDashboardTests(TestCase):
 
     @override_settings(
         TIME_ZONE='America/Los_Angeles',
-        CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}},
+        CACHES={
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': 'feature-usage-reporting-timezone',
+            }
+        },
     )
     def test_feature_usage_buckets_follow_reporting_timezone(self):
         """Both chart paths retain boundary events in the window's calendar day."""
