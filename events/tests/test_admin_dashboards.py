@@ -561,6 +561,7 @@ class AdminDashboardTests(TestCase):
                 event_type=EventType.objects.get(code=code),
                 user=self.regular_user,
                 title='Boundary event',
+                target=self.fast,
             )
             event_ids.append(event.pk)
 
