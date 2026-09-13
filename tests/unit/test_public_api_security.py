@@ -35,7 +35,8 @@ class PublicActivationSettingsTests(SimpleTestCase):
                 isinstance(child, ast.Name) and child.id.startswith("PUBLIC_API_") for child in ast.walk(node.test)
             ):
                 nodes.append(node)
-        scope = {"config": Config(RepositoryEmpty()), "Csv": Csv, "ImproperlyConfigured": ImproperlyConfigured}
+        scope = {"config": Config(RepositoryEmpty()), "Csv": Csv, "ImproperlyConfigured": ImproperlyConfigured,
+                 "REDIS_URL": "redis://existing-redis:6379/0"}
         with patch.dict("os.environ", environment, clear=True):
             exec(compile(ast.Module(body=nodes, type_ignores=[]), str(source), "exec"), scope)
         return scope
@@ -44,6 +45,16 @@ class PublicActivationSettingsTests(SimpleTestCase):
         values = self.settings_block()
         self.assertIs(values["PUBLIC_API_RESOURCES_ENABLED"], False)
         self.assertIs(values["PUBLIC_API_DEPLOYMENT_READY"], False)
+        self.assertIs(values['PUBLIC_API_RESPONSE_CACHE_ENABLED'], False)
+
+    def test_shared_mode_uses_existing_store_without_response_cache(self):
+        values = self.settings_block(PUBLIC_API_REDIS_MODE='shared')
+        self.assertEqual(values['PUBLIC_API_REDIS_URL'], 'redis://existing-redis:6379/0')
+        self.assertFalse(values['PUBLIC_API_RESPONSE_CACHE_ENABLED'])
+        with self.assertRaisesMessage(ImproperlyConfigured, 'caching to be disabled'):
+            self.settings_block(PUBLIC_API_REDIS_MODE='shared', PUBLIC_API_RESPONSE_CACHE_ENABLED='true')
+        with self.assertRaisesMessage(ImproperlyConfigured, 'dedicated or shared'):
+            self.settings_block(PUBLIC_API_REDIS_MODE='typo')
 
     def test_redis_and_token_cannot_activate_without_attestation(self):
         environment = {
