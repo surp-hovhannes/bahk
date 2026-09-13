@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.conf import settings
 from django.core import mail
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
@@ -8,8 +9,8 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from hub.models import Day
-from notifications.models import PostFastEmailDelivery, PostFastEncouragementEmail
-from notifications.tasks import send_post_fast_encouragement_task
+from notifications.models import PostFastEmailDelivery, PostFastEncouragementEmail, PromoEmail
+from notifications.tasks import send_post_fast_encouragement_task, send_promo_email_task
 from tests.fixtures.test_data import TestDataFactory
 
 
@@ -43,6 +44,7 @@ class PostFastEncouragementTests(TestCase):
         self.assertIsNotNone(PostFastEmailDelivery.objects.get().sent_at)
         self.assertEqual(send_post_fast_encouragement_task(), 0)
         self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(cache.get('email_count'), 1)
 
     def test_skips_opt_outs(self):
         self.profile.receive_promotional_emails = False
@@ -100,21 +102,36 @@ class PostFastEncouragementTests(TestCase):
         self.assertEqual(send_post_fast_encouragement_task(), 0)
 
     def test_failed_send_can_be_retried(self):
+        cache.set('email_count', 99)
         with patch('notifications.tasks.EmailMultiAlternatives.send', side_effect=RuntimeError('offline')):
             self.assertEqual(send_post_fast_encouragement_task(), 0)
         self.assertFalse(PostFastEmailDelivery.objects.filter(sent_at__isnull=False).exists())
+        self.assertEqual(cache.get('email_count'), 99)
         self.assertEqual(send_post_fast_encouragement_task(), 1)
+        self.assertEqual(cache.get('email_count'), 100)
 
     def test_zero_send_does_not_mark_delivered(self):
+        cache.set('email_count', 99)
         with patch('notifications.tasks.EmailMultiAlternatives.send', return_value=0):
             self.assertEqual(send_post_fast_encouragement_task(), 0)
         self.assertIsNone(PostFastEmailDelivery.objects.get().sent_at)
+        self.assertEqual(cache.get('email_count'), 99)
+        self.assertEqual(send_post_fast_encouragement_task(), 1)
+        self.assertEqual(cache.get('email_count'), 100)
 
     def test_rate_limit_defers_delivery(self):
         cache.set('email_count', 100)
-        with patch.object(send_post_fast_encouragement_task, 'apply_async') as schedule:
+        with (
+            patch.object(send_post_fast_encouragement_task, 'apply_async') as schedule,
+            patch('notifications.tasks.EmailMultiAlternatives.send') as send,
+        ):
             self.assertEqual(send_post_fast_encouragement_task(), 0)
-        schedule.assert_called_once()
+        send.assert_not_called()
+        self.assertEqual(cache.get('email_count'), 100)
+        schedule.assert_called_once_with(
+            kwargs={'completed_on': self.day.date.isoformat()},
+            countdown=settings.EMAIL_RATE_LIMIT_WINDOW,
+        )
         self.assertEqual(schedule.call_args.kwargs['kwargs'], {'completed_on': self.day.date.isoformat()})
         self.assertFalse(PostFastEmailDelivery.objects.filter(sent_at__isnull=False).exists())
 
@@ -140,3 +157,152 @@ class PostFastEncouragementTests(TestCase):
         user.email = ''
         user.save()
         self.assertEqual(send_post_fast_encouragement_task(), 0)
+
+    @override_settings(EMAIL_RATE_LIMIT=1)
+    def test_multiple_recipients_and_reruns_cannot_exceed_quota(self):
+        other = TestDataFactory.create_profile(church=self.church)
+        other.fasts.add(self.fast)
+
+        def send_with_reservation():
+            self.assertEqual(cache.get('email_count'), 1)
+            return 1
+
+        with (
+            patch('notifications.tasks.EmailMultiAlternatives.send', side_effect=send_with_reservation) as send,
+            patch.object(send_post_fast_encouragement_task, 'apply_async') as schedule,
+        ):
+            self.assertEqual(send_post_fast_encouragement_task(), 1)
+            self.assertEqual(send_post_fast_encouragement_task(), 0)
+        send.assert_called_once()
+        self.assertEqual(cache.get('email_count'), 1)
+        self.assertEqual(PostFastEmailDelivery.objects.filter(sent_at__isnull=False).count(), 1)
+        self.assertEqual(schedule.call_count, 2)
+        for call in schedule.call_args_list:
+            self.assertEqual(call.kwargs, {
+                'kwargs': {'completed_on': self.day.date.isoformat()},
+                'countdown': settings.EMAIL_RATE_LIMIT_WINDOW,
+            })
+
+    def test_provider_success_retains_quota_when_delivery_save_fails(self):
+        PostFastEmailDelivery.objects.create(user=self.profile.user, fast=self.fast)
+        with (
+            patch('notifications.tasks.EmailMultiAlternatives.send', return_value=1) as send,
+            patch.object(PostFastEmailDelivery, 'save', side_effect=RuntimeError('database unavailable')),
+            self.assertLogs('notifications.tasks', level='ERROR'),
+        ):
+            self.assertEqual(send_post_fast_encouragement_task(), 0)
+        send.assert_called_once()
+        self.assertIsNone(PostFastEmailDelivery.objects.get().sent_at)
+        self.assertEqual(cache.get('email_count'), 1)
+
+    def test_render_failure_releases_quota(self):
+        cache.set('email_count', 99)
+        with (
+            patch('notifications.tasks.render_to_string', side_effect=RuntimeError('template unavailable')),
+            self.assertLogs('notifications.tasks', level='ERROR'),
+        ):
+            self.assertEqual(send_post_fast_encouragement_task(), 0)
+        self.assertEqual(cache.get('email_count'), 99)
+
+
+    @override_settings(EMAIL_RATE_LIMIT=1, CELERY_TASK_ALWAYS_EAGER=False, EMAIL_API_DELAY_SECONDS=0)
+    def test_promo_reservation_blocks_overlapping_post_fast_delivery(self):
+        promo = PromoEmail.objects.create(
+            title='Promo', subject='Promo', content_html='<p>Hello</p>', all_users=True,
+        )
+        cache.set(f'promo:{promo.pk}:user_ids', [self.profile.user_id])
+
+        def send_promo_with_post_fast_overlap():
+            self.assertEqual(cache.get('email_count'), 1)
+            self.assertEqual(send_post_fast_encouragement_task(), 0)
+            return 1
+
+        with (
+            patch(
+                'notifications.tasks.EmailMultiAlternatives.send',
+                side_effect=send_promo_with_post_fast_overlap,
+            ) as send,
+            patch.object(send_post_fast_encouragement_task, 'apply_async') as schedule,
+        ):
+            send_promo_email_task(promo.pk)
+        send.assert_called_once()
+        schedule.assert_called_once_with(
+            kwargs={'completed_on': self.day.date.isoformat()},
+            countdown=settings.EMAIL_RATE_LIMIT_WINDOW,
+        )
+        self.assertEqual(cache.get('email_count'), 1)
+        self.assertFalse(PostFastEmailDelivery.objects.filter(sent_at__isnull=False).exists())
+
+    @override_settings(EMAIL_RATE_LIMIT=1, CELERY_TASK_ALWAYS_EAGER=False, EMAIL_API_DELAY_SECONDS=0)
+    def test_post_fast_reservation_defers_promo_at_current_batch_index(self):
+        promo = PromoEmail.objects.create(
+            title='Promo', subject='Promo', content_html='<p>Hello</p>', all_users=True,
+        )
+        cache.set(f'promo:{promo.pk}:user_ids', [self.profile.user_id, self.profile.user_id])
+
+        def send_post_fast_with_promo_overlap():
+            send_promo_email_task(promo.pk, batch_start_index=1)
+            return 1
+
+        with (
+            patch(
+                'notifications.tasks.EmailMultiAlternatives.send',
+                side_effect=send_post_fast_with_promo_overlap,
+            ) as send,
+            patch.object(send_promo_email_task, 'apply_async') as schedule,
+        ):
+            self.assertEqual(send_post_fast_encouragement_task(), 1)
+        send.assert_called_once()
+        schedule.assert_called_once_with(
+            args=[promo.pk], kwargs={'batch_start_index': 1},
+            countdown=settings.EMAIL_RATE_LIMIT_WINDOW,
+        )
+        promo.refresh_from_db()
+        self.assertEqual(promo.status, PromoEmail.SENDING)
+        self.assertEqual(cache.get('email_count'), 1)
+
+    @override_settings(EMAIL_RATE_LIMIT=1, EMAIL_API_DELAY_SECONDS=0)
+    def test_promo_failed_delivery_releases_shared_quota(self):
+        for outcome in (0, RuntimeError('offline')):
+            with self.subTest(outcome=outcome):
+                cache.clear()
+                promo = PromoEmail.objects.create(
+                    title='Promo', subject='Promo', content_html='<p>Hello</p>', all_users=True,
+                )
+                cache.set(f'promo:{promo.pk}:user_ids', [self.profile.user_id])
+                with patch('notifications.tasks.EmailMultiAlternatives.send', side_effect=[outcome]):
+                    send_promo_email_task(promo.pk)
+                self.assertEqual(cache.get('email_count'), 0)
+                promo.refresh_from_db()
+                self.assertEqual(promo.status, PromoEmail.FAILED)
+
+
+    @override_settings(EMAIL_RATE_LIMIT=1, EMAIL_API_DELAY_SECONDS=0)
+    def test_promo_render_failure_releases_quota(self):
+        promo = PromoEmail.objects.create(
+            title='Promo', subject='Promo', content_html='<p>Hello</p>', all_users=True,
+        )
+        cache.set(f'promo:{promo.pk}:user_ids', [self.profile.user_id])
+        with (
+            patch('notifications.tasks.render_to_string', side_effect=RuntimeError('template unavailable')),
+            patch('notifications.tasks.EmailMultiAlternatives.send') as send,
+        ):
+            send_promo_email_task(promo.pk)
+        send.assert_not_called()
+        self.assertEqual(cache.get('email_count'), 0)
+
+    @override_settings(EMAIL_RATE_LIMIT=1, EMAIL_API_DELAY_SECONDS=0)
+    def test_promo_provider_success_retains_quota_after_db_failure(self):
+        promo = PromoEmail.objects.create(
+            title='Promo', subject='Promo', content_html='<p>Hello</p>', all_users=True,
+            status=PromoEmail.SENDING,
+        )
+        cache.set(f'promo:{promo.pk}:user_ids', [self.profile.user_id])
+        with (
+            patch('notifications.tasks.EmailMultiAlternatives.send', return_value=1) as send,
+            patch.object(PromoEmail, 'save', side_effect=RuntimeError('database unavailable')),
+            self.assertLogs('notifications.tasks', level='ERROR'),
+        ):
+            send_promo_email_task(promo.pk)
+        send.assert_called_once()
+        self.assertEqual(cache.get('email_count'), 1)

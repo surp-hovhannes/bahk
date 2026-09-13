@@ -18,6 +18,12 @@ from .constants import (
 )
 from .utils import is_weekly_fast
 from .models import PromoEmail
+from .email_quota import (
+    get_email_count as get_email_count,
+    increment_email_count as increment_email_count,
+    reserve_email_quota,
+    release_email_quota,
+)
 
 # Shared re-engagement nudge deduplication: tasks 4 and 5 use the same key
 # so a user only ever receives one re-engagement push per 7-day window.
@@ -44,7 +50,11 @@ def send_post_fast_encouragement_task(completed_on=None):
     # Keep the completion date when a rate-limited batch resumes after midnight.
     from datetime import date
 
-    yesterday = date.fromisoformat(completed_on) if completed_on else timezone.localdate() - timedelta(days=1)
+    yesterday = (
+        date.fromisoformat(completed_on)
+        if completed_on
+        else timezone.localdate() - timedelta(days=1)
+    )
     fasts = Fast.objects.annotate(completed_on=Max('days__date')).filter(
         completed_on=yesterday,
     )
@@ -57,6 +67,7 @@ def send_post_fast_encouragement_task(completed_on=None):
             fasts=fast, receive_promotional_emails=True, user__is_active=True,
         ).exclude(user__email='').select_related('user')
         for profile in profiles.iterator():
+            quota_held = None
             try:
                 # Serialize overlapping daily runs using the durable delivery row.
                 with transaction.atomic():
@@ -71,7 +82,8 @@ def send_post_fast_encouragement_task(completed_on=None):
                         user__is_active=True,
                     ).exists():
                         continue
-                    if get_email_count() >= settings.EMAIL_RATE_LIMIT:
+                    quota_held = reserve_email_quota()
+                    if quota_held is None:
                         send_post_fast_encouragement_task.apply_async(
                             kwargs={'completed_on': yesterday.isoformat()},
                             countdown=settings.EMAIL_RATE_LIMIT_WINDOW,
@@ -89,7 +101,9 @@ def send_post_fast_encouragement_task(completed_on=None):
                         ),
                     }
                     html = render_to_string('email/post_fast_encouragement.html', context)
-                    text = strip_tags(render_to_string('email/post_fast_encouragement_body.html', context))
+                    text = strip_tags(
+                        render_to_string('email/post_fast_encouragement_body.html', context)
+                    )
                     email = EmailMultiAlternatives(
                         email_copy.subject,
                         text,
@@ -98,12 +112,18 @@ def send_post_fast_encouragement_task(completed_on=None):
                     email.attach_alternative(html, 'text/html')
                     if email.send() != 1:
                         continue
+                    # Provider acceptance consumes quota even if the durable write fails.
+                    quota_held = None
                     delivery.sent_at = timezone.now()
                     delivery.save(update_fields=['sent_at'])
-                    increment_email_count()
                     sent += 1
             except Exception:
-                logger.exception('Post-fast email failed for profile %s, fast %s', profile.pk, fast.pk)
+                logger.exception(
+                    'Post-fast email failed for profile %s, fast %s', profile.pk, fast.pk,
+                )
+            finally:
+                if quota_held is not None:
+                    release_email_quota(quota_held)
     return sent
 
 
@@ -190,25 +210,6 @@ def send_push_notification_to_users_task(message, data=None, user_ids=None, devi
         "Chunked push notification complete: sent=%d, failed=%d, invalid_tokens=%d, total_targets=%d",
         total_sent, total_failed, total_invalid, len(target_ids)
     )
-
-def get_email_count():
-    """Get the number of emails sent in the current rate limit window."""
-    return cache.get('email_count', 0)
-
-def increment_email_count():
-    """Atomically increment the email count and set expiration if not already set."""
-    try:
-        # Try to atomically increment first
-        new_count = cache.incr('email_count')
-        return new_count
-    except ValueError:
-        # Key doesn't exist, set it atomically with timeout
-        success = cache.add('email_count', 1, timeout=settings.EMAIL_RATE_LIMIT_WINDOW)
-        if success:
-            return 1
-        else:
-            # Another process set it, increment it
-            return cache.incr('email_count')
 
 @shared_task
 def send_promo_email_task(promo_id, batch_start_index=0):
@@ -304,14 +305,14 @@ def send_promo_email_task(promo_id, batch_start_index=0):
                 processed_count += 1
                 continue
                 
+            quota_held = None
             try:
-                # Check rate limit before each email
-                current_count = get_email_count()
-                if current_count >= settings.EMAIL_RATE_LIMIT:
+                quota_held = reserve_email_quota()
+                if quota_held is None:
                     logger.warning(
-                        "Rate limit reached (%d / %d emails per %d seconds). Processed %d/%d users. Rescheduling remaining users.", 
-                        current_count, 
-                        settings.EMAIL_RATE_LIMIT, 
+                        "Email quota unavailable (limit %d per %d seconds). "
+                        "Processed %d/%d users. Rescheduling remaining users.",
+                        settings.EMAIL_RATE_LIMIT,
                         settings.EMAIL_RATE_LIMIT_WINDOW,
                         actual_index,
                         total_users
@@ -358,10 +359,12 @@ def send_promo_email_task(promo_id, batch_start_index=0):
                 api_delay = getattr(settings, 'EMAIL_API_DELAY_SECONDS', 1.0)
                 time.sleep(api_delay)
                 
-                email.send()
-                
-                # Increment email count after successful send
-                increment_email_count()
+                if email.send() != 1:
+                    failure_count += 1
+                    processed_count += 1
+                    continue
+                # Provider acceptance consumes quota even if later DB writes fail.
+                quota_held = None
                 success_count += 1
                 processed_count += 1
                 
@@ -387,7 +390,10 @@ def send_promo_email_task(promo_id, batch_start_index=0):
                     logger.error(f"Failed to send promotional email {promo_id} to user {user.id} ({user.email}): {error_message}")
                     failure_count += 1
                     processed_count += 1
-        
+            finally:
+                if quota_held is not None:
+                    release_email_quota(quota_held)
+
         # Determine final status based on whether we rate limited
         if not rate_limited and (batch_start_index + processed_count) >= total_users:
             # All intended recipients processed
