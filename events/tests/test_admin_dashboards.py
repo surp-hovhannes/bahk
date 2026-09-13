@@ -548,6 +548,7 @@ class AdminDashboardTests(TestCase):
     )
     def test_feature_usage_buckets_follow_reporting_timezone(self):
         """Both chart paths retain boundary events in the window's calendar day."""
+        self.client.force_login(self.admin_user)
         feature_types = [
             (EventType.USER_ACCOUNT_CREATED, 'User Signups'),
             (EventType.DEVOTIONAL_VIEWED, 'Devotional Views'),
