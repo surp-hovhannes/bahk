@@ -23,6 +23,7 @@ V1 is anonymous and read-only. The following is the initial inventory and a floo
 | Readings | `/api/v1/readings/` | planned | #494, #497, #496, #498 |
 | Fasts | `/api/v1/fasts/` | planned | #494, #497, #496, #498 |
 | Feasts | `/api/v1/feasts/` | planned | #494, #497, #496, #498 |
+| Icons | `/api/v1/icons/` | planned | #494, #497, #496, #498 |
 | Calendar | `/api/v1/calendar/` | planned | #499 |
 
 A resource cannot be mounted until it has a presentation-neutral serializer (#497), consistent validation and errors (#496), anonymous traffic protections (#498), and contract coverage. It becomes stable only after verified reference documentation is published (#500).
@@ -35,7 +36,7 @@ All route families not listed in the inventory are excluded by default. In parti
 
 - authentication, accounts, profiles, password reset, token, and registration routes;
 - fast participation, user-fast, user-day, participant, map, stats, intention, and legacy fast routes;
-- devotionals, patristic quotes, feedback, notifications, admin helpers, events, prayers, prayer requests, icons, learning resources, uploads, system tags, and all `/hub/` routes;
+- devotionals, patristic quotes, feedback, notifications, admin helpers, events, prayers, prayer requests, unsupported icon upload, icon feedback, icon matching, and icon admin families, learning resources, uploads, system tags, and all `/hub/` routes;
 - the S3 upload helpers at `/api/s3-upload/`.
 
 Internal URLconfs must never be mounted under `/api/v1/` as a shortcut for publishing a resource.
@@ -61,6 +62,117 @@ V1 reserves this error envelope; #496 defines the resource-level codes, validati
 ```
 
 `code` is stable. `message` may change. `details` is optional and resource-specific.
+
+## Schema (presentation-neutral serializers)
+
+Approved fields per resource for the public v1 serializers. The serializer
+is the single source of truth for field selection, naming, and shape; the
+endpoint (when mounted) is a thin pass-through. Every field below is
+covered by a contract test asserting exact key set, value type, and
+nullability.
+
+Missing optional values serialize as JSON `null`, never as the empty string.
+User-facing text follows the requested language (`?lang=` query parameter,
+falling back to the Django-resolved request language, then `en`) and falls
+back to the canonical/base-language field when no translation is registered.
+
+Public serializers MUST NOT trigger thumbnail generation, access any
+`ImageSpecField.url`, perform S3 I/O, write to cache, or write to models.
+Thumbnails come exclusively from the pre-populated `cached_thumbnail_url`
+column; the public field serializes to `null` when that cache is empty.
+`image_url` uses the original image field's URL only when an image is
+present, otherwise `null`.
+
+Implementers' preconditions: mounted views validate `?lang` and pass the
+language to serializers as `context['lang']` — serializers never read the
+request. Fast `start_date`/`end_date` require querysets built with
+`Fast.objects.with_dates()`, and Feast serialization requires
+`select_related("icon")`; both preconditions are pinned by zero-query
+contract tests. Localized fields whose canonical value is empty serialize
+as `null` under the rule above.
+
+### Church
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `name` | string | no | Canonical/base language. Church names do not currently have translations. |
+
+### Fast
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `church_id` | integer | no | Owning church. |
+| `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
+| `description` | string | yes | Localized description. |
+| `start_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
+| `end_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
+| `culmination_feast` | string | yes | Localized culmination name. |
+| `culmination_feast_date` | date (ISO 8601) | yes | |
+| `year` | integer | yes | |
+| `image_url` | string | yes | URL of the original uploaded image only. |
+| `thumbnail_url` | string | yes | Cached thumbnail URL only. `null` when no cache. MUST NOT access `image_thumbnail.url`. |
+| `learn_more_url` | string | yes | Mapped from `Fast.url`. |
+
+Excluded (non-exhaustive): `modal_id`, `countdown`, `joined`,
+`participant_count`, `days_to_feast`, `has_passed`, `next_fast_date`,
+`total_number_of_days`, `current_day_number`,
+`culmination_feast_salutation`, `culmination_feast_message`,
+`culmination_feast_message_attribution`, `has_day_zero`, `image`,
+`image_thumbnail`, `cached_thumbnail_url`, `cached_thumbnail_updated`,
+and the nested `church` object.
+
+### Reading (citation-only)
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `sequence` | integer | yes | Order within the day's readings. |
+| `book` | string | yes | Localized book name. `null` when the stored value is empty (no-empty-string rule). |
+| `start_chapter` | integer | no | |
+| `start_verse` | integer | no | |
+| `end_chapter` | integer | no | |
+| `end_verse` | integer | no | |
+
+Excluded (non-exhaustive): legacy `text*` and `text_hy*` fields,
+`text_copyright`, `text_version`, `text_fetched_at`, `fums_token`,
+`passage_key`, `day`, and any AI-generated context/thumbs or passage text.
+
+### Feast
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
+| `icon` | object (IconPublicSerializer) | yes | Nested icon, or `null` when no icon is matched. |
+
+Excluded (non-exhaustive): `church`, `church_id`, `designation`,
+context/votes/LLM/prayer fields.
+
+### Icon
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `title` | string | no | Canonical/base language. Icon titles do not currently have translations. |
+| `image_url` | string | yes | URL of the original uploaded image only. |
+| `thumbnail_url` | string | yes | Cached thumbnail URL only. `null` when no cache. MUST NOT access `thumbnail.url`. |
+
+Excluded (non-exhaustive): `church`, `church_id`, `tags`, `tag_list`,
+`image_hash`, `phash`, `image_content_digest`, `image_revision`,
+`original_filename`, `filename_provenance`, `created_at`, `updated_at`,
+and any cache columns.
+
+## Change history
+
+A public-contract change requires reviewer approval, a contract-test
+update, and an entry in this changelog. Entries are reverse-chronological.
+
+| Date | Change |
+| --- | --- |
+| 2026-09-11 | Review follow-up: restored the general excluded `feedback` family (covering the reading and feast context-feedback routes) and spelled out the icon families; documented view-resolved language passing (`context['lang']`; serializers never read the request), the `with_dates()` / `select_related("icon")` queryset preconditions, and empty localized values serializing as `null`; added a read-only serializer base whose `create()`/`update()` refuse. (Issue #497 review.) |
+| 2026-09-08 | Added Icons to the initial planned v1 inventory; narrowed the icon exclusion to icon upload, feedback, matching, and admin families; defined exact serializer field/type/nullability/localization/media rules for Church, Fast, Reading, Feast, and Icon; pinned public thumbnail behavior to the cached URL only and forbade `ImageSpecField.url` access during serialization. (Issue #497.) |
 
 ## Release gate
 
