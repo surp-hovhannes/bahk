@@ -7,11 +7,12 @@ This module tests:
 - Admin view functionality
 """
 
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 
 from events.models import Event, EventType
@@ -540,6 +541,50 @@ class AdminDashboardTests(TestCase):
         filters = call_args[1]['filters']
         self.assertTrue(filters['exclude_staff'])
         self.assertIn('analytics', filters['include_categories'])
+
+    @override_settings(
+        TIME_ZONE='America/Los_Angeles',
+        CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}},
+    )
+    def test_feature_usage_buckets_follow_reporting_timezone(self):
+        """Both chart paths retain boundary events in the window's calendar day."""
+        feature_types = [
+            (EventType.USER_ACCOUNT_CREATED, 'User Signups'),
+            (EventType.DEVOTIONAL_VIEWED, 'Devotional Views'),
+            (EventType.CHECKLIST_USED, 'Checklist Uses'),
+            (EventType.PRAYER_SET_VIEWED, 'Prayer Set Views'),
+            (EventType.PRAYER_REQUEST_CREATED, 'Prayer Requests'),
+        ]
+        event_ids = []
+        for code, _ in feature_types:
+            event = Event.objects.create(
+                event_type=EventType.objects.get(code=code),
+                user=self.regular_user,
+                title='Boundary event',
+            )
+            event_ids.append(event.pk)
+
+        for window_tz in [dt_timezone.utc, ZoneInfo('Asia/Tokyo')]:
+            # Local 00:30 falls on the previous date in Los Angeles.
+            boundary = datetime(2025, 1, 15, 0, 30, tzinfo=window_tz)
+            Event.objects.filter(pk__in=event_ids).update(timestamp=boundary)
+            expected_day = '2025-01-15'
+            now = datetime(2025, 1, 15, 12, tzinfo=window_tz)
+            for endpoint in ['events_analytics', 'events_analytics_data']:
+                for days in [1, 2]:
+                    with self.subTest(timezone=window_tz, endpoint=endpoint, days=days):
+                        with timezone.override('America/Los_Angeles'), patch(
+                            'events.admin.timezone.now', return_value=now
+                        ):
+                            response = self.client.get(reverse(f'admin:{endpoint}'), {'days': days})
+                        self.assertEqual(response.status_code, 200)
+                        data = response.json() if endpoint.endswith('_data') else response.context
+                        chart = data['feature_usage_over_time']
+                        expected_labels = ['2025-01-14', expected_day] if days == 2 else [expected_day]
+                        self.assertEqual(chart['labels'], expected_labels)
+                        datasets = {dataset['label']: dataset['data'] for dataset in chart['datasets']}
+                        for _, label in feature_types:
+                            self.assertEqual(datasets[label], [0, 1] if days == 2 else [1])
 
     def test_new_kpi_metrics_in_view(self):
         """Test that new KPI metrics are included in the analytics view."""
