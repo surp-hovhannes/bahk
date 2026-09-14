@@ -299,53 +299,45 @@ class FeastContextGenerationEligibilityTests(TestCase):
 
         self.assertFalse(is_feast_context_generation_eligible(feast))
 
-    def test_unclassified_generic_fast_name_is_not_eligible(self):
-        feast = Feast.objects.create(
-            church=self.day.church,
-            name="First day of the Fast",
-        )
+    def test_the_name_is_no_longer_consulted_at_all(self):
+        """Eligibility reads the designation, never the display text.
 
-        self.assertFalse(is_feast_context_generation_eligible(feast))
+        This replaces a family of regression tests over name regexes -- saint/martyr/prophet
+        words, "fast"/"lent" plus "day", and a hardcoded Mijink token list. Every one of them
+        pattern-matched text the engine is free to rewrite, which is the failure the observance
+        id layer exists to prevent, and they had accumulated their own bugs (the plural-aware
+        ``Prophetesses?`` alternation never matched the singular "Prophetess").
 
-    def test_unclassified_plural_saints_name_is_eligible(self):
-        # Regression: "Sts." and plural "Martyrs" must be recognized as
-        # a named commemoration even before designation is classified.
-        feast = Feast.objects.create(
-            church=self.day.church,
-            name="Commemoration of Sts. Martyrs",
-        )
+        The question they were guessing at is now answered upstream: a ``Feast`` row exists only
+        for an observance the engine marks ``is_comm``, so anything with a row has something to
+        write about.
 
-        self.assertTrue(is_feast_context_generation_eligible(feast))
+        The claim holds for the pipeline and not just for this function: the fast-day regex in
+        ``determine_feast_designation_task`` went at the same time, so nothing upstream can turn
+        a name shape into the ``FAST`` designation this reads. See
+        ``FeastDesignationTaskTests.test_a_fast_shaped_name_is_classified_by_the_llm_not_by_its_shape``,
+        which is the other half of this guarantee.
+        """
+        fast_shaped_names = [
+            "First day of the Fast",
+            "Median day of Great Lent (Mijink)",
+            "Mijink",
+            "Wednesday Fast",
+        ]
+        for name in fast_shaped_names:
+            with self.subTest(name=name):
+                feast = Feast.objects.create(church=self.day.church, name=name)
+                self.assertTrue(is_feast_context_generation_eligible(feast))
 
-    def test_unclassified_mijink_is_not_eligible(self):
-        # Mijink (Median day of Great Lent) is a known generic fast day
-        # whose rendered name does not match the "fast day / lent day" pattern.
-        feast = Feast.objects.create(
-            church=self.day.church,
-            name="Median day of Great Lent (Mijink)",
-        )
-
-        self.assertFalse(is_feast_context_generation_eligible(feast))
-
-    def test_mijink_alone_is_not_eligible(self):
-        feast = Feast.objects.create(
-            church=self.day.church,
-            name="Mijink",
-        )
-
-        self.assertFalse(is_feast_context_generation_eligible(feast))
-
-    def test_unclassified_prophetess_singular_is_eligible(self):
-        # Regression: "Prophetess" (singular) must be recognized as a named
-        # commemoration. The plural-aware alternation Prophetesses? previously
-        # matched only "Prophetesse"/"Prophetesses" (e + s?), so the singular
-        # "Prophetess" alone was missed and the fast-day would be skipped.
-        feast = Feast.objects.create(
-            church=self.day.church,
-            name="Fast day, Prophetess Anna",
-        )
-
-        self.assertTrue(is_feast_context_generation_eligible(feast))
+    def test_the_fast_designation_is_the_only_thing_that_withholds_context(self):
+        for name in ["First day of the Fast", "Commemoration of Sts. Martyrs"]:
+            with self.subTest(name=name):
+                feast = Feast.objects.create(
+                    church=self.day.church,
+                    name=name,
+                    designation=Feast.Designation.FAST,
+                )
+                self.assertFalse(is_feast_context_generation_eligible(feast))
 
 
 class GenerateReadingContextTaskTests(TestCase):
