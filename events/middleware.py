@@ -25,6 +25,10 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
     """
 
     def process_request(self, request):
+        from bahk.public_api.traffic import is_public_request
+
+        if is_public_request(request):
+            return None
         # For API requests, try to authenticate using JWT first
         user = self._get_authenticated_user(request)
         if not user or not user.is_authenticated:
@@ -216,4 +220,3 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
             except Exception:
                 # Do not fail the request on attribution issues
                 pass
-

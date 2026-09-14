@@ -298,18 +298,17 @@ class ReadingPublicSerializerContractTests(TestCase):
 
 
 class FeastPublicSerializerContractTests(TestCase):
-    """Public Feast serializer: ``id``, ``name``, nested nullable ``icon``."""
+    """Public Feast serializer: ``name``, nested nullable ``icon``."""
 
     def setUp(self):
         self.church = Church.objects.create(name="Feast Church")
 
-    def test_returns_id_name_and_null_icon_when_no_icon_attached(self):
+    def test_returns_name_and_null_icon_when_no_icon_attached(self):
         feast = Feast.objects.create(church=self.church, name="Easter")
 
         data = FeastPublicSerializer(feast).data
 
-        self.assertEqual(set(data.keys()), {"id", "name", "icon"})
-        self.assertEqual(data["id"], feast.id)
+        self.assertEqual(set(data.keys()), {"name", "icon"})
         self.assertEqual(data["name"], "Easter")
         self.assertIsNone(data["icon"])
 
@@ -323,6 +322,8 @@ class FeastPublicSerializerContractTests(TestCase):
         data = FeastPublicSerializer(feast).data
 
         for excluded in (
+            "id",
+            "observance_id",
             "church",
             "church_id",
             "designation",
@@ -387,6 +388,7 @@ class FeastPublicSerializerContractTests(TestCase):
 
         self.assertEqual(len(data), 3)
         for payload in data:
+            self.assertEqual(set(payload.keys()), {"name", "icon"})
             self.assertEqual(payload["icon"]["id"], icon.id)
             self.assertEqual(payload["icon"]["title"], "Shared")
             self.assertEqual(

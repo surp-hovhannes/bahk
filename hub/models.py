@@ -55,8 +55,8 @@ class FastQuerySet(models.QuerySet):
         call sites to remember the annotation.
         """
         return self.annotate(
-            start_date=models.Min("days__date"),
-            end_date=models.Max("days__date"),
+            start_date=models.Min("days__date", filter=models.Q(days__church_id=models.F("church_id"))),
+            end_date=models.Max("days__date", filter=models.Q(days__church_id=models.F("church_id"))),
         )
 
 

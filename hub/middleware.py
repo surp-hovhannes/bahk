@@ -25,6 +25,10 @@ class TimezoneUpdateMiddleware(MiddlewareMixin):
         """
         Process incoming request to check and update user timezone if needed.
         """
+        from bahk.public_api.traffic import is_public_request
+
+        if is_public_request(request):
+            return None
         # Only process for authenticated users
         if not request.user or not request.user.is_authenticated:
             return None
