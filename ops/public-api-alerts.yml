@@ -1,0 +1,49 @@
+groups:
+  - name: public-api
+    rules:
+      - alert: PublicApiForbiddenWork
+        expr: sum(increase(public_api_blocked_work_total[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: A public request attempted forbidden LLM, passage, or task work
+      - alert: PublicApiMetricsUnavailable
+        expr: up{job="bahk-public-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Public API metrics cannot be scraped
+      - alert: PublicApiRedisUnavailable
+        expr: public_api_store_up == 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Public API admission store is unavailable; requests fail closed
+      - alert: PublicApiServerErrors
+        expr: sum(increase(public_api_requests_total{status=~"5.."}[5m])) / clamp_min(sum(increase(public_api_requests_total[5m])), 1) > 0.01 and sum(increase(public_api_requests_total[5m])) >= 100
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 1% of public requests fail
+      - alert: PublicApiLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(public_api_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Public API p95 latency exceeds one second
+      - alert: PublicApiThrottling
+        expr: sum(increase(public_api_requests_total{status="429"}[5m])) / clamp_min(sum(increase(public_api_requests_total[5m])), 1) > 0.10 and sum(increase(public_api_requests_total[5m])) >= 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 10% of public requests are throttled
+      - alert: PublicApiCacheCapacity
+        expr: public_api_cache_entries >= 9000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Public response cache is approaching its entry cap
