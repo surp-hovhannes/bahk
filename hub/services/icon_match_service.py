@@ -19,7 +19,7 @@ import unicodedata
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 
-from hub.services.llm_requests import openai_chat_completion
+from hub.services.llm_requests import anthropic_message, openai_chat_completion
 
 logger = logging.getLogger(__name__)
 RELATIONS = ("exact_event", "exact_subject", "subject_portrait", "related_specific", "thematic")
@@ -348,6 +348,94 @@ class OpenAIIconProvider:
         if stage != "analyze":
             result = normalize_provider_matches(result, schema, payload["catalogue"])
         return result
+
+
+def anthropic_schema(schema):
+    """Drop keywords Anthropic structured outputs reject; local validation keeps them.
+
+    Numeric bounds are not expressible on the wire, but validate_schema still
+    enforces them on the response, so an out-of-range value is discarded as a
+    single malformed row rather than silently accepted.
+    """
+    if isinstance(schema, dict):
+        return {k: anthropic_schema(v) for k, v in schema.items() if k not in ("minimum", "maximum")}
+    if isinstance(schema, list):
+        return [anthropic_schema(item) for item in schema]
+    return schema
+
+
+class AnthropicIconProvider:
+    """Same wire contract as the OpenAI provider, on the Messages API.
+
+    Structured outputs replace response_format: wire_schema already emits the
+    required/additionalProperties shape Anthropic validates against, so the
+    schemas are shared verbatim rather than translated.
+    """
+
+    def __init__(self, *, model=None, profile=None, reasoning_effort=None, wire_budget=None):
+        from django.conf import settings
+
+        self.model = model if model is not None else (profile.model if profile else "claude-sonnet-5")
+        self.profile = profile
+        self.reasoning_effort = (
+            reasoning_effort if reasoning_effort is not None else (profile.reasoning_effort if profile else None)
+        )
+        self.wire_budget = wire_budget
+        self.usage_records = []
+        if not getattr(settings, "ANTHROPIC_API_KEY", ""):
+            raise RuntimeError("provider_unavailable")
+        self.api_key = settings.ANTHROPIC_API_KEY
+        self.model_ids = set()
+        self.wire_call_count = 0
+
+    def call(self, stage, payload, schema, timeout):
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=self.api_key, max_retries=0)
+        if self.wire_budget is not None:
+            self.wire_budget.consume()
+        self.wire_call_count += 1
+        self.usage_records.append(None)
+        output_config = {"format": {"type": "json_schema", "schema": anthropic_schema(wire_schema(schema))}}
+        if self.reasoning_effort is not None:
+            output_config["effort"] = self.reasoning_effort
+        try:
+            response = anthropic_message(
+                client.with_options(timeout=timeout),
+                model=self.model,
+                # Sonnet 5 rejects temperature/top_p; thinking runs adaptive by default.
+                max_tokens=16000,
+                system=(self.profile.stage_prompts if self.profile else STAGE_PROMPTS)[stage],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": json.dumps(provider_payload(payload), ensure_ascii=False, separators=(",", ":")),
+                    }
+                ],
+                output_config=output_config,
+            )
+        except anthropic.APITimeoutError as exc:
+            # The orchestrator retries TimeoutError; keep that contract provider-neutral.
+            raise TimeoutError("provider_timeout") from exc
+        if isinstance(getattr(response, "model", None), str):
+            self.model_ids.add(response.model)
+        usage = getattr(response, "usage", None)
+        self.usage_records[-1] = usage.model_dump(mode="json") if usage is not None else None
+        if response.stop_reason == "max_tokens":
+            raise ValueError("output_truncated")
+        if response.stop_reason == "refusal":
+            raise ValueError("provider_refusal")
+        # Thinking blocks may precede the structured payload.
+        result = json.loads(next(block.text for block in response.content if block.type == "text"))
+        if stage != "analyze":
+            result = normalize_provider_matches(result, schema, payload["catalogue"])
+        return result
+
+
+def provider_for(profile, **kwargs):
+    """Select a provider by the profile's model family."""
+    cls = AnthropicIconProvider if profile.model.startswith("claude-") else OpenAIIconProvider
+    return cls(profile=profile, **kwargs)
 
 
 @dataclass(frozen=True)
