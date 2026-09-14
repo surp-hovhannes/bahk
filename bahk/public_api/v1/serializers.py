@@ -306,8 +306,9 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
     query per serialized feast; the contract tests pin the zero-query
     contract with ``assertNumQueries(0)``.
 
-    Excluded: ``id``, ``observance_id``, ``church``, ``church_id``, ``designation``, context/votes/LLM/
-    prayer fields, and any other internal metadata.
+    Excluded: ``id``, ``observance_id``, ``church``, ``church_id``,
+    ``designation``, context/votes/LLM/prayer fields, and any other internal
+    metadata.
     """
 
     icon = serializers.SerializerMethodField()
