@@ -1276,6 +1276,8 @@ class FeastAdmin(admin.ModelAdmin):
         "church_link",
         "__str__",
         "name",
+        "observance_id",
+        "designation",
     )
     list_display_links = (
         "church_link",
@@ -1284,8 +1286,16 @@ class FeastAdmin(admin.ModelAdmin):
     list_filter = (
         "church",
         "designation",
+        # Both fields the enrichment pipeline can silently leave empty, and neither is reachable
+        # from the choice filter above. "Designation: empty" is the handful of rows the classifier
+        # never landed on, which an editor sets by hand here; "Observance id: empty" is a row
+        # nothing could key, which only ``remap_feast_names`` can repair.
+        ("designation", admin.EmptyFieldListFilter),
+        ("observance_id", admin.EmptyFieldListFilter),
     )
-    search_fields = ("name", "name_en", "name_hy", "designation", "church__name")
+    search_fields = (
+        "name", "name_en", "name_hy", "designation", "church__name", "observance_id",
+    )
     ordering = ("church", "name")
     autocomplete_fields = ("icon",)
     actions = [
@@ -1295,11 +1305,22 @@ class FeastAdmin(admin.ModelAdmin):
         "regenerate_context_with_instructions",
     ]
     exclude = ("name",)  # Avoid duplicate with translation fields
-    readonly_fields = ("icon_preview", "icon_rematch_links")
+    # ``observance_id`` is the engine's, not ours: it is half the uniqueness constraint, and
+    # retyping it by hand would either collide with another row or silently re-point this one at a
+    # different commemoration, carrying its context and icon along. ``remap_feast_names`` is what
+    # changes it.
+    readonly_fields = ("observance_id", "icon_preview", "icon_rematch_links")
 
     fieldsets = (
         (None, {
             'fields': ('church',)
+        }),
+        ('Identity', {
+            'fields': ('observance_id',),
+            'description': (
+                "The published engine id this row is keyed by. Empty means nothing could resolve "
+                "the row; run <code>manage.py remap_feast_names</code> to repair it."
+            ),
         }),
         ('Classification', {
             'fields': ('designation',)
