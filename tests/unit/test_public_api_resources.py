@@ -236,7 +236,7 @@ class PublicApiResourceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["date"], "2026-01-06")
-        self.assertEqual(response.json()["feasts"], [{"id": feast.id, "name": "Theophany", "icon": None}])
+        self.assertEqual(response.json()["feasts"], [{"name": "Theophany", "icon": None}])
         lookup.assert_called_once_with(date(2026, 1, 6), self.church)
 
     def test_legacy_fast_days_route_is_not_part_of_public_v1(self):
@@ -338,8 +338,8 @@ class PublicApiResourceTests(TestCase):
         Feast.objects.create(church=self.other_church, name="Missing")
         for service_result, expected in (
             (None, []), ([], []), ({"name_en": "Missing"}, []),
-            ({"name_en": "First"}, [first.id]),
-            ([{"name_en": "Second"}, {"name_en": "First"}], [second.id, first.id]),
+            ({"name_en": "First"}, ["First"]),
+            ([{"name_en": "Second"}, {"name_en": "First"}], ["Second", "First"]),
         ):
             lookup.return_value = service_result
             with self.subTest(service_result=service_result):
@@ -349,7 +349,7 @@ class PublicApiResourceTests(TestCase):
                     })
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(set(response.json()), {"date", "feasts"})
-                self.assertEqual([f["id"] for f in response.json()["feasts"]], expected)
+                self.assertEqual([f["name"] for f in response.json()["feasts"]], expected)
                 self.assertLessEqual(len(queries), 2)
                 self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in queries))
 
@@ -419,7 +419,9 @@ class PublicApiResourceTests(TestCase):
                 "church_id": self.church.id, "date": "2026-03-01",
             })
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["feasts"][0]["id"], feast.id)
+        self.assertEqual(
+            response.json()["feasts"][0], {"name": "Stored name", "icon": None}
+        )
         stored.assert_called_once_with(church=self.church, observance_id__in=[feast.observance_id])
         stored.return_value.select_related.assert_called_once_with("icon")
 
