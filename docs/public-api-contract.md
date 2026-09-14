@@ -17,15 +17,21 @@ This is the approved contract boundary for the Fast & Pray public API. The API m
 
 V1 is anonymous and read-only. The following is the initial inventory and a floor, not a closed list; later resources may be added to v1 after readiness review:
 
-| Resource | Planned route | Status | Follow-on work |
+| Resource | Route | Status | Follow-on work |
 | --- | --- | --- | --- |
-| Churches | `/api/v1/churches/` | planned | #494, #497, #496, #498 |
-| Readings | `/api/v1/readings/` | planned | #494, #497, #496, #498 |
-| Fasts | `/api/v1/fasts/` | planned | #494, #497, #496, #498 |
-| Feasts | `/api/v1/feasts/` | planned | #494, #497, #496, #498 |
-| Calendar | `/api/v1/calendar/` | planned | #499 |
+| Churches | `/api/v1/churches/` | default-disabled | #494, #497, #496, #498 |
+| Readings | `/api/v1/readings/` | default-disabled | #494, #497, #496, #498 |
+| Fasts | `/api/v1/fasts/` | default-disabled | #494, #497, #496, #498 |
+| Feasts | `/api/v1/feasts/` | default-disabled | #494, #497, #496, #498 |
+| Icons | `/api/v1/icons/` | default-disabled | #494, #497, #496, #498 |
+| Calendar | `/api/v1/calendar/` | default-disabled | #499 |
 
 A resource cannot be mounted until it has a presentation-neutral serializer (#497), consistent validation and errors (#496), anonymous traffic protections (#498), and contract coverage. It becomes stable only after verified reference documentation is published (#500).
+
+Resource registration defaults off (`PUBLIC_API_RESOURCES_ENABLED=false`). Enable
+it only after completing the [traffic-control runbook](public-api-operations.md).
+The root descriptor remains registered. While resources are disabled it requires
+no Redis; after activation it is subject to admission control.
 
 The `/api/v1/` root descriptor is live with `status: "pre-release"`, but the resource endpoints are not publicly released until issues #494, #496, #497, #498, #499, and #500 satisfy their gates. Each mounted resource also requires a golden contract test asserting its exact response key set and relevant nullability and URL rules, in addition to serializer, validation, documentation, and traffic-control readiness.
 
@@ -35,7 +41,7 @@ All route families not listed in the inventory are excluded by default. In parti
 
 - authentication, accounts, profiles, password reset, token, and registration routes;
 - fast participation, user-fast, user-day, participant, map, stats, intention, and legacy fast routes;
-- devotionals, patristic quotes, feedback, notifications, admin helpers, events, prayers, prayer requests, icons, learning resources, uploads, system tags, and all `/hub/` routes;
+- devotionals, patristic quotes, feedback, notifications, admin helpers, events, prayers, prayer requests, unsupported icon upload, icon feedback, icon matching, and icon admin families, learning resources, uploads, system tags, and all `/hub/` routes;
 - the S3 upload helpers at `/api/s3-upload/`.
 
 Internal URLconfs must never be mounted under `/api/v1/` as a shortcut for publishing a resource.
@@ -48,9 +54,9 @@ If a successor version is required, its deprecation of v1 is announced in the pu
 
 Normally, no more than two public major versions are supported concurrently. Supporting additional overlap requires explicit maintainer approval and a retirement plan.
 
-## Errors
+## Errors and request validation
 
-V1 reserves this error envelope; #496 defines the resource-level codes, validation, and status conventions:
+Every public-v1 error uses this envelope:
 
 ```json
 {
@@ -60,8 +66,257 @@ V1 reserves this error envelope; #496 defines the resource-level codes, validati
 }
 ```
 
-`code` is stable. `message` may change. `details` is optional and resource-specific.
+`code` and the documented `details` keys are stable public contract. `message`
+may change. `details` is always an object; it is empty when no structured
+context applies.
+
+Public views ignore Authorization headers and render JSON only. An unsupported
+Accept header (for example, `text/html`) returns HTTP 406 with code
+`not_acceptable` and empty `details`, also as JSON. Unmatched paths under
+`/api/v1/` return HTTP 404 with code `not_found` and empty `details`, with
+`application/json` content type regardless of the request method or Accept
+header. Non-v1 Django 404 behavior is unchanged.
+
+Public resource routes validate only the parameters they accept. Missing
+optional parameters retain the route's documented default; a supplied invalid
+parameter never falls back to that default. Accepted parameters are validated before
+any resource lookup, including empty results and unknown IDs. Unknown parameters
+are ignored.
+
+| Parameter | Valid values | Failure code | Details |
+| --- | --- | --- | --- |
+| `date`, `start_date`, `end_date` | Exact ISO `YYYY-MM-DD` calendar date | `invalid_date` | `parameter`, `value` |
+| `start_date` + `end_date` | `start_date <= end_date` | `invalid_date_range` | `start_date`, `end_date` |
+| `lang` | `en` or `hy` | `unsupported_language` | `parameter`, `value`, `supported` |
+| `tz` | IANA timezone name, e.g. `America/Los_Angeles` | `invalid_timezone` | `parameter`, `value` |
+| Required `church_id` | Positive canonical integer | `missing_parameter` or `invalid_church_id` | `parameter` (and `value` for invalid) |
+| `limit` | Whole number from 1 through 100 | `invalid_pagination` | `parameter`, `value` |
+| `offset` | Whole number from 0 through 10,000 | `invalid_pagination` | `parameter`, `value` |
+
+Routes that resolve a church return `church_not_found` with `details.church_id`
+when the syntactically valid ID is unknown. Unknown public resources use
+`resource_not_found` with `details.resource`. Both use HTTP 404. Validation
+errors use HTTP 400.
+
+## Default-disabled pre-release routes
+
+All routes below are anonymous, read-only JSON endpoints, registered only when
+`PUBLIC_API_RESOURCES_ENABLED=true` (default: `false`). Activation requires the deployment attestation and
+#498 traffic readiness checks described below. The root and
+final JSON not-found fallback remain live in either state. A required
+`church_id` is a canonical positive integer discovered through
+`GET /api/v1/churches/`.
+
+Collection endpoints use one limit/offset envelope. The default `limit` is 25
+and the maximum is 100; collections are ordered by ascending ID; `next` and `previous` are URLs or `null`.
+
+```json
+{
+  "count": 123,
+  "next": "https://example.test/api/v1/churches/?limit=25&offset=25",
+  "previous": null,
+  "results": []
+}
+```
+
+| Route | Parameters | Response |
+| --- | --- | --- |
+| `GET /api/v1/churches/` | optional `limit`, `offset` | Paginated Church objects. Use `id` as `church_id` for church-scoped routes. |
+| `GET /api/v1/icons/` | optional `church_id`, `limit`, `offset` | Paginated Icon objects. |
+| `GET /api/v1/fasts/` | required `church_id`; optional `start_date`, `end_date`, `tz`, `lang`, `limit`, `offset` | Paginated Fast objects whose days overlap the inclusive range. Omit the range for 180 days before through 180 days after today in `tz`. |
+| `GET /api/v1/fasts/{id}/` | optional `lang` | One Fast object, or `resource_not_found` (404). |
+| `GET /api/v1/fasts/by-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects active on the inclusive ISO date. |
+| `GET /api/v1/fasts/by-feast-date/` | required `church_id`, `date`; optional `lang`, `limit`, `offset` | Paginated Fast objects with that culmination-feast date. |
+| `GET /api/v1/readings/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "readings": [Reading] }`. Returns only stored citations; an unimported calendar day has an empty list. |
+| `GET /api/v1/feasts/` | required `church_id`, `date`; optional `lang` | `{ "date": "YYYY-MM-DD", "feasts": [Feast] }`. The date resolves offline; only stored commemorations are returned, in service order; zero matches return `feasts: []`. Legacy service dictionaries and future lists are normalized. Each service item uses `observance_id` when supplied and supported by the model; otherwise it falls back to `name_en`/`name`, including mixed transition results. Repeated resolved Feasts are de-duplicated. Nested icons from a different church are returned as `null`. No rows are created. |
+| `GET /api/v1/calendar/` | required `church_id`, `date`; optional `lang`, `tz` | One combined stored-day response: `{date, church, readings, fast, feasts, partial_failures}`. `fast` is the lowest-ID active Fast or `null`; `feasts` is always an array. The endpoint never retrieves passage text or creates data. `tz` defaults to `UTC` and does not shift the explicit date. |
+
+Calendar `partial_failures` is an array of objects with exactly two string fields:
+`{ "component": "feasts", "code": "data_unavailable" }` is currently the only
+allowed entry, emitted only for explicit feast-data unavailability. Ordinary
+empty readings, fasts, or feasts are not failures and leave the array empty.
+Invalid input fails the whole request with HTTP 400; unexpected errors or database
+failures fail the whole request with HTTP 503, rather than returning partial data.
+
+Church and Icon routes ignore `lang`; their canonical text does not vary by
+language. Fast, Reading, Feast, and Calendar routes validate `lang` before database or
+service work, including when the requested resource is absent.
+
+Effective Fast ranges, after filling omitted endpoints, must be ordered and span
+at most 366 inclusive days. Violations return `invalid_date_range` (400), with
+`start_date`, `end_date`, and `max_days` for effective-range budget violations.
+Explicit reversed inputs retain the existing `start_date` and `end_date` details.
+Church IDs must fit a positive signed 64-bit database integer. Pagination inputs
+are limited to ten ASCII digits before numeric conversion.
+
+The public route layer does not create calendar rows, retrieve passage text,
+generate contexts, or enqueue background jobs. Infrastructure writes for admission,
+bounded response caching, and aggregate monitoring are permitted; serializers
+remain free of cache/model writes. `/api/v1/fasts/{id}/days/`
+and every other internal `/api/` or `/hub/` route remain unsupported: v1 has
+no public Day schema, so the product route is not republished as a shortcut.
+
+## Fair use, caching, and retries
+
+All v1 callers share the anonymous policy: 60 requests per minute and 1,000 per
+hour per client IP, aggregated across routes and methods (including HEAD and
+errors). Both fixed windows must allow the request. Windows align with Redis
+server time, so requests clustered at a boundary can use two adjacent allowances.
+Rejected requests do not extend the windows. People behind a shared NAT share an
+allowance. Sending a session cookie or bearer token grants no additional quota
+and causes no analytics or profile writes. CORS preflight answered by the outer
+CORS middleware performs no resource work and does not consume this allowance.
+
+A limit violation returns HTTP 429 with `code: "throttled"`,
+`details: {"retry_after": <integer seconds>}`, and a matching `Retry-After` header.
+Browser callers can read that header through CORS. Wait at least that long and
+add jitter before retrying; do not evade limits by rotating addresses. Cache
+results locally when appropriate and avoid polling unchanged calendar dates.
+
+An unavailable admission store returns HTTP 503, code `service_unavailable`,
+and a five-second retry hint; it never permits unrestricted fallback. A concurrent
+cache fill can return the same code with a one-second retry hint. No public HTTP
+response is cacheable (`Cache-Control: no-store`), including 429 and 503. CDN
+response caching must remain disabled so it cannot bypass admission.
+
+Shared-store launch mode uses best-effort quotas: memory eviction may reset
+counters. Redis errors still fail closed. This mode disables response caching;
+dedicated noeviction Redis is available when strict counter retention is needed.
+
+Optional application caching (off by default) reuses successful public data for up to five minutes, after
+validation and admission. Keys include effective language, dates, church, timezone, resource,
+and pagination where those values affect the route; unknown parameters do not create additional cache entries.
+Pagination links are rebuilt for the current request. Error responses are not
+cached. Responses larger than 256 KiB bypass the cache; at most 10,000 entries or
+fill reservations are admitted. A full cache serves bounded uncached reads.
+Cache misses cannot retrieve passage text, invoke the LLM provider wrappers, or
+dispatch Celery jobs; context-local guards reject those attempts and record them.
+
+The API maintainer owns policy changes and monitoring. Operators may configure
+different rate values only with a corresponding policy review/documentation update.
+## Schema (presentation-neutral serializers)
+
+Approved fields per resource for the public v1 serializers. The serializer
+is the single source of truth for field selection, naming, and shape; the
+endpoint (when mounted) is a thin pass-through. Every field below is
+covered by a contract test asserting exact key set, value type, and
+nullability.
+
+Missing optional values serialize as JSON `null`, never as the empty string.
+User-facing text follows the requested language (`?lang=` query parameter,
+falling back to the Django-resolved request language, then `en`) and falls
+back to the canonical/base-language field when no translation is registered.
+
+Public serializers MUST NOT trigger thumbnail generation, access any
+`ImageSpecField.url`, perform S3 I/O, write to cache, or write to models.
+Thumbnails come exclusively from the pre-populated `cached_thumbnail_url`
+column; the public field serializes to `null` when that cache is empty.
+`image_url` uses the original image field's URL only when an image is
+present, otherwise `null`.
+
+Implementers' preconditions: mounted views validate `?lang` and pass the
+language to serializers as `context['lang']` — serializers never read the
+request. Fast `start_date`/`end_date` require querysets built with
+`Fast.objects.with_dates()`, and Feast serialization requires
+`select_related("icon")`; both preconditions are pinned by zero-query
+contract tests. Localized fields whose canonical value is empty serialize
+as `null` under the rule above.
+### Church
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `name` | string | no | Canonical/base language. Church names do not currently have translations. |
+
+### Fast
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `church_id` | integer | no | Owning church. |
+| `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
+| `description` | string | yes | Localized description. |
+| `start_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
+| `end_date` | date (ISO 8601) | yes | Pre-annotated only. Serializers MUST NOT query related days. `null` when absent. |
+| `culmination_feast` | string | yes | Localized culmination name. |
+| `culmination_feast_date` | date (ISO 8601) | yes | |
+| `year` | integer | yes | |
+| `image_url` | string | yes | URL of the original uploaded image only. |
+| `thumbnail_url` | string | yes | Cached thumbnail URL only. `null` when no cache. MUST NOT access `image_thumbnail.url`. |
+| `learn_more_url` | string | yes | Mapped from `Fast.url`. |
+
+Excluded (non-exhaustive): `modal_id`, `countdown`, `joined`,
+`participant_count`, `days_to_feast`, `has_passed`, `next_fast_date`,
+`total_number_of_days`, `current_day_number`,
+`culmination_feast_salutation`, `culmination_feast_message`,
+`culmination_feast_message_attribution`, `has_day_zero`, `image`,
+`image_thumbnail`, `cached_thumbnail_url`, `cached_thumbnail_updated`,
+and the nested `church` object.
+
+### Reading (citation-only)
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `sequence` | integer | yes | Order within the day's readings. |
+| `book` | string | yes | Localized book name. `null` when the stored value is empty (no-empty-string rule). |
+| `start_chapter` | integer | no | |
+| `start_verse` | integer | no | |
+| `end_chapter` | integer | no | |
+| `end_verse` | integer | no | |
+
+Excluded (non-exhaustive): legacy `text*` and `text_hy*` fields,
+`text_copyright`, `text_version`, `text_fetched_at`, `fums_token`,
+`passage_key`, `day`, and any AI-generated context/thumbs or passage text.
+
+### Feast
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
+| `icon` | object (IconPublicSerializer) | yes | Nested icon, or `null` when no icon is matched. |
+
+Feasts and calendar responses share the `{name, icon}` Feast shape. No Feast
+identifier is exposed: the surrogate `id` is unstable, and exposing
+`observance_id` requires a future contract decision for legacy and null values.
+The nested Icon retains its own `id`.
+
+Excluded (non-exhaustive): `id`, `observance_id`, `church`, `church_id`, `designation`,
+context/votes/LLM/prayer fields.
+
+### Icon
+
+| Field | Type | Nullable | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | Primary key. |
+| `title` | string | no | Canonical/base language. Icon titles do not currently have translations. |
+| `image_url` | string | yes | URL of the original uploaded image only. |
+| `thumbnail_url` | string | yes | Cached thumbnail URL only. `null` when no cache. MUST NOT access `thumbnail.url`. |
+
+Excluded (non-exhaustive): `church`, `church_id`, `tags`, `tag_list`,
+`image_hash`, `phash`, `image_content_digest`, `image_revision`,
+`original_filename`, `filename_provenance`, `created_at`, `updated_at`,
+and any cache columns.
+
+## Change history
+
+A public-contract change requires reviewer approval, a contract-test
+update, and an entry in this changelog. Entries are reverse-chronological.
+
+| Date | Change |
+| --- | --- |
+| 2026-09-13 | Reconciled PR #537’s removal of public Feast identifiers across feasts, calendar, and reference examples; retained PR #539’s canonical `with_dates()` annotations. |
+| 2026-09-11 | Review follow-up: restored the general excluded `feedback` family (covering the reading and feast context-feedback routes) and spelled out the icon families; documented view-resolved language passing (`context['lang']`; serializers never read the request), the `with_dates()` / `select_related("icon")` queryset preconditions, and empty localized values serializing as `null`; added a read-only serializer base whose `create()`/`update()` refuse. (Issue #497 review.) |
+| 2026-09-09 | #500: Added the semantic public reference at `/docs/`, gated by `PUBLIC_API_RESOURCES_ENABLED`, with exact routes, parameters, JSON examples, error/retry policy, freshness, and compatibility guidance. Added publication-state, route-sync, serializer-field, and accessibility regression coverage. |
+| 2026-09-09 | Added a gated, accessible public v1 reference at `/docs/`; it remains Coming soon while resource registration is disabled and publishes the complete contract when deployment readiness enables resources. (Issue #500.) |
+| 2026-09-09 | Added the default-disabled combined Calendar endpoint with church/date/language/timezone cache isolation, stored citation/Fast/Feast composition, and narrow Feast partial-failure semantics. (Issue #499.) |
+| 2026-09-09 | Default-disabled resource registration pending #498; made accepted parameter validation eager, isolated Fast dates by owning church, and aligned Feast responses with the pending observance-ID/`feasts[]` migration. Added route contracts. (Issue #494 / PR #539.) |
+| 2026-09-09 | Made the anonymous, JSON-only boundary shared by v1 views; defined JSON `not_found` responses for unmatched v1 paths and JSON `not_acceptable` responses for unsupported Accept headers on mounted views. (Issue #496.) |
+| 2026-09-08 | Implemented the pre-release Church, Icon, Fast, Reading, and Feast resource routes under `/api/v1/`; documented strict route parameters, consistent collection pagination, read-only calendar lookup behavior, and the explicitly unsupported Fast-days route. (Issue #494.) |
+| 2026-09-08 | Added default-off registration, atomic anonymous quotas, retry/outage semantics, bounded five-minute data caching, query-work limits, and credential-independent read/cost boundaries. Deployment activation remains gated on the #498 operations checks. |
+| 2026-09-08 | Defined v1's shared validation rules and stable error envelope for dates, ranges, languages, timezones, and church IDs. (Issue #496.) |
+| 2026-09-08 | Added Icons to the initial planned v1 inventory; narrowed the icon exclusion to icon upload, feedback, matching, and admin families; defined exact serializer field/type/nullability/localization/media rules for Church, Fast, Reading, Feast, and Icon; pinned public thumbnail behavior to the cached URL only and forbade `ImageSpecField.url` access during serialization. (Issue #497.) |
 
 ## Release gate
 
-`/docs/` remains in its Coming soon state until #494 and #496–#500 satisfy their respective readiness criteria. The current `/api/v1/` root is a live service descriptor, but it does not imply any planned resource is publicly released or available.
+`/docs/` renders its Coming soon state while `PUBLIC_API_RESOURCES_ENABLED=false`. The complete reference is code-complete but is published only when the existing deployment-readiness gate enables resources. The current `/api/v1/` root is a live service descriptor, but it does not imply any planned resource is publicly released or available.
