@@ -11,27 +11,28 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 import json
 import csv
 
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
 
 
-def build_daily_counts_for_queryset(queryset, date_keys):
+def build_daily_counts_for_queryset(queryset, date_keys, window_tz):
     """
     Build a date-keyed dict covering the window for the queryset.
 
     Args:
         queryset: Event queryset to aggregate
         date_keys: Dict keys (dates as 'YYYY-MM-DD' strings) to initialize with zero
+        window_tz: Timezone used to form the reporting window and date keys
 
     Returns:
         Dict mapping date strings to event counts
     """
     counts = {date: 0 for date in date_keys}
     daily_rows = queryset.annotate(
-        date=TruncDate('timestamp')
+        date=TruncDate('timestamp', tzinfo=window_tz)
     ).values('date').annotate(count=Count('id')).order_by('date')
 
     for row in daily_rows:
@@ -356,33 +357,34 @@ class EventAdmin(admin.ModelAdmin):
         prayer_request_activity_total = kpi_totals['prayer_request_activity']
 
         # Get daily breakdowns for each KPI
+        window_tz = start_of_window.tzinfo or dt_timezone.utc
         signups_qs = base_qs.filter(
             event_type__code=EventType.USER_ACCOUNT_CREATED,
             timestamp__gte=start_date,
             timestamp__lt=end_date,
         )
-        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys())
+        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys(), window_tz)
 
         devotional_qs = base_qs.filter(
             event_type__code=EventType.DEVOTIONAL_VIEWED,
             timestamp__gte=start_date,
             timestamp__lt=end_date,
         )
-        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys())
+        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys(), window_tz)
 
         checklist_qs = base_qs.filter(
             event_type__code=EventType.CHECKLIST_USED,
             timestamp__gte=start_date,
             timestamp__lt=end_date,
         )
-        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys())
+        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys(), window_tz)
 
         prayer_set_qs = base_qs.filter(
             event_type__code=EventType.PRAYER_SET_VIEWED,
             timestamp__gte=start_date,
             timestamp__lt=end_date,
         )
-        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys())
+        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys(), window_tz)
 
         prayer_requests_qs = base_qs.filter(
             event_type__code__in=[
@@ -394,7 +396,7 @@ class EventAdmin(admin.ModelAdmin):
             timestamp__gte=start_date,
             timestamp__lt=end_date,
         )
-        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys())
+        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys(), window_tz)
 
         feature_usage_over_time = {
             'labels': list(events_by_day.keys()),
@@ -603,33 +605,34 @@ class EventAdmin(admin.ModelAdmin):
         )
 
         # Get daily breakdowns for each KPI
+        window_tz = start_of_window.tzinfo or dt_timezone.utc
         signups_qs = base_qs.filter(
             event_type__code=EventType.USER_ACCOUNT_CREATED,
             timestamp__gte=start_of_window,
             timestamp__lt=end_date,
         )
-        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys())
+        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys(), window_tz)
 
         devotional_qs = base_qs.filter(
             event_type__code=EventType.DEVOTIONAL_VIEWED,
             timestamp__gte=start_of_window,
             timestamp__lt=end_date,
         )
-        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys())
+        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys(), window_tz)
 
         checklist_qs = base_qs.filter(
             event_type__code=EventType.CHECKLIST_USED,
             timestamp__gte=start_of_window,
             timestamp__lt=end_date,
         )
-        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys())
+        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys(), window_tz)
 
         prayer_set_qs = base_qs.filter(
             event_type__code=EventType.PRAYER_SET_VIEWED,
             timestamp__gte=start_of_window,
             timestamp__lt=end_date,
         )
-        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys())
+        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys(), window_tz)
 
         prayer_requests_qs = base_qs.filter(
             event_type__code__in=[
@@ -641,7 +644,7 @@ class EventAdmin(admin.ModelAdmin):
             timestamp__gte=start_of_window,
             timestamp__lt=end_date,
         )
-        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys())
+        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys(), window_tz)
 
         feature_usage_over_time = {
             'labels': list(events_by_day.keys()),
