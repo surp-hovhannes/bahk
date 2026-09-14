@@ -273,11 +273,15 @@ Excluded (non-exhaustive): legacy `text*` and `text_hy*` fields,
 
 | Field | Type | Nullable | Notes |
 | --- | --- | --- | --- |
-| `id` | integer | no | Primary key. |
-| `name` | string | no | Localized name. `null` when the stored value is empty (no-empty-string rule). |
+| `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
 | `icon` | object (IconPublicSerializer) | yes | Nested icon, or `null` when no icon is matched. |
 
-Excluded (non-exhaustive): `church`, `church_id`, `designation`,
+Feasts and calendar responses share the `{name, icon}` Feast shape. No Feast
+identifier is exposed: the surrogate `id` is unstable, and exposing
+`observance_id` requires a future contract decision for legacy and null values.
+The nested Icon retains its own `id`.
+
+Excluded (non-exhaustive): `id`, `observance_id`, `church`, `church_id`, `designation`,
 context/votes/LLM/prayer fields.
 
 ### Icon
@@ -301,6 +305,7 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-09-13 | Reconciled PR #537’s removal of public Feast identifiers across feasts, calendar, and reference examples; retained PR #539’s canonical `with_dates()` annotations. |
 | 2026-09-11 | Review follow-up: restored the general excluded `feedback` family (covering the reading and feast context-feedback routes) and spelled out the icon families; documented view-resolved language passing (`context['lang']`; serializers never read the request), the `with_dates()` / `select_related("icon")` queryset preconditions, and empty localized values serializing as `null`; added a read-only serializer base whose `create()`/`update()` refuse. (Issue #497 review.) |
 | 2026-09-09 | #500: Added the semantic public reference at `/docs/`, gated by `PUBLIC_API_RESOURCES_ENABLED`, with exact routes, parameters, JSON examples, error/retry policy, freshness, and compatibility guidance. Added publication-state, route-sync, serializer-field, and accessibility regression coverage. |
 | 2026-09-09 | Added a gated, accessible public v1 reference at `/docs/`; it remains Coming soon while resource registration is disabled and publishes the complete contract when deployment readiness enables resources. (Issue #500.) |

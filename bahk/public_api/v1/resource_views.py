@@ -5,7 +5,7 @@ never reuse the product API views: those routes cache, create calendar rows,
 fetch passage text, or schedule background work.
 """
 
-from django.db.models import Exists, F, Max, Min, OuterRef, Q
+from django.db.models import Exists, OuterRef
 from django.http import Http404
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
@@ -26,10 +26,7 @@ from icons.models import Icon
 
 def annotated_fasts(queryset):
     """Add the only Fast date fields allowed by the public serializer."""
-    return queryset.annotate(
-        start_date=Min("days__date", filter=Q(days__church_id=F("church_id"))),
-        end_date=Max("days__date", filter=Q(days__church_id=F("church_id"))),
-    ).order_by("id")
+    return queryset.with_dates().order_by("id")
 
 
 def fasts_for_date(church, target_date):
