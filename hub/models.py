@@ -47,7 +47,7 @@ class FastQuerySet(models.QuerySet):
     """QuerySet for the Fast model."""
 
     def with_dates(self):
-        """Annotate each fast with its first and last scheduled day in its church.
+        """Annotate each fast with its first and last scheduled day.
 
         ``start_date`` / ``end_date`` are the attributes the public v1
         serializers consume; building the queryset with this method
@@ -55,12 +55,8 @@ class FastQuerySet(models.QuerySet):
         call sites to remember the annotation.
         """
         return self.annotate(
-            start_date=models.Min(
-                "days__date", filter=models.Q(days__church_id=models.F("church_id"))
-            ),
-            end_date=models.Max(
-                "days__date", filter=models.Q(days__church_id=models.F("church_id"))
-            ),
+            start_date=models.Min("days__date", filter=models.Q(days__church_id=models.F("church_id"))),
+            end_date=models.Max("days__date", filter=models.Q(days__church_id=models.F("church_id"))),
         )
 
 
