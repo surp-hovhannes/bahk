@@ -243,7 +243,16 @@ class FeastByDateView(PublicApiResourceView):
         church = query.church(required=True)
         target_date = query.date("date", required=True)
 
-        feasts = feasts_for_date(church, target_date)
+        from hub.services import feast_service
+
+        unavailable = getattr(feast_service, "FeastDataUnavailable", ())
+        try:
+            feasts = feasts_for_date(church, target_date)
+        except unavailable:
+            # The offline feast-name engine may not support every valid Church.
+            # Public v1 exposes stored commemorations only, so unavailable engine
+            # data is equivalent to no resolved stored Feast for this endpoint.
+            feasts = []
         return Response(
             {
                 "date": target_date.isoformat(),
