@@ -4,6 +4,7 @@ from django.conf import settings
 from django.urls import path, re_path
 
 from bahk.public_api.v1.resource_views import (
+    CalendarDayView,
     ChurchListView,
     FastByDateView,
     FastByFeastDateView,
@@ -31,6 +32,7 @@ resource_urlpatterns = [
     path("fasts/<int:pk>/", FastDetailView.as_view(), name="fast-detail"),
     path("readings/", ReadingByDateView.as_view(), name="reading-by-date"),
     path("feasts/", FeastByDateView.as_view(), name="feast-by-date"),
+    path("calendar/", CalendarDayView.as_view(), name="calendar"),
 ]
 
 if settings.PUBLIC_API_RESOURCES_ENABLED:

@@ -1,4 +1,7 @@
-from django.test import SimpleTestCase
+import json
+from html.parser import HTMLParser
+
+from django.test import SimpleTestCase, override_settings
 from django.test.client import Client
 from django.urls import NoReverseMatch, resolve, reverse
 
@@ -39,6 +42,7 @@ class LandingPageTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
 
 
+@override_settings(PUBLIC_API_RESOURCES_ENABLED=False)
 class ApiDocsTests(SimpleTestCase):
     def test_docs_route_renders_coming_soon_state(self):
         response = self.client.get("/docs/")
@@ -46,6 +50,8 @@ class ApiDocsTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "api_docs.html")
         self.assertContains(response, "API Docs")
+        self.assertFalse(response.context["public_api_published"])
+        self.assertNotContains(response, "/api/v1/")
         self.assertContains(response, "Coming soon")
         self.assertContains(response, "preparing the API for public use")
         self.assertNotContains(response, "/api/readings/")
@@ -205,3 +211,181 @@ class PublicApiV1Tests(SimpleTestCase):
         ):
             with self.subTest(path=path):
                 self.assertNotContains(response, path)
+
+
+class ReferenceParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.elements = []
+        self.examples = {}
+        self.example = None
+        self.stack = []
+        self.table_parents = []
+        self.caption_ids = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        self.elements.append((tag, attrs))
+        if tag == "table":
+            self.table_parents.append(self.stack[-1] if self.stack else None)
+        if tag == "caption":
+            self.caption_ids.append(attrs.get("id"))
+        if tag not in {
+            "area",
+            "base",
+            "br",
+            "col",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "link",
+            "meta",
+            "param",
+            "source",
+            "track",
+            "wbr",
+        }:
+            self.stack.append((tag, attrs))
+        if tag == "pre" and "data-example" in attrs:
+            self.example = attrs["data-example"]
+            self.examples[self.example] = ""
+
+    def handle_data(self, data):
+        if self.example:
+            self.examples[self.example] += data
+
+    def handle_endtag(self, tag):
+        if self.stack and self.stack[-1][0] == tag:
+            self.stack.pop()
+        if tag == "pre":
+            self.example = None
+
+
+@override_settings(PUBLIC_API_RESOURCES_ENABLED=True)
+class PublishedApiDocsTests(SimpleTestCase):
+    def setUp(self):
+        self.response = self.client.get("/docs/")
+        self.document = ReferenceParser()
+        self.document.feed(self.response.content.decode())
+
+    def test_enabled_reference_and_policy(self):
+        self.assertEqual(self.response.status_code, 200)
+        self.assertTrue(self.response.context["public_api_published"])
+        self.assertNotContains(self.response, "Coming soon")
+        for text in (
+            "60 requests per minute",
+            "1000 requests per hour",
+            "five minutes",
+            "Cache-Control: no-store",
+            "Retry-After",
+            "180-day",
+            "Deprecation",
+            "Sunset",
+            "lang=en",
+            "lang=hy",
+            "UTC",
+            "never shifted",
+            "partial_failures",
+            "HTTP 400",
+            "HTTP 404",
+            "HTTP 405",
+            "HTTP 406",
+            "HTTP 429",
+            "HTTP 503",
+        ):
+            with self.subTest(text=text):
+                self.assertContains(self.response, text)
+
+    def test_documented_routes_match_registered_resource_inventory(self):
+        from bahk.public_api.v1.urls import resource_urlpatterns
+
+        expected = {"root": "/api/v1/"}
+        expected.update(
+            {
+                pattern.name: "/api/v1/" + str(pattern.pattern).replace("<int:pk>", "{id}")
+                for pattern in resource_urlpatterns
+            }
+        )
+        self.assertEqual(set(self.document.examples), set(expected))
+        for path in expected.values():
+            self.assertContains(self.response, f"<code>{path}</code>", html=True)
+
+    def test_json_examples_match_serializer_field_contracts(self):
+        from bahk.public_api.v1.serializers import (
+            ChurchPublicSerializer,
+            FastPublicSerializer,
+            FeastPublicSerializer,
+            IconPublicSerializer,
+            ReadingPublicSerializer,
+        )
+
+        examples = {name: json.loads(value) for name, value in self.document.examples.items()}
+        for name, serializer in (
+            ("church-list", ChurchPublicSerializer),
+            ("icon-list", IconPublicSerializer),
+            ("fast-list", FastPublicSerializer),
+            ("fast-by-date", FastPublicSerializer),
+            ("fast-by-feast-date", FastPublicSerializer),
+        ):
+            self.assertEqual(set(examples[name]), {"count", "next", "previous", "results"})
+            self.assertEqual(set(examples[name]["results"][0]), set(serializer.Meta.fields))
+        self.assertEqual(set(examples["fast-detail"]), set(FastPublicSerializer.Meta.fields))
+        self.assertEqual(set(examples["reading-by-date"]), {"date", "readings"})
+        self.assertEqual(set(examples["feast-by-date"]), {"date", "feasts"})
+        self.assertEqual(set(examples["reading-by-date"]["readings"][0]), set(ReadingPublicSerializer.Meta.fields))
+        feast = examples["feast-by-date"]["feasts"][0]
+        self.assertEqual(set(feast), set(FeastPublicSerializer.Meta.fields))
+        self.assertEqual(set(feast["icon"]), set(IconPublicSerializer.Meta.fields))
+        self.assertEqual(
+            set(examples["calendar"]), {"date", "church", "readings", "fast", "feasts", "partial_failures"}
+        )
+        self.assertEqual(examples["calendar"]["partial_failures"], [])
+        self.assertIsNone(examples["calendar"]["fast"])
+        self.assertEqual(set(examples["root"]), {"service", "version", "base_path", "status"})
+
+    def test_semantic_accessible_reference_has_no_runtime_dependencies(self):
+        elements = self.document.elements
+        ids = [attrs["id"] for _, attrs in elements if "id" in attrs]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(sum(tag == "main" for tag, _ in elements), 1)
+        self.assertEqual(sum(tag == "h1" for tag, _ in elements), 1)
+        self.assertTrue(any(tag == "nav" and attrs.get("aria-label") == "API reference" for tag, attrs in elements))
+        for tag, attrs in elements:
+            if tag == "a" and attrs.get("href", "").startswith("#"):
+                self.assertIn(attrs["href"][1:], ids)
+            if tag == "section":
+                self.assertIn(attrs["aria-labelledby"], ids)
+            if tag == "th":
+                self.assertIn(attrs.get("scope"), {"col", "row"})
+            self.assertNotEqual(tag, "script")
+            if tag == "link":
+                self.assertFalse(attrs.get("href", "").startswith(("https://", "//")))
+        self.assertEqual(sum(tag == "table" for tag, _ in elements), sum(tag == "caption" for tag, _ in elements))
+        self.assertContains(self.response, 'class="skip-link"')
+
+    def test_every_reference_table_has_a_named_keyboard_scroll_region(self):
+        tables = self.document.table_parents
+        self.assertGreater(len(tables), 0)
+        wrappers = [attrs for _, attrs in self.document.elements if "table-scroll" in attrs.get("class", "").split()]
+        self.assertEqual(len(wrappers), len(tables))
+        self.assertEqual(len(self.document.caption_ids), len(tables))
+        for parent, caption_id in zip(tables, self.document.caption_ids):
+            with self.subTest(caption=caption_id):
+                self.assertIsNotNone(parent)
+                tag, attrs = parent
+                self.assertEqual(tag, "div")
+                self.assertIn("table-scroll", attrs.get("class", "").split())
+                self.assertEqual(attrs.get("tabindex"), "0")
+                self.assertEqual(attrs.get("role"), "region")
+                self.assertTrue(caption_id)
+                self.assertEqual(attrs.get("aria-labelledby"), caption_id)
+
+    def test_no_authentication_or_quota_misinformation(self):
+        self.assertContains(self.response, "anonymous and read-only")
+        self.assertContains(self.response, "No account, API key, or token is required.")
+        self.assertContains(self.response, "Authorization headers are ignored.")
+        self.assertContains(self.response, "Credentials do not raise quotas.")
+        self.assertContains(self.response, "it is null when absent or when its church differs from the Feast.")
+        for text in ("Authorization: Bearer", "X-API-Key", "/api/token/", "higher authenticated limits"):
+            self.assertNotContains(self.response, text)

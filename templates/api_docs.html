@@ -1,20 +1,154 @@
 {% extends "api_site_base.html" %}
 
 {% block title %}API Docs | Fast &amp; Pray{% endblock %}
-{% block meta_description %}Fast &amp; Pray public API documentation is coming soon.{% endblock %}
+{% block fonts %}{% endblock %}
+{% block body_attributes %} class="api-docs"{% endblock %}
+{% block skip_link %}<a class="skip-link" href="#main-content">Skip to reference</a>{% endblock %}
+{% block meta_description %}{% if public_api_published %}Fast &amp; Pray public API v1 reference: routes, parameters, examples and fair use.{% else %}Fast &amp; Pray public API documentation is coming soon.{% endif %}{% endblock %}
 
 {% block content %}
-<main class="docs-shell">
+<main class="docs-shell" id="main-content" tabindex="-1">
   <header class="docs-intro">
     <p class="docs-intro__eyebrow">Fast &amp; Pray API</p>
     <h1>API Docs</h1>
     <p class="docs-intro__lede">Reference documentation for the public Fast &amp; Pray API.</p>
   </header>
 
+  {% if public_api_published %}
+    <div class="docs-layout">
+    <nav class="docs-nav" aria-label="API reference">
+      <p>On this page</p>
+      <a href="#overview">Getting started</a>
+      {% for route in routes %}<a href="#{{ route.name }}">{{ route.title }}</a>{% endfor %}
+      <a href="#fields">Response fields</a>
+      <a href="#errors">Errors</a>
+      <a href="#fair-use">Fair use and freshness</a>
+      <a href="#compatibility">Compatibility</a>
+    </nav>
+    <div class="docs-content">
+      <section class="docs-section docs-section--intro" aria-labelledby="overview">
+        <h2 id="overview">Getting started</h2>
+        <p>The public v1 API is anonymous and read-only. No account, API key, or token is required.
+          Send <code>GET</code> with <code>Accept: application/json</code> to the paths below on this service's host.
+          <code>HEAD</code> and <code>OPTIONS</code> are supported; writes are not supported.
+          Authorization headers are ignored. Credentials do not raise quotas.</p>
+        <p>Examples are illustrative: discover current IDs through the collections. Replace
+          <code>YOUR_API_HOST</code> with the host serving this reference. All responses are JSON.</p>
+        <p>Only parameters listed for each route are accepted; unknown parameters are ignored.
+          Missing required parameters and invalid supplied parameters return 400 before resource lookup.
+          Dates use exact <code>YYYY-MM-DD</code> calendar dates, not timestamps.</p>
+        <p>Localized routes accept <code>lang=en</code> (English) or <code>lang=hy</code> (Armenian).
+          Omission uses the request language, then English; missing translations use canonical text.
+          Church names and icon titles remain canonical. Explicit dates are never shifted by timezone.
+          On Fasts, <code>tz</code> determines today for omitted range bounds; Calendar accepts an IANA
+          timezone (default <code>UTC</code>) without changing the requested calendar date.</p>
+        <p>Collections return <code>count</code>, <code>next</code>, <code>previous</code>, and <code>results</code>,
+          ordered by ascending ID. Count is the total matching rows; next and previous are page URLs or
+          <code>null</code>. Default limit is 25, maximum 100; offset defaults to 0, maximum 10000.
+          Readings, Feasts, and Calendar are not paginated.</p>
+      </section>
+      {% for route in routes %}
+      <section class="docs-section" aria-labelledby="{{ route.name }}">
+        <h2 id="{{ route.name }}">{{ route.title }}</h2>
+        <p class="endpoint__route"><span class="method">GET</span> <code>{{ route.path }}</code></p>
+        <p>{{ route.purpose }}</p>
+        {% if route.parameters %}
+        <div class="table-scroll" tabindex="0" role="region" aria-labelledby="{{ route.name }}-parameters">
+        <table class="parameter-table">
+          <caption id="{{ route.name }}-parameters">{{ route.title }} parameters</caption>
+          <thead><tr><th scope="col">Parameter</th><th scope="col">Required?</th><th scope="col">Values and defaults</th></tr></thead>
+          <tbody>{% for parameter in route.parameters %}<tr>
+            <th scope="row"><code>{{ parameter.name }}</code></th>
+            <td>{% if parameter.required %}Required{% else %}Optional{% endif %}</td>
+            <td>{{ parameter.description }}</td>
+          </tr>{% endfor %}</tbody>
+        </table>
+        </div>
+        {% else %}<p>No parameters.</p>{% endif %}
+        <h3>Example request</h3>
+        <pre><code>{{ route.request }}</code></pre>
+        <h3>Example response · 200 OK</h3>
+        <pre data-example="{{ route.name }}"><code>{{ route.response }}</code></pre>
+      </section>
+      {% endfor %}
+      <section class="docs-section" aria-labelledby="fields">
+        <h2 id="fields">Response fields</h2>
+        <p>Examples show the exact current field sets. IDs are integers. Church <code>name</code>,
+          Icon <code>title</code>, Feast <code>name</code>, and Fast <code>name</code> are strings.
+          Icon image and thumbnail URLs are strings or null; thumbnails are returned only when already cached.
+          Feast <code>icon</code> is an Icon object or null; it is null when absent or when its church differs from the Feast.</p>
+        <p>Fast <code>church_id</code> is an integer; <code>description</code> and <code>culmination_feast</code>
+          are strings or null; <code>year</code> is an integer or null. All three Fast date fields are ISO dates
+          or null. Fast image, thumbnail, and learn-more URLs are strings or null. Date bounds come from stored fast days.</p>
+        <p>Reading <code>sequence</code> is an integer or null; <code>book</code> is a string;
+          chapter and verse fields are integers. Readings contain citations only, with no passage text.</p>
+        <p>Calendar always returns <code>date</code>, <code>church</code>, <code>readings</code>,
+          <code>fast</code>, <code>feasts</code>, and <code>partial_failures</code>.
+          Empty resources are normal and leave partial_failures empty. Explicit feast-data unavailability
+          returns 200 with an empty feasts array and this partial_failures entry:</p>
+        <pre><code>[{"component": "feasts", "code": "data_unavailable"}]</code></pre>
+        <p>Each entry has exactly these two string fields. Invalid input fails the whole request with 400;
+          unexpected errors or database failures fail the whole request with 503.</p>
+      </section>
+      <section class="docs-section" aria-labelledby="errors">
+        <h2 id="errors">Errors</h2>
+        <p>Every error has <code>code</code>, <code>message</code>, and an object-valued <code>details</code>.
+          Codes and documented details keys are stable; message wording may change.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-labelledby="validation-errors">
+        <table class="parameter-table">
+          <caption id="validation-errors">Validation and lookup errors</caption>
+          <thead><tr><th scope="col">Status and code</th><th scope="col">Details keys</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">400 · missing_parameter</th><td>parameter</td></tr>
+            <tr><th scope="row">400 · invalid_date, invalid_church_id, invalid_timezone, invalid_pagination</th><td>parameter, value</td></tr>
+            <tr><th scope="row">400 · unsupported_language</th><td>parameter, value, supported (en, hy)</td></tr>
+            <tr><th scope="row">400 · invalid_date_range</th><td>start_date, end_date; max_days for effective-range budget violations</td></tr>
+            <tr><th scope="row">404 · church_not_found</th><td>church_id</td></tr>
+            <tr><th scope="row">404 · resource_not_found</th><td>resource (fast)</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>Unknown v1 paths return 404 JSON regardless of method or Accept header. Unsupported methods
+          return 405 with <code>Allow: GET, HEAD, OPTIONS</code>; an unsupported Accept header returns 406 JSON.</p>
+        {% for error in errors %}
+        <h3>HTTP {{ error.status }}</h3>
+        <p>{{ error.trigger }}</p>
+        <pre><code>{{ error.response }}</code></pre>
+        {% endfor %}
+      </section>
+      <section class="docs-section" aria-labelledby="fair-use">
+        <h2 id="fair-use">Fair use and freshness</h2>
+        <p>Limits are 60 requests per minute and 1000 requests per hour per client IP across routes and methods,
+          including HEAD and errors. Both fixed windows must allow a request. Shared networks share an allowance.
+          Windows follow server time; rejected requests do not extend them. CORS preflight handled by the outer
+          middleware does not consume the allowance. Session cookies and bearer tokens grant no additional quota.</p>
+        <p>On 429, wait at least the integer seconds in <code>Retry-After</code> (also in
+          <code>details.retry_after</code>), then add jitter. The header is readable through CORS.
+          An unavailable admission store returns 503 with a five-second hint; a concurrent cache fill can return
+          503 with a one-second hint. Avoid polling unchanged dates and never rotate addresses to evade limits.</p>
+        <p>Successful data may be reused by the application for up to five minutes after validation and admission.
+          This five-minute data freshness window is separate from HTTP caching: all public API responses send
+          <code>Cache-Control: no-store</code>, including errors. Browsers and shared HTTP caches must not store
+          responses; CDN response caching must remain disabled. Error responses are not cached by the application.</p>
+      </section>
+      <section class="docs-section" aria-labelledby="compatibility">
+        <h2 id="compatibility">Compatibility and deprecation</h2>
+        <p>Use only the documented <code>/api/v1/</code> routes for third-party integrations.
+          Internal <code>/api/</code> and <code>/hub/</code> routes are unsupported for new integrations.</p>
+        <p>Stable v1 fields and request semantics remain compatible throughout v1. Optional response fields may
+          be added; clients should tolerate them. Breaking changes require a new path version.
+          Version deprecation is announced here and in release notes with at least a 180-day notice period,
+          plus <code>Deprecation</code> and <code>Sunset</code> response headers. A security, privacy, or legal
+          emergency may require faster retirement.</p>
+      </section>
+    </div>
+  </div>
+  {% else %}
   <section class="docs-section docs-section--intro" aria-labelledby="coming-soon-title">
     <p class="endpoint__kicker">Documentation</p>
     <h2 id="coming-soon-title">Coming soon</h2>
     <p>We’re preparing the API for public use. Complete reference documentation, examples, and usage guidance will be published here when it is ready.</p>
   </section>
+  {% endif %}
 </main>
 {% endblock %}

@@ -143,7 +143,7 @@ propagating and retaining the public-read safety context (for example with
   the root returns the pre-release descriptor. No resource URL is registered.
 - In a staging deployment with registration on, check anonymous GET and HEAD,
   required parameters, limit/offset errors, equivalent requests, EN/HY responses,
-  and CORS `Retry-After`. Verify HTTP cache bypass through the actual edge.
+  the combined Calendar response, and CORS `Retry-After`. Verify HTTP cache bypass through the actual edge.
 - Send requests up to the approved limit from one controlled client; verify 429
   and retry timing without affecting unrelated clients. Do not run a production
   load test as a deployment smoke check.
@@ -163,8 +163,9 @@ propagating and retaining the public-read safety context (for example with
 Response caching is optional, off by default, and prohibited in shared mode.
 When enabled, only serialized public data and collection counts are cached. The cache does not
 store headers, credential state, or pagination URLs. Language follows Django's
-effective locale; omitted date ranges resolve once per request. Equivalent inputs
-share a key, and midnight produces a different key. Validation precedes cache hits.
+effective locale; omitted date ranges resolve once per request. Calendar keys explicitly
+include church, date, effective language, and validated timezone (default `UTC`). Equivalent inputs
+share a key, and midnight produces a different key for routes with date defaults. Validation precedes cache hits.
 Five-minute TTLs bound ordinary data staleness; there are no model invalidation
 signals in this change. Cache schema `v1` is code-owned: bump it in the same change
 as a cached payload change so an older deployment cannot read incompatible data.
@@ -183,6 +184,9 @@ Other callers get a one-second 503 retry hint instead of duplicating a healthy f
 the normal quota and query bounds. Payloads and leases expire, and expired index
 members are pruned atomically on admission. Successful fills refresh the index's
 TTL; a crashed fill cannot retain capacity indefinitely.
+
+Calendar telemetry uses the low-cardinality `route="calendar"` label; verify its request,
+latency, cache, and error series during staging smoke checks.
 
 To stop resource access, set `PUBLIC_API_RESOURCES_ENABLED=false` and restart all
 workers. Do not roll back to #539 alone, which mounts routes without protections;
