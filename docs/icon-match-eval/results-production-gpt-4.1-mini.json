@@ -1,0 +1,309 @@
+[
+  {
+    "feast": "Remembrance of the Prophet Elijah",
+    "stored_icon": "komitas partridge",
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": []
+  },
+  {
+    "feast": "Holy Voskian Priests",
+    "stored_icon": "Presentation of the Lord to the Temple",
+    "status": "partial",
+    "diagnostics": [
+      "invalid_assessed_candidate",
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 0,
+    "matches": [
+      {
+        "id": 76,
+        "relation": "related_specific",
+        "confidence": "medium",
+        "relevance": 60,
+        "auto_assignable": false,
+        "reason": "Title 'Bishop Mark Of Arethusa and The Deacon Cyril' plus tags 'clergy','group','martyrs','saints' indicate depiction of a clergy group related to the requested 'Holy Voskian Priests' subject. No exact identity match or full request coverage due to lack of direct identity qualification."
+      },
+      {
+        "id": 378,
+        "relation": "related_specific",
+        "confidence": "medium",
+        "relevance": 50,
+        "auto_assignable": false,
+        "reason": "Title 'St. Aristakes' and tags 'bishop','clergy' suggest depiction of a cleric relevant to 'Holy Voskian Priests' but no exact true subject match or identity qualification."
+      },
+      {
+        "id": 624,
+        "relation": "related_specific",
+        "confidence": "medium",
+        "relevance": 50,
+        "auto_assignable": false,
+        "reason": "Title 'Saint Mocius the Priest' and tags including 'priest-martyr','saint-mocius' indicate depiction relevant to clergy like the 'Holy Voskian Priests' subject, without exact identity match."
+      }
+    ]
+  },
+  {
+    "feast": "Sts. Atom and His Soldiers",
+    "stored_icon": "Saint Sarkis the Warrior and Son Mardiros",
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": []
+  },
+  {
+    "feast": "Remembrance of the Dead",
+    "stored_icon": "Dormition of the Theotokos",
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": [
+      {
+        "id": 230,
+        "relation": "related_specific",
+        "confidence": "high",
+        "relevance": 75,
+        "auto_assignable": false,
+        "reason": "Title and tag indicate depiction of Armenian Genocide Martyrs, a specific act of remembrance of the dead, matching the theme 'Remembrance of the Dead'."
+      },
+      {
+        "id": 249,
+        "relation": "related_specific",
+        "confidence": "high",
+        "relevance": 75,
+        "auto_assignable": false,
+        "reason": "Title and tags identify Armenian Genocide Martyrs, linking to specific remembrance event fitting theme request."
+      }
+    ]
+  },
+  {
+    "feast": "Beheading of St. John the Forerunner (Baptist)",
+    "stored_icon": "St. John the Baptist",
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": []
+  },
+  {
+    "feast": "Feast of the Holy Cross",
+    "stored_icon": null,
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": []
+  },
+  {
+    "feast": "Palm Sunday",
+    "stored_icon": "Palm Sunday",
+    "status": "partial",
+    "diagnostics": [
+      "invalid_assessed_candidate",
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 0,
+    "matches": [
+      {
+        "id": 101,
+        "relation": "exact_event",
+        "confidence": "high",
+        "relevance": 100,
+        "auto_assignable": false,
+        "reason": "Title is exactly 'Palm Sunday' establishing the requested event identity; tags include 'biblical','feast','Holy Week','Jesus' consistent with Palm Sunday event."
+      },
+      {
+        "id": 301,
+        "relation": "exact_event",
+        "confidence": "high",
+        "relevance": 90,
+        "auto_assignable": false,
+        "reason": "Title 'Palm Sunday Entry into Jerusalem' includes requested event 'Palm Sunday'; tags include 'armenian-orthodox','entry-into-jerusalem','palm-sunday','palms' consistent with Palm Sunday event depiction."
+      },
+      {
+        "id": 463,
+        "relation": "exact_event",
+        "confidence": "high",
+        "relevance": 80,
+        "auto_assignable": false,
+        "reason": "Title 'Palm Sunday 2' (different from id 325) depicts Palm Sunday event; tags include 'apostles','entry-into-jerusalem','palm-branches' consistent with Palm Sunday scene depiction."
+      },
+      {
+        "id": 464,
+        "relation": "exact_event",
+        "confidence": "high",
+        "relevance": 75,
+        "auto_assignable": false,
+        "reason": "Title 'Palm Sunday Illuminated Manuscript 1450' clearly refers to Palm Sunday event; tags include 'christ-entry-into-jerusalem','palm-sunday','procession' consistent with requested event."
+      },
+      {
+        "id": 203,
+        "relation": "exact_event",
+        "confidence": "high",
+        "relevance": 70,
+        "auto_assignable": false,
+        "reason": "Title 'Palm Sunday illuminated manuscript by classmate of St John of Vorodn' specifies Palm Sunday event; tags include 'palm-sunday','biblical','illuminated-manuscript' consistent with event depiction."
+      }
+    ]
+  },
+  {
+    "feast": "Holy Forty Martyrs of Sebastia",
+    "stored_icon": "40 Martyrs of Sebastia",
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": [
+      {
+        "id": 77,
+        "relation": "exact_subject",
+        "confidence": "high",
+        "relevance": 100,
+        "auto_assignable": false,
+        "reason": "Title exactly matches identity evidence '40 Martyrs of Sebastia' for full subject identity Holy Forty Martyrs of Sebastia."
+      },
+      {
+        "id": 218,
+        "relation": "subject_portrait",
+        "confidence": "high",
+        "relevance": 75,
+        "auto_assignable": false,
+        "reason": "Title 'FortyMartyrsofSebastiaStJohnArmenianChurchicon' combined with tag 'group' and 'icon' recognized as a generic portrait depiction of Holy Forty Martyrs of Sebastia."
+      }
+    ]
+  },
+  {
+    "feast": "Remembrance of the Raising of Lazarus",
+    "stored_icon": "IlluminatedManuscript1450(5)",
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": [
+      {
+        "id": 455,
+        "relation": "exact_event",
+        "confidence": "high",
+        "relevance": 100,
+        "auto_assignable": false,
+        "reason": "Title explicitly includes 'lazarus' and 'resurrection of lazarus' tag indicates depiction of the Raising of Lazarus event with subject Lazarus."
+      }
+    ]
+  },
+  {
+    "feast": "Sts. Hripsime and Her Companions",
+    "stored_icon": "St Hripsime and Companions",
+    "status": "partial",
+    "diagnostics": [
+      "verification_failed",
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": [
+      {
+        "id": 418,
+        "relation": "exact_subject",
+        "confidence": "high",
+        "relevance": 100,
+        "auto_assignable": false,
+        "reason": "Title 'sthripsimeandcompanions' and tags 'companions','group','martyrdom','martyrs','saints','sthripsime','women' explicitly identify the full entity as Sts. Hripsime and Her Companions matching the requested subjects with qualifiers 'Sts.' and 'Companions'."
+      },
+      {
+        "id": 158,
+        "relation": "exact_subject",
+        "confidence": "high",
+        "relevance": 90,
+        "auto_assignable": false,
+        "reason": "Title 'St Hripsime and Companions' and tags including 'group','saint','st-hripsime' establish the identity as Sts. Hripsime and Her Companions, matching the requested subjects with qualifiers."
+      },
+      {
+        "id": 118,
+        "relation": "related_specific",
+        "confidence": "medium",
+        "relevance": 40,
+        "auto_assignable": false,
+        "reason": "Title 'St Hripsime' and tag 'st-hripsime' identify the single saint St Hripsime who is part of the requested group; lacks depiction of the companions hence a subject portrait only."
+      },
+      {
+        "id": 245,
+        "relation": "related_specific",
+        "confidence": "medium",
+        "relevance": 40,
+        "auto_assignable": false,
+        "reason": "Title 'StHripsimeReliefCarvingMoscow' and tags including 'st-hripsime' identify St Hripsime alone without the companions, thus a subject portrait of the saint but no depiction of the companions."
+      },
+      {
+        "id": 270,
+        "relation": "related_specific",
+        "confidence": "medium",
+        "relevance": 40,
+        "auto_assignable": false,
+        "reason": "Title 'Saint Hripsime' plus tags 'saint-hripsime' and 'holy-figure' identify the single saint St Hripsime, without companions, a subject portrait only."
+      }
+    ]
+  },
+  {
+    "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
+    "stored_icon": "Christ Pantocrator",
+    "status": "complete",
+    "diagnostics": [
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 440,
+    "matches": []
+  },
+  {
+    "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+    "stored_icon": "Esayi of Nich aka Nchetsi",
+    "status": "partial",
+    "diagnostics": [
+      "invalid_assessed_candidate",
+      "taxonomy_shadow_skipped_endpoint_deadline"
+    ],
+    "assessed_count": 0,
+    "matches": [
+      {
+        "id": 175,
+        "relation": "related_specific",
+        "confidence": "high",
+        "relevance": 90,
+        "auto_assignable": false,
+        "reason": "Title includes 'StGregoryofTatevandStJohnofVorodn' covering subjects John of Vorotan and Gregory of Tatev exactly."
+      },
+      {
+        "id": 200,
+        "relation": "related_specific",
+        "confidence": "high",
+        "relevance": 80,
+        "auto_assignable": false,
+        "reason": "Title and tags identify 'St John of Vorodn' matching John of Vorotan subject identity precisely."
+      },
+      {
+        "id": 311,
+        "relation": "related_specific",
+        "confidence": "high",
+        "relevance": 80,
+        "auto_assignable": false,
+        "reason": "Title and tags identify 'St. John of Odzun' matching John of Otzun the Patriarch of Armenia subject identity exactly."
+      },
+      {
+        "id": 331,
+        "relation": "related_specific",
+        "confidence": "high",
+        "relevance": 65,
+        "auto_assignable": false,
+        "reason": "Title and tags include 'St Gregory of Tatev' matching requested subject exactly."
+      }
+    ]
+  }
+]

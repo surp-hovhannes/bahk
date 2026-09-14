@@ -426,5 +426,49 @@ LUNA_V2 = IconMatchingProfile(
     LUNA.positive_limit,
     luna_rank,
 )
-REGISTERED_PROFILES = MappingProxyType({p.id: p for p in (CONTROL, LUNA, LUNA_V2)})
+# Andy's curator rubric, expressed against the existing relation ladder. The bands
+# are the proposal verbatim; the schema carries the score in relevance. The one
+# deliberate departure is the proposal's "return the image with the highest score":
+# the batch schema returns a ranked shortlist and the pipeline decides assignment,
+# so forcing a winner here cannot be expressed without replacing the pipeline.
+RUBRIC_SELECTION = """SELECTION RUBRIC. You are an expert art historian and curator
+matching icon metadata to a commemoration. Place every candidate on this ladder and
+set relation and relevance from the band it lands in:
+Band 1 (relevance 90-100), the requested event or action is itself depicted:
+relation=exact_event.
+Band 2 (relevance 70-89), every requested figure is present and fully identified but
+the requested event is not depicted: relation=exact_subject when no event was
+requested, subject_portrait when one was.
+Band 3 (relevance 40-69), a closely related figure or context is present, such as
+some but not all requested figures, a related scene, or the same specific milieu:
+relation=related_specific.
+Band 4 (relevance 1-39), only broad style, genre or provenance matches, such as
+period, artist, manuscript, medium or a bare category word: relation=thematic.
+Band 0, omit the candidate entirely: nothing beyond incidental vocabulary overlap.
+For each candidate you return, decide in this order: which primary entities are
+actually depicted; whether the narrative aligns with the commemoration; the band and
+its score; and a one-line justification naming the metadata that placed it there.
+Put that justification in reason.
+Provenance and style metadata is the weakest evidence there is: it establishes band 4
+and never a primary figure. A tag naming an artist, century, manuscript, medium or
+broad category is never identity evidence.
+Rank by band first, then by score within the band. Where two candidates tie, prefer
+the one whose primary-figure identification is stronger, then the lower id.
+Score honestly. Omitting a weak candidate is correct, and a catalogue holding no
+band 1 or band 2 candidate must not be pressed into producing one.
+"""
+RUBRIC_PROMPTS = (
+    ("analyze", STAGE_PROMPTS["analyze"]),
+    ("assess", STAGE_PROMPTS["assess"] + RUBRIC_SELECTION),
+    ("verify", STAGE_PROMPTS["verify"] + RUBRIC_SELECTION),
+)
+# Arm A isolates the model against the gpt-4.1-mini production baseline; arm B adds
+# the rubric and nothing else, so the pair isolates the prompt.
+SONNET_CONTROL = IconMatchingProfile(
+    "sonnet-control-v1", "claude-sonnet-5", None, "control-v1", "control-v1", tuple(STAGE_PROMPTS.items()), 8, _rank
+)
+RUBRIC_V1 = IconMatchingProfile(
+    "sonnet-rubric-v1", "claude-sonnet-5", None, "rubric-v1", "control-v1", RUBRIC_PROMPTS, 8, _rank
+)
+REGISTERED_PROFILES = MappingProxyType({p.id: p for p in (CONTROL, LUNA, LUNA_V2, SONNET_CONTROL, RUBRIC_V1)})
 DEFAULT_PROFILES = (CONTROL, LUNA)
