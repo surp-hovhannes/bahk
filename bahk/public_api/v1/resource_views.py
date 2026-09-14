@@ -7,7 +7,7 @@ fetch passage text, or schedule background work.
 
 from datetime import timedelta
 
-from django.db.models import Exists, F, Max, Min, OuterRef, Q
+from django.db.models import Exists, OuterRef
 from django.http import Http404
 from django.utils import timezone
 from rest_framework.generics import ListAPIView, RetrieveAPIView
@@ -28,10 +28,7 @@ from icons.models import Icon
 
 def annotated_fasts(queryset):
     """Add the only Fast date fields allowed by the public serializer."""
-    return queryset.annotate(
-        start_date=Min("days__date", filter=Q(days__church_id=F("church_id"))),
-        end_date=Max("days__date", filter=Q(days__church_id=F("church_id"))),
-    ).order_by("id")
+    return queryset.with_dates().order_by("id")
 
 
 class PublicApiResourceView(PublicApiView):

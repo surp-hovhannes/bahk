@@ -114,6 +114,83 @@ class PublicApiResourceTests(TestCase):
             },
         )
 
+    def test_fast_collections_preserve_id_order_and_full_dates_across_pages(self):
+        # Names and start dates deliberately sort in the opposite order to IDs.
+        second = Fast.objects.create(
+            church=self.church, name="Earlier Fast",
+        )
+        foreign = Fast.objects.create(
+            church=self.other_church, name="Foreign Fast",
+            culmination_feast_date=self.fast.culmination_feast_date,
+        )
+        for fast, dates in (
+            (self.fast, (date(2026, 2, 20), date(2026, 3, 10))),
+            (second, (date(2026, 2, 1), date(2026, 3, 1), date(2026, 3, 20))),
+            (foreign, (date(2026, 3, 1),)),
+        ):
+            for day_date in dates:
+                Day.objects.create(church=fast.church, fast=fast, date=day_date)
+
+        for route, params in (
+            ("fasts/", {"start_date": "2026-03-01", "end_date": "2026-03-01"}),
+            ("fasts/by-date/", {"date": "2026-03-01"}),
+        ):
+            with self.subTest(route=route):
+                response = self.client.get(f"/api/v1/{route}", {
+                    **params, "church_id": self.church.id, "limit": 1,
+                })
+                self.assertEqual(response.status_code, 200)
+                first_page = response.json()
+                self.assertEqual(first_page["count"], 2)
+                response = self.client.get(first_page["next"])
+                self.assertEqual(response.status_code, 200)
+                second_page = response.json()
+                self.assertIsNone(second_page["next"])
+                rows = first_page["results"] + second_page["results"]
+                self.assertEqual(
+                    [(row["id"], row["church_id"], row["start_date"], row["end_date"])
+                     for row in rows],
+                    [(self.fast.id, self.church.id, "2026-02-20", "2026-03-10"),
+                     (second.id, self.church.id, "2026-02-01", "2026-03-20")],
+                )
+
+    def test_fasts_without_own_church_days_keep_null_dates_and_visibility(self):
+        for mismatched_day in (False, True):
+            with self.subTest(mismatched_day=mismatched_day):
+                fast = Fast.objects.create(
+                    church=self.church, name=f"Undated Fast {mismatched_day}",
+                    culmination_feast_date=date(2026, 4, 6 + int(mismatched_day)),
+                )
+                if mismatched_day:
+                    Day.objects.create(
+                        church=self.other_church, fast=fast, date=date(2026, 3, 2)
+                    )
+                annotated = Fast.objects.with_dates().get(pk=fast.pk)
+                self.assertIsNone(annotated.start_date)
+                self.assertIsNone(annotated.end_date)
+                detail = self.client.get(f"/api/v1/fasts/{fast.id}/")
+                self.assertEqual(detail.status_code, 200)
+                self.assertIsNone(detail.json()["start_date"])
+                self.assertIsNone(detail.json()["end_date"])
+                feast_response = self.client.get("/api/v1/fasts/by-feast-date/", {
+                    "church_id": self.church.id,
+                    "date": fast.culmination_feast_date.isoformat(),
+                })
+                self.assertEqual(feast_response.status_code, 200)
+                row = next(row for row in feast_response.json()["results"]
+                           if row["id"] == fast.id)
+                self.assertIsNone(row["start_date"])
+                self.assertIsNone(row["end_date"])
+                for route, params in (
+                    ("fasts/", {"start_date": "2026-03-02", "end_date": "2026-03-02"}),
+                    ("fasts/by-date/", {"date": "2026-03-02"}),
+                ):
+                    response = self.client.get(f"/api/v1/{route}", {
+                        **params, "church_id": self.church.id,
+                    })
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["results"], [])
+
     def test_readings_lookup_never_creates_a_calendar_day(self):
         target_date = date(2026, 3, 2)
         response = self.client.get(
