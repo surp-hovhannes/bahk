@@ -1,16 +1,15 @@
 """Views for the versioned public API."""
 
-from rest_framework.renderers import JSONRenderer
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
-from rest_framework.views import APIView
+
+from bahk.public_api.v1.validation import PublicApiView
 
 
-class PublicApiRootView(APIView):
+class PublicApiRootView(PublicApiView):
     """Return the stable service descriptor for the public v1 API."""
 
-    authentication_classes = []
-    permission_classes = []
-    renderer_classes = [JSONRenderer]
     http_method_names = ["get", "head", "options"]
 
     def get(self, request, *args, **kwargs):
@@ -22,3 +21,12 @@ class PublicApiRootView(APIView):
                 "status": "pre-release",
             }
         )
+
+
+@csrf_exempt
+def public_api_not_found(request):
+    """Return a JSON 404 for unmatched v1 paths, regardless of method or Accept."""
+    return JsonResponse(
+        {"code": "not_found", "message": "The requested route does not exist.", "details": {}},
+        status=404,
+    )

@@ -23,6 +23,7 @@ from django.urls import include, path
 from markdownx.views import ImageUploadView, MarkdownifyView
 
 from bahk.tag_views import SystemTagsView
+from bahk.public_api.traffic import metrics_view
 from bahk.views import ApiDocsView, LandingPageView
 #Apply Simple JSON Web Token (SimpleJWT) Authentication Routes to the API
 from rest_framework_simplejwt.views import (
@@ -154,6 +155,7 @@ urlpatterns += [
 # internal `/api/` URLconfs.
 urlpatterns += [
     path("api/", include("bahk.public_api.urls")),
+    path("internal/public-api-metrics/", metrics_view, name="public-api-metrics"),
 ]
 
 # Learning resources endpoints are handled by the include above
