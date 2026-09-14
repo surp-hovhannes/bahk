@@ -2,9 +2,11 @@
 
 Providers implement ``call(stage, payload, schema, timeout) -> dict``. No ORM
 lookup or assignment occurs here. Completeness is validated model attestation for every supplied batch, not mechanical
-proof of reasoning or semantic recall. assessed_count counts records in structurally
-validated, completed batches. Positive recommendations are a bounded shortlist;
-positives_complete remains false for nonempty catalogues.
+proof of reasoning or semantic recall. assessed_count counts records in completed,
+attested batches: it measures coverage, so a defective positive row bounds automatic
+assignment by the strength that row claimed rather than un-assessing its neighbours.
+Positive recommendations are a bounded shortlist; positives_complete remains false
+for nonempty catalogues.
 """
 
 import asyncio
@@ -588,6 +590,12 @@ def _strong_identity_coverage(match, analysis, record):
     return covered == set(range(len(analysis["subjects"])))
 
 
+def _claimed_relation(match):
+    """Strength a discarded row claimed; an unreadable claim counts as the strongest."""
+    relation = match.get("relation") if isinstance(match, dict) else None
+    return RELATIONS.index(relation) if relation in RELATIONS else 0
+
+
 def _ids(actual, expected):
     if len(actual) != len(set(actual)) or set(actual) != set(expected):
         raise ValueError("incomplete_ids")
@@ -744,6 +752,8 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
         outcome.diagnostics.append("catalogue_budget_exceeded")
     positives, event_exists = [], False
     assessment_repair_used = False
+    # Only relations strictly stronger than every discarded claim stay assignable.
+    dropped_floor = len(RELATIONS)
     for batch in batches[: limits.max_batches]:
         try:
             payload = assessment_payload(batch)
@@ -760,7 +770,7 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
                 previous_event_summary = result["exact_event_exists"]
                 if len(result["matches"]) > limits.positive_limit:
                     raise ValueError("positive_limit_exceeded")
-                valid, failures = [], []
+                valid, failures, discarded = [], [], []
                 seen = set()
                 for match in result["matches"]:
                     try:
@@ -771,8 +781,10 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
                         valid.append(validated)
                     except ValueError as exc:
                         failures.append(str(exc))
+                        discarded.append(match)
                     except (KeyError, TypeError):
                         failures.append("unexpected_validation_failure")
+                        discarded.append(match)
                 dropped = bool(failures)
                 if valid or not dropped:
                     break
@@ -788,7 +800,11 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
                 if _size(payload) > limits.batch_bytes:
                     raise ValueError("repair_payload_too_large")
             if dropped:
+                # A defective positive row is a claim about one icon, not evidence
+                # that the batch's other records went unassessed. Bound automatic
+                # assignment by the strength the dropped rows claimed instead.
                 outcome.diagnostics.append("invalid_assessed_candidate")
+                dropped_floor = min([dropped_floor] + [_claimed_relation(m) for m in discarded])
             if any(m["relation"] == "exact_event" for m in valid) and not result["exact_event_exists"]:
                 raise ValueError("contradictory_event_summary")
             if result["exact_event_exists"] and not any(m["relation"] == "exact_event" for m in valid):
@@ -797,10 +813,13 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
                 else:
                     outcome.diagnostics.append("exact_event_details_omitted")
             positives.extend(valid)
-            if not dropped:
-                outcome.assessed_count += len(batch)
+            outcome.assessed_count += len(batch)
         except Exception:
             outcome.diagnostics.append("batch_failed")
+    if dropped_floor < len(RELATIONS):
+        # Name the bound so production can tell a discarded weak row (harmless)
+        # from a discarded strong one (which withholds automatic assignment).
+        outcome.diagnostics.append(f"assignment_floor:{RELATIONS[dropped_floor]}")
     outcome.catalogue_complete = outcome.assessed_count == len(records)
     outcome.status = (
         "complete" if outcome.catalogue_complete else ("partial" if outcome.assessed_count else "unavailable")
@@ -810,7 +829,6 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
         for code in (
             "exact_event_details_omitted",
             "contradictory_event_summary",
-            "invalid_assessed_candidate",
             "assessment_event_summary_disagreement",
         )
     ):
@@ -895,6 +913,7 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
             and analysis["intent"] in ("subject", "event")
             and not analysis["unresolved"]
             and request.auto_assign_policy in ("feast_strict", "content_suggest")
+            and RELATIONS.index(match["relation"]) < dropped_floor
             and match["relation"] in RELATIONS[:3]
             and bool(identity_evidence or analysis["event"])
             and all(
