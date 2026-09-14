@@ -143,11 +143,15 @@ Excluded (non-exhaustive): legacy `text*` and `text_hy*` fields,
 
 | Field | Type | Nullable | Notes |
 | --- | --- | --- | --- |
-| `id` | integer | no | Primary key. |
 | `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
 | `icon` | object (IconPublicSerializer) | yes | Nested icon, or `null` when no icon is matched. |
 
-Excluded (non-exhaustive): `church`, `church_id`, `designation`,
+Feast objects in both the feasts and calendar responses use this same field set.
+No Feast identifier is exposed: the surrogate `id` is unstable, and exposing
+`observance_id` requires a future contract decision for legacy and null values.
+The nested Icon retains its own `id`.
+
+Excluded (non-exhaustive): `id`, `observance_id`, `church`, `church_id`, `designation`,
 context/votes/LLM/prayer fields.
 
 ### Icon
@@ -171,6 +175,7 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-09-13 | PR #537 review follow-up: removed the unstable Feast surrogate `id` from the pre-release contract; no replacement identifier is exposed. Feasts and calendar responses share the `{name, icon}` Feast shape. |
 | 2026-09-11 | Review follow-up: restored the general excluded `feedback` family (covering the reading and feast context-feedback routes) and spelled out the icon families; documented view-resolved language passing (`context['lang']`; serializers never read the request), the `with_dates()` / `select_related("icon")` queryset preconditions, and empty localized values serializing as `null`; added a read-only serializer base whose `create()`/`update()` refuse. (Issue #497 review.) |
 | 2026-09-08 | Added Icons to the initial planned v1 inventory; narrowed the icon exclusion to icon upload, feedback, matching, and admin families; defined exact serializer field/type/nullability/localization/media rules for Church, Fast, Reading, Feast, and Icon; pinned public thumbnail behavior to the cached URL only and forbade `ImageSpecField.url` access during serialization. (Issue #497.) |
 

@@ -295,7 +295,6 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
     """Public read-only Feast serializer.
 
     Contract fields:
-        * ``id`` (int)
         * ``name`` (string): localized name with canonical fallback;
           ``null`` when empty
         * ``icon`` (object|null): nested IconPublicSerializer or ``None``
@@ -307,8 +306,9 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
     query per serialized feast; the contract tests pin the zero-query
     contract with ``assertNumQueries(0)``.
 
-    Excluded: ``church``, ``church_id``, ``designation``, context/votes/LLM/
-    prayer fields, and any other internal metadata.
+    Excluded: ``id``, ``observance_id``, ``church``, ``church_id``,
+    ``designation``, context/votes/LLM/prayer fields, and any other internal
+    metadata.
     """
 
     icon = IconPublicSerializer(read_only=True)
@@ -316,7 +316,7 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
 
     class Meta:
         model = Feast
-        fields = ["id", "name", "icon"]
+        fields = ["name", "icon"]
         read_only_fields = list(fields)
 
     def get_name(self, obj):
