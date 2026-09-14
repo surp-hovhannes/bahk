@@ -367,6 +367,78 @@ class SemanticMatchingTests(SimpleTestCase):
                 self.assertEqual([c[0] for c in provider.calls], ["analyze", "assess"])
                 self.assertEqual(outcome.status, "complete" if fault == "empty" else "unavailable")
 
+    def test_one_defective_row_does_not_unassess_its_whole_batch(self):
+        """A single-batch catalogue must not lose all coverage to one bad positive."""
+        records = [{"id": 1, "title": "Saint Narek of the Lake", "tags": ["Սուրբ Նարեկ"]}] + [
+            {"id": i, "title": f"Unrelated icon {i}", "tags": []} for i in range(2, 441)
+        ]
+        weakest = candidate(2, "Unrelated icon 2", "thematic", covered_subjects=[], relevance=25)
+
+        def mutate(stage, payload, result):
+            if stage == "assess":
+                for match in result["matches"]:
+                    if match["id"] == 2:
+                        match["evidence"][0]["quote"] = "not a substring of any source"
+
+        outcome, _ = self.run_match(records=records, matches=[self.match, weakest], mutate=mutate)
+        self.assertEqual(outcome.assessed_count, 440)
+        self.assertTrue(outcome.catalogue_complete)
+        self.assertEqual(outcome.status, "complete")
+        self.assertIn("invalid_assessed_candidate", outcome.diagnostics)
+        self.assertIn("assignment_floor:thematic", outcome.diagnostics)
+        # The discarded row claimed only a weaker relation, so the exact subject stands.
+        self.assertEqual([m["id"] for m in outcome.matches], [1])
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
+
+    def test_discarded_claim_bounds_assignment_by_its_own_strength(self):
+        records = [
+            {"id": 1, "title": "Saint Narek of the Lake", "tags": ["Սուրբ Նարեկ"]},
+            {"id": 2, "title": "Rival scene", "tags": []},
+        ]
+        for relation, assignable in (
+            ("thematic", True),
+            ("related_specific", True),
+            ("subject_portrait", True),
+            ("exact_subject", False),
+        ):
+            with self.subTest(discarded=relation):
+
+                def mutate(stage, payload, result):
+                    if stage == "assess":
+                        for match in result["matches"]:
+                            if match["id"] == 2:
+                                match["evidence"][0]["quote"] = "not a substring of any source"
+
+                outcome, _ = self.run_match(
+                    records=records, matches=[self.match, candidate(2, "Rival scene", relation)], mutate=mutate
+                )
+                self.assertEqual(outcome.assessed_count, 2)
+                self.assertEqual(outcome.status, "complete")
+                self.assertIn(f"assignment_floor:{relation}", outcome.diagnostics)
+                self.assertEqual(outcome.matches[0]["auto_assignable"], assignable)
+
+    def test_unreadable_discarded_row_blocks_assignment(self):
+        def mutate(stage, payload, result):
+            if stage == "assess":
+                result["matches"].append({"id": 2})
+
+        outcome, _ = self.run_match(matches=[self.match, candidate(2, "Other scene")], mutate=mutate)
+        self.assertEqual(outcome.assessed_count, 2)
+        self.assertEqual(outcome.status, "complete")
+        self.assertIn("assignment_floor:exact_event", outcome.diagnostics)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_every_candidate_invalid_still_fails_its_batch(self):
+        def mutate(stage, payload, result):
+            if stage == "assess":
+                for match in result["matches"]:
+                    match["evidence"][0]["quote"] = "not a substring of any source"
+
+        outcome, _ = self.run_match(mutate=mutate)
+        self.assertEqual(outcome.assessed_count, 0)
+        self.assertFalse(outcome.catalogue_complete)
+        self.assertIn("batch_failed", outcome.diagnostics)
+
     def test_event_only_valid_neighbor_is_not_repaired(self):
         def mutate(stage, payload, result):
             if stage == "assess":
@@ -376,7 +448,10 @@ class SemanticMatchingTests(SimpleTestCase):
         outcome, provider = self.event_only_case(mutate, multiple=True)
         self.assertEqual([c[0] for c in provider.calls], ["analyze", "assess", "verify"])
         self.assertEqual([m["id"] for m in outcome.matches], [1])
-        self.assertEqual(outcome.status, "partial")
+        self.assertEqual(outcome.status, "complete")
+        self.assertTrue(outcome.catalogue_complete)
+        # An unreadable discarded row counts as the strongest possible claim.
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
 
     def test_event_only_requires_independent_event_evidence(self):
         for weakened in ("assess", "verify"):
@@ -873,9 +948,14 @@ class SemanticMatchingTests(SimpleTestCase):
                             ],
                             limits=MatchLimits(verification_limit=1),
                         )
-                        self.assertEqual(outcome.status, "partial")
-                        self.assertFalse(outcome.catalogue_complete)
+                        # Coverage stays complete; the discarded direct-relation
+                        # claim bounds assignment instead of un-assessing the batch.
+                        # A discarded exact_event still contradicts the batch summary.
+                        event_claimed = direct_relation == "exact_event"
+                        self.assertEqual(outcome.status, "partial" if event_claimed else "complete")
+                        self.assertTrue(outcome.catalogue_complete)
                         self.assertIn("invalid_assessed_candidate", outcome.diagnostics)
+                        self.assertEqual("contradictory_event_summary" in outcome.diagnostics, event_claimed)
                         self.assertNotIn("verification_shortlist", outcome.diagnostics)
                         self.assertEqual([m["id"] for m in outcome.matches], [2])
                         self.assertEqual(outcome.matches[0]["match_tier"], valid_relation)
@@ -1312,11 +1392,13 @@ class RequestIntentTests(SimpleTestCase):
                             result["matches"][1]["evidence"][0]["quote"] = "Not in metadata"
 
                 outcome, _ = self.run_match(matches=[self.match, candidate(2, "Other scene")], mutate=mutate)
-                self.assertEqual(outcome.status, "partial")
+                self.assertEqual(outcome.status, "complete" if broken_stage == "assess" else "partial")
                 self.assertEqual([m["id"] for m in outcome.matches], [1])
+                # The bad neighbour claimed an equal relation, so it still bounds assignment.
                 self.assertFalse(outcome.matches[0]["auto_assignable"])
                 if broken_stage == "assess":
-                    self.assertFalse(outcome.catalogue_complete)
+                    self.assertTrue(outcome.catalogue_complete)
+                    self.assertIn("invalid_assessed_candidate", outcome.diagnostics)
 
     def test_event_action_is_not_entity_qualifier(self):
         self.analysis = analysis_for("three companions", "Arrival")
