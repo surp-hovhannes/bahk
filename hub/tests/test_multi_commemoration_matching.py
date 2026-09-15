@@ -269,6 +269,103 @@ class FindAllMatchingFeastsTests(TestCase):
             for match in matches:
                 self.assertIn("Gregory", match['name'])
 
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    @patch('hub.services.llm_service.feast_service.dates_for_feast_name')
+    def test_holy_church_date_window_selects_only_canonical_reference(
+        self,
+        mock_dates_for_feast_name,
+        mock_llm_filter,
+    ):
+        """The full 2026 Holy Church window bypasses fuzzy and LLM matching."""
+        mock_dates_for_feast_name.return_value = [
+            date(2026, 9, 15),
+            date(2026, 9, 16),
+            date(2026, 9, 17),
+        ]
+        feast = Feast.objects.create(
+            church=self.day.church,
+            name="Feast of the Holy Church",
+        )
+        excluded_names = {
+            "Sunday of the World Church (Green Sunday)",
+            "Feast of the Cathedral of Holy Etchmiadzin",
+            "Commemoration of the Tabernacle of Old Testament (or the Old Ark) "
+            "and the Feast of the New Holy Church",
+        }
+
+        matches = _find_all_matching_feasts(feast)
+        match_names = {match['name'] for match in matches}
+
+        self.assertEqual(match_names, {"Feast of the Holy Church"})
+        self.assertTrue(match_names.isdisjoint(excluded_names))
+        mock_llm_filter.assert_not_called()
+
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    @patch(
+        'hub.services.llm_service.feast_service.dates_for_feast_name',
+        return_value=[
+            date(2026, 2, 14),
+            date(2027, 2, 14),
+            date(2028, 2, 14),
+        ],
+    )
+    def test_multi_year_date_collision_excludes_unrelated_reference(
+        self,
+        mock_dates_for_feast_name,
+        mock_llm_filter,
+    ):
+        """A shared 2027 date does not mix Sunday of Expulsion into Tiarn'ndaraj."""
+        feast = Feast.objects.create(
+            church=self.day.church,
+            name="Tiarn'ndaraj",
+        )
+
+        matches = _find_all_matching_feasts(feast)
+        match_names = {match['name'] for match in matches}
+
+        self.assertEqual(match_names, {"Tiarn’ndaraj"})
+        self.assertNotIn("Sunday of Expulsion", match_names)
+        mock_llm_filter.assert_not_called()
+
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    @patch(
+        'hub.services.llm_service.feast_service.dates_for_feast_name',
+        return_value=[date(2026, 9, 15)],
+    )
+    @patch('os.path.exists', return_value=True)
+    def test_invalid_or_nonoverlapping_upcoming_dates_use_fuzzy_fallback(
+        self,
+        mock_exists,
+        mock_dates_for_feast_name,
+        mock_llm_filter,
+    ):
+        """Malformed date windows are ignored without changing fuzzy fallback."""
+        feasts_data = [
+            {
+                "name": "Feast of the Holy Church",
+                "description": "Canonical reference with unusable dates.",
+                "upcoming_dates": ["not-a-date", None, "2027-09-14"],
+            },
+            {
+                "name": "Sunday of Expulsion",
+                "description": "Low-similarity reference sharing a served date.",
+                "upcoming_dates": ["2026-09-15"],
+            },
+        ]
+        expected_matches = [feasts_data[0]]
+        mock_llm_filter.return_value = expected_matches
+
+        with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
+            feast = Feast.objects.create(
+                church=self.day.church,
+                name="Feast of the Holy Church",
+            )
+
+            matches = _find_all_matching_feasts(feast)
+
+        self.assertEqual(matches, expected_matches)
+        mock_llm_filter.assert_called_once_with(feast, expected_matches)
+
     @patch('os.path.exists', return_value=False)
     def test_handles_missing_feasts_file(self, mock_exists):
         """Test handles missing feasts.json file gracefully."""
