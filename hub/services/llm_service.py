@@ -44,6 +44,22 @@ def _calculate_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
+def _calculate_feast_name_similarity(
+    feast_name_lower: str,
+    feast_name_hy_lower: Optional[str],
+    entry: dict,
+) -> float:
+    """Calculate an entry's best English/Armenian name similarity score."""
+    entry_name_lower = entry.get('name', '').lower()
+    name_score = _calculate_similarity(feast_name_lower, entry_name_lower)
+    if feast_name_hy_lower:
+        name_score = max(
+            name_score,
+            _calculate_similarity(feast_name_hy_lower, entry_name_lower),
+        )
+    return name_score
+
+
 def _llm_filter_feast_matches(feast, candidates: list[dict]) -> list[dict]:
     """
     Use an LLM to intelligently filter candidate feast matches.
@@ -198,6 +214,10 @@ def _find_all_matching_feasts(feast) -> list[dict]:
         logger.error(f"Error reading feasts reference file: {e}")
         return []
 
+    # Cache lowercased feast names to avoid repeated .lower() calls
+    feast_name_lower = feast.name.lower()
+    feast_name_hy_lower = feast.name_hy.lower() if hasattr(feast, 'name_hy') and feast.name_hy else None
+
     # Prefer reference records whose explicit date windows overlap dates served by the engine.
     # Invalid reference dates are ignored so one malformed record cannot break all matching.
     served_date_set = set(served_dates)
@@ -225,13 +245,34 @@ def _find_all_matching_feasts(feast) -> list[dict]:
                     overlapping_entries.append(entry)
                     break
 
-    if overlapping_entries:
+    overlapping_matches = [
+        {
+            'entry': entry,
+            'score': _calculate_feast_name_similarity(
+                feast_name_lower,
+                feast_name_hy_lower,
+                entry,
+            ),
+        }
+        for entry in overlapping_entries
+    ]
+    overlapping_matches = [
+        match
+        for match in overlapping_matches
+        if match['score'] >= MIN_MULTI_FEAST_SIMILARITY
+    ]
+    if overlapping_matches:
+        overlapping_matches.sort(key=lambda match: match['score'], reverse=True)
+        result = [
+            match['entry']
+            for match in overlapping_matches[:MAX_COMMEMORATIONS_IN_CONTEXT]
+        ]
         logger.info(
-            "Found %d date-window reference(s) for %s",
-            len(overlapping_entries),
+            "Found %d name-matched date-window reference(s) for %s",
+            len(result),
             feast.name,
         )
-        return overlapping_entries
+        return result
 
     # Extract feast date components if available (for confidence boost)
     feast_month = None
@@ -250,24 +291,16 @@ def _find_all_matching_feasts(feast) -> list[dict]:
     else:
         logger.debug(f"Searching for feast references: {feast.name} (no date available)")
 
-    # Cache lowercased feast names to avoid repeated .lower() calls
-    feast_name_lower = feast.name.lower()
-    feast_name_hy_lower = feast.name_hy.lower() if hasattr(feast, 'name_hy') and feast.name_hy else None
-
     # Collect all matches above threshold
     matches = []
 
     for entry in feasts_data:
-        entry_name = entry.get('name', '')
-        entry_name_lower = entry_name.lower()
-
-        # Calculate name similarity
-        name_score = _calculate_similarity(feast_name_lower, entry_name_lower)
-
-        # Also check Armenian name if available
-        if feast_name_hy_lower:
-            hy_score = _calculate_similarity(feast_name_hy_lower, entry_name_lower)
-            name_score = max(name_score, hy_score)
+        # Calculate name similarity using the same English/Armenian semantics as date-window matches
+        name_score = _calculate_feast_name_similarity(
+            feast_name_lower,
+            feast_name_hy_lower,
+            entry,
+        )
 
         # Apply date boost if available and dates match
         final_score = name_score
