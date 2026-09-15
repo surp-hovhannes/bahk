@@ -269,6 +269,70 @@ class FindAllMatchingFeastsTests(TestCase):
             for match in matches:
                 self.assertIn("Gregory", match['name'])
 
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    @patch('hub.services.llm_service.feast_service.dates_for_feast_name')
+    def test_holy_church_date_window_selects_only_canonical_reference(
+        self,
+        mock_dates_for_feast_name,
+        mock_llm_filter,
+    ):
+        """Each 2026 Holy Church date bypasses fuzzy and LLM matching."""
+        feast = Feast.objects.create(
+            church=self.day.church,
+            name="Feast of the Holy Church",
+        )
+        excluded_names = {
+            "Sunday of the World Church (Green Sunday)",
+            "Feast of the Cathedral of Holy Etchmiadzin",
+            "Commemoration of the Tabernacle of Old Testament (or the Old Ark) "
+            "and the Feast of the New Holy Church",
+        }
+
+        for served_date in (date(2026, 9, 15), date(2026, 9, 16), date(2026, 9, 17)):
+            with self.subTest(served_date=served_date):
+                mock_dates_for_feast_name.return_value = [served_date]
+
+                matches = _find_all_matching_feasts(feast)
+                match_names = {match['name'] for match in matches}
+
+                self.assertEqual(match_names, {"Feast of the Holy Church"})
+                self.assertTrue(match_names.isdisjoint(excluded_names))
+
+        mock_llm_filter.assert_not_called()
+
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    @patch(
+        'hub.services.llm_service.feast_service.dates_for_feast_name',
+        return_value=[date(2026, 9, 15)],
+    )
+    @patch('os.path.exists', return_value=True)
+    def test_invalid_or_nonoverlapping_upcoming_dates_use_fuzzy_fallback(
+        self,
+        mock_exists,
+        mock_dates_for_feast_name,
+        mock_llm_filter,
+    ):
+        """Malformed date windows are ignored without changing fuzzy fallback."""
+        feasts_data = [
+            {
+                "name": "Feast of the Holy Church",
+                "description": "Canonical reference with unusable dates.",
+                "upcoming_dates": ["not-a-date", None, "2027-09-14"],
+            }
+        ]
+        mock_llm_filter.return_value = feasts_data
+
+        with patch('builtins.open', self._create_mock_feasts_data(feasts_data)):
+            feast = Feast.objects.create(
+                church=self.day.church,
+                name="Feast of the Holy Church",
+            )
+
+            matches = _find_all_matching_feasts(feast)
+
+        self.assertEqual(matches, feasts_data)
+        mock_llm_filter.assert_called_once_with(feast, feasts_data)
+
     @patch('os.path.exists', return_value=False)
     def test_handles_missing_feasts_file(self, mock_exists):
         """Test handles missing feasts.json file gracefully."""

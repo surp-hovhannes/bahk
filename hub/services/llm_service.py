@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import date
 from typing import Optional
 import logging
 import json
@@ -11,7 +12,7 @@ from django.conf import settings
 from django.core.mail import mail_admins
 
 from hub.models import LLMPrompt, Reading, Feast
-from hub.services.feast_service import representative_date_for_feast_name
+from hub.services import feast_service
 from hub.services.llm_requests import anthropic_message, openai_chat_completion
 
 logger = logging.getLogger(__name__)
@@ -180,6 +181,8 @@ def _find_all_matching_feasts(feast) -> list[dict]:
         List of matching feast dictionaries, sorted by score (descending).
         Returns empty list if no matches found.
     """
+    served_dates = feast_service.dates_for_feast_name(feast.name)
+
     # Get the base directory (project root)
     base_dir = settings.BASE_DIR
     feasts_file_path = os.path.join(base_dir, 'data', 'feasts.json')
@@ -195,6 +198,41 @@ def _find_all_matching_feasts(feast) -> list[dict]:
         logger.error(f"Error reading feasts reference file: {e}")
         return []
 
+    # Prefer reference records whose explicit date windows overlap dates served by the engine.
+    # Invalid reference dates are ignored so one malformed record cannot break all matching.
+    served_date_set = set(served_dates)
+    overlapping_entries = []
+    if served_date_set:
+        for entry in feasts_data:
+            upcoming_dates = entry.get('upcoming_dates')
+            if not isinstance(upcoming_dates, list):
+                continue
+
+            for upcoming_date in upcoming_dates:
+                if not isinstance(upcoming_date, str):
+                    continue
+                try:
+                    parsed_date = date.fromisoformat(upcoming_date)
+                except ValueError:
+                    logger.warning(
+                        "Ignoring invalid upcoming date %r for feast reference %r",
+                        upcoming_date,
+                        entry.get('name'),
+                    )
+                    continue
+
+                if parsed_date in served_date_set:
+                    overlapping_entries.append(entry)
+                    break
+
+    if overlapping_entries:
+        logger.info(
+            "Found %d date-window reference(s) for %s",
+            len(overlapping_entries),
+            feast.name,
+        )
+        return overlapping_entries
+
     # Extract feast date components if available (for confidence boost)
     feast_month = None
     feast_day = None
@@ -203,7 +241,7 @@ def _find_all_matching_feasts(feast) -> list[dict]:
     # A feast is keyed by commemoration, not by date, so ask the engine for a date it falls on.
     # Fixed feasts -- the only ones data/feasts.json carries a month/day for -- recur on the same
     # month and day, so any occurrence serves the boost below equally well.
-    feast_date = representative_date_for_feast_name(feast.name)
+    feast_date = served_dates[0] if served_dates else None
     if feast_date:
         feast_month = feast_date.strftime("%B")  # Full month name (e.g., "January")
         feast_day = feast_date.strftime("%d")    # Day with leading zero (e.g., "06")
