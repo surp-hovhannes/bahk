@@ -44,7 +44,7 @@ class FeastContextStaffAPITests(APITestCase):
             self.feast = Feast.objects.create(
                 church=self.church,
                 name="Context Staff API Feast",
-                designation=Feast.Designation.DOMINICAL,
+                designation=Feast.Designation.SUNDAYS_DOMINICAL,
             )
         users = get_user_model()
         self.staff = users.objects.create_user(
@@ -258,7 +258,7 @@ class FeastContextRegenerationAPITests(APITestCase):
             self.feast = Feast.objects.create(
                 church=self.church,
                 name="Context Task Feast",
-                designation=Feast.Designation.DOMINICAL,
+                designation=Feast.Designation.SUNDAYS_DOMINICAL,
             )
         self.staff = get_user_model().objects.create_user(
             username="task-staff", is_staff=True
@@ -376,7 +376,7 @@ class FeastContextGenerationTaskTests(TestCase):
             self.feast = Feast.objects.create(
                 church=self.church,
                 name="Append Task Feast",
-                designation=Feast.Designation.DOMINICAL,
+                designation=Feast.Designation.SUNDAYS_DOMINICAL,
             )
         self.staff = get_user_model().objects.create_user(username="actor", is_staff=True)
         self.prompt = LLMPrompt.objects.create(
