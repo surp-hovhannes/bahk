@@ -4,7 +4,10 @@ from django.db.models.signals import m2m_changed, post_delete, post_save, pre_de
 from django.db import transaction
 from django.dispatch import receiver
 from django.core.cache import cache
-from hub.cache import invalidate_feast_api_cache_for_feast
+from hub.cache import (
+    invalidate_feast_api_cache_for_church,
+    invalidate_feast_api_cache_for_feast,
+)
 from hub.models import Profile, Feast, FeastContext
 from hub.tasks.llm_tasks import determine_feast_designation_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
@@ -80,14 +83,18 @@ def handle_feast_delete(sender, instance, **kwargs):
 
 @receiver(post_save, sender=FeastContext)
 def handle_feast_context_save(sender, instance, **kwargs):
-    """Invalidate feast API cache entries when context content or votes change."""
-    invalidate_feast_api_cache_for_feast(instance.feast)
+    """Invalidate feast API cache entries only after the context write commits."""
+    if getattr(instance, "_feast_cache_invalidation_managed", False):
+        return
+    church_id = instance.feast.church_id
+    transaction.on_commit(lambda: invalidate_feast_api_cache_for_church(church_id))
 
 
 @receiver(post_delete, sender=FeastContext)
 def handle_feast_context_delete(sender, instance, **kwargs):
-    """Invalidate feast API cache entries when context is deleted."""
-    invalidate_feast_api_cache_for_feast(instance.feast)
+    """Invalidate feast API cache entries only after the context delete commits."""
+    church_id = instance.feast.church_id
+    transaction.on_commit(lambda: invalidate_feast_api_cache_for_church(church_id))
 
 
 def invalidate_feast_api_cache_for_icon(icon):

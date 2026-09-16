@@ -636,7 +636,8 @@ class FeastAPIRouteTests(TestCase):
 
         context.text = "New context"
         context.short_text = "New short"
-        context.save(update_fields=["text", "short_text"])
+        with self.captureOnCommitCallbacks(execute=True):
+            context.save(update_fields=["text", "short_text"])
 
         second_response = self._get_cached_feast_response(feast)
         self.assertEqual(second_response.json()["feasts"][0]["text"], "New context")
@@ -653,11 +654,12 @@ class FeastAPIRouteTests(TestCase):
         first_response = self._get_cached_feast_response(feast)
         self.assertEqual(first_response.json()["feasts"][0]["context_thumbs_up"], 0)
 
-        feedback_response = self.client.post(
-            reverse("feast-context-feedback", args=[feast.id]),
-            data={"feedback_type": "up"},
-            content_type="application/json",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            feedback_response = self.client.post(
+                reverse("feast-context-feedback", args=[feast.id]),
+                data={"feedback_type": "up"},
+                content_type="application/json",
+            )
 
         self.assertEqual(feedback_response.status_code, status.HTTP_200_OK)
         second_response = self._get_cached_feast_response(feast)

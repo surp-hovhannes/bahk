@@ -481,14 +481,14 @@ class FeastContextFeedbackView(APIView):
             FeastContext.objects.filter(pk=active_context.pk).update(
                 thumbs_up=F('thumbs_up') + 1
             )
-            invalidate_feast_api_cache_for_feast(feast)
+            transaction.on_commit(lambda: invalidate_feast_api_cache_for_feast(feast))
             return Response({"status": "success", "regenerate": False})
         elif feedback_type == "down":
             # Use atomic increment to prevent race conditions
             FeastContext.objects.filter(pk=active_context.pk).update(
                 thumbs_down=F('thumbs_down') + 1
             )
-            invalidate_feast_api_cache_for_feast(feast)
+            transaction.on_commit(lambda: invalidate_feast_api_cache_for_feast(feast))
             # Refresh the object to get the updated value for threshold check
             active_context.refresh_from_db()
             threshold = getattr(settings, "FEAST_CONTEXT_REGENERATION_THRESHOLD", 5)
