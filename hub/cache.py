@@ -16,13 +16,14 @@ logger = logging.getLogger(__name__)
 # it. Keyed on a constant that travels with the code, each version only ever reads entries it
 # wrote, in both directions, with nothing to remember at deploy time.
 #
-# The keys of a feast entry count too, not just the body's top level: an entry is what the
-# deprecated "feast" key holds, and old builds read fields out of it.
+# The keys of an entry inside "feasts" count too, not just the body's top level: a client reads
+# fields out of an entry, so dropping one changes the shape as surely as renaming the array does.
 #
 #   1: {"date", "feast"}
 #   2: {"date", "feasts", "feast"}  -- "feast" deprecated, see hub/views/feasts.py
 #   3: entries drop "context_eligible", which only restated "designation"
-FEAST_API_RESPONSE_SHAPE = 3
+#   4: {"date", "feasts"}  -- the deprecated "feast" key is gone
+FEAST_API_RESPONSE_SHAPE = 4
 
 
 def feast_api_generation(church_id):
