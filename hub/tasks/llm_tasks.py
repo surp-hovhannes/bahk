@@ -4,6 +4,17 @@ from celery import shared_task
 from django.conf import settings
 
 from hub.models import LLMPrompt, Reading, ReadingContext, Feast, FeastContext
+from hub.services.feast_contexts import (
+    FEAST_CONTEXT_TASK_MAX_RETRIES,
+    FEAST_CONTEXT_TASK_RETRY_DELAY,
+    FEAST_CONTEXT_TASK_SOFT_TIME_LIMIT,
+    FEAST_CONTEXT_TASK_TIME_LIMIT,
+    FeastContextVersionInput,
+    append_feast_context_version,
+    clear_feast_context_regeneration_lock,
+    get_feast_context_task_status,
+    set_feast_context_task_status,
+)
 from hub.services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
@@ -149,66 +160,31 @@ def _check_all_feast_translations_present(context: FeastContext, languages: list
     return True
 
 
-def _update_feast_context_translations(
-    context: FeastContext, 
-    generated_contexts: dict[str, dict[str, str]], 
-    force_regeneration: bool
-) -> None:
-    """Update existing feast context with missing or regenerated translations.
-    
-    Args:
-        context: FeastContext instance to update
-        generated_contexts: Dict mapping language codes to dicts with 'text' and 'short_text' keys
-        force_regeneration: If True, overwrite existing translations
-    """
-    for lang, texts in generated_contexts.items():
-        if lang == 'en':
-            if not context.text or not context.text.strip() or force_regeneration:
-                context.text = texts['text']
-            if not context.short_text or not context.short_text.strip() or force_regeneration:
-                context.short_text = texts['short_text']
-        else:
-            existing_text = getattr(context, f'text_{lang}', None)
-            if not existing_text or not existing_text.strip() or force_regeneration:
-                setattr(context, f'text_{lang}', texts['text'])
-            
-            existing_short = getattr(context, f'short_text_{lang}', None)
-            if not existing_short or not existing_short.strip() or force_regeneration:
-                setattr(context, f'short_text_{lang}', texts['short_text'])
-    context.save()
-
-
-def _create_feast_context_with_translations(
+def _append_generated_feast_context(
     feast: Feast,
     llm_prompt: LLMPrompt,
-    generated_contexts: dict[str, dict[str, str]]
+    generated_contexts: dict[str, dict[str, str]],
+    *,
+    force_regeneration: bool,
+    improvement_instructions: str,
+    actor_id: int | None,
 ) -> FeastContext:
-    """Create new feast context with all translations.
-    
-    Args:
-        feast: Feast instance
-        llm_prompt: LLMPrompt used for generation
-        generated_contexts: Dict mapping language codes to dicts with 'text' and 'short_text' keys
-    
-    Returns:
-        Created FeastContext instance
-    """
-    english_texts = generated_contexts.get('en', {'text': '', 'short_text': ''})
-    context = FeastContext(
-        feast=feast,
-        text=english_texts['text'],
-        short_text=english_texts['short_text'],
-        prompt=llm_prompt,
+    """Persist generated translations as a new context version."""
+    return append_feast_context_version(
+        feast.id,
+        values=FeastContextVersionInput(
+            operation=(
+                FeastContext.Operation.REGENERATED
+                if force_regeneration
+                else FeastContext.Operation.GENERATED
+            ),
+            actor_id=actor_id,
+            prompt=llm_prompt,
+            additional_instructions=improvement_instructions or "",
+        ),
+        language_updates=generated_contexts,
+        replace_languages=force_regeneration,
     )
-    
-    for lang, texts in generated_contexts.items():
-        if lang != 'en':
-            setattr(context, f'text_{lang}', texts['text'])
-            setattr(context, f'short_text_{lang}', texts['short_text'])
-    
-    context.save()
-    return context
-
 
 def is_feast_context_generation_eligible(feast: Feast) -> bool:
     """Return whether FeastContext generation should run for this feast.
@@ -227,18 +203,32 @@ def is_feast_context_generation_eligible(feast: Feast) -> bool:
     return feast.designation != Feast.Designation.FAST
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@shared_task(
+    bind=True,
+    max_retries=FEAST_CONTEXT_TASK_MAX_RETRIES,
+    default_retry_delay=FEAST_CONTEXT_TASK_RETRY_DELAY,
+    soft_time_limit=FEAST_CONTEXT_TASK_SOFT_TIME_LIMIT,
+    time_limit=FEAST_CONTEXT_TASK_TIME_LIMIT,
+)
 def generate_feast_context_task(
-    self, feast_id: int, force_regeneration: bool = False, language_code: str = None, improvement_instructions: str = None
+    self,
+    feast_id: int,
+    force_regeneration: bool = False,
+    language_code: str = None,
+    improvement_instructions: str = None,
+    actor_id: int | None = None,
 ):
-    """Generate and save AI context for a Feast instance in all available languages.
+    """Generate and append AI context for a Feast in all available languages."""
+    task_id = self.request.id
+    track_status = bool(
+        task_id
+        and (actor_id is not None or get_feast_context_task_status(task_id))
+    )
+    if track_status:
+        set_feast_context_task_status(
+            task_id, feast_id=feast_id, state="STARTED", ready=False
+        )
 
-    Args:
-        feast_id: ID of the Feast to generate context for
-        force_regeneration: If True, regenerate even if context exists
-        language_code: DEPRECATED - Ignored. All languages are always generated.
-        improvement_instructions: Optional instructions to improve the generated content
-    """
     if language_code is not None:
         logger.warning(
             "language_code parameter is deprecated and will be removed in a future version. "
@@ -249,62 +239,107 @@ def generate_feast_context_task(
         feast = Feast.objects.get(pk=feast_id)
     except Feast.DoesNotExist:
         logger.error("Feast with id %s not found.", feast_id)
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="Feast not found.",
+            )
+            clear_feast_context_regeneration_lock(feast_id, task_id)
         return
 
-    # Skip context generation for generic fast days — they are never displayed
     if not is_feast_context_generation_eligible(feast):
         logger.info("Feast %s is a generic fast day, skipping context generation.", feast_id)
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="This feast is not eligible for context generation.",
+            )
+            clear_feast_context_regeneration_lock(feast_id, task_id)
         return
 
     active_context = feast.active_context
     if active_context and not force_regeneration:
         if _check_all_feast_translations_present(active_context, AVAILABLE_LANGUAGES):
             logger.info(
-                "Feast %s already has context for all languages, skipping.",
-                feast_id
+                "Feast %s already has context for all languages, skipping.", feast_id
             )
+            if track_status:
+                set_feast_context_task_status(
+                    task_id, feast_id=feast_id, state="SUCCESS", ready=True
+                )
+                clear_feast_context_regeneration_lock(feast_id, task_id)
             return
 
     llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='feasts').first()
     if not llm_prompt:
         logger.error("No active LLM prompt found for feasts.")
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="No active feast generation prompt is configured.",
+            )
+            clear_feast_context_regeneration_lock(feast_id, task_id)
         return
 
     try:
         service = llm_prompt.get_llm_service()
-        
         generated_contexts = {}
         for lang in AVAILABLE_LANGUAGES:
-            # Generate both text and short_text in a single call
-            context_dict = service.generate_feast_context(feast, llm_prompt, lang, improvement_instructions)
-            
-            if context_dict and 'text' in context_dict and 'short_text' in context_dict:
-                generated_contexts[lang] = context_dict
+            context_dict = service.generate_feast_context(
+                feast, llm_prompt, lang, improvement_instructions
+            )
+            if (
+                context_dict
+                and isinstance(context_dict.get('text'), str)
+                and context_dict['text'].strip()
+                and isinstance(context_dict.get('short_text'), str)
+                and context_dict['short_text'].strip()
+            ):
+                generated_contexts[lang] = {
+                    "text": context_dict["text"].strip(),
+                    "short_text": context_dict["short_text"].strip(),
+                }
             else:
                 logger.warning(
                     "Failed to generate complete context for Feast %s in language %s",
                     feast_id, lang
                 )
-        
+
         if not generated_contexts:
-            logger.error("Failed to generate context for Feast %s in any language", feast_id)
-            raise self.retry(exc=Exception("Context generation failed for all languages"))
-        
-        if active_context:
-            _update_feast_context_translations(active_context, generated_contexts, force_regeneration)
-            logger.info(
-                "Context translations updated for Feast %s (languages: %s)",
-                feast_id, ', '.join(generated_contexts.keys())
+            raise RuntimeError("Context generation failed for all languages")
+
+        _append_generated_feast_context(
+            feast,
+            llm_prompt,
+            generated_contexts,
+            force_regeneration=force_regeneration,
+            improvement_instructions=improvement_instructions or "",
+            actor_id=actor_id,
+        )
+        logger.info(
+            "Context version appended for Feast %s (languages: %s)",
+            feast_id, ', '.join(generated_contexts.keys())
+        )
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="SUCCESS", ready=True
             )
-        else:
-            _create_feast_context_with_translations(feast, llm_prompt, generated_contexts)
-            logger.info(
-                "Context generated for Feast %s in languages: %s",
-                feast_id, ', '.join(generated_contexts.keys())
+            clear_feast_context_regeneration_lock(feast_id, task_id)
+    except Exception as exc:
+        logger.exception("Error generating context for Feast %s", feast_id)
+        if self.request.retries < self.max_retries:
+            if track_status:
+                set_feast_context_task_status(
+                    task_id, feast_id=feast_id, state="RETRY", ready=False
+                )
+            raise self.retry(exc=exc)
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="Context generation failed.",
             )
-    except ValueError as e:
-        logger.error(f"Error selecting LLM service: {e}")
-        raise self.retry(exc=e)
+            clear_feast_context_regeneration_lock(feast_id, task_id)
+        raise
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
