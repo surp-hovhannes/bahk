@@ -33,6 +33,7 @@ LOCMEM_CACHE = {
 
 @override_settings(
     CACHES=DUMMY_CACHE,
+    SESSION_ENGINE="django.contrib.sessions.backends.db",
     MODELTRANS_AVAILABLE_LANGUAGES=["en", "hy"],
 )
 class FeastContextStaffAPITests(APITestCase):
@@ -245,6 +246,7 @@ class FeastContextStaffAPITests(APITestCase):
 
 @override_settings(
     CACHES=LOCMEM_CACHE,
+    SESSION_ENGINE="django.contrib.sessions.backends.db",
     MODELTRANS_AVAILABLE_LANGUAGES=["en", "hy"],
     CELERY_RESULT_BACKEND=None,
 )
