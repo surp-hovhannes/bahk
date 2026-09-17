@@ -235,6 +235,67 @@ class Fast(models.Model):
         return s
 
 
+class FastParticipation(models.Model):
+    """A historical record of a profile's membership period in a fast.
+
+    ``Profile.fasts`` stays the source of truth for membership -- the views
+    mutate it, the events receiver observes it, and the FastCompletion queries
+    follow it.  This table records when each period began and ended so we can
+    answer "did this user complete fast X?" even after they have left it (a
+    completed-then-left fast must not look like a current membership).
+
+    Periods are append-only.  A join opens a row (one per profile/fast); a leave
+    stamps ``left_at`` on the open row.  Leaving and re-joining opens a new
+    period -- the previous one is preserved.
+    """
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='fast_participations',
+    )
+    fast = models.ForeignKey(
+        'Fast', on_delete=models.CASCADE, related_name='participations',
+    )
+    joined_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text='UTC timestamp of the join.  NULL when the period is recorded from a leave event with no prior join.',
+    )
+    left_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text='UTC timestamp of the leave.  NULL while the period is still open.',
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['profile', 'fast'],
+                condition=models.Q(left_at__isnull=True),
+                name='unique_open_fast_participation',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['fast', 'left_at']),
+        ]
+
+    @property
+    def completed(self):
+        """Whether this period ends in a completed fast (vs an early departure).
+
+        - Open period: completed iff every day of the fast is in the past.
+        - Closed period: completed iff ``left_at`` falls on or after the fast's
+          last day; an earlier leave is an early departure.
+        """
+        from django.db.models import Max
+
+        end_date = self.fast.days.aggregate(end=Max('date'))['end']
+        if end_date is None:
+            return False
+        if self.left_at is None:
+            return end_date < timezone.localdate()
+        return self.left_at.date() >= end_date
+
+    def __str__(self):
+        return f"FastParticipation(profile={self.profile_id}, fast={self.fast_id})"
+
+
 class Profile(models.Model):
     """Model for a user profile."""
 
