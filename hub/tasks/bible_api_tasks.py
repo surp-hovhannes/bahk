@@ -3,6 +3,11 @@
 Provides:
     - fetch_reading_text_task: fetch text for the passage a single Reading cites.
       Useful for management commands or ad-hoc backfills.
+    - fetch_missing_passage_texts_task: fetch text the readings view served blank.
+      The view no longer calls API.Bible in the request cycle (issue #506); it hands
+      its missing-passage set to this task instead.
+    - prewarm_next_day_readings_task: scheduled task that creates tomorrow's
+      Day/Reading rows and warms their passage text before the first request.
     - refresh_all_reading_texts_task: scheduled task that re-retrieves passages whose text
       has passed READING_TEXT_REFRESH_DAYS, to stay inside API.Bible's 30-day cap.
 
@@ -22,6 +27,9 @@ from hub.services.reading_text_service import (
     TEXT_FETCHERS,
     bible_api_budgets,
     fetch_passage_text,
+    languages_needing_fetch,
+    load_passage_texts,
+    missing_passage_texts,
     prepare_shared_resources,
     stale_passage_text_queryset,
 )
@@ -37,9 +45,9 @@ METERED_LANGUAGES = ("en",)
 def fetch_reading_text_task(self, reading_id: int):
     """Fetch text for the passage cited by a single Reading.
 
-    NOTE: readings created by the readings view fetch synchronously in the request cycle,
-    so this is no longer triggered by a post_save signal.  It remains available for
-    management commands and ad-hoc backfills.
+    NOTE: the readings view no longer fetches text in the request cycle (issue #506);
+    it enqueues fetch_missing_passage_texts_task instead.  This task remains available
+    for management commands and ad-hoc backfills.
     """
     from hub.models import Reading
     from hub.services.reading_text_service import fetch_all_reading_texts
@@ -70,6 +78,144 @@ def fetch_reading_text_task(self, reading_id: int):
             "Could not fetch %s text for Reading %s (%s).",
             ", ".join(failed), reading_id, reading.passage_reference,
         )
+
+
+@shared_task(name='hub.tasks.fetch_missing_passage_texts_task')
+def fetch_missing_passage_texts_task(items):
+    """Fetch and store text for passages the readings view served blank.
+
+    The view stopped calling API.Bible in the request cycle (issue #506): a burst of
+    missing passages used to serialize 10-second-timeout calls inside the request and
+    push it past the gateway's limit.  It now returns the partial response (blank text
+    fields -- the long-standing contract for unfetched text) and hands the missing set
+    to this task.
+
+    Args:
+        items: the view's missing set, JSON-shaped as a list of
+            ``{"key": passage_key, "citation": [book, sch, sv, ech, ev],
+            "langs": [...]}`` dicts -- one per passage, at most a day's worth.
+
+    Idempotent: missing state is re-derived at execution time (``languages_needing_fetch``
+    against the current store), so duplicate enqueues from client retries, races with the
+    weekly refresh, and re-served dates only ever fetch what is still missing.
+
+    Budgets: charges the same daily + monthly envelopes the view path always did.  The
+    daily cap keeps user-triggered fetches bounded, and a zero daily budget (the test
+    suite's guard) keeps eager in-line runs from reaching API.Bible.
+    """
+    if not items:
+        return
+
+    texts = load_passage_texts({item.get("key") for item in items})
+    pending = []
+    for item in items:
+        key = item.get("key")
+        if not key:
+            continue
+        still_missing = [
+            lang for lang in item.get("langs", ())
+            if lang in set(languages_needing_fetch(key, texts))
+        ]
+        if still_missing:
+            pending.append((key, tuple(item["citation"]), still_missing))
+
+    if not pending:
+        logger.info("Text already stored for all %d enqueued passages; nothing to fetch.", len(items))
+        return
+
+    shared = prepare_shared_resources()
+    fetched = failed = 0
+    pending_count = len(pending)
+    for i, (key, citation, langs) in enumerate(pending):
+        results = fetch_passage_text(key, citation, langs=langs, **shared)
+        fetched += sum(1 for ok in results.values() if ok)
+        failed += sum(1 for ok in results.values() if not ok)
+        # Sleep only after a fetch that actually reached API.Bible, and not after
+        # the last item (nothing to space out).  An exhausted budget or an
+        # unmappable book returns before any HTTP call -- no need to wait.
+        if i < pending_count - 1 and any(
+            lang in METERED_LANGUAGES and results.get(lang) for lang in langs
+        ):
+            time.sleep(0.5)
+
+    logger.info(
+        "Follow-up text fetch complete: %d language(s) stored, %d failed, of %d passages enqueued.",
+        fetched, failed, len(items),
+    )
+
+
+@shared_task(name='hub.tasks.prewarm_next_day_readings_task')
+def prewarm_next_day_readings_task():
+    """Create tomorrow's Day/Reading rows and warm their passage text.
+
+    Scheduled daily ahead of the day rolling over, so the first request for the date
+    finds readings and text already stored instead of paying for lectionary computation
+    and API.Bible retrieval in the request cycle (issue #506).
+
+    For every church: get-or-create the Day, import the lectionary readings if absent,
+    then fetch still-missing passage text.  Armenian composes locally; English charges
+    the monthly ceiling only, like the other background runs -- the daily budget stays
+    reserved for the public on-demand path.  Re-running is a no-op: readings persist via
+    get-or-create and only missing or expired text is fetched.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from hub.models import Church, Day
+    from hub.services.lectionary_service import get_daily_readings, persist_readings
+
+    target_date = timezone.localdate() + timedelta(days=1)
+    readings_created = 0
+    passages_warmed = 0
+
+    for church in Church.objects.iterator():
+        try:
+            day, _ = Day.objects.get_or_create(date=target_date, church=church)
+            if not day.readings.exists():
+                readings_created += len(persist_readings(day, get_daily_readings(target_date, church)))
+            passages_warmed += _warm_day_passage_texts(day)
+        except Exception:
+            logger.exception("Prewarm failed for church %s on %s.", church.name, target_date)
+
+    logger.info(
+        "Prewarm for %s: %d reading(s) imported, %d language fetch(es) stored.",
+        target_date, readings_created, passages_warmed,
+    )
+
+
+def _warm_day_passage_texts(day) -> int:
+    """Fetch still-missing passage text for *day*'s readings.  Returns fetches stored.
+
+    Shared with the per-church loop above; passage-keyed, so churches whose days cite
+    the same passages warm them once.  Charges the monthly ceiling only, matching the
+    refresh task: background runs must not be able to starve the public daily budget.
+    """
+    readings = list(day.readings.all())
+    if not readings:
+        return 0
+
+    passage_texts = load_passage_texts({r.passage_key for r in readings if r.passage_key})
+    missing = missing_passage_texts(readings, passage_texts)
+    if not missing:
+        return 0
+
+    shared = prepare_shared_resources()
+    shared["budgets"] = bible_api_budgets(include_daily=False)
+
+    stored = 0
+    items = list(missing.items())
+    for i, (key, (citation, langs)) in enumerate(items):
+        lang_list = sorted(langs)
+        results = fetch_passage_text(key, citation, langs=lang_list, **shared)
+        stored += sum(1 for ok in results.values() if ok)
+        # Same rule as the follow-up task: sleep only after an API.Bible fetch,
+        # not after the last item, and not when the budget refused.
+        if i < len(items) - 1 and any(
+            lang in METERED_LANGUAGES and results.get(lang) for lang in lang_list
+        ):
+            time.sleep(0.5)
+    return stored
 
 
 def _citations_by_key(keys) -> dict[str, tuple]:

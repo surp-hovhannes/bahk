@@ -8,7 +8,12 @@ from .mapping_tasks import generate_participant_map, update_current_fast_maps
 from .geocoding_tasks import batch_geocode_profiles, geocode_profile_location
 from .llm_tasks import generate_reading_context_task, generate_feast_context_task, tag_intention_prayers
 from .icon_tasks import match_icon_to_feast_task
-from .bible_api_tasks import fetch_reading_text_task, refresh_all_reading_texts_task
+from .bible_api_tasks import (
+    fetch_missing_passage_texts_task,
+    fetch_reading_text_task,
+    prewarm_next_day_readings_task,
+    refresh_all_reading_texts_task,
+)
 from .armenian_text_tasks import fetch_armenian_reading_text_task
 from celery import shared_task
 
@@ -20,6 +25,8 @@ def add(x, y):
 __all__ = [
     'test_email_task',
     'send_fast_reminder_task',
+    'fetch_missing_passage_texts_task',
+    'prewarm_next_day_readings_task',
     'generate_participant_map',
     'update_current_fast_maps',
     'batch_geocode_profiles',
