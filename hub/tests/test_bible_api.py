@@ -7,7 +7,8 @@ Tests cover:
     - admin fetch actions charging the same budgets as every other path
     - fetch_reading_text_task (Celery wrapper, used for management commands)
     - refresh_all_reading_texts_task (per-passage refresh, spend limits, error summary)
-    - Synchronous text fetch in GetDailyReadingsForDate view
+    - the readings view handing missing text to fetch_missing_passage_texts_task (issue #506)
+    - prewarm_next_day_readings_task (tomorrow's readings and text, before first request)
     - API response (includes text fields)
 
 Text is stored per passage in ``PassageText``, not per ``Reading`` row, so most assertions
@@ -41,7 +42,9 @@ from hub.models import Church, Day, PassageText, Reading
 from hub.services.bible_api_service import BibleAPIService
 from hub.services.reading_text_service import bible_api_budgets, fetch_all_reading_texts
 from hub.tasks.bible_api_tasks import (
+    fetch_missing_passage_texts_task,
     fetch_reading_text_task,
+    prewarm_next_day_readings_task,
     refresh_all_reading_texts_task,
 )
 
@@ -966,27 +969,35 @@ class RefreshAllReadingTextsTaskTests(TestCase):
 
 
 # ------------------------------------------------------------------ #
-#  View Synchronous Text Fetch Tests
+#  View Async Text Fetch Tests
 # ------------------------------------------------------------------ #
 
-class ViewSynchronousTextFetchTests(TestCase):
-    """Tests that GetDailyReadingsForDate fetches Bible text synchronously."""
+class ViewAsyncTextFetchTests(TestCase):
+    """The readings view never calls API.Bible in the request cycle (issue #506).
+
+    Missing text is served blank (the long-standing partial contract) and the missing
+    set is handed to fetch_missing_passage_texts_task in one enqueue, so a cold date
+    costs one task -- not a burst of synchronous 10s-timeout calls inside the request.
+    """
 
     def setUp(self):
         self.church = Church.objects.get(pk=Church.get_default_pk())
         self.test_date = date(2025, 4, 1)
 
-    @patch('hub.views.readings.fetch_passage_text')
-    @patch('hub.views.readings.prepare_shared_resources')
-    @patch('hub.views.readings.get_daily_readings')
-    @patch('hub.views.readings.generate_reading_context_task')
-    def test_view_calls_fetch_all_for_new_readings(
-        self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_passage,
-    ):
-        """The view retrieves text for passages it has none for, in every language."""
+    def _get(self):
         from rest_framework.test import APIRequestFactory
         from hub.views.readings import GetDailyReadingsForDate
 
+        request = APIRequestFactory().get(f'/readings/?date={self.test_date}')
+        return GetDailyReadingsForDate.as_view()(request)
+
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
+    @patch('hub.views.readings.get_daily_readings')
+    @patch('hub.views.readings.generate_reading_context_task')
+    def test_view_enqueues_task_for_new_readings(
+        self, mock_context_task, mock_scrape, mock_text_task,
+    ):
+        """The view hands the missing set to the follow-up task in one enqueue."""
         mock_scrape.return_value = [
             {
                 "book": "Matthew",
@@ -997,70 +1008,54 @@ class ViewSynchronousTextFetchTests(TestCase):
                 "end_verse": 12,
             },
         ]
-        mock_prepare.return_value = {"service": "mock_svc"}
 
-        factory = APIRequestFactory()
-        request = factory.get(f'/readings/?date={self.test_date}')
-        view = GetDailyReadingsForDate.as_view()
-
-        response = view(request)
+        response = self._get()
 
         self.assertEqual(response.status_code, 200)
-        # prepare_shared_resources should have been called once for the batch
-        mock_prepare.assert_called_once()
-        # fetch_passage_text should have been called once for the new passage
-        mock_fetch_passage.assert_called_once()
-        # The call should include the shared resources from prepare
-        call_kwargs = mock_fetch_passage.call_args
-        self.assertEqual(call_kwargs.kwargs.get('service'), "mock_svc")
+        mock_text_task.delay.assert_called_once()
+        reading = Reading.objects.get(day__date=self.test_date, book="Matthew")
+        self.assertEqual(
+            mock_text_task.delay.call_args.args[0],
+            [{
+                "key": reading.passage_key,
+                "citation": ["Matthew", 5, 1, 5, 12],
+                "langs": ["en", "hy"],
+            }],
+        )
+        # The response still honours the partial contract: served blank, not blocked.
+        self.assertEqual(response.data["readings"][0]["text"], "")
 
-    @patch('hub.views.readings.fetch_passage_text')
-    @patch('hub.views.readings.prepare_shared_resources')
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
     @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_view_does_not_fetch_text_for_existing_readings(
-        self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_passage,
+    def test_view_does_not_enqueue_for_existing_readings(
+        self, mock_context_task, mock_scrape, mock_text_task,
     ):
-        """Test that the view does not re-fetch text for readings that already exist."""
-        from rest_framework.test import APIRequestFactory
-        from hub.views.readings import GetDailyReadingsForDate
-
+        """Test that the view does not enqueue for readings whose text is servable."""
         mock_scrape.return_value = []
 
         # Pre-create the day and reading, with text already stored for its passage.
         # Both languages must be present: the gate is per (passage, language), so a
-        # missing one would legitimately trigger a fetch.
+        # missing one would legitimately trigger an enqueue.
         day = Day.objects.create(date=self.test_date, church=self.church)
         reading = _create_reading(day, book="Matthew", start_ch=5, start_v=1, end_ch=5, end_v=12)
         _store_text(reading)
         _store_text(reading, language="hy", text="Existing hy text")
 
-        factory = APIRequestFactory()
-        request = factory.get(f'/readings/?date={self.test_date}')
-        view = GetDailyReadingsForDate.as_view()
+        self.assertEqual(self._get().status_code, 200)
+        mock_text_task.delay.assert_not_called()
 
-        response = view(request)
-
-        self.assertEqual(response.status_code, 200)
-        # Nothing to retrieve, so neither the fetch nor the HTTP session is paid for.
-        mock_fetch_passage.assert_not_called()
-        mock_prepare.assert_not_called()
-
-    @patch('hub.views.readings.fetch_passage_text')
-    @patch('hub.views.readings.prepare_shared_resources')
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
     @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_view_makes_no_call_for_a_new_date_citing_a_known_passage(
-        self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_passage,
+    def test_view_makes_no_enqueue_for_a_new_date_citing_a_known_passage(
+        self, mock_context_task, mock_scrape, mock_text_task,
     ):
         """A date never requested before is free if its passages are already stored.
 
         This is what the passage-keyed store buys at serve time: browsing to an unseen
-        date costs no quota, because text is not keyed by date.
+        date costs no quota and no enqueue, because text is not keyed by date.
         """
-        from rest_framework.test import APIRequestFactory
-        from hub.views.readings import GetDailyReadingsForDate
-
         mock_scrape.return_value = []
 
         # A different date already cites this passage and has text stored.
@@ -1072,25 +1067,19 @@ class ViewSynchronousTextFetchTests(TestCase):
         new_day = Day.objects.create(date=self.test_date, church=self.church)
         _create_reading(new_day, book="Matthew", start_ch=5, start_v=1, end_ch=5, end_v=12)
 
-        factory = APIRequestFactory()
-        request = factory.get(f'/readings/?date={self.test_date}')
-        response = GetDailyReadingsForDate.as_view()(request)
+        response = self._get()
 
         self.assertEqual(response.status_code, 200)
-        mock_fetch_passage.assert_not_called()
+        mock_text_task.delay.assert_not_called()
         self.assertEqual(response.data["readings"][0]["text"], "Existing text")
 
-    @patch('hub.views.readings.fetch_passage_text')
-    @patch('hub.views.readings.prepare_shared_resources')
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
     @patch('hub.views.readings.get_daily_readings')
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_view_graceful_when_prepare_partial(
-        self, mock_context_task, mock_scrape, mock_prepare, mock_fetch_passage,
+    def test_view_serves_partial_response_when_enqueue_fails(
+        self, mock_context_task, mock_scrape, mock_text_task,
     ):
-        """Test that the view still returns readings when some resources fail to prepare."""
-        from rest_framework.test import APIRequestFactory
-        from hub.views.readings import GetDailyReadingsForDate
-
+        """A broker hiccup must not turn a servable response into an error."""
         mock_scrape.return_value = [
             {
                 "book": "Matthew",
@@ -1101,20 +1090,13 @@ class ViewSynchronousTextFetchTests(TestCase):
                 "end_verse": 12,
             },
         ]
-        # Simulate partial preparation (e.g. API key missing, Armenian scrape failed)
-        mock_prepare.return_value = {}
+        mock_text_task.delay.side_effect = OSError("broker unavailable")
 
-        factory = APIRequestFactory()
-        request = factory.get(f'/readings/?date={self.test_date}')
-        view = GetDailyReadingsForDate.as_view()
+        response = self._get()
 
-        response = view(request)
-
-        # View should still succeed, just without text
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["readings"]), 1)
-        # the fetch was still attempted (with empty shared resources)
-        mock_fetch_passage.assert_called_once()
+        self.assertEqual(response.data["readings"][0]["text"], "")
 
 
 # ------------------------------------------------------------------ #
@@ -1209,51 +1191,64 @@ class ViewOnDemandRefetchTests(TestCase):
         request = APIRequestFactory().get(f'/readings/?date={self.test_date}')
         return GetDailyReadingsForDate.as_view()(request)
 
-    @patch('hub.views.readings.fetch_passage_text')
-    @patch('hub.views.readings.prepare_shared_resources', return_value={})
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
     @patch('hub.views.readings.get_daily_readings', return_value=[])
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_refetches_expired_reading(self, mock_ctx, mock_scrape, mock_prepare, mock_fetch):
+    def test_enqueues_refetch_for_expired_reading(self, mock_ctx, mock_scrape, mock_text_task):
         reading = _create_reading(self.day, book="Matthew", start_ch=5, start_v=1, end_ch=5, end_v=12)
         _store_text(reading, text="Stale text", fetched_at=timezone.now() - timedelta(days=31))
         _store_text(reading, language="hy", text="hy text")
 
-        self.assertEqual(self._get().status_code, 200)
+        response = self._get()
 
-        mock_prepare.assert_called_once()
-        mock_fetch.assert_called_once()
+        self.assertEqual(response.status_code, 200)
+        mock_text_task.delay.assert_called_once()
+        # Only the expired English is re-requested; Armenian is still servable.
+        self.assertEqual(
+            mock_text_task.delay.call_args.args[0],
+            [{
+                "key": reading.passage_key,
+                "citation": ["Matthew", 5, 1, 5, 12],
+                "langs": ["en"],
+            }],
+        )
+        # Expired text is blanked in the response until the task lands.
+        self.assertEqual(response.data["readings"][0]["text"], "")
 
-    @patch('hub.views.readings.fetch_passage_text')
-    @patch('hub.views.readings.prepare_shared_resources', return_value={})
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
     @patch('hub.views.readings.get_daily_readings', return_value=[])
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_does_not_refetch_just_inside_max_age(self, mock_ctx, mock_scrape, mock_prepare, mock_fetch):
+    def test_does_not_refetch_just_inside_max_age(self, mock_ctx, mock_scrape, mock_text_task):
         reading = _create_reading(self.day, book="Matthew", start_ch=5, start_v=1, end_ch=5, end_v=12)
         _store_text(reading, text="Fresh enough", fetched_at=timezone.now() - timedelta(days=29))
         _store_text(reading, language="hy", text="hy text")
 
         self.assertEqual(self._get().status_code, 200)
 
-        mock_fetch.assert_not_called()
-        mock_prepare.assert_not_called()
+        mock_text_task.delay.assert_not_called()
 
-    @patch('hub.views.readings.fetch_passage_text')
-    @patch('hub.views.readings.prepare_shared_resources', return_value={})
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
     @patch('hub.views.readings.get_daily_readings', return_value=[])
     @patch('hub.views.readings.generate_reading_context_task')
-    def test_prepares_shared_resources_once_for_many_expired(self, mock_ctx, mock_scrape, mock_prepare, mock_fetch):
-        """Shared resources open an HTTP session and scrape a page; build them once."""
+    def test_enqueues_once_for_many_expired(self, mock_ctx, mock_scrape, mock_text_task):
+        """A burst of expired passages is one enqueue, not one per passage."""
+        readings = []
         for verse in range(1, 4):
             reading = _create_reading(
                 self.day, book="Matthew", start_ch=5, start_v=verse, end_ch=5, end_v=verse,
             )
             _store_text(reading, text="Stale", fetched_at=timezone.now() - timedelta(days=31))
             _store_text(reading, language="hy", text="hy text")
+            readings.append(reading)
 
-        self.assertEqual(self._get().status_code, 200)
+        response = self._get()
 
-        mock_prepare.assert_called_once()
-        self.assertEqual(mock_fetch.call_count, 3)
+        self.assertEqual(response.status_code, 200)
+        mock_text_task.delay.assert_called_once()
+        self.assertEqual(
+            {item["key"] for item in mock_text_task.delay.call_args.args[0]},
+            {r.passage_key for r in readings},
+        )
 
 
 class ReadingFetchBudgetTests(TestCase):
@@ -1756,3 +1751,278 @@ class ViewPassageTextQueryTests(TestCase):
             len(passage_queries), 1,
             f"expected one passagetext query, got {len(passage_queries)}",
         )
+
+
+# ------------------------------------------------------------------ #
+#  fetch_missing_passage_texts_task (the view's off-thread continuation)
+# ------------------------------------------------------------------ #
+
+class FetchMissingPassageTextsTaskTests(TestCase):
+    """The task the readings view enqueues instead of calling API.Bible inline (#506)."""
+
+    def setUp(self):
+        cache.clear()
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.day = Day.objects.create(date=date(2025, 7, 1), church=self.church)
+        self.reading = _create_reading(self.day, book="Genesis", start_ch=1, start_v=1, end_ch=1, end_v=5)
+        self.mock_api_response = {
+            "content": "Test verse content.",
+            "copyright": "Test copyright.",
+            "version": "NKJV",
+            "reference": "Genesis 1:1-5",
+            "fums_token": "test-fums-token",
+        }
+        self.item = {
+            "key": self.reading.passage_key,
+            "citation": ["Genesis", 1, 1, 1, 5],
+            "langs": ["en", "hy"],
+        }
+
+    @override_settings(READING_FETCH_DAILY_BUDGET=2, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_stores_text_for_enqueued_passages(self, mock_config, mock_resolve, mock_get_passage):
+        mock_get_passage.return_value = self.mock_api_response
+
+        fetch_missing_passage_texts_task([self.item])
+
+        stored = _text_for(self.reading)
+        self.assertEqual(stored.text, "Test verse content.")
+        mock_get_passage.assert_called_once()
+
+    def test_empty_payload_is_a_noop(self):
+        fetch_missing_passage_texts_task([])
+
+    @override_settings(READING_FETCH_DAILY_BUDGET=2, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_duplicate_enqueue_fetches_only_once(self, mock_config, mock_resolve, mock_get_passage):
+        """A client retry enqueues the same set twice; the second run must no-op."""
+        mock_get_passage.return_value = self.mock_api_response
+
+        fetch_missing_passage_texts_task([self.item])
+        fetch_missing_passage_texts_task([self.item])
+
+        mock_get_passage.assert_called_once()
+
+    @override_settings(READING_FETCH_DAILY_BUDGET=2, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_fetches_only_the_language_still_missing(self, mock_config, mock_resolve, mock_get_passage):
+        """Armenian stored since the enqueue means the run fetches English only."""
+        mock_get_passage.return_value = self.mock_api_response
+        _store_text(self.reading, language="hy", text="hy text")
+
+        fetch_missing_passage_texts_task([self.item])
+
+        mock_get_passage.assert_called_once()
+        self.assertEqual(_text_for(self.reading).text, "Test verse content.")
+
+    @override_settings(READING_FETCH_DAILY_BUDGET=0)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_charges_the_daily_budget(self, mock_config, mock_resolve, mock_get_passage):
+        """The follow-up task IS the on-demand path: a zero daily budget stops it.
+
+        READING_FETCH_DAILY_BUDGET=0 is the test suite's only guard keeping eager runs
+        of this task from reaching API.Bible, so it must stay on the daily envelope.
+        """
+        mock_get_passage.return_value = self.mock_api_response
+
+        fetch_missing_passage_texts_task([self.item])
+
+        mock_get_passage.assert_not_called()
+        self.assertIsNone(_text_for(self.reading))
+
+    @override_settings(READING_FETCH_DAILY_BUDGET=2, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.tasks.bible_api_tasks.time.sleep')
+    @patch('hub.tasks.bible_api_tasks.fetch_passage_text')
+    def test_sleeps_only_after_successful_metered_fetch_and_not_on_last_item(
+        self, mock_fetch, mock_sleep,
+    ):
+        """The 0.5s spacing must fire only when a metered fetch actually hit API.Bible,
+        and must be skipped after the last pending item (nothing to space out).
+
+        ``fetch_passage_text`` is mocked directly so the per-item result is
+        fully controlled: the first item reports a successful metered fetch,
+        the second reports a failed one (and is the last item).
+        """
+        other_day = Day.objects.create(date=date(2025, 7, 2), church=self.church)
+        other_reading = _create_reading(
+            other_day, book="Genesis", start_ch=1, start_v=6, end_ch=1, end_v=10,
+        )
+        other_item = {
+            "key": other_reading.passage_key,
+            "citation": ["Genesis", 1, 6, 1, 10],
+            "langs": ["en", "hy"],
+        }
+        mock_fetch.side_effect = [
+            {"en": True, "hy": True},  # item 1: metered success -> sleep
+            {"en": False, "hy": False},  # item 2: metered failure, also last -> no sleep
+        ]
+
+        fetch_missing_passage_texts_task([self.item, other_item])
+
+        self.assertEqual(mock_sleep.call_count, 1)
+
+    @override_settings(READING_FETCH_DAILY_BUDGET=0, BIBLE_API_MONTHLY_BUDGET=1000)
+    @patch('hub.tasks.bible_api_tasks.time.sleep')
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    def test_no_sleep_when_every_metered_fetch_is_refused(
+        self, mock_config, mock_resolve, mock_get_passage, mock_sleep,
+    ):
+        """Budget-refused fetches never reach API.Bible -- no point waiting."""
+        other_day = Day.objects.create(date=date(2025, 7, 2), church=self.church)
+        other_reading = _create_reading(
+            other_day, book="Genesis", start_ch=1, start_v=6, end_ch=1, end_v=10,
+        )
+        other_item = {
+            "key": other_reading.passage_key,
+            "citation": ["Genesis", 1, 6, 1, 10],
+            "langs": ["en"],
+        }
+        mock_get_passage.return_value = self.mock_api_response
+
+        fetch_missing_passage_texts_task([self.item, other_item])
+
+        mock_get_passage.assert_not_called()
+        mock_sleep.assert_not_called()
+
+
+# ------------------------------------------------------------------ #
+#  prewarm_next_day_readings_task
+# ------------------------------------------------------------------ #
+
+class PrewarmNextDayReadingsTaskTests(TestCase):
+    """Tomorrow's readings are created and warmed before the first request (#506)."""
+
+    def setUp(self):
+        cache.clear()
+        self.church = Church.objects.get(pk=Church.get_default_pk())
+        self.other_church = Church.objects.create(name="St. Other Church")
+        self.tomorrow = timezone.localdate() + timedelta(days=1)
+        self.readings_payload = [
+            {
+                "book": "Genesis",
+                "book_en": "Genesis",
+                "start_chapter": 1,
+                "start_verse": 1,
+                "end_chapter": 1,
+                "end_verse": 5,
+            },
+        ]
+        self.mock_api_response = {
+            "content": "Test verse content.",
+            "copyright": "Test copyright.",
+            "version": "NKJV",
+            "reference": "Genesis 1:1-5",
+            "fums_token": "test-fums-token",
+        }
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    @patch('hub.services.lectionary_service.get_daily_readings')
+    def test_creates_tomorrows_readings_for_every_church(
+        self, mock_scrape, mock_config, mock_resolve, mock_get_passage,
+    ):
+        mock_scrape.return_value = self.readings_payload
+        mock_get_passage.return_value = self.mock_api_response
+
+        prewarm_next_day_readings_task()
+
+        for church in (self.church, self.other_church):
+            day = Day.objects.get(date=self.tomorrow, church=church)
+            self.assertEqual(day.readings.count(), 1)
+        # The same passage shared by both churches is fetched once.
+        self.assertEqual(mock_get_passage.call_count, 1)
+        self.assertEqual(
+            PassageText.objects.get(passage_key="GEN.1.1-1.5", language="en").text,
+            "Test verse content.",
+        )
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    @patch('hub.services.lectionary_service.get_daily_readings')
+    def test_rerun_is_a_noop(self, mock_scrape, mock_config, mock_resolve, mock_get_passage):
+        """Beat firing twice must not duplicate rows or re-spend quota."""
+        mock_scrape.return_value = self.readings_payload
+        mock_get_passage.return_value = self.mock_api_response
+
+        prewarm_next_day_readings_task()
+        prewarm_next_day_readings_task()
+
+        self.assertEqual(Reading.objects.filter(day__date=self.tomorrow).count(), 2)
+        mock_get_passage.assert_called_once()
+
+    @override_settings(READING_FETCH_DAILY_BUDGET=0)
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    @patch('hub.services.lectionary_service.get_daily_readings')
+    def test_charges_monthly_ceiling_only(
+        self, mock_scrape, mock_config, mock_resolve, mock_get_passage,
+    ):
+        """Background warm-up must not eat the public daily allowance: even with the
+        daily budget pinned to zero, the passages are fetched."""
+        mock_scrape.return_value = self.readings_payload
+        mock_get_passage.return_value = self.mock_api_response
+
+        prewarm_next_day_readings_task()
+
+        self.assertEqual(mock_get_passage.call_count, 1)
+
+    @patch('hub.services.bible_api_service.BibleAPIService.get_passage')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    @patch('hub.services.lectionary_service.get_daily_readings')
+    def test_one_church_failure_does_not_block_the_rest(
+        self, mock_scrape, mock_config, mock_resolve, mock_get_passage,
+    ):
+        def explode_for_default_church(target, church):
+            if church.pk == Church.get_default_pk():
+                raise RuntimeError("lectionary exploded")
+            return self.readings_payload
+
+        mock_scrape.side_effect = explode_for_default_church
+        mock_get_passage.return_value = self.mock_api_response
+
+        prewarm_next_day_readings_task()
+        self.assertEqual(Day.objects.get(date=self.tomorrow, church=self.church).readings.count(), 0)
+        self.assertEqual(Day.objects.get(date=self.tomorrow, church=self.other_church).readings.count(), 1)
+        self.assertEqual(mock_get_passage.call_count, 1)
+
+    @patch('hub.tasks.bible_api_tasks.time.sleep')
+    @patch('hub.tasks.bible_api_tasks.fetch_passage_text')
+    @patch('hub.services.bible_api_service.BibleAPIService.resolve_book_name', return_value="GEN")
+    @patch('hub.services.bible_api_service.config', return_value="test-key")
+    @patch('hub.services.lectionary_service.get_daily_readings')
+    def test_sleeps_only_between_metered_fetches_and_skips_the_last(
+        self, mock_scrape, mock_config, mock_resolve, mock_fetch, mock_sleep,
+    ):
+        """Two distinct metered passages: sleep fires once (between them), not after the last."""
+        mock_scrape.side_effect = [
+            [
+                {
+                    "book": "Genesis", "book_en": "Genesis",
+                    "start_chapter": 1, "start_verse": 1, "end_chapter": 1, "end_verse": 5,
+                },
+                {
+                    "book": "Genesis", "book_en": "Genesis",
+                    "start_chapter": 1, "start_verse": 6, "end_chapter": 1, "end_verse": 10,
+                },
+            ],
+        ]
+        mock_fetch.side_effect = [{"en": True}, {"en": True}]
+
+        prewarm_next_day_readings_task()
+
+        self.assertEqual(mock_fetch.call_count, 2)
+        self.assertEqual(mock_sleep.call_count, 1)

@@ -420,6 +420,25 @@ def reading_needs_text_fetch(reading, passage_texts: dict, *, now=None) -> bool:
     return bool(languages_needing_fetch(reading.passage_key, passage_texts, now=now))
 
 
+def missing_passage_texts(readings, passage_texts) -> dict[str, tuple[tuple, set]]:
+    """``{passage_key: (citation, langs)}`` for readings whose text is not servable.
+
+    Merges duplicate passage keys within a batch: readings on the same day may cite the
+    same passage, and one fetch per passage is the point of the passage-keyed store.
+    Gating stays per language (see ``languages_needing_fetch``), so English arriving
+    from the shared store never suppresses a missing Armenian fetch.
+    """
+    missing: dict[str, tuple[tuple, set]] = {}
+    for reading in readings:
+        langs = languages_needing_fetch(reading.passage_key, passage_texts)
+        if langs:
+            citation, langs_set = missing.setdefault(
+                reading.passage_key, (reading_citation(reading), set())
+            )
+            langs_set.update(langs)
+    return missing
+
+
 def ensure_book_hy(reading) -> bool:
     """Top up ``Reading.book_hy`` from the corpus mapping.  Returns True if it changed.
 
