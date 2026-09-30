@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("hub", "0069_feast_context_version_history"),
+        ("hub", "0070_alter_llmprompt_model"),
     ]
 
     operations = [
