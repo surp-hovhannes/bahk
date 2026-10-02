@@ -2,7 +2,7 @@
 
 A gateway 504 is invisible from inside the app unless the logs name the endpoint.
 These pin the observability contract: slow requests are logged at WARNING with
-method, full path, status and duration; fast ones are not; the threshold comes
+method, path without query secrets, status and duration; fast ones are not; the threshold comes
 from settings.
 """
 
@@ -40,7 +40,8 @@ class SlowRequestLoggingMiddlewareTests(TestCase):
         self.assertEqual(len(logs.records), 1)
         message = logs.records[0].getMessage()
         self.assertIn("GET", message)
-        self.assertIn("/readings/?date=2025-01-01", message)
+        self.assertIn("/readings/", message)
+        self.assertNotIn("date=", message)
         self.assertIn("200", message)
         self.assertIn("threshold", message)
 
@@ -76,3 +77,12 @@ class SlowRequestLoggingMiddlewareTests(TestCase):
         self.assertIs(response, original)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.content, b"payload")
+
+    def test_signed_query_tokens_never_reach_logs(self):
+        request = self.factory.get('/notifications/unsubscribe/?token=signed-secret&email=private')
+        with self.assertLogs('bahk.middleware', level='WARNING') as logs:
+            SlowRequestLoggingMiddleware(Mock(side_effect=_sleeping_view(0.1)))(request)
+        message = logs.records[0].getMessage()
+        self.assertIn('/notifications/unsubscribe/', message)
+        self.assertNotIn('signed-secret', message)
+        self.assertNotIn('private', message)

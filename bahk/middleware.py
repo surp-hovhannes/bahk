@@ -12,9 +12,10 @@ class SlowRequestLoggingMiddleware:
     """Log a WARNING for any request slower than ``SLOW_REQUEST_THRESHOLD_SECONDS``.
 
     Times the full downstream stack (every later middleware, the view, the response
-    rendering), so a request that a gateway or client times out on — the 504s of
-    issue #506 — can be attributed to an endpoint from the logs alone: the record
-    names the method, full path (query string included), status, and duration.
+    rendering). Records method, path without query secrets, status and duration.
+    This measures completed responses only: a terminated Gunicorn worker cannot
+    emit a completion log. Worker/proxy timeout logs and transaction-duration
+    monitoring are required to diagnose gateway 504s (issue #506).
     """
 
     def __init__(self, get_response):
@@ -29,7 +30,7 @@ class SlowRequestLoggingMiddleware:
             logger.warning(
                 "Slow request: %s %s -> %s in %.2fs (threshold %.1fs)",
                 request.method,
-                request.get_full_path(),
+                request.path,
                 response.status_code,
                 duration,
                 threshold,

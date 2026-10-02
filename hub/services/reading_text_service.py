@@ -215,6 +215,9 @@ def fetch_armenian(
     }
 
 
+# Languages whose fetch uses a metered network service; local corpus languages stay inline.
+METERED_LANGUAGES = ("en",)
+
 TEXT_FETCHERS: dict[str, callable] = {
     "en": fetch_english,
     "hy": fetch_armenian,

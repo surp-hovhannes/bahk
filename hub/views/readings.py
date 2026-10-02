@@ -18,7 +18,9 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.services.reading_text_service import (
+    METERED_LANGUAGES,
     ensure_book_hy,
+    fetch_passage_text,
     get_reading_text_fields,
     load_passage_texts,
     missing_passage_texts,
@@ -135,20 +137,23 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         passage_keys = {r.passage_key for r in readings if r.passage_key}
         passage_texts = load_passage_texts(passage_keys)
 
-        # Fetch asynchronously, per (passage, language): the response serves blank text
-        # fields for anything still missing (the long-standing partial contract) and a
-        # follow-up task fills the store.  Fetching inline here used to serialize
-        # API.Bible calls inside the request and could push it past the gateway's
-        # timeout (issue #506).  Gating stays per language so English arriving from the
-        # shared store never suppresses a missing Armenian fetch; spend stays capped by
-        # the budgets inside the English fetcher.
+        # Local corpus text belongs in the first response. Only metered network
+        # retrieval leaves the request path (issue #506).
         missing = missing_passage_texts(readings, passage_texts)
+        items = []
+        stored_locally = False
+        for key, (citation, langs) in missing.items():
+            local_langs = sorted(set(langs) - set(METERED_LANGUAGES))
+            metered_langs = sorted(set(langs) & set(METERED_LANGUAGES))
+            if local_langs:
+                results = fetch_passage_text(key, citation, langs=local_langs)
+                stored_locally |= any(results.values())
+            if metered_langs:
+                items.append({"key": key, "citation": list(citation), "langs": metered_langs})
+        if stored_locally:
+            passage_texts = load_passage_texts(passage_keys)
 
-        if missing:
-            items = [
-                {"key": key, "citation": list(citation), "langs": sorted(langs)}
-                for key, (citation, langs) in missing.items()
-            ]
+        if items:
             try:
                 fetch_missing_passage_texts_task.delay(items)
             except Exception:

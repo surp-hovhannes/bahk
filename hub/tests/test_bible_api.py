@@ -1019,7 +1019,7 @@ class ViewAsyncTextFetchTests(TestCase):
             [{
                 "key": reading.passage_key,
                 "citation": ["Matthew", 5, 1, 5, 12],
-                "langs": ["en", "hy"],
+                "langs": ["en"],
             }],
         )
         # The response still honours the partial contract: served blank, not blocked.
@@ -2026,3 +2026,41 @@ class PrewarmNextDayReadingsTaskTests(TestCase):
 
         self.assertEqual(mock_fetch.call_count, 2)
         self.assertEqual(mock_sleep.call_count, 1)
+
+
+class LocalReadingColdResponseTests(TestCase):
+    @patch('hub.views.readings.generate_reading_context_task')
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
+    def test_cold_response_composes_armenian_and_only_defers_english(self, task, context_task):
+        from hub.models import BibleVerse
+        from hub.views.readings import GetDailyReadingsForDate
+        from rest_framework.test import APIRequestFactory
+
+        church = Church.objects.get(pk=Church.get_default_pk())
+        day = Day.objects.create(date=date(2025, 4, 1), church=church)
+        reading = _create_reading(day, book='Matthew', start_ch=5, start_v=1, end_ch=5, end_v=1)
+        BibleVerse.objects.create(book='MAT', chapter=5, verse=1, text='Հայերեն տեքստ')
+        response = GetDailyReadingsForDate.as_view()(
+            APIRequestFactory().get('/readings/?date=2025-04-01&lang=hy')
+        )
+        self.assertEqual(response.data['readings'][0]['text'], '[1] Հայերեն տեքստ')
+        self.assertEqual(task.delay.call_args.args[0], [{
+            'key': reading.passage_key, 'citation': ['Matthew', 5, 1, 5, 1], 'langs': ['en'],
+        }])
+
+    @patch('hub.views.readings.generate_reading_context_task')
+    @patch('hub.views.readings.fetch_missing_passage_texts_task')
+    def test_armenian_corpus_gap_never_enqueues_local_language(self, task, context_task):
+        from hub.views.readings import GetDailyReadingsForDate
+        from rest_framework.test import APIRequestFactory
+
+        church = Church.objects.get(pk=Church.get_default_pk())
+        day = Day.objects.create(date=date(2025, 4, 1), church=church)
+        reading = _create_reading(day)
+        _store_text(reading)
+        for _ in range(2):
+            response = GetDailyReadingsForDate.as_view()(
+                APIRequestFactory().get('/readings/?date=2025-04-01&lang=hy')
+            )
+            self.assertEqual(response.status_code, 200)
+        task.delay.assert_not_called()

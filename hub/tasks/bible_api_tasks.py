@@ -24,6 +24,7 @@ from celery import shared_task
 from django.conf import settings
 
 from hub.services.reading_text_service import (
+    METERED_LANGUAGES,
     TEXT_FETCHERS,
     bible_api_budgets,
     fetch_passage_text,
@@ -36,16 +37,12 @@ from hub.services.reading_text_service import (
 
 logger = logging.getLogger(__name__)
 
-# Languages whose retrieval costs quota, and so must respect the circuit breaker, the spend
-# ceiling, and the inter-call delay.  Everything else composes from a local corpus.
-METERED_LANGUAGES = ("en",)
-
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, name='hub.tasks.fetch_reading_text_task')
 def fetch_reading_text_task(self, reading_id: int):
     """Fetch text for the passage cited by a single Reading.
 
-    NOTE: the readings view no longer fetches text in the request cycle (issue #506);
+    NOTE: the readings view no longer fetches metered text in the request cycle (issue #506);
     it enqueues fetch_missing_passage_texts_task instead.  This task remains available
     for management commands and ad-hoc backfills.
     """
