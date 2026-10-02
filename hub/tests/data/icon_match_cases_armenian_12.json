@@ -1,0 +1,99 @@
+[
+ {
+  "feast": "Remembrance of the Prophet Elijah",
+  "correct": [],
+  "acceptable": [
+   499
+  ],
+  "note": "No Elijah portrait in the catalogue. 499 (Transfiguration) carries an explicit 'elijah' tag and does depict him, so a related suggestion is right and an assignment is not."
+ },
+ {
+  "feast": "Sts. Atom and His Soldiers",
+  "correct": [],
+  "acceptable": [],
+  "note": "No Atom icon and no near neighbour. Other warrior-martyrs are different saints; surfacing one is a wrong-subject suggestion."
+ },
+ {
+  "feast": "Holy Voskian Priests",
+  "correct": [],
+  "acceptable": [],
+  "note": "No Voskian icon. Generic clergy/priest-martyr icons are different saints."
+ },
+ {
+  "feast": "Remembrance of the Dead",
+  "correct": [],
+  "acceptable": [],
+  "note": "A commemoration with no depicted subject. Thematic neighbours exist but none depicts this observance."
+ },
+ {
+  "feast": "Feast of the Holy Cross",
+  "correct": [],
+  "acceptable": [],
+  "note": "No Exaltation/Discovery/Varague icon. Crucifixion icons are a different feast, not this one. Reviewer input welcome."
+ },
+ {
+  "feast": "Beheading of St. John the Forerunner (Baptist)",
+  "correct": [],
+  "acceptable": [
+   36,
+   333,
+   377
+  ],
+  "note": "No Beheading scene exists. A St John the Baptist portrait is the intended fallback."
+ },
+ {
+  "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
+  "correct": [],
+  "acceptable": [
+   428
+  ],
+  "note": "428 is a Toros Roslin Last Judgment; thematically right for the Sunday of the Judge."
+ },
+ {
+  "feast": "Palm Sunday",
+  "correct": [
+   101,
+   301,
+   463,
+   464,
+   203
+  ],
+  "acceptable": [],
+  "note": "Five genuine Palm Sunday depictions; any is correct."
+ },
+ {
+  "feast": "Holy Forty Martyrs of Sebastia",
+  "correct": [
+   77
+  ],
+  "acceptable": [
+   218
+  ],
+  "note": "77 titled exactly; 218 is the same subject under a run-together filename title."
+ },
+ {
+  "feast": "Remembrance of the Raising of Lazarus",
+  "correct": [
+   455
+  ],
+  "acceptable": [],
+  "note": "Filename-shaped title but tags carry 'lazarus' and 'resurrection-of-lazarus'."
+ },
+ {
+  "feast": "Sts. Hripsime and Her Companions",
+  "correct": [
+   418,
+   158
+  ],
+  "acceptable": [],
+  "note": "Both depict Hripsime WITH companions. Solo Hripsime icons (118, 245, 270) are partial coverage, not correct."
+ },
+ {
+  "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+  "correct": [],
+  "acceptable": [
+   175
+  ],
+  "note": "No icon covers all four. 175 covers two of them and is the best available partial."
+ }
+]
