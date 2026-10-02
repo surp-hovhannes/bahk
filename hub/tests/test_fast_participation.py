@@ -595,6 +595,100 @@ class ReconciliationReviewTests(FastParticipationBackfillTests):
         self.assertIsNone(period.left_at)
         self.assertFalse(period.completed)
 
+    def test_real_live_closed_periods_do_not_duplicate_on_reconciliation(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        self.profile.fasts.add(self.fast)
+        self.profile.fasts.remove(self.fast)
+        before = list(FastParticipation.objects.values())
+        self.assertEqual(len(before), 1)
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        self.assertEqual(list(FastParticipation.objects.values()), before)
+
+    def test_reconciliation_skips_new_noop_removal_events(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        self.profile.fasts.remove(self.fast)
+        self.assertEqual(FastParticipation.objects.count(), 0)
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        self.assertEqual(FastParticipation.objects.count(), 0)
+        self.profile.fasts.add(self.fast)
+        self.profile.fasts.remove(self.fast)
+        self.profile.fasts.remove(self.fast)
+        before = list(FastParticipation.objects.values())
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        self.assertEqual(list(FastParticipation.objects.values()), before)
+        self.assertEqual(len(before), 1)
+
+    def test_real_membership_events_reference_the_existing_period(self):
+        self.profile.fasts.add(self.fast)
+        self.profile.fasts.remove(self.fast)
+        period = FastParticipation.objects.get()
+        events = self.Event.objects.filter(
+            user=self.profile.user, object_id=self.fast.pk, event_type__code__in=["user_joined_fast", "user_left_fast"]
+        )
+        self.assertEqual(events.count(), 2)
+        for event in events:
+            self.assertTrue(event.data["participation_tracked"])
+            self.assertTrue(event.data["participation_changed"])
+            self.assertEqual(event.data["participation_id"], period.pk)
+
+    def test_legacy_unlinked_independently_timed_closed_history_is_not_duplicated(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        self.profile.fasts.add(self.fast)
+        self.profile.fasts.remove(self.fast)
+        self.Event.objects.filter(user=self.profile.user, object_id=self.fast.pk).update(data={})
+        before = list(FastParticipation.objects.values())
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        self.assertEqual(list(FastParticipation.objects.values()), before)
+
+    def test_linked_independently_timed_unknown_period_cannot_date_new_membership(self):
+        self.profile.fasts.add(self.fast)
+        old = FastParticipation.objects.get()
+        old.ended_at_unknown = True
+        old.save(update_fields=["ended_at_unknown"])
+        self._run_backfill()
+        current = FastParticipation.objects.get(ended_at_unknown=False, left_at__isnull=True)
+        self.assertIsNone(current.joined_at)
+        self.assertFalse(current.completed)
+
+    def test_unlinked_independently_timed_unknown_period_cannot_date_new_membership(self):
+        self.profile.fasts.add(self.fast)
+        old = FastParticipation.objects.get()
+        old.ended_at_unknown = True
+        old.save(update_fields=["ended_at_unknown"])
+        self.Event.objects.filter(user=self.profile.user, object_id=self.fast.pk).update(data={})
+        self._run_backfill()
+        current = FastParticipation.objects.get(ended_at_unknown=False, left_at__isnull=True)
+        self.assertIsNone(current.joined_at)
+        self.assertFalse(current.completed)
+
+    def test_closed_existing_period_consumes_stale_join_evidence(self):
+        joined = timezone.now() - datetime.timedelta(days=3)
+        self._make_event(self.profile, self.fast, "user_joined_fast", joined)
+        FastParticipation.objects.create(
+            profile=self.profile, fast=self.fast, joined_at=joined, left_at=joined + datetime.timedelta(days=1)
+        )
+        Profile.fasts.through.objects.create(profile=self.profile, fast=self.fast)
+        self._run_backfill()
+        self.assertIsNone(FastParticipation.objects.get(left_at__isnull=True).joined_at)
+
+    def test_stale_event_cannot_date_an_unknown_current_rejoin(self):
+        joined = timezone.now() - datetime.timedelta(days=3)
+        self._make_event(self.profile, self.fast, "user_joined_fast", joined)
+        FastParticipation.objects.create(profile=self.profile, fast=self.fast, joined_at=joined, ended_at_unknown=True)
+        Profile.fasts.through.objects.create(profile=self.profile, fast=self.fast)
+        self._run_backfill()
+        current = FastParticipation.objects.get(ended_at_unknown=False, left_at__isnull=True)
+        self.assertIsNone(current.joined_at)
+        self.assertFalse(current.completed)
+
     def test_stale_join_event_for_nonmember_does_not_make_open_period(self):
         self._make_event(self.profile, self.fast, "user_joined_fast", timezone.now())
         self._run_backfill()
@@ -727,6 +821,55 @@ class FastParticipationPostgresConcurrencyTests(TransactionTestCase):
         self.assertEqual(
             FastParticipation.objects.filter(left_at__isnull=True, ended_at_unknown=False).count(), int(member)
         )
+
+    def test_bulk_delete_and_remove_use_fast_before_participation_lock_order(self):
+        from threading import Event as ThreadEvent
+        from django.db import transaction
+        from hub.models import Fast
+
+        locked = ThreadEvent()
+        deletion_attempted = ThreadEvent()
+        self.profile.fasts.add(self.fast)
+
+        def remove():
+            close_old_connections()
+            try:
+                with transaction.atomic():
+                    Fast.objects.select_for_update().get(pk=self.fast.pk)
+                    locked.set()
+                    self.assertTrue(deletion_attempted.wait(timeout=10))
+                    Profile.objects.get(pk=self.profile.pk).fasts.remove(self.fast.pk)
+            finally:
+                close_old_connections()
+
+        def delete():
+            close_old_connections()
+
+            def observe(execute, sql, params, many, context):
+                if '"hub_fast"' in sql and "FOR UPDATE" in sql:
+                    deletion_attempted.set()
+                result = execute(sql, params, many, context)
+                if sql.startswith('UPDATE "hub_fastparticipation"'):
+                    # On the old order, this signals only after audit rows are
+                    # locked, deterministically exposing the inversion.
+                    deletion_attempted.set()
+                return result
+
+            try:
+                self.assertTrue(locked.wait(timeout=10))
+                with connection.execute_wrapper(observe):
+                    Fast.objects.filter(pk=self.fast.pk).delete()
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            jobs = [pool.submit(remove), pool.submit(delete)]
+            for job in jobs:
+                job.result(timeout=25)
+        period = FastParticipation.objects.get()
+        self.assertIsNone(period.fast_id)
+        self.assertIsNotNone(period.left_at)
+        self.assertEqual(period.fast_original_id, self.fast.pk)
 
 
 class SnapshotMigrationReviewTests(TestCase):

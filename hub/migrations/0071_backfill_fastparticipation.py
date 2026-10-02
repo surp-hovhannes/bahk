@@ -27,7 +27,7 @@ periods recorded by the live receiver.
 
 from collections import Counter, defaultdict
 
-from django.db import migrations
+from django.db import migrations, models
 
 JOIN_CODE = "user_joined_fast"
 LEAVE_CODE = "user_left_fast"
@@ -76,7 +76,11 @@ def backfill_fast_participation(apps, schema_editor):
     valid_fast_ids = set(Fast.values_list("id", flat=True))
     user_to_profile = {p.user_id: p.id for p in Profile.only("id", "user_id")}
 
-    # (profile_id, fast_id) -> list of (timestamp, action_code)
+    audit_ids = defaultdict(set)
+    for period_id, profile_id, fast_id in FastParticipation.values_list("id", "profile_id", "fast_id"):
+        audit_ids[(profile_id, fast_id)].add(period_id)
+
+    # (profile_id, fast_id) -> list of (timestamp, action_code, covered)
     history = defaultdict(list)
     relevant_events = (
         Event.filter(
@@ -84,43 +88,75 @@ def backfill_fast_participation(apps, schema_editor):
             event_type_id__in=[et.id for et in event_types.values()],
         )
         .order_by("timestamp", "id")
-        .only("user_id", "object_id", "timestamp", "event_type_id")
+        .only("user_id", "object_id", "timestamp", "event_type_id", "data")
     )
 
     for ev in relevant_events:
         profile_id = user_to_profile.get(ev.user_id)
         if profile_id is None or ev.object_id not in valid_fast_ids:
             continue
+        data = ev.data if isinstance(ev.data, dict) else {}
+        if data.get("participation_tracked") is True and data.get("participation_changed") is False:
+            # New no-op removals are explicitly not membership evidence. Legacy
+            # unlinked leave evidence remains available as unconfirmed history.
+            continue
+        period_id = data.get("participation_id")
+        covered = isinstance(period_id, int) and period_id in audit_ids[(profile_id, ev.object_id)]
         action = "join" if ev.event_type_id == join_type_id else "leave"
-        history[(profile_id, ev.object_id)].append((ev.timestamp, action))
+        history[(profile_id, ev.object_id)].append((ev.timestamp, action, covered))
 
     # Derive complete periods before inserting: replay must not temporarily
     # open a historical period while an existing final open period remains.
+    open_starts = {}
     for (profile_id, fast_id), events in history.items():
         periods = []
         open_period = None
-        for ts, action in events:
+        for ts, action, covered in events:
             if action == "join":
                 if open_period is not None:
                     # A repeated join cannot prove a leave or a new period start.
                     # Preserve uncertainty, rather than fabricate a completion.
                     open_period[0] = None
+                    open_period[2] |= covered
                 else:
-                    open_period = [ts, None]
+                    open_period = [ts, None, covered]
                     periods.append(open_period)
             elif open_period is not None:
                 open_period[1] = ts
+                open_period[2] |= covered
                 open_period = None
             else:
-                periods.append([None, ts])
+                periods.append([None, ts, covered])
 
         existing = FastParticipation.filter(profile_id=profile_id, fast_id=fast_id)
-        recorded = Counter(existing.values_list("joined_at", "left_at"))
-        expected = Counter(tuple(period) for period in periods)
+        open_starts[(profile_id, fast_id)] = open_period[0] if open_period is not None and not open_period[2] else None
+        expected = Counter((joined, left) for joined, left, covered in periods if not covered)
+        # Match exact legacy replay rows first, preserving orphan multiplicity.
+        # For independently timestamped legacy live rows, consume overlapping
+        # known closed intervals one-to-one; never change stored timestamps.
+        unmatched = []
+        for key in existing.values_list("joined_at", "left_at"):
+            if expected[key] > 0:
+                expected[key] -= 1
+            else:
+                unmatched.append(key)
         for (joined_at, left_at), count in expected.items():
             # An unmatched join is not evidence of current membership.
             if left_at is None and (profile_id, fast_id) not in current_memberships:
                 continue
+            if left_at is None and joined_at is not None:
+                consumed = existing.filter(
+                    left_at__isnull=False, joined_at__lte=joined_at, left_at__gte=joined_at
+                ).exists()
+                if supports_unknown_end:
+                    consumed |= (
+                        existing.filter(ended_at_unknown=True)
+                        .filter(models.Q(joined_at__isnull=True) | models.Q(joined_at__lte=joined_at))
+                        .exists()
+                    )
+                if consumed:
+                    open_starts[(profile_id, fast_id)] = None
+                    continue
             # Keep any live open period, even if its timestamp differs from
             # the historical join. Never close or overwrite runtime history.
             if (
@@ -130,7 +166,19 @@ def backfill_fast_participation(apps, schema_editor):
                 ).exists()
             ):
                 continue
-            for _ in range(max(0, count - recorded[(joined_at, left_at)])):
+            if joined_at is not None and left_at is not None:
+                for key in list(unmatched):
+                    old_join, old_left = key
+                    if (
+                        count
+                        and old_join is not None
+                        and old_left is not None
+                        and joined_at < old_left
+                        and old_join < left_at
+                    ):
+                        unmatched.remove(key)
+                        count -= 1
+            for _ in range(count):
                 FastParticipation.create(
                     profile_id=profile_id,
                     fast_id=fast_id,
@@ -154,8 +202,13 @@ def backfill_fast_participation(apps, schema_editor):
                 continue
             # Only the final unmatched join proves the current period start. A
             # join followed by a leave cannot date a later, unrecorded rejoin.
-            events = history.get((profile.id, fast_id), [])
-            joined_at = events[-1][0] if events and events[-1][1] == "join" else None
+            joined_at = open_starts.get((profile.id, fast_id))
+            if joined_at is not None:
+                consumed = FastParticipation.filter(profile_id=profile.id, fast_id=fast_id, joined_at=joined_at)
+                if consumed.filter(left_at__isnull=False).exists() or (
+                    supports_unknown_end and consumed.filter(ended_at_unknown=True).exists()
+                ):
+                    joined_at = None
             FastParticipation.create(
                 profile_id=profile.id,
                 fast_id=fast_id,

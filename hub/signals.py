@@ -85,20 +85,26 @@ def track_fast_participation(sender, instance, action, reverse, pk_set, using, *
         return
 
     now = timezone.now()
+    # Reset for every post signal, including empty/no-op mutations; the event
+    # receiver consumes this metadata immediately on the same instance.
+    instance._fast_participation_changes = {}
     if action == 'post_add':
         pairs = [(pk, instance.pk) if reverse else (instance.pk, pk) for pk in sorted(pk_set or [])]
         fast_ids = {fast_id for _, fast_id in pairs}
         fasts = {fast.pk: fast for fast in Fast.objects.using(using).with_dates().filter(pk__in=fast_ids)}
         for profile_id, fast_id in pairs:
             fast = fasts[fast_id]
-            FastParticipation.objects.using(using).get_or_create(
+            period, _ = FastParticipation.objects.using(using).get_or_create(
                 profile_id=profile_id, fast_id=fast_id, left_at=None, ended_at_unknown=False,
                 defaults={'joined_at': now, 'fast_original_id': fast.pk, 'fast_name': fast.name,
                           'fast_year': fast.year, 'fast_end_date': fast.end_date},
             )
+            instance._fast_participation_changes[fast_id] = period.pk
     else:
         for profile_id, fast_id in getattr(instance, '_participation_removed_pairs', []):
-            _stamp_participation_leave(profile_id, fast_id, now, using=using)
+            instance._fast_participation_changes[fast_id] = _stamp_participation_leave(
+                profile_id, fast_id, now, using=using,
+            )
         instance.__dict__.pop('_participation_removed_pairs', None)
 
 
@@ -113,6 +119,8 @@ def _stamp_participation_leave(profile_id, fast_id, now, *, using):
         for period in periods:
             period.left_at = now
             period.save(using=using, update_fields=['left_at'])
+            return period.pk
+    return None
 
 
 @receiver(pre_delete, sender='hub.Fast')
@@ -122,6 +130,8 @@ def preserve_deleted_fast_participations(sender, instance, using, **kwargs):
     from django.utils import timezone
     from hub.models import FastParticipation
 
+    # Match membership/reconciliation order: Fast before audit rows.
+    list(sender.objects.using(using).select_for_update().filter(pk=instance.pk))
     end = instance.days.using(using).filter(church_id=instance.church_id).aggregate(end=Max('date'))['end']
     FastParticipation.objects.using(using).filter(fast_id=instance.pk).update(
         fast_original_id=instance.pk, fast_name=instance.name, fast_year=instance.year,
