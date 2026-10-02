@@ -294,6 +294,7 @@ class FastParticipation(models.Model):
     joined_at = models.DateTimeField(null=True, blank=True, help_text='UTC join timestamp; NULL means unknown.')
     left_at = models.DateTimeField(null=True, blank=True, help_text='UTC leave timestamp; NULL when open or unknown.')
     ended_at_unknown = models.BooleanField(default=False, db_default=False, help_text='Membership ended but its leave timestamp is unknown.')
+    fast_original_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     fast_name = models.CharField(max_length=128, blank=True, default='', db_default='')
     fast_year = models.IntegerField(null=True, blank=True)
     fast_end_date = models.DateField(null=True, blank=True)

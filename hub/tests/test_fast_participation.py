@@ -522,6 +522,7 @@ class CompletionAndDeletionReviewTests(TestCase):
         from unittest.mock import patch
 
         period = self.period(datetime.datetime(2026, 9, 28, 12, tzinfo=datetime.timezone.utc))
+        original_id = self.fast.pk
         deletion = datetime.datetime(2026, 9, 30, 12, tzinfo=datetime.timezone.utc)
         with patch("django.utils.timezone.now", return_value=deletion):
             self.fast.delete()
@@ -530,6 +531,8 @@ class CompletionAndDeletionReviewTests(TestCase):
         self.assertEqual(period.fast_name, self.fast.name)
         self.assertEqual(period.fast_end_date, datetime.date(2026, 10, 1))
         self.assertEqual(period.fast_deleted_at, deletion)
+        self.assertEqual(period.fast_original_id, original_id)
+        self.assertEqual(FastParticipation.objects.filter(fast_original_id=original_id).count(), 1)
         self.assertFalse(
             FastParticipation.objects.with_completion(as_of=datetime.date(2030, 1, 1)).get(pk=period.pk).completed
         )
@@ -742,6 +745,7 @@ class SnapshotMigrationReviewTests(TestCase):
         migration.snapshot_existing_periods(apps, SimpleNamespace(connection=connection))
         period.refresh_from_db()
         self.assertEqual(period.fast_name, fast.name)
+        self.assertEqual(period.fast_original_id, fast.pk)
         self.assertEqual(period.fast_end_date, end)
         self.assertEqual(period.joined_at, joined)
         self.assertIsNone(period.left_at)

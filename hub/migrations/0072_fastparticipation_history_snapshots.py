@@ -13,6 +13,7 @@ def snapshot_existing_periods(apps, schema_editor):
     for fast in Fast.objects.using(alias).all().iterator():
         end = fast.days.using(alias).filter(church_id=fast.church_id).aggregate(end=models.Max("date"))["end"]
         Period.objects.using(alias).filter(fast_id=fast.pk).update(
+            fast_original_id=fast.pk,
             fast_name=fast.name,
             fast_year=fast.year,
             fast_end_date=end,
@@ -32,6 +33,11 @@ class Migration(migrations.Migration):
             field=models.BooleanField(
                 default=False, db_default=False, help_text="Membership ended but its leave timestamp is unknown."
             ),
+        ),
+        migrations.AddField(
+            model_name="fastparticipation",
+            name="fast_original_id",
+            field=models.BigIntegerField(blank=True, db_index=True, null=True),
         ),
         migrations.AddField(
             model_name="fastparticipation",

@@ -93,7 +93,7 @@ def track_fast_participation(sender, instance, action, reverse, pk_set, using, *
             fast = fasts[fast_id]
             FastParticipation.objects.using(using).get_or_create(
                 profile_id=profile_id, fast_id=fast_id, left_at=None, ended_at_unknown=False,
-                defaults={'joined_at': now, 'fast_name': fast.name,
+                defaults={'joined_at': now, 'fast_original_id': fast.pk, 'fast_name': fast.name,
                           'fast_year': fast.year, 'fast_end_date': fast.end_date},
             )
     else:
@@ -124,7 +124,8 @@ def preserve_deleted_fast_participations(sender, instance, using, **kwargs):
 
     end = instance.days.using(using).filter(church_id=instance.church_id).aggregate(end=Max('date'))['end']
     FastParticipation.objects.using(using).filter(fast_id=instance.pk).update(
-        fast_name=instance.name, fast_year=instance.year, fast_end_date=end, fast_deleted_at=timezone.now(),
+        fast_original_id=instance.pk, fast_name=instance.name, fast_year=instance.year,
+        fast_end_date=end, fast_deleted_at=timezone.now(),
     )
 
 
