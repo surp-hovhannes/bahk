@@ -12,8 +12,8 @@ Rules:
   left_at=NULL), a leave stamps left_at on the open row (or creates a row with
   joined_at=NULL, left_at=event.timestamp if no prior join).
 * Anomalies (a second join without a leave in between, a leave without a
-  join) are tolerated -- they fall back to "leave first, reopen" so the unique
-  partial index holds.
+  join) remain unconfirmed: repeated joins make the start unknown, and a leave
+  without a join keeps joined_at NULL. Never synthesize a leave timestamp.
 * After walking events, current ``Profile.fasts`` membership that has no open
   period gets one with ``joined_at`` taken from the latest matching join event
   (NULL if there is no event -- "unknown" is preserved, not guessed).
@@ -41,6 +41,8 @@ def backfill_fast_participation(apps, schema_editor):
     Profile = apps.get_model("hub", "Profile")
     ContentType = apps.get_model("contenttypes", "ContentType")
 
+    current_memberships_model = Profile.fasts.through
+    supports_unknown_end = "ended_at_unknown" in {field.name for field in FastParticipation._meta.fields}
     db_alias = schema_editor.connection.alias
     Event = Event.objects.using(db_alias)
     EventType = EventType.objects.using(db_alias)
@@ -48,6 +50,15 @@ def backfill_fast_participation(apps, schema_editor):
     FastParticipation = FastParticipation.objects.using(db_alias)
     Profile = Profile.objects.using(db_alias)
     ContentType = ContentType.objects.using(db_alias)
+
+    current_memberships = set(current_memberships_model.objects.using(db_alias).values_list("profile_id", "fast_id"))
+    if supports_unknown_end:
+        # Preserve uncertain legacy rows, without inventing a leave timestamp.
+        for period in FastParticipation.filter(
+            fast_id__isnull=False, left_at__isnull=True, ended_at_unknown=False
+        ).iterator():
+            if (period.profile_id, period.fast_id) not in current_memberships:
+                FastParticipation.filter(pk=period.pk).update(ended_at_unknown=True)
 
     event_types = {
         et.code: et
@@ -91,9 +102,12 @@ def backfill_fast_participation(apps, schema_editor):
         for ts, action in events:
             if action == "join":
                 if open_period is not None:
-                    open_period[1] = ts
-                open_period = [ts, None]
-                periods.append(open_period)
+                    # A repeated join cannot prove a leave or a new period start.
+                    # Preserve uncertainty, rather than fabricate a completion.
+                    open_period[0] = None
+                else:
+                    open_period = [ts, None]
+                    periods.append(open_period)
             elif open_period is not None:
                 open_period[1] = ts
                 open_period = None
@@ -104,9 +118,17 @@ def backfill_fast_participation(apps, schema_editor):
         recorded = Counter(existing.values_list("joined_at", "left_at"))
         expected = Counter(tuple(period) for period in periods)
         for (joined_at, left_at), count in expected.items():
+            # An unmatched join is not evidence of current membership.
+            if left_at is None and (profile_id, fast_id) not in current_memberships:
+                continue
             # Keep any live open period, even if its timestamp differs from
             # the historical join. Never close or overwrite runtime history.
-            if left_at is None and existing.filter(left_at__isnull=True).exists():
+            if (
+                left_at is None
+                and existing.filter(
+                    left_at__isnull=True, **({"ended_at_unknown": False} if supports_unknown_end else {})
+                ).exists()
+            ):
                 continue
             for _ in range(max(0, count - recorded[(joined_at, left_at)])):
                 FastParticipation.create(
@@ -117,17 +139,6 @@ def backfill_fast_participation(apps, schema_editor):
                 )
 
     # Pass 2: mark current membership with an open period if none exists.
-    latest_join_by_event = {}  # (user_id, fast_id) -> latest join timestamp
-    for user_id, object_id, ts in (
-        Event.filter(
-            event_type_id=join_type_id,
-            content_type=fast_content_type,
-        )
-        .order_by("timestamp", "id")
-        .values_list("user_id", "object_id", "timestamp")
-    ):
-        latest_join_by_event[(user_id, object_id)] = ts
-
     for profile in Profile.iterator(chunk_size=500):
         current_fast_ids = list(
             profile.fasts.using(db_alias).values_list("id", flat=True),
@@ -137,10 +148,14 @@ def backfill_fast_participation(apps, schema_editor):
                 profile_id=profile.id,
                 fast_id=fast_id,
                 left_at__isnull=True,
+                **({"ended_at_unknown": False} if supports_unknown_end else {}),
             ).exists()
             if already_open:
                 continue
-            joined_at = latest_join_by_event.get((profile.user_id, fast_id))
+            # Only the final unmatched join proves the current period start. A
+            # join followed by a leave cannot date a later, unrecorded rejoin.
+            events = history.get((profile.id, fast_id), [])
+            joined_at = events[-1][0] if events and events[-1][1] == "join" else None
             FastParticipation.create(
                 profile_id=profile.id,
                 fast_id=fast_id,

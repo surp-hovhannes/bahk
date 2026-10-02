@@ -118,4 +118,42 @@ jobs:
     #     heroku_api_key: ${{ secrets.HEROKU_API_KEY }} # Store API key in GitHub secrets
     #     heroku_app_name: "your-app-name" # Replace with your Heroku app name
     #     heroku_email: "your-email@example.com" # Replace with your Heroku email
-    #     # Add other options like buildpacks, healthchecks etc. as needed 
+    #     # Add other options like buildpacks, healthchecks etc. as needed
+  participation-postgres:
+    name: Participation concurrency (PostgreSQL 17)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: bahk_tests
+          POSTGRES_USER: bahk_tests
+          POSTGRES_PASSWORD: bahk_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bahk_tests"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: '**/requirements*.txt'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Test participation concurrency and migration state
+        env:
+          CI: 'true'
+          IS_PRODUCTION: 'false'
+          SENTRY_DSN: ''
+          AWS_ACCESS_KEY_ID: testing
+          AWS_SECRET_ACCESS_KEY: testing
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: >-
+          python manage.py test hub.tests.test_fast_participation
+          tests.unit.test_migration_state --noinput
+          --settings=tests.postgres_test_settings

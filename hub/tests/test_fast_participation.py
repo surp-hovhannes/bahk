@@ -7,9 +7,12 @@ without the views.
 """
 
 import datetime
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from unittest import skipUnless
 
-from django.db import IntegrityError
-from django.test import TestCase
+from django.db import IntegrityError, close_old_connections, connection
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from tests.fixtures.test_data import TestDataFactory
@@ -71,23 +74,10 @@ class FastParticipationJoinLeaveTests(TestCase):
             0,
         )
 
-    def test_leave_without_a_prior_join_is_recorded_as_an_orphan_period(self):
-        """A leave that finds no open period still leaves a ground-truth trail."""
-        # Add a through row directly so the M2M is non-empty WITHOUT the
-        # receiver seeing a join -- simulates a legacy backfill or an external
-        # import.
-        from hub.models import Profile
-
+    def test_runtime_leave_without_audited_join_does_not_invent_an_orphan(self):
         Profile.fasts.through.objects.create(profile=self.profile, fast=self.fast)
-        self.assertFalse(
-            FastParticipation.objects.filter(profile=self.profile, fast=self.fast).exists(),
-        )
-
         self.profile.fasts.remove(self.fast)
-
-        period = FastParticipation.objects.get(profile=self.profile, fast=self.fast)
-        self.assertIsNone(period.joined_at)
-        self.assertIsNotNone(period.left_at)
+        self.assertFalse(FastParticipation.objects.filter(profile=self.profile, fast=self.fast).exists())
 
     def test_unique_constraint_rejects_two_open_periods_for_the_same_pair(self):
         FastParticipation.objects.create(
@@ -122,7 +112,7 @@ class FastParticipationCompletedPropertyTests(TestCase):
         period = FastParticipation.objects.create(
             profile=self.profile,
             fast=self.fast,
-            joined_at=timezone.now(),
+            joined_at=timezone.now() - datetime.timedelta(days=3),
             left_at=None,
         )
         self.assertTrue(period.completed)
@@ -136,7 +126,7 @@ class FastParticipationCompletedPropertyTests(TestCase):
         period = FastParticipation.objects.create(
             profile=self.profile,
             fast=self.fast,
-            joined_at=timezone.now(),
+            joined_at=timezone.now() - datetime.timedelta(days=3),
             left_at=None,
         )
         self.assertFalse(period.completed)
@@ -145,7 +135,7 @@ class FastParticipationCompletedPropertyTests(TestCase):
         period = FastParticipation.objects.create(
             profile=self.profile,
             fast=self.fast,
-            joined_at=timezone.now(),
+            joined_at=timezone.now() - datetime.timedelta(days=3),
             left_at=timezone.now(),
         )
         self.assertTrue(period.completed)
@@ -160,7 +150,7 @@ class FastParticipationCompletedPropertyTests(TestCase):
         period = FastParticipation.objects.create(
             profile=self.profile,
             fast=self.fast,
-            joined_at=timezone.now(),
+            joined_at=timezone.now() - datetime.timedelta(days=3),
             left_at=timezone.now(),
         )
         self.assertFalse(period.completed)
@@ -170,7 +160,7 @@ class FastParticipationCompletedPropertyTests(TestCase):
         period = FastParticipation.objects.create(
             profile=self.profile,
             fast=bare_fast,
-            joined_at=timezone.now(),
+            joined_at=timezone.now() - datetime.timedelta(days=3),
             left_at=None,
         )
         self.assertFalse(period.completed)
@@ -435,6 +425,7 @@ class FastParticipationBackfillTests(TestCase):
         self._make_event(self.profile, self.fast, "user_joined_fast", joined_at)
         self._make_event(self.profile, self.fast, "user_left_fast", left_at)
         self._make_event(self.profile, self.fast, "user_joined_fast", timezone.now())
+        Profile.fasts.through.objects.create(profile=self.profile, fast=self.fast)
         runtime_period = FastParticipation.objects.create(profile=self.profile, fast=self.fast, joined_at=None)
 
         self._run_backfill()
@@ -445,3 +436,331 @@ class FastParticipationBackfillTests(TestCase):
         self.assertIsNone(runtime_period.left_at)
         self.assertEqual(FastParticipation.objects.count(), 2)
         self.assertTrue(FastParticipation.objects.filter(joined_at=joined_at, left_at=left_at).exists())
+
+
+class AndyReviewBaselineTests(TestCase):
+    def setUp(self):
+        self.profile = TestDataFactory.create_profile()
+        self.fast = TestDataFactory.create_fast(church=self.profile.church)
+        _days(self.fast, [datetime.date(2026, 10, 1)])
+
+    def test_nonmember_and_repeated_remove_do_not_invent_history(self):
+        self.profile.fasts.remove(self.fast)
+        self.assertFalse(FastParticipation.objects.exists())
+        self.profile.fasts.add(self.fast)
+        self.profile.fasts.remove(self.fast)
+        self.profile.fasts.remove(self.fast)
+        self.assertEqual(FastParticipation.objects.count(), 1)
+
+    def test_post_end_join_is_not_completion(self):
+        period = FastParticipation.objects.create(
+            profile=self.profile,
+            fast=self.fast,
+            joined_at=datetime.datetime(2026, 10, 11, 12, tzinfo=datetime.timezone.utc),
+        )
+        self.assertFalse(period.completed)
+
+    def test_database_utc_leave_on_previous_local_day_is_early(self):
+        period = FastParticipation.objects.create(
+            profile=self.profile,
+            fast=self.fast,
+            joined_at=datetime.datetime(2026, 9, 28, 12, tzinfo=datetime.timezone.utc),
+            left_at=datetime.datetime(2026, 10, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        period.refresh_from_db()
+        self.assertFalse(period.completed)
+
+    def test_fast_deletion_preserves_history(self):
+        period = FastParticipation.objects.create(
+            profile=self.profile,
+            fast=self.fast,
+            joined_at=datetime.datetime(2026, 9, 28, 12, tzinfo=datetime.timezone.utc),
+        )
+        self.fast.delete()
+        self.assertTrue(FastParticipation.objects.filter(pk=period.pk).exists())
+
+
+class CompletionAndDeletionReviewTests(TestCase):
+    def setUp(self):
+        self.profile = TestDataFactory.create_profile()
+        self.fast = TestDataFactory.create_fast(church=self.profile.church)
+        _days(self.fast, [datetime.date(2026, 9, 28), datetime.date(2026, 10, 1)])
+
+    def period(self, joined, left=None, **extra):
+        return FastParticipation.objects.create(
+            profile=self.profile, fast=self.fast, joined_at=joined, left_at=left, **extra
+        )
+
+    def test_final_local_day_mid_fast_join_and_queryset_parity(self):
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+
+        local = ZoneInfo("America/Los_Angeles")
+        joined = datetime.datetime(2026, 9, 30, 18, tzinfo=local)
+        for hour in (0, 12, 23):
+            period = self.period(joined, datetime.datetime(2026, 10, 1, hour, tzinfo=local))
+            period.refresh_from_db()
+            self.assertTrue(period.completed)
+        self.period(joined, datetime.datetime(2026, 9, 30, 23, tzinfo=local))
+        self.period(None, datetime.datetime(2026, 10, 2, 12, tzinfo=local))
+        self.period(joined, ended_at_unknown=True)
+        self.period(datetime.datetime(2026, 10, 2, 12, tzinfo=local))
+        expected = {p.pk for p in FastParticipation.objects.all() if p.completed}
+        self.assertEqual(len(expected), 3)
+        with self.assertNumQueries(1):
+            annotated = list(FastParticipation.objects.with_completion())
+            self.assertEqual({p.pk for p in annotated if p.completed}, expected)
+        self.assertEqual(set(FastParticipation.objects.completed().values_list("pk", flat=True)), expected)
+        FastParticipation.objects.filter(left_at__isnull=True, ended_at_unknown=False).delete()
+        period = self.period(joined)
+        with patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 10, 1)):
+            self.assertFalse(period.completed)
+        with patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 10, 2)):
+            self.assertTrue(period.completed)
+
+    def test_deleted_unfinished_fast_never_completes_later(self):
+        from unittest.mock import patch
+
+        period = self.period(datetime.datetime(2026, 9, 28, 12, tzinfo=datetime.timezone.utc))
+        deletion = datetime.datetime(2026, 9, 30, 12, tzinfo=datetime.timezone.utc)
+        with patch("django.utils.timezone.now", return_value=deletion):
+            self.fast.delete()
+        period.refresh_from_db()
+        self.assertIsNone(period.fast_id)
+        self.assertEqual(period.fast_name, self.fast.name)
+        self.assertEqual(period.fast_end_date, datetime.date(2026, 10, 1))
+        self.assertEqual(period.fast_deleted_at, deletion)
+        self.assertFalse(
+            FastParticipation.objects.with_completion(as_of=datetime.date(2030, 1, 1)).get(pk=period.pk).completed
+        )
+
+    def test_deleted_completed_fast_retains_completion_and_profile_delete_erases_it(self):
+        from unittest.mock import patch
+
+        period = self.period(datetime.datetime(2026, 9, 28, 12, tzinfo=datetime.timezone.utc))
+        with patch(
+            "django.utils.timezone.now", return_value=datetime.datetime(2026, 10, 2, 12, tzinfo=datetime.timezone.utc)
+        ):
+            self.fast.delete()
+        period.refresh_from_db()
+        self.assertTrue(period.completed)
+        from django.core.management import call_command
+        from io import StringIO
+
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        period.refresh_from_db()
+        self.assertFalse(period.ended_at_unknown)
+        self.assertTrue(period.completed)
+        self.profile.delete()
+        self.assertFalse(FastParticipation.objects.filter(pk=period.pk).exists())
+
+    def test_bulk_fast_delete_preserves_snapshot(self):
+        from hub.models import Fast
+
+        period = self.period(None)
+        Fast.objects.filter(pk=self.fast.pk).delete()
+        period.refresh_from_db()
+        self.assertIsNone(period.fast_id)
+        self.assertEqual(period.fast_name, self.fast.name)
+
+    def test_existing_join_timestamp_is_never_overwritten(self):
+        joined = timezone.now() - datetime.timedelta(days=2)
+        period = self.period(joined)
+        self.profile.fasts.add(self.fast)
+        period.refresh_from_db()
+        self.assertEqual(period.joined_at, joined)
+
+    def test_reverse_clear_and_remove_only_close_real_members(self):
+        self.fast.profiles.remove(self.profile)
+        self.assertFalse(FastParticipation.objects.exists())
+        self.fast.profiles.add(self.profile)
+        self.fast.profiles.clear()
+        self.fast.profiles.remove(self.profile)
+        self.assertEqual(FastParticipation.objects.count(), 1)
+        self.assertIsNotNone(FastParticipation.objects.get().left_at)
+
+
+class ReconciliationReviewTests(FastParticipationBackfillTests):
+    def test_repeated_join_events_never_invent_a_leave_or_confirm_completion(self):
+        joined = timezone.now() - datetime.timedelta(days=3)
+        self._make_event(self.profile, self.fast, "user_joined_fast", joined)
+        self._make_event(self.profile, self.fast, "user_joined_fast", joined + datetime.timedelta(days=1))
+        Profile.fasts.through.objects.create(profile=self.profile, fast=self.fast)
+        self._run_backfill()
+        period = FastParticipation.objects.get()
+        self.assertIsNone(period.joined_at)
+        self.assertIsNone(period.left_at)
+        self.assertFalse(period.completed)
+
+    def test_stale_join_event_for_nonmember_does_not_make_open_period(self):
+        self._make_event(self.profile, self.fast, "user_joined_fast", timezone.now())
+        self._run_backfill()
+        self.assertFalse(FastParticipation.objects.filter(left_at__isnull=True, ended_at_unknown=False).exists())
+
+    def test_existing_stale_open_period_marks_unknown_end_without_inventing_timestamp(self):
+        period = FastParticipation.objects.create(profile=self.profile, fast=self.fast, joined_at=timezone.now())
+        self._run_backfill()
+        period.refresh_from_db()
+        self.assertTrue(period.ended_at_unknown)
+        self.assertIsNone(period.left_at)
+        self.assertFalse(period.completed)
+
+    def test_rerunnable_command_recovers_deployment_gap_and_is_idempotent(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        joined = timezone.now() - datetime.timedelta(days=2)
+        self._make_event(self.profile, self.fast, "user_joined_fast", joined)
+        Profile.fasts.through.objects.create(profile=self.profile, fast=self.fast)
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        period = FastParticipation.objects.get()
+        self.assertEqual(period.joined_at, joined)
+        before = list(FastParticipation.objects.values())
+        call_command("reconcile_fast_participations", stdout=StringIO())
+        self.assertEqual(list(FastParticipation.objects.values()), before)
+
+    def test_closed_event_history_does_not_guess_a_current_rejoin_date(self):
+        self._make_event(self.profile, self.fast, "user_joined_fast", timezone.now() - datetime.timedelta(days=2))
+        self._make_event(self.profile, self.fast, "user_left_fast", timezone.now() - datetime.timedelta(days=1))
+        Profile.fasts.through.objects.create(profile=self.profile, fast=self.fast)
+        self._run_backfill()
+        self.assertIsNone(FastParticipation.objects.get(left_at__isnull=True).joined_at)
+
+
+@skipUnless(connection.vendor == "postgresql", "Real row-lock races require PostgreSQL")
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
+class FastParticipationPostgresConcurrencyTests(TransactionTestCase):
+    def setUp(self):
+        self.profile = TestDataFactory.create_profile()
+        self.fast = TestDataFactory.create_fast(church=self.profile.church)
+
+    def race(self, operation):
+        barrier = Barrier(2)
+
+        def worker():
+            close_old_connections()
+            try:
+                profile = Profile.objects.get(pk=self.profile.pk)
+                barrier.wait(timeout=10)
+                operation(profile)
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = [pool.submit(worker) for _ in range(2)]
+            for result in results:
+                result.result(timeout=20)
+
+    def test_concurrent_joins_create_one_period_preserving_first_timestamp(self):
+        self.race(lambda profile: profile.fasts.add(self.fast.pk))
+        self.assertEqual(FastParticipation.objects.count(), 1)
+        period = FastParticipation.objects.get()
+        joined = period.joined_at
+        self.race(lambda profile: profile.fasts.add(self.fast.pk))
+        period.refresh_from_db()
+        self.assertEqual(period.joined_at, joined)
+        self.assertEqual(Profile.fasts.through.objects.count(), 1)
+
+    def test_concurrent_leaves_create_no_false_periods(self):
+        self.profile.fasts.add(self.fast)
+        self.race(lambda profile: profile.fasts.remove(self.fast.pk))
+        self.assertEqual(FastParticipation.objects.count(), 1)
+        self.assertIsNotNone(FastParticipation.objects.get().left_at)
+        self.assertFalse(Profile.fasts.through.objects.exists())
+
+    def test_concurrent_clears_create_no_false_periods(self):
+        self.profile.fasts.add(self.fast)
+        self.race(lambda profile: profile.fasts.clear())
+        self.assertEqual(FastParticipation.objects.count(), 1)
+        self.assertIsNotNone(FastParticipation.objects.get().left_at)
+
+    def test_join_and_leave_race_matches_membership(self):
+        barrier = Barrier(2)
+
+        def worker(join):
+            close_old_connections()
+            try:
+                profile = Profile.objects.get(pk=self.profile.pk)
+                barrier.wait(timeout=10)
+                if join:
+                    profile.fasts.add(self.fast.pk)
+                else:
+                    profile.fasts.remove(self.fast.pk)
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            jobs = [pool.submit(worker, join) for join in (True, False)]
+            for job in jobs:
+                job.result(timeout=20)
+        member = self.profile.fasts.filter(pk=self.fast.pk).exists()
+        self.assertEqual(
+            FastParticipation.objects.filter(left_at__isnull=True, ended_at_unknown=False).count(), int(member)
+        )
+        self.assertFalse(FastParticipation.objects.filter(joined_at__isnull=True).exists())
+
+    def test_reverse_clear_and_new_profile_join_race_matches_membership(self):
+        from hub.models import Fast
+
+        barrier = Barrier(2)
+
+        def worker(join):
+            close_old_connections()
+            try:
+                fast = Fast.objects.get(pk=self.fast.pk)
+                barrier.wait(timeout=10)
+                if join:
+                    fast.profiles.add(self.profile.pk)
+                else:
+                    fast.profiles.clear()
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            jobs = [pool.submit(worker, join) for join in (True, False)]
+            for job in jobs:
+                job.result(timeout=20)
+        member = self.profile.fasts.filter(pk=self.fast.pk).exists()
+        self.assertEqual(
+            FastParticipation.objects.filter(left_at__isnull=True, ended_at_unknown=False).count(), int(member)
+        )
+
+
+class SnapshotMigrationReviewTests(TestCase):
+    def test_existing_history_gets_snapshots_and_unknown_end_without_timestamp_changes(self):
+        from django.apps import apps
+        from importlib import import_module
+        from types import SimpleNamespace
+
+        profile = TestDataFactory.create_profile()
+        fast = TestDataFactory.create_fast(church=profile.church)
+        end = timezone.localdate() - datetime.timedelta(days=1)
+        _days(fast, [end])
+        joined = timezone.now() - datetime.timedelta(days=3)
+        period = FastParticipation.objects.create(profile=profile, fast=fast, joined_at=joined)
+        migration = import_module("hub.migrations.0072_fastparticipation_history_snapshots")
+        migration.snapshot_existing_periods(apps, SimpleNamespace(connection=connection))
+        period.refresh_from_db()
+        self.assertEqual(period.fast_name, fast.name)
+        self.assertEqual(period.fast_end_date, end)
+        self.assertEqual(period.joined_at, joined)
+        self.assertIsNone(period.left_at)
+        self.assertTrue(period.ended_at_unknown)
+        self.assertFalse(period.completed)
+        before = list(FastParticipation.objects.values())
+        migration.snapshot_existing_periods(apps, SimpleNamespace(connection=connection))
+        self.assertEqual(list(FastParticipation.objects.values()), before)
+
+    def test_snapshot_migration_keeps_real_current_membership_open(self):
+        from django.apps import apps
+        from importlib import import_module
+        from types import SimpleNamespace
+
+        profile = TestDataFactory.create_profile()
+        fast = TestDataFactory.create_fast(church=profile.church)
+        profile.fasts.add(fast)
+        migration = import_module("hub.migrations.0072_fastparticipation_history_snapshots")
+        migration.snapshot_existing_periods(apps, SimpleNamespace(connection=connection))
+        period = FastParticipation.objects.get()
+        self.assertFalse(period.ended_at_unknown)
+        self.assertIsNone(period.left_at)

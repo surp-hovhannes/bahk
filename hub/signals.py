@@ -50,89 +50,82 @@ def handle_fast_participant_change(sender, instance, action, **kwargs):
 
 
 @receiver(m2m_changed, sender=Profile.fasts.through)
-def track_fast_participation(sender, instance, action, reverse, pk_set, **kwargs):
-    """Record each join/leave as an open or closed ``FastParticipation`` period.
+def track_fast_participation(sender, instance, action, reverse, pk_set, using, **kwargs):
+    """Serialize mutations per profile, and stamp only real membership changes.
 
-    ``Profile.fasts`` is the membership source of truth -- this receiver keeps
-    ``FastParticipation`` aligned with it so analytics can distinguish
-    "currently in fast" from "completed and left" from "left early".
-
-    ``m2m_changed`` fires once per side of a through-model mutation; the
-    ``reverse`` flag tells us which side is the ``instance`` and which PKs are
-    in ``pk_set``.
+    m2m managers wrap pre/post signals and the through mutation in one atomic
+    block. Fast locks protect reverse clears; profile locks exist even when
+    the audit row does not, protecting
+    concurrent joins/removes/clear on either side of the relation.
     """
     from django.utils import timezone
+    from hub.models import Fast, FastParticipation
 
-    from hub.models import FastParticipation
-
-    if action == 'post_add':
-        if not pk_set:
-            return
-        now = timezone.now()
-        if reverse:
-            fast_id = instance.pk
-            for profile_id in pk_set:
-                # Filter on the open row only -- a closed period must stay
-                # closed so the historical record of past memberships is
-                # preserved when the same profile rejoins.
-                FastParticipation.objects.update_or_create(
-                    profile_id=profile_id, fast_id=fast_id, left_at=None,
-                    defaults={'joined_at': now},
-                )
-        else:
-            profile_id = instance.pk
-            for fast_id in pk_set:
-                FastParticipation.objects.update_or_create(
-                    profile_id=profile_id, fast_id=fast_id, left_at=None,
-                    defaults={'joined_at': now},
-                )
-
-    elif action == 'post_remove':
-        if not pk_set:
-            return
-        now = timezone.now()
-        if reverse:
-            fast_id = instance.pk
-            for profile_id in pk_set:
-                _stamp_participation_leave(profile_id, fast_id, now)
-        else:
-            profile_id = instance.pk
-            for fast_id in pk_set:
-                _stamp_participation_leave(profile_id, fast_id, now)
-
-    elif action == 'post_clear':
-        # ``instance.fasts.clear()`` -- the set is already gone, stamp every
-        # still-open period on this side.  The reverse case (a Fast cleared
-        # its profiles) stamps every open period on the Fast.
-        now = timezone.now()
-        if isinstance(instance, Profile):
-            FastParticipation.objects.filter(
-                profile=instance, left_at__isnull=True,
-            ).update(left_at=now)
-        else:
-            FastParticipation.objects.filter(
-                fast=instance, left_at__isnull=True,
-            ).update(left_at=now)
-
-
-def _stamp_participation_leave(profile_id, fast_id, now):
-    """Stamp ``left_at`` on the open period; if none exists, record the leave."""
-    from hub.models import FastParticipation
-
-    open_period = FastParticipation.objects.filter(
-        profile_id=profile_id, fast_id=fast_id, left_at__isnull=True,
-    ).first()
-    if open_period is not None:
-        open_period.left_at = now
-        open_period.save(update_fields=['left_at'])
-    else:
-        # Leave is ground truth: the user was in the fast and isn't anymore.
-        # Record it without a join -- backfill or a later event can fill in
-        # ``joined_at`` if/when the data surfaces.
-        FastParticipation.objects.create(
-            profile_id=profile_id, fast_id=fast_id,
-            joined_at=None, left_at=now,
+    if action not in {'pre_add', 'pre_remove', 'pre_clear', 'post_add', 'post_remove', 'post_clear'}:
+        return
+    through = sender.objects.using(using)
+    if action.startswith('pre_'):
+        # Lock fasts first in a stable order as well: reverse clear must exclude
+        # concurrent additions of profiles not yet in its initial member set.
+        fast_ids = [instance.pk] if reverse else (
+            sorted(through.filter(profile_id=instance.pk).values_list("fast_id", flat=True))
+            if action == "pre_clear" else sorted(pk_set or [])
         )
+        list(Fast.objects.using(using).select_for_update().filter(pk__in=fast_ids).order_by("pk"))
+        profile_ids = sorted(pk_set or []) if reverse and action != 'pre_clear' else (
+            sorted(through.filter(fast_id=instance.pk).values_list('profile_id', flat=True))
+            if reverse else [instance.pk]
+        )
+        list(Profile.objects.using(using).select_for_update().filter(pk__in=profile_ids).order_by('pk'))
+        if action in {'pre_remove', 'pre_clear'}:
+            memberships = through.filter(fast_id=instance.pk) if reverse else through.filter(profile_id=instance.pk)
+            if action == 'pre_remove':
+                memberships = memberships.filter(profile_id__in=pk_set) if reverse else memberships.filter(fast_id__in=pk_set)
+            instance._participation_removed_pairs = list(memberships.values_list('profile_id', 'fast_id'))
+        return
+
+    now = timezone.now()
+    if action == 'post_add':
+        pairs = [(pk, instance.pk) if reverse else (instance.pk, pk) for pk in sorted(pk_set or [])]
+        fast_ids = {fast_id for _, fast_id in pairs}
+        fasts = {fast.pk: fast for fast in Fast.objects.using(using).with_dates().filter(pk__in=fast_ids)}
+        for profile_id, fast_id in pairs:
+            fast = fasts[fast_id]
+            FastParticipation.objects.using(using).get_or_create(
+                profile_id=profile_id, fast_id=fast_id, left_at=None, ended_at_unknown=False,
+                defaults={'joined_at': now, 'fast_name': fast.name,
+                          'fast_year': fast.year, 'fast_end_date': fast.end_date},
+            )
+    else:
+        for profile_id, fast_id in getattr(instance, '_participation_removed_pairs', []):
+            _stamp_participation_leave(profile_id, fast_id, now, using=using)
+        instance.__dict__.pop('_participation_removed_pairs', None)
+
+
+def _stamp_participation_leave(profile_id, fast_id, now, *, using):
+    """Close a known runtime period; orphan leave evidence belongs to backfill."""
+    from hub.models import FastParticipation
+
+    with transaction.atomic(using=using):
+        periods = FastParticipation.objects.using(using).select_for_update().filter(
+            profile_id=profile_id, fast_id=fast_id, left_at__isnull=True, ended_at_unknown=False,
+        )
+        for period in periods:
+            period.left_at = now
+            period.save(using=using, update_fields=['left_at'])
+
+
+@receiver(pre_delete, sender='hub.Fast')
+def preserve_deleted_fast_participations(sender, instance, using, **kwargs):
+    """Snapshot before SET_NULL; freeze open completion at the deletion instant."""
+    from django.db.models import Max
+    from django.utils import timezone
+    from hub.models import FastParticipation
+
+    end = instance.days.using(using).filter(church_id=instance.church_id).aggregate(end=Max('date'))['end']
+    FastParticipation.objects.using(using).filter(fast_id=instance.pk).update(
+        fast_name=instance.name, fast_year=instance.year, fast_end_date=end, fast_deleted_at=timezone.now(),
+    )
 
 
 @receiver(post_save, sender=Feast)
