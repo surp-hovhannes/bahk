@@ -42,17 +42,25 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(m2m_changed)
-def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
-    """
-    Track when users join or leave fasts.
-    This signal is triggered when the Profile.fasts ManyToMany relationship changes.
-    """
-    from hub.models import Fast, Profile  # Import here to avoid circular imports
-    
-    # Only process signals from the Profile.fasts relationship
-    if sender != Profile.fasts.through or not hasattr(instance, 'user') or action not in ['post_add', 'post_remove'] or not pk_set:
+def track_fast_membership_changes(sender, instance, action, **kwargs):
+    """Emit one event for each real forward/reverse add/remove/clear transition."""
+    from hub.models import Profile
+
+    if sender != Profile.fasts.through or action not in ('post_add', 'post_remove', 'post_clear'):
         return
-        
+    pairs = getattr(instance, '_fast_participation_changes', {})
+    by_profile = {}
+    for (profile_id, fast_id), period_id in pairs.items():
+        by_profile.setdefault(profile_id, {})[fast_id] = period_id
+    for profile in Profile.objects.filter(pk__in=by_profile).select_related('user'):
+        _record_profile_fast_changes(profile, 'post_add' if action == 'post_add' else 'post_remove',
+                                     by_profile[profile.pk])
+
+
+def _record_profile_fast_changes(instance, action, changes):
+    from hub.models import Fast
+
+    pk_set = changes
     try:
         # Get the user from the profile
         user = instance.user
@@ -75,9 +83,9 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             target=fast,
                             description=f"User {user} joined the fast '{fast.name}'",
                             data={
-                                'participation_tracked': hasattr(instance, '_fast_participation_changes'),
-                                'participation_changed': fast_pk in getattr(instance, '_fast_participation_changes', {}),
-                                'participation_id': getattr(instance, '_fast_participation_changes', {}).get(fast_pk),
+                                'participation_tracked': True,
+                                'participation_changed': True,
+                                'participation_id': changes[fast_pk],
                                 'fast_id': fast.id,
                                 'fast_name': fast.name,
                                 'church_id': fast.church.id if fast.church else None,
@@ -143,9 +151,9 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             target=fast,
                             description=f"User {user} left the fast '{fast.name}'",
                             data={
-                                'participation_tracked': hasattr(instance, '_fast_participation_changes'),
-                                'participation_changed': fast_pk in getattr(instance, '_fast_participation_changes', {}),
-                                'participation_id': getattr(instance, '_fast_participation_changes', {}).get(fast_pk),
+                                'participation_tracked': True,
+                                'participation_changed': True,
+                                'participation_id': changes[fast_pk],
                                 'fast_id': fast.id,
                                 'fast_name': fast.name,
                                 'church_id': fast.church.id if fast.church else None,
