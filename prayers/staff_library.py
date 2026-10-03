@@ -15,7 +15,7 @@ from taggit.models import Tag
 
 from hub.models import Church
 from prayers.import_utils import _apply_translations, validate_import_json
-from prayers.models import Prayer, PrayerLibraryOperation, PrayerSet, PrayerSetMembership
+from prayers.models import Prayer, PrayerLibraryChurchGrant, PrayerLibraryOperation, PrayerSet, PrayerSetMembership
 
 MAX_BYTES = 5 * 1024 * 1024
 
@@ -296,10 +296,8 @@ class StaffLibraryView(APIView):
 
     def church(self, request, church_id):
         church = get_object_or_404(Church, pk=church_id)
-        # Existing Profile church is the scope for non-superuser staff.
-        profile = getattr(request.user, 'profile', None)
-        if not request.user.is_superuser and (profile is None or profile.church_id != church.pk):
-            raise PermissionDenied('Staff must belong to the selected church.')
+        if not request.user.is_superuser and not PrayerLibraryChurchGrant.objects.filter(user=request.user, church=church).exists():
+            raise PermissionDenied('An explicit staff prayer-library church grant is required.')
         return church
 
     def get(self, request, church_id):
@@ -345,6 +343,9 @@ class StaffLibraryView(APIView):
                 raise ValidationError('Payload digest mismatch.')
         with transaction.atomic():
             church = Church.objects.select_for_update().get(pk=church.pk)
+            if not request.user.is_superuser:
+                if not PrayerLibraryChurchGrant.objects.select_for_update().filter(user=request.user, church=church).exists():
+                    raise PermissionDenied("Church grant was revoked; no write performed.")
             if not preview:
                 receipt = PrayerLibraryOperation.objects.filter(church=church, key=key).first()
                 if receipt:

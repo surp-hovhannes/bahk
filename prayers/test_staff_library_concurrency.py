@@ -10,7 +10,7 @@ from django.test import TransactionTestCase, override_settings
 from rest_framework.test import APIClient
 
 from hub.models import Church, Profile
-from prayers.models import Prayer, PrayerLibraryOperation, PrayerSet
+from prayers.models import Prayer, PrayerLibraryChurchGrant, PrayerLibraryOperation, PrayerSet
 from prayers.staff_library import digest
 
 
@@ -21,6 +21,7 @@ class StaffLibraryConcurrencyTests(TransactionTestCase):
         self.church = Church.objects.create(name='Concurrent fixture church')
         self.staff = get_user_model().objects.create_user(username='concurrent-staff', is_staff=True)
         Profile.objects.update_or_create(user=self.staff, defaults={'church': self.church})
+        PrayerLibraryChurchGrant.objects.create(user=self.staff, church=self.church)
         self.url = f'/api/staff/prayer-library/{self.church.pk}/'
 
     def submit(self, action, payload, revision=None, key=None):

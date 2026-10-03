@@ -737,3 +737,13 @@ class PrayerLibraryOperation(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['church', 'key'], name='unique_prayer_library_operation')]
+
+
+class PrayerLibraryChurchGrant(models.Model):
+    """Explicit staff scope; user-editable profile preference is not authorization."""
+
+    church = models.ForeignKey(Church, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['church', 'user'], name='unique_prayer_library_church_grant')]

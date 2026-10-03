@@ -4,7 +4,7 @@ Implements the backend dependency of [CLI #8](https://github.com/surp-hovhannes/
 
 ## Scope and safety
 
-`/api/staff/prayer-library/<church_id>/` requires an authenticated active staff account. Non-superusers must have an existing Profile whose church matches the selected church; superusers may explicitly select any existing church. Every referenced prayer/set is selected from that church. No login or token refresh is performed. The API creates no tags, changes no shared taxonomy, and starts no icon/AI jobs. Supplied tag names must exactly identify existing shared taggit names; spelling suggestions are advisory CLI behavior only. Global tag creation/rename/merge/delete remain deferred until ownership and cross-model impact are agreed.
+`/api/staff/prayer-library/<church_id>/` requires an authenticated active staff account. Non-superusers must have an explicit PrayerLibraryChurchGrant for the selected church; superusers may explicitly select any existing church. Every referenced prayer/set is selected from that church. Grants are managed only by superusers in Django admin; staff cannot create/edit/revoke grants, and user-editable Profile.church grants no authority. No grants are created automatically by the migration. No login or token refresh is performed. The API creates no tags, changes no shared taxonomy, and starts no icon/AI jobs. Supplied tag names must exactly identify existing shared taggit names; spelling suggestions are advisory CLI behavior only. Global tag creation/rename/merge/delete remain deferred until ownership and cross-model impact are agreed.
 
 All mutations run inside one transaction after locking the selected Church, matching the existing admin bulk-import lock. Updates/deletes/membership/reorder also require a snapshot revision checked under that lock. Tags referenced by writes are locked and assigned as existing Tag objects. Public reads are unaffected. Bilingual staff reads take the church lock and hash the exact returned snapshot, so content and revision agree. Revisions include both translations, tag names, membership order/content, and affected-set IDs for prayer deletion; callers must treat them as opaque hashes.
 
@@ -56,9 +56,9 @@ Receipts remain until the church is deleted. Deleting an account nulls the user 
 
 ## Migration and rollback
 
-`prayers.0011_prayerlibraryoperation` depends only on `prayers.0010_prayer_set_icon` and the auth user model. It adds one receipt table and does not alter prayer content or the separate hub participation migrations/PR559/560. No production migration has been run.
+`prayers.0011_prayerlibraryoperation` depends only on `prayers.0010_prayer_set_icon` and the auth user model. It adds receipt and explicit church-grant tables and does not alter prayer content or the separate hub participation migrations/PR559/560. No production migration has been run.
 
-Before reverting the migration in an environment with executed operations, disable staff writes and preserve/export receipt records. Dropping the table loses replay protection; do not retry old operations without their saved receipt evidence. Reverting API/CLI code alone leaves existing prayer data and receipts intact. This is an additive feature migration, not a clawpatch schema sweep.
+Before reverting the migration in an environment with executed operations, disable staff writes and preserve/export receipt records. Dropping the receipt table loses replay protection; preserve grants before rollback too; do not retry old operations without their saved receipt evidence. Reverting API/CLI code alone leaves existing prayer data and receipts intact. This is an additive feature migration, not a clawpatch schema sweep.
 
 ## Provenance, content rights and tests
 

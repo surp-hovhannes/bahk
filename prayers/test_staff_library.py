@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from taggit.models import Tag
 
 from hub.models import Church, Profile
-from prayers.models import Prayer, PrayerLibraryOperation, PrayerSet
+from prayers.models import Prayer, PrayerLibraryChurchGrant, PrayerLibraryOperation, PrayerSet
 from prayers.staff_library import digest
 
 
@@ -18,6 +18,7 @@ class StaffLibraryTests(APITestCase):
         self.other = Church.objects.create(name='Other church')
         self.staff = get_user_model().objects.create_user(username='library-staff', is_staff=True)
         Profile.objects.update_or_create(user=self.staff, defaults={'church': self.church})
+        PrayerLibraryChurchGrant.objects.create(user=self.staff, church=self.church)
         self.client.force_authenticate(self.staff)
         self.url = f'/api/staff/prayer-library/{self.church.pk}/'
         Tag.objects.create(name='mercy', slug='mercy')
@@ -171,6 +172,7 @@ class StaffLibraryTests(APITestCase):
         self.assertEqual(self.execute('prayer.create', payload, key=key).status_code, 200)
         other_staff = get_user_model().objects.create_user(username='other-staff', is_staff=True)
         Profile.objects.update_or_create(user=other_staff, defaults={'church': self.church})
+        PrayerLibraryChurchGrant.objects.create(user=other_staff, church=self.church)
         self.client.force_authenticate(other_staff)
         self.assertEqual(self.client.get(self.url, {'operation_key': key}).status_code, 404)
         self.assertEqual(self.execute('prayer.create', payload, key=key).status_code, 409)
@@ -194,3 +196,37 @@ class StaffLibraryTests(APITestCase):
         self.assertTrue(preview.data['plan']['blocked'])
         self.assertEqual(preview.data['plan']['existing_ids'], [result['id']])
         self.assertNotIn('Synthetic English', json.dumps(preview.data))
+
+    def test_profile_preference_does_not_grant_other_church_access(self):
+        Profile.objects.filter(user=self.staff).update(church=self.other)
+        self.assertEqual(self.client.get(f'/api/staff/prayer-library/{self.other.pk}/').status_code, 403)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        PrayerLibraryChurchGrant.objects.filter(user=self.staff).delete()
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_only_superuser_can_administer_church_grants(self):
+        from prayers.admin import PrayerLibraryChurchGrantAdmin
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        model_admin = PrayerLibraryChurchGrantAdmin(PrayerLibraryChurchGrant, AdminSite())
+        request = RequestFactory().get('/')
+        request.user = self.staff
+        for check in ('has_add_permission', 'has_change_permission', 'has_delete_permission', 'has_view_permission'):
+            self.assertFalse(getattr(model_admin, check)(request))
+        self.staff.is_superuser = True
+        for check in ('has_add_permission', 'has_change_permission', 'has_delete_permission', 'has_view_permission'):
+            self.assertTrue(getattr(model_admin, check)(request))
+
+    def test_revocation_between_initial_permission_and_transaction_blocks_write(self):
+        from unittest.mock import patch
+        from prayers.staff_library import StaffLibraryView
+        original = StaffLibraryView.church
+        def revoke(view, request, church_id):
+            church = original(view, request, church_id)
+            PrayerLibraryChurchGrant.objects.filter(user=self.staff).delete()
+            return church
+        with patch.object(StaffLibraryView, 'church', revoke):
+            response = self.execute('prayer.create', {'record': self.prayer()})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Prayer.objects.count(), 0)
+        self.assertEqual(PrayerLibraryOperation.objects.count(), 0)
