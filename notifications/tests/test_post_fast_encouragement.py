@@ -168,6 +168,19 @@ class PostFastEncouragementTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
         self.assertIsNone(PostFastEmailDelivery.objects.get().sent_at)
 
+    def test_rechecks_uncertain_completion_under_delivery_lock(self):
+        original = PostFastEmailDelivery.objects.get_or_create
+
+        def make_completion_uncertain(**kwargs):
+            FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(ended_at_unknown=True)
+            return original(**kwargs)
+
+        with patch.object(PostFastEmailDelivery.objects, 'get_or_create', side_effect=make_completion_uncertain):
+            self.assertEqual(send_post_fast_encouragement_task(), 0)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertIsNone(PostFastEmailDelivery.objects.get().sent_at)
+        self.assertIsNone(cache.get('email_count'))
+
     def test_only_sends_after_final_day(self):
         Day.objects.create(church=self.church, fast=self.fast, date=timezone.localdate())
         self.assertEqual(send_post_fast_encouragement_task(), 0)
