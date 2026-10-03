@@ -437,7 +437,7 @@ class AnalyticsPerformanceTest(TestCase):
         
         # The version is included in the hash, not directly visible in the key
         # Let's test that different versions produce different keys
-        with patch.object(AnalyticsCacheService, 'CACHE_VERSION', 'v3'):
+        with patch.object(AnalyticsCacheService, 'CACHE_VERSION', 'test-next-version'):
             key_v3 = AnalyticsCacheService._get_cache_key('test', param1='value1')
         
         # Keys should be different when version changes

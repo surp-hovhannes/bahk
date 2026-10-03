@@ -77,6 +77,14 @@ def track_fast_participation(sender, instance, action, reverse, pk_set, using, *
             if reverse else [instance.pk]
         )
         list(Profile.objects.using(using).select_for_update().filter(pk__in=profile_ids).order_by('pk'))
+        if action == 'pre_add':
+            pairs = [(pk, instance.pk) if reverse else (instance.pk, pk) for pk in sorted(pk_set or [])]
+            # Django computes pk_set before the lock. A concurrent add may have
+            # already inserted membership while this operation was waiting.
+            instance._participation_added_pairs = [
+                (profile_id, fast_id) for profile_id, fast_id in pairs
+                if not through.filter(profile_id=profile_id, fast_id=fast_id).exists()
+            ]
         if action in {'pre_remove', 'pre_clear'}:
             memberships = through.filter(fast_id=instance.pk) if reverse else through.filter(profile_id=instance.pk)
             if action == 'pre_remove':
@@ -89,7 +97,7 @@ def track_fast_participation(sender, instance, action, reverse, pk_set, using, *
     # receiver consumes this metadata immediately on the same instance.
     instance._fast_participation_changes = {}
     if action == 'post_add':
-        pairs = [(pk, instance.pk) if reverse else (instance.pk, pk) for pk in sorted(pk_set or [])]
+        pairs = instance.__dict__.pop('_participation_added_pairs', [])
         fast_ids = {fast_id for _, fast_id in pairs}
         fasts = {fast.pk: fast for fast in Fast.objects.using(using).with_dates().filter(pk__in=fast_ids)}
         for profile_id, fast_id in pairs:
@@ -99,10 +107,10 @@ def track_fast_participation(sender, instance, action, reverse, pk_set, using, *
                 defaults={'joined_at': now, 'fast_original_id': fast.pk, 'fast_name': fast.name,
                           'fast_year': fast.year, 'fast_end_date': fast.end_date},
             )
-            instance._fast_participation_changes[fast_id] = period.pk
+            instance._fast_participation_changes[(profile_id, fast_id)] = period.pk
     else:
         for profile_id, fast_id in getattr(instance, '_participation_removed_pairs', []):
-            instance._fast_participation_changes[fast_id] = _stamp_participation_leave(
+            instance._fast_participation_changes[(profile_id, fast_id)] = _stamp_participation_leave(
                 profile_id, fast_id, now, using=using,
             )
         instance.__dict__.pop('_participation_removed_pairs', None)
