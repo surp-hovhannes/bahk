@@ -230,3 +230,28 @@ class StaffLibraryTests(APITestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(Prayer.objects.count(), 0)
         self.assertEqual(PrayerLibraryOperation.objects.count(), 0)
+
+
+    def test_delete_acknowledgement_rejects_boolean_or_duplicate_ids(self):
+        imported = self.execute('set.import', {'prayer_sets': [{'title': 'Set', 'category': 'general', 'prayers': [self.prayer()]}]}).data['result']
+        prayer_id = imported['created_prayer_ids'][0]
+        set_id = imported['created_set_ids'][0]
+        rev = self.read('prayer', prayer_id)['revision']
+        for ids in ([True], [set_id, set_id], 'invalid'):
+            response = self.execute('prayer.delete', {'id': prayer_id, 'affected_set_ids': ids}, rev)
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(Prayer.objects.count(), 1)
+
+
+    def test_legacy_cross_church_membership_cannot_be_reordered_or_deleted(self):
+        from prayers.models import PrayerSetMembership
+        prayer = Prayer.objects.create(church=self.church, title='Synthetic', text='Synthetic')
+        foreign_set = PrayerSet.objects.create(church=self.other, title='Foreign set')
+        PrayerSetMembership.objects.create(prayer_set=foreign_set, prayer=prayer, order=1)
+        rev = self.read('prayer', prayer.pk)['revision']
+        self.assertEqual(self.execute('prayer.delete', {'id': prayer.pk, 'affected_set_ids': [foreign_set.pk]}, rev).status_code, 409)
+        self.staff.is_superuser = True
+        self.staff.save()
+        self.assertEqual(self.client.get(f'/api/staff/prayer-library/{self.other.pk}/', {'kind': 'set', 'id': foreign_set.pk}).status_code, 409)
+        self.assertTrue(Prayer.objects.filter(pk=prayer.pk).exists())
+        self.assertTrue(PrayerSetMembership.objects.filter(prayer_set=foreign_set).exists())

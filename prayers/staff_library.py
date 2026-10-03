@@ -44,6 +44,8 @@ def strict(data, fields):
 
 
 def snapshot(obj):
+    if isinstance(obj, PrayerSet) and obj.memberships.exclude(prayer__church_id=obj.church_id).exists():
+        raise Conflict('Existing membership crosses church scope; repair separately before management.')
     fields = ('title', 'description') if isinstance(obj, PrayerSet) else ('title', 'text')
     result = {'id': obj.pk, 'church_id': obj.church_id, 'category': obj.category}
     for field in fields:
@@ -222,6 +224,15 @@ def run(action, payload, church, if_match, preview=False):
     elif verb == 'delete' and kind != 'members':
         strict(payload, {'id', 'affected_set_ids'} if not is_set else {'id'})
         if not is_set:
+            if obj.memberships.exclude(prayer_set__church_id=church.pk).exists():
+                raise Conflict('Deletion would affect a set outside the selected church; repair separately.')
+            acknowledged = payload.get('affected_set_ids', [])
+            if not isinstance(acknowledged, list):
+                raise ValidationError('affected_set_ids must be an array of positive integer IDs.')
+            for pk in acknowledged:
+                positive(pk)
+            if len(set(acknowledged)) != len(acknowledged):
+                raise ValidationError('Duplicate affected-set IDs.')
             affected = list(obj.memberships.order_by('prayer_set_id').values_list('prayer_set_id', flat=True))
             plan['affected_set_ids'] = affected
             if not preview and payload.get('affected_set_ids', []) != affected:
