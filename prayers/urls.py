@@ -3,6 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from prayers import views
+from prayers.staff_library import StaffLibraryView
 
 app_name = 'prayers'
 
@@ -11,6 +12,7 @@ router = DefaultRouter()
 router.register(r'prayer-requests', views.PrayerRequestViewSet, basename='prayer-request')
 
 urlpatterns = [
+    path("staff/prayer-library/<int:church_id>/", StaffLibraryView.as_view(), name="staff-library"),
     # Prayer endpoints
     path('prayers/', views.PrayerListView.as_view(), name='prayer-list'),
     path('prayers/<int:pk>/', views.PrayerDetailView.as_view(), name='prayer-detail'),
