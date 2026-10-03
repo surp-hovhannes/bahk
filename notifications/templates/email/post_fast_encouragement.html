@@ -1,0 +1,6 @@
+{% extends "email/promotional_email.html" %}
+{% block email_title %}{{ subject }}{% endblock %}
+{% block email_heading %}{{ subject }}{% endblock %}
+{% block email_body %}
+  {% include "email/post_fast_encouragement_body.html" %}
+{% endblock %}

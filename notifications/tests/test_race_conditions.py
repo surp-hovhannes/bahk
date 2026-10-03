@@ -1,6 +1,7 @@
 """
 Test race conditions and concurrency issues in promo email tasks.
 """
+from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
 from unittest.mock import patch
@@ -10,7 +11,10 @@ from django.test import TestCase, override_settings, TransactionTestCase, tag
 from django.db import connection
 from django.db.utils import OperationalError
 
-from notifications.tasks import send_promo_email_task, increment_email_count, get_email_count
+from notifications.tasks import (
+    send_promo_email_task, increment_email_count, get_email_count,
+    reserve_email_quota, release_email_quota,
+)
 from notifications.models import PromoEmail
 from tests.fixtures.test_data import TestDataFactory
 
@@ -405,3 +409,79 @@ class AtomicOperationTests(TestCase):
         
         # Cache should reflect the new value
         self.assertEqual(cache.get('email_count'), 6)
+
+@override_settings(
+    EMAIL_RATE_LIMIT=1,
+    EMAIL_RATE_LIMIT_WINDOW=60,
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+)
+class EmailQuotaReservationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def test_concurrent_reservations_respect_limit(self):
+        # Exercise both first-key initialization and an existing window, without sleeps.
+        for initial_count in (None, 0, 1):
+            with self.subTest(initial_count=initial_count):
+                cache.clear()
+                if initial_count is not None:
+                    cache.set('email_count', initial_count, timeout=60)
+                barrier = threading.Barrier(8)
+
+                def reserve(_):
+                    barrier.wait(timeout=10)
+                    return reserve_email_quota()
+
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    results = list(pool.map(reserve, range(8)))
+                self.assertEqual(sum(result is not None for result in results), 0 if initial_count == 1 else 1)
+                self.assertEqual(get_email_count(), 1)
+
+    def test_failed_reservation_can_be_reused(self):
+        token = reserve_email_quota()
+        self.assertIsNotNone(token)
+        self.assertFalse(reserve_email_quota())
+        release_email_quota(token)
+        self.assertEqual(get_email_count(), 0)
+        self.assertTrue(reserve_email_quota())
+        self.assertEqual(get_email_count(), 1)
+
+    def test_release_does_not_recreate_expired_counter(self):
+        token = reserve_email_quota()
+        cache.delete('email_count')
+        release_email_quota(token)
+        self.assertIsNone(cache.get('email_count'))
+
+    def test_stale_release_cannot_change_rotated_window(self):
+        with patch('time.time', return_value=1000):
+            stale = reserve_email_quota()
+        with patch('time.time', return_value=1061):
+            fresh = reserve_email_quota()
+            self.assertIsNotNone(fresh)
+            release_email_quota(stale)
+            self.assertEqual(get_email_count(), 1)
+            self.assertIsNone(reserve_email_quota())
+            release_email_quota(fresh)
+            self.assertEqual(get_email_count(), 0)
+
+    def test_duplicate_release_cannot_release_another_reservation(self):
+        old = reserve_email_quota()
+        release_email_quota(old)
+        fresh = reserve_email_quota()
+        release_email_quota(old)
+        self.assertEqual(get_email_count(), 1)
+        release_email_quota(fresh)
+        self.assertEqual(get_email_count(), 0)
+
+    def test_cache_failure_denies_reservation(self):
+        with (
+            patch('notifications.email_quota._transition', side_effect=RuntimeError('offline')),
+            self.assertLogs('notifications.email_quota', level='ERROR'),
+        ):
+            self.assertIsNone(reserve_email_quota())
+
+    @override_settings(EMAIL_RATE_LIMIT=0)
+    def test_zero_limit_denies_first_reservation(self):
+        self.assertFalse(reserve_email_quota())
+        self.assertEqual(get_email_count(), 0)
