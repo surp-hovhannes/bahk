@@ -380,6 +380,25 @@ class FastParticipationBackfillTests(TestCase):
         self.assertEqual(period.joined_at, joined_at)
         self.assertEqual(period.left_at, left_at)
 
+    def test_initial_participation_migration_creates_final_history_schema(self):
+        from django.db.migrations.loader import MigrationLoader
+        from django.db.models import Q
+        from django.db.models.deletion import SET_NULL
+
+        loader = MigrationLoader(connection)
+        state = loader.project_state([("hub", "0070_fastparticipation")])
+        period = state.apps.get_model("hub", "FastParticipation")
+        fast = period._meta.get_field("fast")
+        self.assertTrue(fast.null)
+        self.assertIs(fast.remote_field.on_delete, SET_NULL)
+        self.assertEqual(period._meta.get_field("ended_at_unknown").db_default, False)
+        self.assertEqual(period._meta.get_field("fast_name").db_default, "")
+        for name in ("fast_original_id", "fast_year", "fast_end_date", "fast_deleted_at"):
+            self.assertIsNotNone(period._meta.get_field(name))
+        constraint = period._meta.constraints[0]
+        self.assertEqual(constraint.condition, Q(left_at__isnull=True, ended_at_unknown=False))
+        self.assertNotIn(("hub", "0072_fastparticipation_history_snapshots"), loader.disk_migrations)
+
     def test_migration_graph_serializes_the_pending_choices_fix(self):
         from django.db import connection
         from django.db.migrations.loader import MigrationLoader
@@ -872,7 +891,7 @@ class FastParticipationPostgresConcurrencyTests(TransactionTestCase):
         self.assertEqual(period.fast_original_id, self.fast.pk)
 
 
-class SnapshotMigrationReviewTests(TestCase):
+class SnapshotBackfillReviewTests(TestCase):
     def test_existing_history_gets_snapshots_and_unknown_end_without_timestamp_changes(self):
         from django.apps import apps
         from importlib import import_module
@@ -884,8 +903,8 @@ class SnapshotMigrationReviewTests(TestCase):
         _days(fast, [end])
         joined = timezone.now() - datetime.timedelta(days=3)
         period = FastParticipation.objects.create(profile=profile, fast=fast, joined_at=joined)
-        migration = import_module("hub.migrations.0072_fastparticipation_history_snapshots")
-        migration.snapshot_existing_periods(apps, SimpleNamespace(connection=connection))
+        migration = import_module("hub.services.fast_participation_backfill")
+        migration.backfill_fast_participation(apps, SimpleNamespace(connection=connection))
         period.refresh_from_db()
         self.assertEqual(period.fast_name, fast.name)
         self.assertEqual(period.fast_original_id, fast.pk)
@@ -895,10 +914,10 @@ class SnapshotMigrationReviewTests(TestCase):
         self.assertTrue(period.ended_at_unknown)
         self.assertFalse(period.completed)
         before = list(FastParticipation.objects.values())
-        migration.snapshot_existing_periods(apps, SimpleNamespace(connection=connection))
+        migration.backfill_fast_participation(apps, SimpleNamespace(connection=connection))
         self.assertEqual(list(FastParticipation.objects.values()), before)
 
-    def test_snapshot_migration_keeps_real_current_membership_open(self):
+    def test_snapshot_backfill_keeps_real_current_membership_open(self):
         from django.apps import apps
         from importlib import import_module
         from types import SimpleNamespace
@@ -906,8 +925,53 @@ class SnapshotMigrationReviewTests(TestCase):
         profile = TestDataFactory.create_profile()
         fast = TestDataFactory.create_fast(church=profile.church)
         profile.fasts.add(fast)
-        migration = import_module("hub.migrations.0072_fastparticipation_history_snapshots")
-        migration.snapshot_existing_periods(apps, SimpleNamespace(connection=connection))
+        migration = import_module("hub.services.fast_participation_backfill")
+        migration.backfill_fast_participation(apps, SimpleNamespace(connection=connection))
         period = FastParticipation.objects.get()
         self.assertFalse(period.ended_at_unknown)
         self.assertIsNone(period.left_at)
+
+
+class ParticipationMigrationExecutorTests(TransactionTestCase):
+    def test_legacy_membership_and_events_upgrade_to_final_schema(self):
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.migrations.executor import MigrationExecutor
+        from events.models import Event, EventType
+
+        profile = TestDataFactory.create_profile()
+        fast = TestDataFactory.create_fast(church=profile.church)
+        end = timezone.localdate() - datetime.timedelta(days=1)
+        _days(fast, [end])
+        executor = MigrationExecutor(connection)
+        final_targets = executor.loader.graph.leaf_nodes()
+        try:
+            executor.migrate([("hub", "0070_alter_llmprompt_model")])
+            Profile.fasts.through.objects.create(profile=profile, fast=fast)
+            EventType.get_or_create_default_types()
+            joined = timezone.now() - datetime.timedelta(days=3)
+            Event.objects.create(
+                user=profile.user,
+                content_type=ContentType.objects.get_for_model(fast),
+                object_id=fast.pk,
+                event_type=EventType.objects.get(code="user_joined_fast"),
+                timestamp=joined,
+                title="Legacy join",
+            )
+            executor = MigrationExecutor(connection)
+            executor.migrate(final_targets)
+            period = FastParticipation.objects.get(profile=profile, fast=fast)
+            self.assertEqual(period.joined_at, joined)
+            self.assertIsNone(period.left_at)
+            self.assertFalse(period.ended_at_unknown)
+            self.assertEqual(period.fast_original_id, fast.pk)
+            self.assertEqual(period.fast_name, fast.name)
+            self.assertEqual(period.fast_end_date, end)
+            before = list(FastParticipation.objects.values())
+            executor = MigrationExecutor(connection)
+            executor.migrate([("hub", "0070_fastparticipation")])
+            self.assertEqual(list(FastParticipation.objects.values()), before)
+            executor = MigrationExecutor(connection)
+            executor.migrate(final_targets)
+            self.assertEqual(list(FastParticipation.objects.values()), before)
+        finally:
+            MigrationExecutor(connection).migrate(final_targets)

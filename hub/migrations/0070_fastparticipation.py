@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
                     "joined_at",
                     models.DateTimeField(
                         blank=True,
-                        help_text="UTC timestamp of the join.  NULL when the period is recorded from a leave event with no prior join.",
+                        help_text="UTC join timestamp; NULL means unknown.",
                         null=True,
                     ),
                 ),
@@ -26,14 +26,31 @@ class Migration(migrations.Migration):
                     "left_at",
                     models.DateTimeField(
                         blank=True,
-                        help_text="UTC timestamp of the leave.  NULL while the period is still open.",
+                        help_text="UTC leave timestamp; NULL when open or unknown.",
                         null=True,
                     ),
                 ),
                 (
+                    "ended_at_unknown",
+                    models.BooleanField(
+                        default=False,
+                        db_default=False,
+                        help_text="Membership ended but its leave timestamp is unknown.",
+                    ),
+                ),
+                ("fast_original_id", models.BigIntegerField(blank=True, db_index=True, null=True)),
+                ("fast_name", models.CharField(blank=True, default="", db_default="", max_length=128)),
+                ("fast_year", models.IntegerField(blank=True, null=True)),
+                ("fast_end_date", models.DateField(blank=True, null=True)),
+                ("fast_deleted_at", models.DateTimeField(blank=True, null=True)),
+                (
                     "fast",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, related_name="participations", to="hub.fast"
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="participations",
+                        to="hub.fast",
                     ),
                 ),
                 (
@@ -49,7 +66,7 @@ class Migration(migrations.Migration):
                 "indexes": [models.Index(fields=["fast", "left_at"], name="hub_fastpar_fast_id_4a65e5_idx")],
                 "constraints": [
                     models.UniqueConstraint(
-                        condition=models.Q(("left_at__isnull", True)),
+                        condition=models.Q(left_at__isnull=True, ended_at_unknown=False),
                         fields=("profile", "fast"),
                         name="unique_open_fast_participation",
                     )
