@@ -6,7 +6,8 @@ Provides high-performance analytics data aggregation to replace N+1 query patter
 from django.db.models import Count, Case, When
 from django.utils import timezone
 from datetime import timedelta, timezone as dt_timezone
-from .models import Event, EventType
+from .models import EventType
+from .participation_analytics import analytics_events, transition_counts
 
 
 class AnalyticsQueryOptimizer:
@@ -58,7 +59,7 @@ class AnalyticsQueryOptimizer:
         window_tz = start_of_window.tzinfo or dt_timezone.utc
         
         # Base queryset with optional filters
-        queryset = Event.objects.filter(
+        queryset = analytics_events().filter(
             timestamp__gte=start_of_window,
             timestamp__lt=end_of_window
         )
@@ -123,9 +124,15 @@ class AnalyticsQueryOptimizer:
             
             if date_str in events_by_day:  # Only include dates in our window
                 events_by_day[date_str] = stat['total_events']
-                fast_joins_by_day[date_str] = stat['fast_joins']
-                fast_leaves_by_day[date_str] = stat['fast_leaves']
+
         
+        for day, counts in transition_counts(
+            start=start_of_window, end=end_of_window, group_by='day', tz=window_tz, filters=filters,
+        ).items():
+            key = day.strftime('%Y-%m-%d')
+            if key in fast_joins_by_day:
+                fast_joins_by_day[key], fast_leaves_by_day[key] = counts['joins'], counts['leaves']
+
         result = {
             'events_by_day': events_by_day,
             'fast_joins_by_day': fast_joins_by_day,
@@ -157,11 +164,7 @@ class AnalyticsQueryOptimizer:
         Returns:
             dict: {fast_name: {'daily_joins': {...}, 'daily_leaves': {...}, ...}}
         """
-        from django.contrib.contenttypes.models import ContentType
-        from hub.models import Fast
-        
         end_of_window = start_of_window + timedelta(days=num_days)
-        fast_content_type = ContentType.objects.get_for_model(Fast)
 
         # Same timezone pairing as get_daily_event_aggregates: bucket rows in the
         # timezone the window and the day keys are expressed in.
@@ -170,51 +173,6 @@ class AnalyticsQueryOptimizer:
         result = {}
         
         for fast in fast_queryset:
-            # Get daily data for this fast with a single query using Django's database-agnostic date truncation
-            from django.db.models.functions import TruncDate
-            
-            base_qs = Event.objects.filter(
-                content_type=fast_content_type,
-                object_id=fast.id,
-                timestamp__gte=start_of_window,
-                timestamp__lt=end_of_window
-            )
-
-            if filters:
-                include_categories = filters.get('include_categories')
-                exclude_categories = filters.get('exclude_categories')
-                exclude_staff = filters.get('exclude_staff')
-                only_event_types = filters.get('only_event_types')
-                exclude_event_types = filters.get('exclude_event_types')
-
-                if include_categories:
-                    base_qs = base_qs.filter(event_type__category__in=include_categories)
-                if exclude_categories:
-                    base_qs = base_qs.exclude(event_type__category__in=exclude_categories)
-                if exclude_staff:
-                    base_qs = base_qs.exclude(user__is_staff=True)
-                if only_event_types:
-                    base_qs = base_qs.filter(event_type__code__in=only_event_types)
-                if exclude_event_types:
-                    base_qs = base_qs.exclude(event_type__code__in=exclude_event_types)
-
-            daily_stats = base_qs.annotate(
-                date=TruncDate('timestamp', tzinfo=window_tz)
-            ).values('date').annotate(
-                joins=Count(
-                    Case(
-                        When(event_type__code=EventType.USER_JOINED_FAST, then=1),
-                        default=None
-                    )
-                ),
-                leaves=Count(
-                    Case(
-                        When(event_type__code=EventType.USER_LEFT_FAST, then=1),
-                        default=None
-                    )
-                )
-            ).order_by('date')
-            
             # Initialize all days
             # Note: A rolling window of N days can span N+1 calendar days
             daily_joins = {}
@@ -225,18 +183,14 @@ class AnalyticsQueryOptimizer:
                 daily_joins[date_str] = 0
                 daily_leaves[date_str] = 0
             
-            # Fill actual data
-            for stat in daily_stats:
-                # Handle both datetime objects (PostgreSQL) and strings (SQLite)
-                if hasattr(stat['date'], 'strftime'):
-                    date_str = stat['date'].strftime('%Y-%m-%d')
-                else:
-                    date_str = str(stat['date'])
-                    
-                if date_str in daily_joins:
-                    daily_joins[date_str] = stat['joins']
-                    daily_leaves[date_str] = stat['leaves']
-            
+            for day, counts in transition_counts(
+                fast_id=fast.pk, start=start_of_window, end=end_of_window,
+                group_by='day', tz=window_tz, filters=filters,
+            ).items():
+                key = day.strftime('%Y-%m-%d')
+                if key in daily_joins:
+                    daily_joins[key], daily_leaves[key] = counts['joins'], counts['leaves']
+
             # Get fast date range
             fast_days = fast.days.order_by('date')
             if fast_days.exists():

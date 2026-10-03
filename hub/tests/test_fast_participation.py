@@ -10,6 +10,7 @@ import datetime
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from unittest import skipUnless
+from unittest.mock import patch
 
 from django.db import IntegrityError, close_old_connections, connection
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -747,6 +748,11 @@ class ReconciliationReviewTests(FastParticipationBackfillTests):
 @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
 class FastParticipationPostgresConcurrencyTests(TransactionTestCase):
     def setUp(self):
+        milestone_queue = patch('events.tasks.track_fast_participant_milestone_task.delay')
+        milestone_queue.start()
+        self.addCleanup(milestone_queue.stop)
+        from events.models import EventType
+        EventType.get_or_create_default_types()
         self.profile = TestDataFactory.create_profile()
         self.fast = TestDataFactory.create_fast(church=self.profile.church)
 
@@ -776,6 +782,8 @@ class FastParticipationPostgresConcurrencyTests(TransactionTestCase):
         period.refresh_from_db()
         self.assertEqual(period.joined_at, joined)
         self.assertEqual(Profile.fasts.through.objects.count(), 1)
+        from events.models import Event, EventType
+        self.assertEqual(Event.objects.filter(event_type__code=EventType.USER_JOINED_FAST).count(), 1)
 
     def test_concurrent_leaves_create_no_false_periods(self):
         self.profile.fasts.add(self.fast)

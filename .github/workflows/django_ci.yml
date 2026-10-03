@@ -156,5 +156,6 @@ jobs:
         run: >-
           python manage.py test hub.tests.test_fast_participation
           notifications.tests.test_post_fast_encouragement
+          events.tests.test_participation_analytics
           tests.unit.test_migration_state --noinput
           --settings=tests.postgres_test_settings
