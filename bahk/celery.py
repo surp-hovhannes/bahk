@@ -213,6 +213,15 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'prewarm-next-day-readings-daily': {
+        'task': 'hub.tasks.prewarm_next_day_readings_task',
+        'schedule': crontab(hour=3, minute=30),  # 3:30 AM daily, before the Monday 04:00 refresh
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-next-day-readings-prewarm',
+            }
+        }
+    },
 }
 
 # Reuse the existing scheduler only when explicitly enabled; never create a

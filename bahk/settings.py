@@ -130,6 +130,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First so slow-request logs time the whole stack, including the public-API
+    # gatekeeping middleware below it (issue #506).
+    'bahk.middleware.SlowRequestLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'bahk.public_api.traffic.PublicApiTrafficMiddleware',
@@ -662,6 +665,12 @@ if fcm_cert_filename:
     else:
         print(f"Warning: Failed to load FCM certificate: {fcm_cert_filename}")
  """
+
+# Requests slower than this many seconds are logged at WARNING by
+# bahk.middleware.SlowRequestLoggingMiddleware, naming method, path, status and
+# duration, so gateway 504s (issue #506) can be attributed to an endpoint.
+SLOW_REQUEST_THRESHOLD_SECONDS = config('SLOW_REQUEST_THRESHOLD_SECONDS', default=5.0, cast=float)
+
 # Logging Configuration
 LOGGING = {
     'version': 1,
@@ -687,6 +696,11 @@ LOGGING = {
         'bahk.public_api': {
             'handlers': ['console'],
             'level': 'WARNING',
+            'propagate': True,
+        },
+        'bahk.middleware': {
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': True,
         },
         'django': {
