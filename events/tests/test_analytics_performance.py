@@ -474,7 +474,11 @@ class AnalyticsPerformanceTest(TestCase):
         """Test analytics performance with many events."""
         # Create many events
         events_to_create = []
-        base_time = timezone.now() - timedelta(days=1)
+        # Anchor to midday so the 100 one-minute-apart events cannot straddle a
+        # day boundary, whatever time of day the suite happens to run at.
+        base_time = (timezone.now() - timedelta(days=1)).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
         
         for i in range(100):
             events_to_create.append(Event(

@@ -68,6 +68,19 @@ python manage.py test --noinput --parallel --exclude-tag=performance --exclude-t
 
 Only include `performance` or `slow` tests when the change explicitly touches those tests or performance behavior.
 
+## Dispatch Workflow
+
+Before opening a PR, in this order:
+
+1. Branch off main: `fix/issue-NNN-short-description`.
+2. Run `ruff check .` until clean. CI runs that exact command, so a lint failure fails the PR.
+3. Run the default test command above.
+4. Re-run `ruff check .` after any test-driven edits — fixing a test is the usual way lint
+   regresses after step 2.
+
+After opening it, wait for CI. Do not admin-merge on red unless the failure is pre-existing and
+unrelated to the change.
+
 ## Independent icon catalogue backfill
 
 See [docs/ICON_TAXONOMY.md](docs/ICON_TAXONOMY.md) and run

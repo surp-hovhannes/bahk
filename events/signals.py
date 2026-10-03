@@ -75,6 +75,9 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             target=fast,
                             description=f"User {user} joined the fast '{fast.name}'",
                             data={
+                                'participation_tracked': hasattr(instance, '_fast_participation_changes'),
+                                'participation_changed': fast_pk in getattr(instance, '_fast_participation_changes', {}),
+                                'participation_id': getattr(instance, '_fast_participation_changes', {}).get(fast_pk),
                                 'fast_id': fast.id,
                                 'fast_name': fast.name,
                                 'church_id': fast.church.id if fast.church else None,
@@ -140,6 +143,9 @@ def track_fast_membership_changes(sender, instance, action, pk_set, **kwargs):
                             target=fast,
                             description=f"User {user} left the fast '{fast.name}'",
                             data={
+                                'participation_tracked': hasattr(instance, '_fast_participation_changes'),
+                                'participation_changed': fast_pk in getattr(instance, '_fast_participation_changes', {}),
+                                'participation_id': getattr(instance, '_fast_participation_changes', {}).get(fast_pk),
                                 'fast_id': fast.id,
                                 'fast_name': fast.name,
                                 'church_id': fast.church.id if fast.church else None,

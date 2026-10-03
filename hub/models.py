@@ -55,8 +55,8 @@ class FastQuerySet(models.QuerySet):
         call sites to remember the annotation.
         """
         return self.annotate(
-            start_date=models.Min("days__date"),
-            end_date=models.Max("days__date"),
+            start_date=models.Min("days__date", filter=models.Q(days__church_id=models.F("church_id"))),
+            end_date=models.Max("days__date", filter=models.Q(days__church_id=models.F("church_id"))),
         )
 
 
@@ -233,6 +233,94 @@ class Fast(models.Model):
         if self.year:
             s += f" ({self.year})"
         return s
+
+
+class FastParticipationQuerySet(models.QuerySet):
+    def with_completion(self, *, as_of=None):
+        """Annotate ``is_completed`` in one query using the configured local calendar.
+
+        Unknown joins/closures are unconfirmed. Deleted fasts are evaluated as
+        of deletion, so an unfinished deleted fast cannot complete later.
+        """
+        from django.db.models.functions import TruncDate
+
+        tz = timezone.get_default_timezone()
+        today = as_of or timezone.localdate(timezone=tz)
+        return self.annotate(
+            _live_end=models.Max('fast__days__date', filter=models.Q(
+                fast__days__church_id=models.F('fast__church_id'))),
+            _joined_day=TruncDate('joined_at', tzinfo=tz),
+            _left_day=TruncDate('left_at', tzinfo=tz),
+            _deleted_day=TruncDate('fast_deleted_at', tzinfo=tz),
+        ).annotate(
+            _end=models.Case(
+                models.When(fast_id__isnull=True, then=models.F('fast_end_date')),
+                default=models.F('_live_end'), output_field=models.DateField(),
+            ),
+        ).annotate(
+            is_completed=models.Case(
+                models.When(
+                    models.Q(ended_at_unknown=False, joined_at__isnull=False,
+                             _joined_day__lte=models.F('_end'))
+                    & (models.Q(left_at__isnull=False, _left_day__gte=models.F('_end'),
+                                left_at__gte=models.F('joined_at'))
+                       | (models.Q(left_at__isnull=True, _end__lt=today)
+                          & (models.Q(fast_deleted_at__isnull=True)
+                             | models.Q(_end__lt=models.F('_deleted_day'))))),
+                    then=models.Value(True),
+                ),
+                default=models.Value(False), output_field=models.BooleanField(),
+            ),
+        )
+
+    def completed(self, *, as_of=None):
+        return self.with_completion(as_of=as_of).filter(is_completed=True)
+
+
+class FastParticipation(models.Model):
+    """Membership history; Profile.fasts remains the source of truth.
+
+    Known mid-fast joins can complete by staying past the final local calendar
+    day, or leaving anytime on that day. Post-end joins and unknown joins or
+    closures never confirm completion. Fast deletion preserves snapshots and
+    freezes completion at deletion; profile deletion erases history for privacy.
+    """
+    objects = FastParticipationQuerySet.as_manager()
+
+    profile = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='fast_participations')
+    fast = models.ForeignKey(
+        'Fast', null=True, blank=True, on_delete=models.SET_NULL, related_name='participations',
+    )
+    joined_at = models.DateTimeField(null=True, blank=True, help_text='UTC join timestamp; NULL means unknown.')
+    left_at = models.DateTimeField(null=True, blank=True, help_text='UTC leave timestamp; NULL when open or unknown.')
+    ended_at_unknown = models.BooleanField(default=False, db_default=False, help_text='Membership ended but its leave timestamp is unknown.')
+    fast_original_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    fast_name = models.CharField(max_length=128, blank=True, default='', db_default='')
+    fast_year = models.IntegerField(null=True, blank=True)
+    fast_end_date = models.DateField(null=True, blank=True)
+    fast_deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['profile', 'fast'],
+                condition=models.Q(left_at__isnull=True, ended_at_unknown=False),
+                name='unique_open_fast_participation',
+            ),
+        ]
+        indexes = [models.Index(fields=['fast', 'left_at'])]
+
+    @property
+    def completed(self):
+        """Use the same database predicate as scalable completion queries."""
+        if 'is_completed' in self.__dict__:
+            return self.is_completed
+        return type(self).objects.using(self._state.db).with_completion().filter(pk=self.pk).values_list(
+            'is_completed', flat=True,
+        ).first() or False
+
+    def __str__(self):
+        return f"FastParticipation(profile={self.profile_id}, fast={self.fast_id})"
 
 
 class Profile(models.Model):
@@ -778,10 +866,12 @@ class Reading(models.Model):
 class Feast(models.Model):
     """A commemoration, and the enrichment the app keeps for it.
 
-    Keyed by ``(church, name)``, not by date.  The name of the day comes from the
-    ``armenian_lectionary`` engine and is recomputed per request, so nothing here needs to be
-    pre-populated for a date to resolve; what this row exists to hold is the part the engine has
-    no notion of -- the AI ``designation``, the matched ``icon``, and the generated ``contexts``.
+    Keyed by ``(church, observance_id)`` -- one published engine id, so a row is exactly one
+    commemoration -- and not by date, nor by the name, which is display text the engine corrects
+    between releases.  The day's commemorations come from the ``armenian_lectionary`` engine and
+    are recomputed per request, so nothing here needs to be pre-populated for a date to resolve;
+    what this row exists to hold is the part the engine has no notion of -- the AI
+    ``designation``, the matched ``icon``, and the generated ``contexts``.
 
     Those are properties of the commemoration, not of the day it lands on.  This model used to
     hang off ``Day``, which meant the same feast earned a new row, a new LLM context and a new
@@ -817,6 +907,18 @@ class Feast(models.Model):
         )
 
     church = models.ForeignKey(Church, on_delete=models.CASCADE, related_name="feasts")
+    observance_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "The identity of this commemoration: one of the engine's published observance ids. "
+            "Stable across engine releases in a way the name is not -- a published id keeps "
+            "meaning the same observance, while the display text gets corrected. Null only on "
+            "rows nothing could resolve."
+        ),
+    )
     # 512 instead of 256 because two feast names in the Armenian lectionary exceed 256 characters:
     # the Twelve Holy Doctors (289) and the Holy Fathers of Egypt (257)
     name = models.CharField(max_length=512)
@@ -841,11 +943,25 @@ class Feast(models.Model):
 
     class Meta:
         constraints = [
-            # One row per commemoration per church: the invariant the whole re-key exists to
-            # establish, enforced in the database so a race between two requests for the same
-            # date cannot recreate the per-occurrence duplication.
+            # One row per observance per church: the invariant the re-key exists to establish,
+            # enforced in the database so a race between two requests for the same date cannot
+            # recreate the per-occurrence duplication.
+            #
+            # Keyed on observance_id rather than name because only the id is a contract. A
+            # published id keeps meaning the same observance; the name is display text the engine
+            # corrects, and keying on it is what stranded 158 rows at 1.3.0 and more at 2.0.0.
+            #
+            # That no two commemorations happen to share an English name in 2.1.0 is not a reason
+            # to key on the name instead: it is a property of today's catalog, not a guarantee the
+            # engine makes, and the engine already distinguishes non-commemoration observances
+            # English would conflate.
+            #
+            # Partial, because a row nothing could resolve carries no id and several such rows
+            # must be allowed to coexist rather than collide on NULL.
             models.UniqueConstraint(
-                fields=["church", "name"], name="unique_feast_per_church"
+                fields=["church", "observance_id"],
+                condition=models.Q(observance_id__isnull=False),
+                name="unique_feast_observance_id_per_church",
             ),
         ]
 
@@ -1036,11 +1152,48 @@ class ReadingContext(models.Model):
 class FeastContext(models.Model):
     """Model for storing context for feast days, typically generated by an LLM."""
 
+    class Operation(models.TextChoices):
+        GENERATED = "generated", "Generated"
+        REGENERATED = "regenerated", "Regenerated"
+        MANUAL_EDIT = "manual_edit", "Manual edit"
+        RESTORED = "restored", "Restored"
+
     feast = models.ForeignKey(
         Feast,
         on_delete=models.CASCADE,
         related_name="contexts",
         help_text="The feast this context is for",
+    )
+    version = models.PositiveIntegerField(
+        default=1,
+        help_text="Monotonic version number within this feast's context history",
+    )
+    operation = models.CharField(
+        max_length=16,
+        choices=Operation.choices,
+        default=Operation.GENERATED,
+        help_text="The operation that created this context version",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_feast_contexts",
+        help_text="The staff user who created this context version",
+    )
+    additional_instructions = models.TextField(
+        blank=True,
+        default="",
+        help_text="Editorial instructions supplied when this version was generated",
+    )
+    restored_from = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restored_versions",
+        help_text="The prior version restored into this context version",
     )
     text = models.TextField(help_text="The generated context text (longer format)")
     short_text = models.TextField(
@@ -1071,6 +1224,17 @@ class FeastContext(models.Model):
 
     # Translations for user-facing fields
     i18n = TranslationField(fields=('text', 'short_text'))
+
+    class Meta:
+        # Do not add per-feast uniqueness here: feast consolidation reparents complete histories,
+        # and two source feasts can legitimately arrive with the same historical version numbers.
+        # Staff write paths must allocate the next version transactionally when they are added.
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1),
+                name="feast_context_version_positive",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if self.active:

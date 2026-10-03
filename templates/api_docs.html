@@ -73,7 +73,8 @@
       {% endfor %}
       <section class="docs-section" aria-labelledby="fields">
         <h2 id="fields">Response fields</h2>
-        <p>Examples show the exact current field sets. IDs are integers. Church <code>name</code>,
+        <p>Examples show the exact current field sets. IDs are integers. Feast objects expose only
+          <code>name</code> and <code>icon</code>; they have no public identifier. Church <code>name</code>,
           Icon <code>title</code>, Feast <code>name</code>, and Fast <code>name</code> are strings.
           Icon image and thumbnail URLs are strings or null; thumbnails are returned only when already cached.
           Feast <code>icon</code> is an Icon object or null; it is null when absent or when its church differs from the Feast.</p>

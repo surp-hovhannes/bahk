@@ -28,7 +28,7 @@ READING = {
     "end_chapter": 3,
     "end_verse": 21,
 }
-FEAST = {"id": 18, "name": "Exaltation of the Holy Cross", "icon": ICON}
+FEAST = {"name": "Exaltation of the Holy Cross", "icon": ICON}
 ROOT = {"service": "fast-and-pray", "version": "v1", "base_path": "/api/v1/", "status": "pre-release"}
 CALENDAR = {
     "date": "2026-09-13",

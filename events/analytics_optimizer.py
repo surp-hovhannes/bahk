@@ -5,7 +5,7 @@ Provides high-performance analytics data aggregation to replace N+1 query patter
 
 from django.db.models import Count, Case, When
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 from .models import Event, EventType
 
 
@@ -49,6 +49,13 @@ class AnalyticsQueryOptimizer:
         
         # Single query with conditional aggregation using Django's database-agnostic date truncation
         from django.db.models.functions import TruncDate
+
+        # Bucket rows in the same timezone the window boundaries and the day keys
+        # below are expressed in. Without this TruncDate would truncate in
+        # settings.TIME_ZONE while the keys are built from start_of_window, so any
+        # event whose local date differs from its window date lands on the wrong
+        # day -- or, at the edges of the window, is dropped entirely.
+        window_tz = start_of_window.tzinfo or dt_timezone.utc
         
         # Base queryset with optional filters
         queryset = Event.objects.filter(
@@ -75,7 +82,7 @@ class AnalyticsQueryOptimizer:
                 queryset = queryset.exclude(event_type__code__in=exclude_event_types)
 
         daily_stats = queryset.annotate(
-            date=TruncDate('timestamp')
+            date=TruncDate('timestamp', tzinfo=window_tz)
         ).values('date').annotate(
             total_events=Count('id'),
             fast_joins=Count(
@@ -155,6 +162,10 @@ class AnalyticsQueryOptimizer:
         
         end_of_window = start_of_window + timedelta(days=num_days)
         fast_content_type = ContentType.objects.get_for_model(Fast)
+
+        # Same timezone pairing as get_daily_event_aggregates: bucket rows in the
+        # timezone the window and the day keys are expressed in.
+        window_tz = start_of_window.tzinfo or dt_timezone.utc
         
         result = {}
         
@@ -188,7 +199,7 @@ class AnalyticsQueryOptimizer:
                     base_qs = base_qs.exclude(event_type__code__in=exclude_event_types)
 
             daily_stats = base_qs.annotate(
-                date=TruncDate('timestamp')
+                date=TruncDate('timestamp', tzinfo=window_tz)
             ).values('date').annotate(
                 joins=Count(
                     Case(

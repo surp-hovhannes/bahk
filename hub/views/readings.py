@@ -18,17 +18,18 @@ from rest_framework.views import APIView
 
 from hub.models import Church, Day, Reading
 from hub.services.reading_text_service import (
+    METERED_LANGUAGES,
     ensure_book_hy,
     fetch_passage_text,
     get_reading_text_fields,
-    languages_needing_fetch,
     load_passage_texts,
-    prepare_shared_resources,
-    reading_citation,
+    missing_passage_texts,
 )
 from hub.services.lectionary_service import get_daily_readings, persist_readings
-from hub.tasks import generate_reading_context_task
+from hub.tasks import fetch_missing_passage_texts_task, generate_reading_context_task
 from hub.utils import get_user_profile_safe
+
+logger = logging.getLogger(__name__)
 
 
 class GetDailyReadingsForDate(generics.GenericAPIView):
@@ -136,24 +137,35 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
         passage_keys = {r.passage_key for r in readings if r.passage_key}
         passage_texts = load_passage_texts(passage_keys)
 
-        # Retrieve synchronously, per (passage, language), so text is in this response.
-        # Gating per language matters: English arriving from the shared store must not be
-        # read as "this passage is done" and suppress Armenian.  Spend is capped by the
-        # daily and monthly budgets inside the English fetcher.
-        missing = {}
-        for reading_obj in readings:
-            langs = languages_needing_fetch(reading_obj.passage_key, passage_texts)
-            if langs:
-                missing.setdefault(reading_obj.passage_key, (reading_citation(reading_obj), set()))
-                missing[reading_obj.passage_key][1].update(langs)
-
-        if missing:
-            # Built lazily: this opens an HTTP session, so requests with nothing to
-            # retrieve must not pay for it.
-            shared = prepare_shared_resources(date_obj, church)
-            for key, (citation, langs) in missing.items():
-                fetch_passage_text(key, citation, langs=sorted(langs), **shared)
+        # Local corpus text belongs in the first response. Only metered network
+        # retrieval leaves the request path (issue #506).
+        missing = missing_passage_texts(readings, passage_texts)
+        items = []
+        stored_locally = False
+        for key, (citation, langs) in missing.items():
+            local_langs = sorted(set(langs) - set(METERED_LANGUAGES))
+            metered_langs = sorted(set(langs) & set(METERED_LANGUAGES))
+            if local_langs:
+                results = fetch_passage_text(key, citation, langs=local_langs)
+                stored_locally |= any(results.values())
+            if metered_langs:
+                items.append({"key": key, "citation": list(citation), "langs": metered_langs})
+        if stored_locally:
             passage_texts = load_passage_texts(passage_keys)
+
+        if items:
+            try:
+                fetch_missing_passage_texts_task.delay(items)
+            except Exception:
+                # An enqueue failure must not break the partial response: the weekly
+                # refresh task still reaches these passages.
+                logger.warning(
+                    "Could not enqueue text fetch for %d passage(s) on %s; they stay "
+                    "blank until the refresh task reaches them.",
+                    len(items),
+                    date_str,
+                    exc_info=True,
+                )
 
         # Older rows predate the lectionary engine supplying book_hy at creation.
         for reading_obj in readings:
@@ -169,8 +181,8 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
             active_context = reading.active_context
             if active_context is None:
                 # No context at all, trigger generation for all languages
-                logging.warning("No context found for reading %s", str(reading))
-                logging.info("Enqueue context generation for reading %s (all languages)", reading.id)
+                logger.warning("No context found for reading %s", str(reading))
+                logger.info("Enqueue context generation for reading %s (all languages)", reading.id)
                 generate_reading_context_task.delay(reading.id)
                 context_dict = {
                     "context": "",
@@ -197,7 +209,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
 
                 # If any translation is missing, trigger generation for all languages
                 if not all_languages_present:
-                    logging.info(
+                    logger.info(
                         "Context translations missing for reading %s, enqueuing generation for all languages",
                         reading.id
                     )

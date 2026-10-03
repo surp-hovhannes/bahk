@@ -861,7 +861,7 @@ class FeastIconAPITests(TestCase):
         from hub.services.feast_service import get_feast_for_date
         feast = Feast.objects.create(
             church=self.church,
-            name=get_feast_for_date(self.test_date, self.church)["name_en"],
+            name=get_feast_for_date(self.test_date, self.church)[0]["name_en"],
             icon=icon,
         )
 
@@ -871,10 +871,10 @@ class FeastIconAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('feast', response.data)
-        self.assertIn('icon', response.data['feast'])
-        self.assertIsNotNone(response.data['feast']['icon'])
-        self.assertEqual(response.data['feast']['icon']['id'], icon.id)
+        self.assertIn('feasts', response.data)
+        self.assertIn('icon', response.data['feasts'][0])
+        self.assertIsNotNone(response.data['feasts'][0]['icon'])
+        self.assertEqual(response.data['feasts'][0]['icon']['id'], icon.id)
 
     def test_feast_api_includes_null_icon_when_not_present(self):
         """Test that API response includes null icon when icon is not set."""
@@ -893,6 +893,6 @@ class FeastIconAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('feast', response.data)
-        self.assertIn('icon', response.data['feast'])
-        self.assertIsNone(response.data['feast']['icon'])
+        self.assertIn('feasts', response.data)
+        self.assertIn('icon', response.data['feasts'][0])
+        self.assertIsNone(response.data['feasts'][0]['icon'])

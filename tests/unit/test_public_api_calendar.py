@@ -113,7 +113,7 @@ class PublicCalendarTests(TestCase):
                         "thumbnail_url": None,
                         "learn_more_url": None,
                     },
-                    "feasts": [{"id": feast.pk, "name": feast_name, "icon": None}],
+                    "feasts": [{"name": feast_name, "icon": None}],
                     "partial_failures": [],
                 },
             )
@@ -137,7 +137,7 @@ class PublicCalendarTests(TestCase):
             self.assertEqual(data["fast"]["start_date"], "2026-03-01")
             self.assertEqual(data["fast"]["end_date"], end)
             self.assertEqual([r["id"] for r in data["readings"]], [reading.pk])
-            self.assertEqual([f["id"] for f in data["feasts"]], [feast.pk])
+            self.assertEqual([f["name"] for f in data["feasts"]], [feast.name])
         self.assertIsNone(self.get(church_id=self.other.pk, date="2026-02-01").json()["fast"])
 
     def test_multiple_fast_candidates_choose_lowest_id_and_readings_keep_order(self):
@@ -160,16 +160,15 @@ class PublicCalendarTests(TestCase):
             (None, []),
             ([], []),
             ({"name_en": "Missing"}, []),
-            ({"name_en": "First"}, [{"id": first.pk, "name": "First", "icon": None}]),
+            ({"name_en": "First"}, [{"name": first.name, "icon": None}]),
             (
                 [{"name_en": "Second"}, {"name_en": "First"}, {"name_en": "Second"}],
                 [
                     {
-                        "id": second.pk,
-                        "name": "Second",
+                        "name": second.name,
                         "icon": {"id": icon.pk, "title": icon.title, "image_url": None, "thumbnail_url": None},
                     },
-                    {"id": first.pk, "name": "First", "icon": None},
+                    {"name": first.name, "icon": None},
                 ],
             ),
         ):
@@ -193,7 +192,7 @@ class PublicCalendarTests(TestCase):
         ):
             stored.return_value.select_related.return_value.order_by.return_value = [feast]
             data = self.get().json()
-        self.assertEqual(data["feasts"], [{"id": feast.pk, "name": "Stored name", "icon": None}])
+        self.assertEqual(data["feasts"], [{"name": "Stored name", "icon": None}])
         stored.assert_called_once_with(church=self.church, observance_id__in=["stable-id"])
 
     def test_legacy_only_results_after_observance_field_exists(self):
@@ -204,7 +203,7 @@ class PublicCalendarTests(TestCase):
         with patch.object(Feast._meta, "get_fields", return_value=fields):
             response = self.get()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([item["id"] for item in response.json()["feasts"]], [second.pk, first.pk])
+        self.assertEqual([item["name"] for item in response.json()["feasts"]], [second.name, first.name])
 
     def test_mixed_transition_results_preserve_order_and_deduplicate_rows(self):
         first = Feast.objects.create(church=self.church, name="First")
@@ -235,7 +234,7 @@ class PublicCalendarTests(TestCase):
         ):
             response = self.get()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([item["id"] for item in response.json()["feasts"]], [second.pk, first.pk])
+        self.assertEqual([item["name"] for item in response.json()["feasts"]], [second.name, first.name])
 
     def test_cross_church_nested_icon_is_null_without_mutation(self):
         icon = Icon.objects.create(church=self.other, title="Other church private icon")
@@ -249,7 +248,7 @@ class PublicCalendarTests(TestCase):
             with self.subTest(route=route), CaptureQueriesContext(connection) as queries:
                 response = self.client.get(route, self.params)
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json()["feasts"], [{"id": feast.pk, "name": feast.name, "icon": None}])
+                self.assertEqual(response.json()["feasts"], [{"name": feast.name, "icon": None}])
             self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in queries))
         feast.refresh_from_db()
         self.assertEqual(feast.icon_id, icon.pk)

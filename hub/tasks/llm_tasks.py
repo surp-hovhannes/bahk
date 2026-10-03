@@ -1,10 +1,20 @@
 import logging
-import re
 
 from celery import shared_task
 from django.conf import settings
 
 from hub.models import LLMPrompt, Reading, ReadingContext, Feast, FeastContext
+from hub.services.feast_contexts import (
+    FEAST_CONTEXT_TASK_MAX_RETRIES,
+    FEAST_CONTEXT_TASK_RETRY_DELAY,
+    FEAST_CONTEXT_TASK_SOFT_TIME_LIMIT,
+    FEAST_CONTEXT_TASK_TIME_LIMIT,
+    FeastContextVersionInput,
+    append_feast_context_version,
+    clear_feast_context_regeneration_lock,
+    get_feast_context_task_status,
+    set_feast_context_task_status,
+)
 from hub.services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
@@ -150,135 +160,75 @@ def _check_all_feast_translations_present(context: FeastContext, languages: list
     return True
 
 
-def _update_feast_context_translations(
-    context: FeastContext, 
-    generated_contexts: dict[str, dict[str, str]], 
-    force_regeneration: bool
-) -> None:
-    """Update existing feast context with missing or regenerated translations.
-    
-    Args:
-        context: FeastContext instance to update
-        generated_contexts: Dict mapping language codes to dicts with 'text' and 'short_text' keys
-        force_regeneration: If True, overwrite existing translations
-    """
-    for lang, texts in generated_contexts.items():
-        if lang == 'en':
-            if not context.text or not context.text.strip() or force_regeneration:
-                context.text = texts['text']
-            if not context.short_text or not context.short_text.strip() or force_regeneration:
-                context.short_text = texts['short_text']
-        else:
-            existing_text = getattr(context, f'text_{lang}', None)
-            if not existing_text or not existing_text.strip() or force_regeneration:
-                setattr(context, f'text_{lang}', texts['text'])
-            
-            existing_short = getattr(context, f'short_text_{lang}', None)
-            if not existing_short or not existing_short.strip() or force_regeneration:
-                setattr(context, f'short_text_{lang}', texts['short_text'])
-    context.save()
-
-
-def _create_feast_context_with_translations(
+def _append_generated_feast_context(
     feast: Feast,
     llm_prompt: LLMPrompt,
-    generated_contexts: dict[str, dict[str, str]]
+    generated_contexts: dict[str, dict[str, str]],
+    *,
+    force_regeneration: bool,
+    improvement_instructions: str,
+    actor_id: int | None,
 ) -> FeastContext:
-    """Create new feast context with all translations.
-    
-    Args:
-        feast: Feast instance
-        llm_prompt: LLMPrompt used for generation
-        generated_contexts: Dict mapping language codes to dicts with 'text' and 'short_text' keys
-    
-    Returns:
-        Created FeastContext instance
-    """
-    english_texts = generated_contexts.get('en', {'text': '', 'short_text': ''})
-    context = FeastContext(
-        feast=feast,
-        text=english_texts['text'],
-        short_text=english_texts['short_text'],
-        prompt=llm_prompt,
+    """Persist generated translations as a new context version."""
+    return append_feast_context_version(
+        feast.id,
+        values=FeastContextVersionInput(
+            operation=(
+                FeastContext.Operation.REGENERATED
+                if force_regeneration
+                else FeastContext.Operation.GENERATED
+            ),
+            actor_id=actor_id,
+            prompt=llm_prompt,
+            additional_instructions=improvement_instructions or "",
+        ),
+        language_updates=generated_contexts,
+        replace_languages=force_regeneration,
     )
-    
-    for lang, texts in generated_contexts.items():
-        if lang != 'en':
-            setattr(context, f'text_{lang}', texts['text'])
-            setattr(context, f'short_text_{lang}', texts['short_text'])
-    
-    context.save()
-    return context
-
-
-def _has_named_commemoration(feast_name: str) -> bool:
-    """Return whether a feast name appears to name a saint or feast."""
-    return bool(
-        re.search(
-            # \b does not match between a letter and a final "s", so use explicit
-            # singular|plural alternations (e.g. "Martyrs?" matches both).
-            r"\b(?:Saints?|Sts?\.?|Martyrs?|Blesseds?|Holy\s+(?!Cross)|Prophets?|"
-            r"Apostles?|Patriarchs?|Vartapets?|Bishops?|Confessors?|Evangelists?|"
-            r"Righteous(?:es)?|Prophetess(?:es)?|Lord|Translation|Relics|"
-            r"Consecration|Commemoration)\b",
-            feast_name,
-            re.IGNORECASE,
-        )
-    )
-
-
-def _looks_like_generic_fast_day(feast_name: str) -> bool:
-    """Return whether an unclassified feast name appears to be only a fast day."""
-    return bool(
-        re.search(r"\b(fast|lent)\b", feast_name, re.IGNORECASE)
-        and re.search(r"\bday\b", feast_name, re.IGNORECASE)
-        and not _has_named_commemoration(feast_name)
-    )
-
 
 def is_feast_context_generation_eligible(feast: Feast) -> bool:
-    """Return whether FeastContext generation should run for this feast."""
-    if feast.designation == Feast.Designation.FAST:
-        return False
+    """Return whether FeastContext generation should run for this feast.
 
-    if feast.designation is None and (
-        _is_known_generic_fast_day(feast.name)
-        or _looks_like_generic_fast_day(feast.name)
-    ):
-        return False
+    A ``Feast`` row now exists only for an observance the engine marks ``is_comm``, so "is there
+    anything here to write about" is already answered upstream, by a human-reviewed mark rather
+    than by reading the display name.
 
-    return True
-
-
-# Specific named feast days that should be treated as generic fast days even though their
-# rendered name does not match the "Fast day, day N of Great Lent" pattern (e.g. once the
-# day counter is rendered as a name, or named lenten landmarks). Centralized so the view
-# and the worker agree.
-_GENERIC_FAST_DAY_TOKENS = (
-    "Mijink",  # Median day of Great Lent
-    "Median day of Great Lent",
-)
-
-
-def _is_known_generic_fast_day(feast_name: str) -> bool:
-    if not feast_name:
-        return False
-    lower = feast_name.lower()
-    return any(token.lower() in lower for token in _GENERIC_FAST_DAY_TOKENS)
-
-
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def generate_feast_context_task(
-    self, feast_id: int, force_regeneration: bool = False, language_code: str = None, improvement_instructions: str = None
-):
-    """Generate and save AI context for a Feast instance in all available languages.
-
-    Args:
-        feast_id: ID of the Feast to generate context for
-        force_regeneration: If True, regenerate even if context exists
-        language_code: DEPRECATED - Ignored. All languages are always generated.
-        improvement_instructions: Optional instructions to improve the generated content
+    This used to guess from the name -- regexes looking for saint/martyr/prophet words, and for
+    "fast"/"lent" plus "day" -- and both halves were wrong in the same way: they pattern-matched
+    text the engine is free to rewrite, which is exactly the failure the observance id layer
+    exists to prevent. They also disagreed with each other on Mijink, which the token list
+    blocked while ``determine_feast_designation_task`` exempted as a named feast, not a generic
+    fast day. The engine marks it a commemoration; it gets context.
     """
+    return feast.designation != Feast.Designation.FAST
+
+
+@shared_task(
+    bind=True,
+    max_retries=FEAST_CONTEXT_TASK_MAX_RETRIES,
+    default_retry_delay=FEAST_CONTEXT_TASK_RETRY_DELAY,
+    soft_time_limit=FEAST_CONTEXT_TASK_SOFT_TIME_LIMIT,
+    time_limit=FEAST_CONTEXT_TASK_TIME_LIMIT,
+)
+def generate_feast_context_task(
+    self,
+    feast_id: int,
+    force_regeneration: bool = False,
+    language_code: str = None,
+    improvement_instructions: str = None,
+    actor_id: int | None = None,
+):
+    """Generate and append AI context for a Feast in all available languages."""
+    task_id = self.request.id
+    track_status = bool(
+        task_id
+        and (actor_id is not None or get_feast_context_task_status(task_id))
+    )
+    if track_status:
+        set_feast_context_task_status(
+            task_id, feast_id=feast_id, state="STARTED", ready=False
+        )
+
     if language_code is not None:
         logger.warning(
             "language_code parameter is deprecated and will be removed in a future version. "
@@ -289,68 +239,125 @@ def generate_feast_context_task(
         feast = Feast.objects.get(pk=feast_id)
     except Feast.DoesNotExist:
         logger.error("Feast with id %s not found.", feast_id)
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="Feast not found.",
+            )
+            clear_feast_context_regeneration_lock(feast_id, task_id)
         return
 
-    # Skip context generation for generic fast days — they are never displayed
     if not is_feast_context_generation_eligible(feast):
         logger.info("Feast %s is a generic fast day, skipping context generation.", feast_id)
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="This feast is not eligible for context generation.",
+            )
+            clear_feast_context_regeneration_lock(feast_id, task_id)
         return
 
     active_context = feast.active_context
     if active_context and not force_regeneration:
         if _check_all_feast_translations_present(active_context, AVAILABLE_LANGUAGES):
             logger.info(
-                "Feast %s already has context for all languages, skipping.",
-                feast_id
+                "Feast %s already has context for all languages, skipping.", feast_id
             )
+            if track_status:
+                set_feast_context_task_status(
+                    task_id, feast_id=feast_id, state="SUCCESS", ready=True
+                )
+                clear_feast_context_regeneration_lock(feast_id, task_id)
             return
 
     llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='feasts').first()
     if not llm_prompt:
         logger.error("No active LLM prompt found for feasts.")
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="No active feast generation prompt is configured.",
+            )
+            clear_feast_context_regeneration_lock(feast_id, task_id)
         return
 
     try:
         service = llm_prompt.get_llm_service()
-        
         generated_contexts = {}
         for lang in AVAILABLE_LANGUAGES:
-            # Generate both text and short_text in a single call
-            context_dict = service.generate_feast_context(feast, llm_prompt, lang, improvement_instructions)
-            
-            if context_dict and 'text' in context_dict and 'short_text' in context_dict:
-                generated_contexts[lang] = context_dict
+            context_dict = service.generate_feast_context(
+                feast, llm_prompt, lang, improvement_instructions
+            )
+            if (
+                context_dict
+                and isinstance(context_dict.get('text'), str)
+                and context_dict['text'].strip()
+                and isinstance(context_dict.get('short_text'), str)
+                and context_dict['short_text'].strip()
+            ):
+                generated_contexts[lang] = {
+                    "text": context_dict["text"].strip(),
+                    "short_text": context_dict["short_text"].strip(),
+                }
             else:
                 logger.warning(
                     "Failed to generate complete context for Feast %s in language %s",
                     feast_id, lang
                 )
-        
+
         if not generated_contexts:
-            logger.error("Failed to generate context for Feast %s in any language", feast_id)
-            raise self.retry(exc=Exception("Context generation failed for all languages"))
-        
-        if active_context:
-            _update_feast_context_translations(active_context, generated_contexts, force_regeneration)
-            logger.info(
-                "Context translations updated for Feast %s (languages: %s)",
-                feast_id, ', '.join(generated_contexts.keys())
+            raise RuntimeError("Context generation failed for all languages")
+
+        _append_generated_feast_context(
+            feast,
+            llm_prompt,
+            generated_contexts,
+            force_regeneration=force_regeneration,
+            improvement_instructions=improvement_instructions or "",
+            actor_id=actor_id,
+        )
+        logger.info(
+            "Context version appended for Feast %s (languages: %s)",
+            feast_id, ', '.join(generated_contexts.keys())
+        )
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="SUCCESS", ready=True
             )
-        else:
-            _create_feast_context_with_translations(feast, llm_prompt, generated_contexts)
-            logger.info(
-                "Context generated for Feast %s in languages: %s",
-                feast_id, ', '.join(generated_contexts.keys())
+            clear_feast_context_regeneration_lock(feast_id, task_id)
+    except Exception as exc:
+        logger.exception("Error generating context for Feast %s", feast_id)
+        if self.request.retries < self.max_retries:
+            if track_status:
+                set_feast_context_task_status(
+                    task_id, feast_id=feast_id, state="RETRY", ready=False
+                )
+            raise self.retry(exc=exc)
+        if track_status:
+            set_feast_context_task_status(
+                task_id, feast_id=feast_id, state="FAILURE", ready=True,
+                error="Context generation failed.",
             )
-    except ValueError as e:
-        logger.error(f"Error selecting LLM service: {e}")
-        raise self.retry(exc=e)
+            clear_feast_context_regeneration_lock(feast_id, task_id)
+        raise
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def determine_feast_designation_task(self, feast_id: int):
     """Determine and set the designation for a Feast instance using AI.
-    
+
+    Every row reaching here is a commemoration -- the engine's ``is_comm`` mark is what mints it --
+    so there is nothing left for a name regex to screen out.  This used to short-circuit
+    "<Ordinal> day of Great Lent"-shaped names straight to ``FAST`` without asking the LLM, with
+    hardcoded carve-outs for saint words and for Mijink.  The carve-out spelled out ``Saint`` and
+    never ``St.``, which is the abbreviation the engine's display text overwhelmingly uses, so
+    days plainly naming a saint were stamped as generic fasts anyway -- St. Theodore the Tyron,
+    Lazarus Saturday and St. Gregory's Descent into the Pit among them on production.
+
+    That is not a cost the classifier can undo later: ``designation`` is never overwritten once
+    set, and it is what stands between a feast and its generated context.  Migration ``0068``
+    repairs the rows this already wrote; removing it is what stops new ones.
+
     Args:
         feast_id: ID of the Feast to determine designation for
     """
@@ -363,22 +370,6 @@ def determine_feast_designation_task(self, feast_id: int):
     # Skip if designation is already set (don't overwrite manual assignments)
     if feast.designation:
         logger.info("Feast %s already has designation '%s', skipping.", feast_id, feast.designation)
-        return
-
-    # Short-circuit for generic numbered fast days — pattern like "Seventeenth day of Great Lent"
-    # These never commemorate a specific saint so the LLM is not needed.
-    # Require "fast" or "lent" in the name to avoid false positives.
-    # Explicitly exclude Mijink (Median day of Great Lent) — a named feast, not a generic fast day.
-    if re.match(r'^[\w\s]+ day of ', feast.name, re.IGNORECASE) and re.search(
-        r'fast|lent', feast.name, re.IGNORECASE
-    ) and not re.search(
-        r'Mijink|Median', feast.name, re.IGNORECASE
-    ) and not re.search(
-        r'Saint|Martyr|Blessed|Holy\s+(?!Cross)|Prophet|Apostle|Patriarch|Vartapet', feast.name, re.IGNORECASE
-    ):
-        feast.designation = Feast.Designation.FAST
-        feast.save(update_fields=['designation'])
-        logger.info("Regex fast-day pattern matched, assigned 'Fast' to Feast %s (%s)", feast_id, feast.name)
         return
 
     # Determine which LLM service to use based on active prompt or default

@@ -42,6 +42,13 @@ from .views.feasts import (
     FeastMatchIconView,
     GetFeastForDate,
 )
+from .views.feast_contexts import (
+    FeastContextDetailView,
+    FeastContextHistoryView,
+    FeastContextRegenerateView,
+    FeastContextRestoreView,
+    FeastContextTaskStatusView,
+)
 from .views.patristic_quotes import (
     PatristicQuoteListView,
     PatristicQuoteDetailView,
@@ -139,8 +146,31 @@ urlpatterns = [
         name="feast-assign-icon",
     ),
     path("feasts/<int:pk>/feedback/", FeastContextFeedbackView.as_view(), name="feast-context-feedback"),
-
-
+    path(
+        "feasts/<int:pk>/context/",
+        FeastContextDetailView.as_view(),
+        name="feast-context-detail",
+    ),
+    path(
+        "feasts/<int:pk>/context/history/",
+        FeastContextHistoryView.as_view(),
+        name="feast-context-history",
+    ),
+    path(
+        "feasts/<int:pk>/context/regenerate/",
+        FeastContextRegenerateView.as_view(),
+        name="feast-context-regenerate",
+    ),
+    path(
+        "feasts/<int:pk>/context/restore/",
+        FeastContextRestoreView.as_view(),
+        name="feast-context-restore",
+    ),
+    path(
+        "feasts/<int:pk>/context/task/<uuid:task_id>/",
+        FeastContextTaskStatusView.as_view(),
+        name="feast-context-task-status",
+    ),
 
 
     # Admin endpoints

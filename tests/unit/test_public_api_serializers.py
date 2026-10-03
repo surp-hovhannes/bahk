@@ -298,18 +298,17 @@ class ReadingPublicSerializerContractTests(TestCase):
 
 
 class FeastPublicSerializerContractTests(TestCase):
-    """Public Feast serializer: ``id``, ``name``, nested nullable ``icon``."""
+    """Public Feast serializer: ``name``, nested nullable ``icon``."""
 
     def setUp(self):
         self.church = Church.objects.create(name="Feast Church")
 
-    def test_returns_id_name_and_null_icon_when_no_icon_attached(self):
+    def test_returns_name_and_null_icon_when_no_icon_attached(self):
         feast = Feast.objects.create(church=self.church, name="Easter")
 
         data = FeastPublicSerializer(feast).data
 
-        self.assertEqual(set(data.keys()), {"id", "name", "icon"})
-        self.assertEqual(data["id"], feast.id)
+        self.assertEqual(set(data.keys()), {"name", "icon"})
         self.assertEqual(data["name"], "Easter")
         self.assertIsNone(data["icon"])
 
@@ -323,6 +322,8 @@ class FeastPublicSerializerContractTests(TestCase):
         data = FeastPublicSerializer(feast).data
 
         for excluded in (
+            "id",
+            "observance_id",
             "church",
             "church_id",
             "designation",
@@ -387,6 +388,7 @@ class FeastPublicSerializerContractTests(TestCase):
 
         self.assertEqual(len(data), 3)
         for payload in data:
+            self.assertEqual(set(payload.keys()), {"name", "icon"})
             self.assertEqual(payload["icon"]["id"], icon.id)
             self.assertEqual(payload["icon"]["title"], "Shared")
             self.assertEqual(
@@ -528,6 +530,26 @@ class FastPublicSerializerContractTests(TestCase):
 
         annotated = Fast.objects.with_dates().get(pk=fast.pk)
 
+        with self.assertNumQueries(0):
+            data = FastPublicSerializer(annotated).data
+
+        self.assertEqual(data["start_date"], "2026-02-15")
+        self.assertEqual(data["end_date"], "2026-04-04")
+
+    def test_with_dates_ignores_days_from_other_churches(self):
+        fast = self._make_fast()
+        other_church = Church.objects.create(name="Other Fast Church")
+        Day.objects.create(date=datetime.date(2026, 1, 1), fast=fast, church=other_church)
+        Day.objects.create(date=datetime.date(2026, 12, 31), fast=fast, church=other_church)
+
+        annotated = Fast.objects.with_dates().get(pk=fast.pk)
+        self.assertIsNone(annotated.start_date)
+        self.assertIsNone(annotated.end_date)
+
+        Day.objects.create(date=datetime.date(2026, 2, 15), fast=fast, church=self.church)
+        Day.objects.create(date=datetime.date(2026, 4, 4), fast=fast, church=self.church)
+
+        annotated = Fast.objects.with_dates().get(pk=fast.pk)
         with self.assertNumQueries(0):
             data = FastPublicSerializer(annotated).data
 
