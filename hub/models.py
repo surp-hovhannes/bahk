@@ -235,6 +235,94 @@ class Fast(models.Model):
         return s
 
 
+class FastParticipationQuerySet(models.QuerySet):
+    def with_completion(self, *, as_of=None):
+        """Annotate ``is_completed`` in one query using the configured local calendar.
+
+        Unknown joins/closures are unconfirmed. Deleted fasts are evaluated as
+        of deletion, so an unfinished deleted fast cannot complete later.
+        """
+        from django.db.models.functions import TruncDate
+
+        tz = timezone.get_default_timezone()
+        today = as_of or timezone.localdate(timezone=tz)
+        return self.annotate(
+            _live_end=models.Max('fast__days__date', filter=models.Q(
+                fast__days__church_id=models.F('fast__church_id'))),
+            _joined_day=TruncDate('joined_at', tzinfo=tz),
+            _left_day=TruncDate('left_at', tzinfo=tz),
+            _deleted_day=TruncDate('fast_deleted_at', tzinfo=tz),
+        ).annotate(
+            _end=models.Case(
+                models.When(fast_id__isnull=True, then=models.F('fast_end_date')),
+                default=models.F('_live_end'), output_field=models.DateField(),
+            ),
+        ).annotate(
+            is_completed=models.Case(
+                models.When(
+                    models.Q(ended_at_unknown=False, joined_at__isnull=False,
+                             _joined_day__lte=models.F('_end'))
+                    & (models.Q(left_at__isnull=False, _left_day__gte=models.F('_end'),
+                                left_at__gte=models.F('joined_at'))
+                       | (models.Q(left_at__isnull=True, _end__lt=today)
+                          & (models.Q(fast_deleted_at__isnull=True)
+                             | models.Q(_end__lt=models.F('_deleted_day'))))),
+                    then=models.Value(True),
+                ),
+                default=models.Value(False), output_field=models.BooleanField(),
+            ),
+        )
+
+    def completed(self, *, as_of=None):
+        return self.with_completion(as_of=as_of).filter(is_completed=True)
+
+
+class FastParticipation(models.Model):
+    """Membership history; Profile.fasts remains the source of truth.
+
+    Known mid-fast joins can complete by staying past the final local calendar
+    day, or leaving anytime on that day. Post-end joins and unknown joins or
+    closures never confirm completion. Fast deletion preserves snapshots and
+    freezes completion at deletion; profile deletion erases history for privacy.
+    """
+    objects = FastParticipationQuerySet.as_manager()
+
+    profile = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='fast_participations')
+    fast = models.ForeignKey(
+        'Fast', null=True, blank=True, on_delete=models.SET_NULL, related_name='participations',
+    )
+    joined_at = models.DateTimeField(null=True, blank=True, help_text='UTC join timestamp; NULL means unknown.')
+    left_at = models.DateTimeField(null=True, blank=True, help_text='UTC leave timestamp; NULL when open or unknown.')
+    ended_at_unknown = models.BooleanField(default=False, db_default=False, help_text='Membership ended but its leave timestamp is unknown.')
+    fast_original_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    fast_name = models.CharField(max_length=128, blank=True, default='', db_default='')
+    fast_year = models.IntegerField(null=True, blank=True)
+    fast_end_date = models.DateField(null=True, blank=True)
+    fast_deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['profile', 'fast'],
+                condition=models.Q(left_at__isnull=True, ended_at_unknown=False),
+                name='unique_open_fast_participation',
+            ),
+        ]
+        indexes = [models.Index(fields=['fast', 'left_at'])]
+
+    @property
+    def completed(self):
+        """Use the same database predicate as scalable completion queries."""
+        if 'is_completed' in self.__dict__:
+            return self.is_completed
+        return type(self).objects.using(self._state.db).with_completion().filter(pk=self.pk).values_list(
+            'is_completed', flat=True,
+        ).first() or False
+
+    def __str__(self):
+        return f"FastParticipation(profile={self.profile_id}, fast={self.fast_id})"
+
+
 class Profile(models.Model):
     """Model for a user profile."""
 
