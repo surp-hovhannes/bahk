@@ -723,3 +723,17 @@ class FeastPrayer(models.Model):
             'title': rendered_title,
             'text': rendered_text
         }
+
+
+class PrayerLibraryOperation(models.Model):
+    """Durable receipts; never store source text or credentials."""
+
+    church = models.ForeignKey(Church, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    key = models.CharField(max_length=36)
+    digest = models.CharField(max_length=64)
+    result = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['church', 'key'], name='unique_prayer_library_operation')]
