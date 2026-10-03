@@ -1,14 +1,17 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Barrier
+from unittest import skipUnless
 from unittest.mock import patch
 
 from django.conf import settings
 from django.core import mail
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.db import IntegrityError, close_old_connections, connection, transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
-from hub.models import Day
+from hub.models import Day, FastParticipation
 from notifications.models import PostFastEmailDelivery, PostFastEncouragementEmail, PromoEmail
 from notifications.tasks import send_post_fast_encouragement_task, send_promo_email_task
 from tests.fixtures.test_data import TestDataFactory
@@ -30,6 +33,9 @@ class PostFastEncouragementTests(TestCase):
         )
         self.profile = TestDataFactory.create_profile(church=self.church)
         self.profile.fasts.add(self.fast)
+        FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(
+            joined_at=timezone.now() - timedelta(days=3),
+        )
         self.email_copy = PostFastEncouragementEmail.objects.create(
             fast=self.fast, subject='A custom blessing', message='May Christ grant you peace.',
         )
@@ -88,9 +94,79 @@ class PostFastEncouragementTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('fast', form.errors)
 
-    def test_skips_users_who_left(self):
+    def test_skips_early_departures(self):
         self.profile.fasts.remove(self.fast)
+        FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(
+            left_at=timezone.now() - timedelta(days=2),
+        )
         self.assertEqual(send_post_fast_encouragement_task(), 0)
+
+    def test_final_day_leaver_is_eligible_without_current_membership(self):
+        from datetime import datetime, time
+
+        self.profile.fasts.remove(self.fast)
+        left = timezone.make_aware(datetime.combine(self.day.date, time(18)))
+        FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(left_at=left)
+        self.assertEqual(send_post_fast_encouragement_task(), 1)
+        self.assertFalse(self.profile.fasts.filter(pk=self.fast.pk).exists())
+
+    def test_post_end_joiner_is_not_eligible(self):
+        FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(joined_at=timezone.now())
+        self.assertEqual(send_post_fast_encouragement_task(), 0)
+
+    def test_unknown_join_or_ending_is_not_eligible(self):
+        periods = FastParticipation.objects.filter(profile=self.profile, fast=self.fast)
+        periods.update(joined_at=None)
+        self.assertEqual(send_post_fast_encouragement_task(), 0)
+        periods.update(joined_at=timezone.now() - timedelta(days=3), ended_at_unknown=True)
+        self.assertEqual(send_post_fast_encouragement_task(), 0)
+
+    def test_multiple_completed_periods_send_once_per_profile(self):
+        from datetime import datetime, time
+
+        left = timezone.make_aware(datetime.combine(self.day.date, time(12)))
+        FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(left_at=left)
+        FastParticipation.objects.create(
+            profile=self.profile, fast=self.fast, joined_at=left + timedelta(hours=1),
+            left_at=left + timedelta(hours=2),
+        )
+        self.assertEqual(send_post_fast_encouragement_task(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(send_post_fast_encouragement_task(), 0)
+
+    def test_mid_fast_joiner_remaining_through_end_is_eligible(self):
+        from datetime import datetime, time
+
+        Day.objects.create(church=self.church, fast=self.fast, date=self.day.date - timedelta(days=4))
+        joined = timezone.make_aware(datetime.combine(self.day.date - timedelta(days=1), time(12)))
+        FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(joined_at=joined)
+        self.assertEqual(send_post_fast_encouragement_task(), 1)
+
+    def test_previous_local_day_leaver_is_not_eligible(self):
+        from datetime import datetime, time
+
+        self.profile.fasts.remove(self.fast)
+        left = timezone.make_aware(datetime.combine(self.day.date - timedelta(days=1), time(23)))
+        FastParticipation.objects.filter(profile=self.profile, fast=self.fast).update(left_at=left)
+        self.assertEqual(send_post_fast_encouragement_task(), 0)
+
+    def test_another_church_day_does_not_change_fast_completion_day(self):
+        other_church = TestDataFactory.create_church()
+        Day.objects.create(church=other_church, fast=self.fast, date=timezone.localdate())
+        self.assertEqual(send_post_fast_encouragement_task(), 1)
+
+    def test_rechecks_opt_out_under_delivery_lock(self):
+        original = PostFastEmailDelivery.objects.get_or_create
+
+        def opt_out(**kwargs):
+            self.profile.receive_promotional_emails = False
+            self.profile.save(update_fields=['receive_promotional_emails'])
+            return original(**kwargs)
+
+        with patch.object(PostFastEmailDelivery.objects, 'get_or_create', side_effect=opt_out):
+            self.assertEqual(send_post_fast_encouragement_task(), 0)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertIsNone(PostFastEmailDelivery.objects.get().sent_at)
 
     def test_only_sends_after_final_day(self):
         Day.objects.create(church=self.church, fast=self.fast, date=timezone.localdate())
@@ -162,6 +238,9 @@ class PostFastEncouragementTests(TestCase):
     def test_multiple_recipients_and_reruns_cannot_exceed_quota(self):
         other = TestDataFactory.create_profile(church=self.church)
         other.fasts.add(self.fast)
+        FastParticipation.objects.filter(profile=other, fast=self.fast).update(
+            joined_at=timezone.now() - timedelta(days=3),
+        )
 
         def send_with_reservation():
             self.assertEqual(cache.get('email_count'), 1)
@@ -305,4 +384,43 @@ class PostFastEncouragementTests(TestCase):
         ):
             send_promo_email_task(promo.pk)
         send.assert_called_once()
+        self.assertEqual(cache.get('email_count'), 1)
+
+
+@skipUnless(connection.vendor == 'postgresql', 'Delivery row-lock race requires PostgreSQL')
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    EMAIL_RATE_LIMIT=100,
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+)
+class PostFastDeliveryConcurrencyTests(TransactionTestCase):
+    def test_overlapping_batches_deliver_completed_profile_once(self):
+        cache.clear()
+        church = TestDataFactory.create_church()
+        fast = TestDataFactory.create_fast(church=church)
+        completed_on = timezone.localdate() - timedelta(days=1)
+        Day.objects.create(church=church, fast=fast, date=completed_on)
+        profile = TestDataFactory.create_profile(church=church)
+        # Completion eligibility intentionally does not require current membership.
+        FastParticipation.objects.create(
+            profile=profile, fast=fast, joined_at=timezone.now() - timedelta(days=3),
+        )
+        PostFastEncouragementEmail.objects.create(fast=fast, subject='Blessing', message='Peace.')
+        barrier = Barrier(2)
+
+        def worker():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                return send_post_fast_encouragement_task(completed_on=completed_on.isoformat())
+            finally:
+                close_old_connections()
+
+        with patch('notifications.tasks.EmailMultiAlternatives.send', return_value=1) as send:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(worker) for _ in range(2)]
+                results = [future.result(timeout=20) for future in futures]
+        self.assertEqual(sorted(results), [0, 1])
+        send.assert_called_once()
+        self.assertEqual(PostFastEmailDelivery.objects.filter(sent_at__isnull=False).count(), 1)
         self.assertEqual(cache.get('email_count'), 1)

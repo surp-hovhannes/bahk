@@ -155,5 +155,6 @@ jobs:
           AWS_EC2_METADATA_DISABLED: 'true'
         run: >-
           python manage.py test hub.tests.test_fast_participation
+          notifications.tests.test_post_fast_encouragement
           tests.unit.test_migration_state --noinput
           --settings=tests.postgres_test_settings

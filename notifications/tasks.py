@@ -1,6 +1,6 @@
 from celery import shared_task
 from notifications.utils import send_push_notification
-from hub.models import Fast, Devotional
+from hub.models import Fast, Devotional, FastParticipation
 from hub.models import Profile
 from hub.models import Day
 from django.utils import timezone
@@ -42,9 +42,8 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_post_fast_encouragement_task(completed_on=None):
-    """Encourage remaining participants the day after the final scheduled day."""
+    """Encourage confirmed completers once per user, after the final local day."""
     from django.db import transaction
-    from django.db.models import Max
     from .models import PostFastEmailDelivery, PostFastEncouragementEmail
 
     # Keep the completion date when a rate-limited batch resumes after midnight.
@@ -55,16 +54,18 @@ def send_post_fast_encouragement_task(completed_on=None):
         if completed_on
         else timezone.localdate() - timedelta(days=1)
     )
-    fasts = Fast.objects.annotate(completed_on=Max('days__date')).filter(
-        completed_on=yesterday,
-    )
+    fasts = Fast.objects.with_dates().filter(end_date=yesterday)
     sent = 0
     for fast in fasts.iterator():
         email_copy = PostFastEncouragementEmail.objects.filter(fast=fast).first()
         if not email_copy or not email_copy.message.strip() or not email_copy.subject.strip():
             continue
+        # IN selects each profile once even if several periods completed.
+        completed_profiles = FastParticipation.objects.completed(
+            as_of=yesterday + timedelta(days=1),
+        ).filter(fast=fast).values('profile_id')
         profiles = Profile.objects.filter(
-            fasts=fast, receive_promotional_emails=True, user__is_active=True,
+            pk__in=completed_profiles, receive_promotional_emails=True, user__is_active=True,
         ).exclude(user__email='').select_related('user')
         for profile in profiles.iterator():
             quota_held = None
@@ -77,10 +78,7 @@ def send_post_fast_encouragement_task(completed_on=None):
                     delivery = PostFastEmailDelivery.objects.select_for_update().get(pk=delivery.pk)
                     if delivery.sent_at is not None:
                         continue
-                    if not Profile.objects.filter(
-                        pk=profile.pk, fasts=fast, receive_promotional_emails=True,
-                        user__is_active=True,
-                    ).exists():
+                    if not profiles.filter(pk=profile.pk).exists():
                         continue
                     quota_held = reserve_email_quota()
                     if quota_held is None:
