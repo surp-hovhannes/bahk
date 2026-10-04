@@ -19,6 +19,7 @@ from hub.services.llm_requests import anthropic_message
 from hub.services.icon_match_router import match_icons
 from hub.services.icon_taxonomy_matching import assignment_current
 from icons.models import Icon
+from prayers.clef_moderation import clef_moderation_result
 from prayers.models import Prayer, PrayerRequest, PrayerRequestPrayerLog
 
 logger = logging.getLogger(__name__)
@@ -193,6 +194,48 @@ Note: The concerns array should be empty if fully approved with no issues.
         return model_name, None, prompt_text
 
 
+def _llm_moderation_result(prayer_request):
+    """Moderate ``prayer_request`` with the configured LLM prompt and return its parsed JSON."""
+    # Get prompt and model (from database or fallback to hard-coded)
+    model_name, system_role, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
+
+    from anthropic import Anthropic
+
+    client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    response = anthropic_message(
+        client,
+        model=model_name,
+        max_tokens=500,
+        system=system_role,
+        messages=[{"role": "user", "content": moderation_prompt}],
+    )
+
+    # Parse response
+    import json
+
+    response_text = response.content[0].text
+
+    # Extract JSON from response (handle markdown code blocks)
+    if "```json" in response_text:
+        response_text = response_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in response_text:
+        response_text = response_text.split("```")[1].split("```")[0].strip()
+
+    llm_result = json.loads(response_text)
+
+    # Validate that the LLM returned a dict with required structure
+    if not isinstance(llm_result, dict):
+        raise ValueError(
+            f"LLM returned {type(llm_result).__name__} instead of dict. Response was: {response_text[:200]}"
+        )
+
+    # Check for required key 'approved' at minimum
+    if "approved" not in llm_result:
+        raise ValueError(f"LLM response missing required 'approved' key. Got keys: {list(llm_result.keys())}")
+
+    return llm_result
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def moderate_prayer_request_task(self, prayer_request_id):
     """
@@ -241,44 +284,12 @@ def moderate_prayer_request_task(self, prayer_request_id):
             logger.info(f"Prayer request {prayer_request_id} rejected due to profanity")
             return {"success": True, "status": "rejected", "reason": "profanity"}
 
-        # Step 2: LLM moderation check
+        # Step 2: LLM (or Clef decision model) moderation check
         try:
-            # Get prompt and model (from database or fallback to hard-coded)
-            model_name, system_role, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
-
-            from anthropic import Anthropic
-
-            client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-            response = anthropic_message(
-                client,
-                model=model_name,
-                max_tokens=500,
-                system=system_role,
-                messages=[{"role": "user", "content": moderation_prompt}],
-            )
-
-            # Parse response
-            import json
-
-            response_text = response.content[0].text
-
-            # Extract JSON from response (handle markdown code blocks)
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-
-            llm_result = json.loads(response_text)
-
-            # Validate that the LLM returned a dict with required structure
-            if not isinstance(llm_result, dict):
-                raise ValueError(
-                    f"LLM returned {type(llm_result).__name__} instead of dict. Response was: {response_text[:200]}"
-                )
-
-            # Check for required key 'approved' at minimum
-            if "approved" not in llm_result:
-                raise ValueError(f"LLM response missing required 'approved' key. Got keys: {list(llm_result.keys())}")
+            if settings.PRAYER_MODERATION_ENGINE == "clef":
+                llm_result = clef_moderation_result(prayer_request, model=settings.PRAYER_MODERATION_CLEF_MODEL)
+            else:
+                llm_result = _llm_moderation_result(prayer_request)
 
             # Update prayer request based on LLM result
             prayer_request.reviewed = True

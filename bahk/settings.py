@@ -469,6 +469,14 @@ FEAST_CONTEXT_REGENERATION_THRESHOLD = config('FEAST_CONTEXT_REGENERATION_THRESH
 # ANTHROPIC SETTINGS
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY')
 
+# CLOUDFLARE WORKERS AI SETTINGS
+CLOUDFLARE_WORKERSAI_ACCOUNT_ID = config('CLOUDFLARE_WORKERSAI_ACCOUNT_ID', default='')
+CLOUDFLARE_WORKERSAI_API_KEY = config('CLOUDFLARE_WORKERSAI_API_KEY', default='')
+# Prayer request moderation engine: "llm" (active LLMPrompt, Claude by default) or
+# "clef" (Cloudflare's Clef decision model, see prayers/clef_moderation.py).
+PRAYER_MODERATION_ENGINE = config('PRAYER_MODERATION_ENGINE', default='llm')
+PRAYER_MODERATION_CLEF_MODEL = config('PRAYER_MODERATION_CLEF_MODEL', default='clef')
+
 # API.BIBLE SETTINGS
 BIBLE_API_KEY = config('BIBLE_API_KEY', default='')
 # Number of days after which a reading's text is considered stale and is queued for the
