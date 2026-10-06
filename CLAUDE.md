@@ -359,6 +359,10 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`
 - `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (for AI-generated content)
+- `CLOUDFLARE_WORKERSAI_ACCOUNT_ID`, `CLOUDFLARE_WORKERSAI_API_KEY` (Clef decision model);
+  `PRAYER_MODERATION_ENGINE` (`llm` default, or `clef`) and `PRAYER_MODERATION_CLEF_MODEL`
+  (`clef` default) choose the prayer request moderator. Run
+  `python manage.py compare_clef_moderation` (read-only) to compare Clef against past decisions
 - `BIBLE_API_KEY` (API.Bible text retrieval); see Key Features #6 for the spend-control
   vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT` (distinct passages, not
   readings), `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`

@@ -82,6 +82,28 @@ class PrayerRequestModerationAdminTests(TestCase):
     def test_resolved_filter_groups_terminal_states(self):
         self.assertEqual(self.filtered_ids("resolved"), {self.resolved.pk})
 
+    def test_rejected_crisis_stays_in_needs_review_until_human_review_is_resolved(self):
+        crisis = PrayerRequest.objects.create(
+            title="Synthetic crisis requiring attention",
+            description="Synthetic safety concern for queue routing only",
+            requester=self.user,
+            status="rejected",
+            reviewed=True,
+            requires_human_review=True,
+            moderation_severity="critical",
+        )
+
+        self.assertTrue(crisis.reviewed)
+        self.assertIn(crisis.pk, self.filtered_ids("needs_review"))
+        badge = str(self.model_admin.moderation_state(crisis))
+        self.assertIn("Critical", badge)
+        self.assertIn("Human review", badge)
+
+        crisis.requires_human_review = False
+        crisis.save(update_fields=["requires_human_review"])
+
+        self.assertNotIn(crisis.pk, self.filtered_ids("needs_review"))
+
     def test_badges_make_moderation_and_expiration_state_scannable(self):
         flagged = str(self.model_admin.moderation_state(self.flagged))
         expired = str(self.model_admin.expiration_state(self.expired))

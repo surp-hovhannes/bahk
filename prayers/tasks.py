@@ -19,6 +19,7 @@ from hub.services.llm_requests import anthropic_message
 from hub.services.icon_match_router import match_icons
 from hub.services.icon_taxonomy_matching import assignment_current
 from icons.models import Icon
+from prayers.clef_moderation import clef_moderation_result
 from prayers.models import Prayer, PrayerRequest, PrayerRequestPrayerLog
 
 logger = logging.getLogger(__name__)
@@ -193,14 +194,56 @@ Note: The concerns array should be empty if fully approved with no issues.
         return model_name, None, prompt_text
 
 
+def _llm_moderation_result(prayer_request):
+    """Moderate ``prayer_request`` with the configured LLM prompt and return its parsed JSON."""
+    # Get prompt and model (from database or fallback to hard-coded)
+    model_name, system_role, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
+
+    from anthropic import Anthropic
+
+    client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    response = anthropic_message(
+        client,
+        model=model_name,
+        max_tokens=500,
+        system=system_role,
+        messages=[{"role": "user", "content": moderation_prompt}],
+    )
+
+    # Parse response
+    import json
+
+    response_text = response.content[0].text
+
+    # Extract JSON from response (handle markdown code blocks)
+    if "```json" in response_text:
+        response_text = response_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in response_text:
+        response_text = response_text.split("```")[1].split("```")[0].strip()
+
+    llm_result = json.loads(response_text)
+
+    # Validate that the LLM returned a dict with required structure
+    if not isinstance(llm_result, dict):
+        raise ValueError(
+            f"LLM returned {type(llm_result).__name__} instead of dict. Response was: {response_text[:200]}"
+        )
+
+    # Check for required key 'approved' at minimum
+    if "approved" not in llm_result:
+        raise ValueError(f"LLM response missing required 'approved' key. Got keys: {list(llm_result.keys())}")
+
+    return llm_result
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def moderate_prayer_request_task(self, prayer_request_id):
     """
-    Moderate a prayer request using profanity filter and LLM.
+    Moderate a prayer request using profanity flags and the configured safety engine.
 
     This task:
     1. Runs profanity filter check
-    2. Runs LLM moderation check
+    2. Runs the configured Clef or LLM moderation check before routing
     3. Updates prayer request status based on results
     4. Sends email to admin if rejected
 
@@ -219,66 +262,18 @@ def moderate_prayer_request_task(self, prayer_request_id):
         title_has_profanity = profanity.contains_profanity(prayer_request.title)
         description_has_profanity = profanity.contains_profanity(prayer_request.description)
 
-        if title_has_profanity or description_has_profanity:
-            # Automatic rejection due to profanity
-            prayer_request.reviewed = True
-            prayer_request.status = "rejected"
-            prayer_request.moderation_result = {
-                "profanity_check": {
-                    "passed": False,
-                    "title_contains_profanity": title_has_profanity,
-                    "description_contains_profanity": description_has_profanity,
-                },
-                "llm_check": None,
-                "reason": "Content contains inappropriate language",
-            }
-            prayer_request.moderated_at = timezone.now()
-            prayer_request.save()
+        profanity_check = {
+            "passed": not (title_has_profanity or description_has_profanity),
+            "title_contains_profanity": title_has_profanity,
+            "description_contains_profanity": description_has_profanity,
+        }
 
-            # Send email to admin
-            _send_moderation_alert_email(prayer_request, "profanity_detected")
-
-            logger.info(f"Prayer request {prayer_request_id} rejected due to profanity")
-            return {"success": True, "status": "rejected", "reason": "profanity"}
-
-        # Step 2: LLM moderation check
+        # Step 2: LLM (or Clef decision model) moderation check
         try:
-            # Get prompt and model (from database or fallback to hard-coded)
-            model_name, system_role, moderation_prompt = _get_moderation_prompt_and_service(prayer_request)
-
-            from anthropic import Anthropic
-
-            client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-            response = anthropic_message(
-                client,
-                model=model_name,
-                max_tokens=500,
-                system=system_role,
-                messages=[{"role": "user", "content": moderation_prompt}],
-            )
-
-            # Parse response
-            import json
-
-            response_text = response.content[0].text
-
-            # Extract JSON from response (handle markdown code blocks)
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-
-            llm_result = json.loads(response_text)
-
-            # Validate that the LLM returned a dict with required structure
-            if not isinstance(llm_result, dict):
-                raise ValueError(
-                    f"LLM returned {type(llm_result).__name__} instead of dict. Response was: {response_text[:200]}"
-                )
-
-            # Check for required key 'approved' at minimum
-            if "approved" not in llm_result:
-                raise ValueError(f"LLM response missing required 'approved' key. Got keys: {list(llm_result.keys())}")
+            if settings.PRAYER_MODERATION_ENGINE == "clef":
+                llm_result = clef_moderation_result(prayer_request, model=settings.PRAYER_MODERATION_CLEF_MODEL)
+            else:
+                llm_result = _llm_moderation_result(prayer_request)
 
             # Update prayer request based on LLM result
             prayer_request.reviewed = True
@@ -300,13 +295,15 @@ def moderate_prayer_request_task(self, prayer_request_id):
             # Store moderation metadata
             prayer_request.moderation_severity = severity
             prayer_request.moderation_result = {
-                "profanity_check": {"passed": True},
+                "profanity_check": profanity_check,
                 "llm_check": llm_result,
                 "reason": llm_result.get("reason", "Processed by automated moderation"),
             }
 
+            # Safety takes precedence over profanity; keep these requests unpublished.
             # Handle critical severity - always escalate
             if severity == "critical" or suggested_action == "escalate":
+                prayer_request.moderation_severity = "critical"
                 prayer_request.status = "rejected"
                 prayer_request.requires_human_review = True
                 prayer_request.save()
@@ -318,6 +315,15 @@ def moderate_prayer_request_task(self, prayer_request_id):
                     f"CRITICAL: Prayer request {prayer_request_id} flagged for safety concerns "
                     f"(severity={severity}, suggested_action={suggested_action}): {llm_result.get('reason')}"
                 )
+
+            # Reject profanity only after the model has had a chance to escalate.
+            elif not profanity_check["passed"]:
+                prayer_request.status = "rejected"
+                prayer_request.requires_human_review = False
+                prayer_request.moderation_result["reason"] = "Content contains inappropriate language"
+                prayer_request.save()
+                _send_moderation_alert_email(prayer_request, "profanity_detected")
+                logger.info(f"Prayer request {prayer_request_id} rejected due to profanity")
 
             # Handle high severity - flag for review regardless of approval
             elif severity == "high" or requires_review or suggested_action == "flag_for_review":
@@ -392,7 +398,10 @@ def moderate_prayer_request_task(self, prayer_request_id):
 
             prayer_request.save()
 
-            return {"success": True, "status": prayer_request.status, "llm_result": llm_result}
+            result = {"success": True, "status": prayer_request.status, "llm_result": llm_result}
+            if not profanity_check["passed"] and severity != "critical" and suggested_action != "escalate":
+                result["reason"] = "profanity"
+            return result
 
         except Exception as llm_error:
             logger.error(f"LLM moderation error for prayer request {prayer_request_id}: {llm_error}")
@@ -401,7 +410,7 @@ def moderate_prayer_request_task(self, prayer_request_id):
             prayer_request.requires_human_review = True
             prayer_request.moderation_severity = "high"
             prayer_request.moderation_result = {
-                "profanity_check": {"passed": True},
+                "profanity_check": profanity_check,
                 "llm_check": {"error": str(llm_error)},
                 "reason": "LLM moderation failed, requires manual review",
             }
