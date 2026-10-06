@@ -163,6 +163,19 @@ class ClefModerationTaskTests(BaseTestCase):
         self.assertEqual(prayer_request.moderation_severity, "critical")
         email.assert_called_with(prayer_request, "critical_safety_concern")
 
+    def test_crisis_with_profanity_runs_clef_and_preserves_probabilities(self):
+        prayer_request = self.create_request("Fuck, help", "I plan to hurt myself tonight.")
+        result, run, email = self.moderate(prayer_request, clef_answers(crisis=0.9))
+
+        run.assert_called_once()
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(prayer_request.moderation_severity, "critical")
+        self.assertTrue(prayer_request.requires_human_review)
+        self.assertTrue(prayer_request.moderation_result["profanity_check"]["title_contains_profanity"])
+        self.assertEqual(prayer_request.moderation_result["llm_check"]["probabilities"]["crisis"], 0.9)
+        self.assertFalse(PrayerRequestAcceptance.objects.filter(prayer_request=prayer_request).exists())
+        email.assert_called_once_with(prayer_request, "critical_safety_concern")
+
     def test_spam_is_rejected(self):
         prayer_request = self.create_request("Buy watches", "cheapwatchz.example")
         result, _, email = self.moderate(prayer_request, clef_answers(genuine=0.05, spam=0.95))

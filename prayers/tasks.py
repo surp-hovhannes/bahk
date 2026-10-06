@@ -239,11 +239,11 @@ def _llm_moderation_result(prayer_request):
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def moderate_prayer_request_task(self, prayer_request_id):
     """
-    Moderate a prayer request using profanity filter and LLM.
+    Moderate a prayer request using profanity flags and the configured safety engine.
 
     This task:
     1. Runs profanity filter check
-    2. Runs LLM moderation check
+    2. Runs the configured Clef or LLM moderation check before routing
     3. Updates prayer request status based on results
     4. Sends email to admin if rejected
 
@@ -262,27 +262,11 @@ def moderate_prayer_request_task(self, prayer_request_id):
         title_has_profanity = profanity.contains_profanity(prayer_request.title)
         description_has_profanity = profanity.contains_profanity(prayer_request.description)
 
-        if title_has_profanity or description_has_profanity:
-            # Automatic rejection due to profanity
-            prayer_request.reviewed = True
-            prayer_request.status = "rejected"
-            prayer_request.moderation_result = {
-                "profanity_check": {
-                    "passed": False,
-                    "title_contains_profanity": title_has_profanity,
-                    "description_contains_profanity": description_has_profanity,
-                },
-                "llm_check": None,
-                "reason": "Content contains inappropriate language",
-            }
-            prayer_request.moderated_at = timezone.now()
-            prayer_request.save()
-
-            # Send email to admin
-            _send_moderation_alert_email(prayer_request, "profanity_detected")
-
-            logger.info(f"Prayer request {prayer_request_id} rejected due to profanity")
-            return {"success": True, "status": "rejected", "reason": "profanity"}
+        profanity_check = {
+            "passed": not (title_has_profanity or description_has_profanity),
+            "title_contains_profanity": title_has_profanity,
+            "description_contains_profanity": description_has_profanity,
+        }
 
         # Step 2: LLM (or Clef decision model) moderation check
         try:
@@ -311,13 +295,15 @@ def moderate_prayer_request_task(self, prayer_request_id):
             # Store moderation metadata
             prayer_request.moderation_severity = severity
             prayer_request.moderation_result = {
-                "profanity_check": {"passed": True},
+                "profanity_check": profanity_check,
                 "llm_check": llm_result,
                 "reason": llm_result.get("reason", "Processed by automated moderation"),
             }
 
+            # Safety takes precedence over profanity; keep these requests unpublished.
             # Handle critical severity - always escalate
             if severity == "critical" or suggested_action == "escalate":
+                prayer_request.moderation_severity = "critical"
                 prayer_request.status = "rejected"
                 prayer_request.requires_human_review = True
                 prayer_request.save()
@@ -329,6 +315,15 @@ def moderate_prayer_request_task(self, prayer_request_id):
                     f"CRITICAL: Prayer request {prayer_request_id} flagged for safety concerns "
                     f"(severity={severity}, suggested_action={suggested_action}): {llm_result.get('reason')}"
                 )
+
+            # Reject profanity only after the model has had a chance to escalate.
+            elif not profanity_check["passed"]:
+                prayer_request.status = "rejected"
+                prayer_request.requires_human_review = False
+                prayer_request.moderation_result["reason"] = "Content contains inappropriate language"
+                prayer_request.save()
+                _send_moderation_alert_email(prayer_request, "profanity_detected")
+                logger.info(f"Prayer request {prayer_request_id} rejected due to profanity")
 
             # Handle high severity - flag for review regardless of approval
             elif severity == "high" or requires_review or suggested_action == "flag_for_review":
@@ -403,7 +398,10 @@ def moderate_prayer_request_task(self, prayer_request_id):
 
             prayer_request.save()
 
-            return {"success": True, "status": prayer_request.status, "llm_result": llm_result}
+            result = {"success": True, "status": prayer_request.status, "llm_result": llm_result}
+            if not profanity_check["passed"] and severity != "critical" and suggested_action != "escalate":
+                result["reason"] = "profanity"
+            return result
 
         except Exception as llm_error:
             logger.error(f"LLM moderation error for prayer request {prayer_request_id}: {llm_error}")
@@ -412,7 +410,7 @@ def moderate_prayer_request_task(self, prayer_request_id):
             prayer_request.requires_human_review = True
             prayer_request.moderation_severity = "high"
             prayer_request.moderation_result = {
-                "profanity_check": {"passed": True},
+                "profanity_check": profanity_check,
                 "llm_check": {"error": str(llm_error)},
                 "reason": "LLM moderation failed, requires manual review",
             }
