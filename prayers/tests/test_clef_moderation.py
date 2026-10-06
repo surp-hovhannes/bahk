@@ -11,7 +11,7 @@ from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 
 from hub.services.clef import ClefError, run_clef
-from prayers.clef_moderation import QUESTIONS, decide, moderation_state
+from prayers.clef_moderation import QUESTIONS, clef_moderation_result, decide, moderation_state
 from prayers.models import PrayerRequest, PrayerRequestAcceptance
 from prayers.tasks import moderate_prayer_request_task
 from tests.base import BaseTestCase
@@ -25,6 +25,56 @@ def probabilities(**overrides):
 
 def clef_answers(**overrides):
     return {name: {"type": "noul", "noul": value} for name, value in probabilities(**overrides).items()}
+
+
+class ClefResponseValidationTests(SimpleTestCase):
+    def test_invalid_scores_are_rejected_for_every_question(self):
+        request = SimpleNamespace(title="Invented support request", description="Invented details")
+        for name in QUESTIONS:
+            for value in (
+                True,
+                False,
+                -0.01,
+                1.01,
+                float("nan"),
+                float("inf"),
+                -float("inf"),
+                "0.03",
+                "NaN",
+                None,
+                [],
+                {},
+            ):
+                with self.subTest(question=name, value=value):
+                    with patch("prayers.clef_moderation.run_clef", return_value=clef_answers(**{name: value})):
+                        with self.assertRaisesMessage(ClefError, f"invalid probability for: {name}"):
+                            clef_moderation_result(request)
+
+    def test_malformed_answers_raise_a_safe_error(self):
+        request = SimpleNamespace(title="Invented support request", description="")
+        for answers in (
+            None,
+            [],
+            {},
+            {**clef_answers(), "crisis": None},
+            {**clef_answers(), "crisis": {}},
+            {**clef_answers(), "crisis": {"noul": "Invented private payload"}},
+        ):
+            with self.subTest(answers=answers), patch("prayers.clef_moderation.run_clef", return_value=answers):
+                with self.assertRaises(ClefError) as caught:
+                    clef_moderation_result(request)
+                self.assertNotIn("Invented private payload", str(caught.exception))
+
+    def test_zero_and_one_are_valid_probabilities(self):
+        request = SimpleNamespace(title="Invented support request", description="")
+        for value in (0, 1, 0.0, 1.0):
+            with (
+                self.subTest(value=value),
+                patch("prayers.clef_moderation.run_clef", return_value=clef_answers(crisis=value)),
+            ):
+                result = clef_moderation_result(request)
+                self.assertEqual(result["probabilities"]["crisis"], value)
+                self.assertEqual(result["suggested_action"], "approve" if value == 0 else "escalate")
 
 
 class ClefDecisionTests(SimpleTestCase):
@@ -132,9 +182,11 @@ class ClefModerationTaskTests(BaseTestCase):
         )
 
     def moderate(self, prayer_request, answers=None, error=None):
-        with patch("prayers.clef_moderation.run_clef", return_value=answers, side_effect=error) as run, \
-             patch("prayers.tasks._send_moderation_alert_email") as email, \
-             patch("anthropic.Anthropic") as anthropic:
+        with (
+            patch("prayers.clef_moderation.run_clef", return_value=answers, side_effect=error) as run,
+            patch("prayers.tasks._send_moderation_alert_email") as email,
+            patch("anthropic.Anthropic") as anthropic,
+        ):
             result = moderate_prayer_request_task(prayer_request.id)
         anthropic.assert_not_called()
         prayer_request.refresh_from_db()
@@ -193,8 +245,89 @@ class ClefModerationTaskTests(BaseTestCase):
         self.assertTrue(prayer_request.requires_human_review)
         email.assert_called_with(prayer_request, "llm_error")
 
+    def test_invalid_scores_fail_safe_with_or_without_profanity(self):
+        for title in ("Invented support request", "Fuck, help"):
+            for name, value in (
+                ("crisis", -1),
+                ("crisis", False),
+                ("crisis", float("nan")),
+                ("crisis", float("inf")),
+                ("spam", -1),
+                ("genuine", 1.1),
+            ):
+                with self.subTest(title=title, question=name, value=value):
+                    prayer_request = self.create_request(title)
+                    with (
+                        patch("prayers.tasks.Event.create_event") as event,
+                        patch("prayers.tasks.UserMilestone.create_milestone") as milestone,
+                    ):
+                        result, run, email = self.moderate(prayer_request, clef_answers(**{name: value}))
+                    run.assert_called_once()
+                    event.assert_not_called()
+                    milestone.assert_not_called()
+                    self.assertFalse(result["success"])
+                    self.assertEqual(prayer_request.status, "pending_moderation")
+                    self.assertEqual(prayer_request.moderation_severity, "high")
+                    self.assertTrue(prayer_request.requires_human_review)
+                    self.assertFalse(prayer_request.reviewed)
+                    self.assertIsNone(prayer_request.moderated_at)
+                    self.assertFalse(PrayerRequestAcceptance.objects.filter(prayer_request=prayer_request).exists())
+                    email.assert_called_once_with(prayer_request, "llm_error")
+
 
 class CompareClefModerationCommandTests(BaseTestCase):
+    def test_skips_noncritical_profanity_rejections_without_provider_calls(self):
+        requester = self.create_user(email="compare-profanity@example.test")
+        for approved, severity, action in (
+            (True, "low", "approve"),
+            (True, "high", "flag_for_review"),
+            (False, "medium", "reject"),
+        ):
+            PrayerRequest.objects.create(
+                title="Invented profanity rejection",
+                requester=requester,
+                status="rejected",
+                reviewed=True,
+                moderated_at=timezone.now(),
+                moderation_result={
+                    "profanity_check": {"passed": False},
+                    "llm_check": {"approved": approved, "severity": severity, "suggested_action": action},
+                },
+            )
+        before = list(PrayerRequest.objects.values())
+        out = StringIO()
+        with patch("prayers.clef_moderation.run_clef") as provider:
+            call_command("compare_clef_moderation", stdout=out)
+        provider.assert_not_called()
+        self.assertIn("Compared 0 requests", out.getvalue())
+        self.assertIn("'profanity rejection': 3", out.getvalue())
+        self.assertNotIn("Agreement:", out.getvalue())
+        self.assertEqual(list(PrayerRequest.objects.values()), before)
+
+    def test_compares_safety_escalations_even_with_profanity(self):
+        requester = self.create_user(email="compare-escalation@example.test")
+        for severity, action in ((" CRITICAL ", "approve"), ("low", " ESCALATE ")):
+            PrayerRequest.objects.create(
+                title="Invented safety escalation",
+                requester=requester,
+                status="rejected",
+                reviewed=True,
+                requires_human_review=True,
+                moderated_at=timezone.now(),
+                moderation_result={
+                    "profanity_check": {"passed": False},
+                    "llm_check": {"approved": True, "severity": severity, "suggested_action": action},
+                },
+            )
+        before = list(PrayerRequest.objects.values())
+        out = StringIO()
+        with patch("prayers.clef_moderation.run_clef", return_value=clef_answers(crisis=0.9)) as provider:
+            call_command("compare_clef_moderation", stdout=out)
+        self.assertEqual(provider.call_count, 2)
+        self.assertIn("Compared 2 requests", out.getvalue())
+        self.assertIn("Agreement: 2/2", out.getvalue())
+        self.assertEqual(list(PrayerRequest.objects.values()), before)
+
     def test_tabulates_previous_route_against_clef_without_writing(self):
         requester = self.create_user(email="compare@example.com")
         prayer_request = PrayerRequest.objects.create(

@@ -11,7 +11,7 @@ crisis messages (English, Armenian, Spanish) on the full ``clef`` model.
 default for this safety-relevant decision.
 """
 
-from hub.services.clef import run_clef
+from hub.services.clef import ClefError, run_clef
 
 QUESTIONS = {
     "genuine": {
@@ -141,7 +141,15 @@ def clef_moderation_result(prayer_request, model="clef"):
     can see why a request was routed where it was.
     """
     answers = run_clef(moderation_state(prayer_request), QUESTIONS, model=model)
-    probabilities = {name: float(answers[name]["noul"]) for name in QUESTIONS}
+    probabilities = {}
+    for name in QUESTIONS:
+        answer = answers.get(name) if isinstance(answers, dict) else None
+        value = answer.get("noul") if isinstance(answer, dict) else None
+        # Validate before coercion: bools and numeric strings are not JSON
+        # probabilities. The range check also rejects NaN and infinities.
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            raise ClefError(f"Clef returned an invalid probability for: {name}")
+        probabilities[name] = float(value)
     return {
         **decide(probabilities),
         "engine": "clef",
