@@ -718,10 +718,12 @@ All prayer requests undergo two-tier moderation:
 ### 1. Profanity Filter
 - Uses `better-profanity` library
 - Checks title and description
-- Immediate rejection if profanity detected
+- Records profanity flags before calling the configured moderation engine once
+- Rejects profanity after safety evaluation, unless critical severity or escalation requires urgent human review
+- Engine errors remain pending with high severity and human review, including when profanity is present
 - Email sent to admin with details
 
-### 2. AI Moderation (Claude Sonnet 4.5)
+### 2. AI Moderation (configured Clef or LLM engine)
 
 **Enhanced Moderation with Severity Levels**
 
@@ -745,10 +747,11 @@ The AI moderation system evaluates each request and assigns a severity level:
 
 **Tiered Moderation Workflow:**
 
-1. **Critical Severity**: Automatically rejected, flagged for review, urgent email sent to admin
-2. **High Severity**: Kept in `pending_moderation` status, flagged for review, email sent to admin
-3. **Medium/Low + Approved**: Auto-approved with severity tracking
-4. **Rejected (any severity)**: Status set to `rejected`, admin notified
+1. **Critical Severity or Escalate Action**: Stored as critical, rejected (unpublished), flagged for review, urgent email sent to admin; takes precedence over profanity
+2. **Profanity without escalation**: Rejected, model evidence and profanity flags retained, profanity email sent to admin
+3. **High Severity**: Kept in `pending_moderation` status, flagged for review, email sent to admin
+4. **Medium/Low + Approved**: Auto-approved with severity tracking
+5. **Rejected (any severity)**: Status set to `rejected`, admin notified
 
 **Moderation Response Format:**
 ```json

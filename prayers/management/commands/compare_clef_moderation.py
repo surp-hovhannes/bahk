@@ -3,7 +3,8 @@
 Re-moderates already-reviewed prayer requests with Clef and tabulates its
 routing (approve / reject / review / escalate) against the decision the LLM
 made at the time. Requests rejected by the profanity filter or whose LLM call
-failed are skipped, since Clef would not have been consulted for them either.
+failed are skipped, since their stored model decision is not the effective
+route. Safety escalations remain comparable even when profanity is present.
 Nothing is written to the database.
 """
 
@@ -56,6 +57,11 @@ class Command(BaseCommand):
             if llm_check.get("engine") == "clef":
                 skipped["already moderated by Clef"] += 1
                 continue
+            before = route(llm_check)
+            profanity_check = stored.get("profanity_check")
+            if isinstance(profanity_check, dict) and profanity_check.get("passed") is False and before != "escalate":
+                skipped["profanity rejection"] += 1
+                continue
             try:
                 clef_result = clef_moderation_result(prayer_request, model=model)
             except ClefError as exc:
@@ -63,7 +69,7 @@ class Command(BaseCommand):
                 self.stderr.write(f"#{prayer_request.id}: {exc}")
                 continue
 
-            before, after = route(llm_check), route(clef_result)
+            after = route(clef_result)
             table[before, after] += 1
             if before != after:
                 disagreements.append((prayer_request, before, after, clef_result["probabilities"]))
