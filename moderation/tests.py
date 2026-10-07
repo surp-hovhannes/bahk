@@ -71,6 +71,33 @@ class ModerationTests(TestCase):
         self.assertRedirects(response, reverse("moderation-dashboard"))
         self.assertEqual(self.client.get("/admin/").status_code, 302)
 
+    def test_admin_quick_link_requires_explicit_responsibility_and_opens_scoped_dashboard(self):
+        for general, crisis in [(False, False), (True, False), (False, True), (True, True)]:
+            with self.subTest(general=general, crisis=crisis):
+                Responsibility.objects.update_or_create(
+                    user=self.staff, defaults={"general": general, "crisis": crisis}
+                )
+                self.client.force_login(self.staff)
+                response = self.client.get(reverse("admin:index"))
+                links = [a for a in response.context["admin_quick_actions"] if a["name"] == "Moderation Dashboard"]
+                self.assertEqual(len(links), int(general or crisis))
+                if links:
+                    self.assertContains(response, 'class="module fp-quick-actions"')
+                    self.assertEqual(links[0]["url"], reverse("moderation-dashboard"))
+                    dashboard = self.client.get(links[0]["url"])
+                    self.assertEqual(dashboard.status_code, 200)
+                    if not crisis:
+                        self.assertNotContains(dashboard, self.urgent.title)
+                else:
+                    self.assertNotContains(response, "Moderation Dashboard")
+        self.client.force_login(self.superuser)
+        self.assertNotContains(self.client.get(reverse("admin:index")), "Moderation Dashboard")
+        self.staff.is_active = False
+        self.staff.save(update_fields=["is_active"])
+        request = RequestFactory().get(reverse("admin:index"))
+        request.user = self.staff
+        self.assertFalse(admin.site.each_context(request)["moderation_access"])
+
     def test_direct_post_cannot_escalate_or_publish_crisis(self):
         self.client.force_login(self.general)
         self.assertEqual(

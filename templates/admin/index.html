@@ -3,7 +3,6 @@
 
 {% block content %}
 <div id="content-main" class="fp-dashboard">
-  {% if moderation_access %}<p><a href="{% url 'moderation-dashboard' %}">Moderation review dashboard</a></p>{% endif %}
   {% if admin_sections %}
     {% for section in admin_sections %}
       <section class="fp-admin-section" aria-labelledby="section-{{ section.slug }}">

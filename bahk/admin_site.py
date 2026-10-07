@@ -149,12 +149,22 @@ class FastAndPrayAdminSite(AdminSite):
         """Render the dashboard without rebuilding Django's permission logic."""
         site_context = self.each_context(request)
         app_list = site_context["available_apps"]
+        quick_actions = self.get_quick_actions(app_list)
+        if site_context["moderation_access"]:
+            quick_actions.append(
+                {
+                    "name": "Moderation Dashboard",
+                    "description": "Review items covered by your assigned moderation responsibilities.",
+                    "icon": "shield",
+                    "url": reverse("moderation-dashboard"),
+                }
+            )
         context = {
             **site_context,
             "title": self.index_title,
             "subtitle": None,
             "app_list": app_list,
-            "admin_quick_actions": self.get_quick_actions(app_list),
+            "admin_quick_actions": quick_actions,
             **(extra_context or {}),
         }
         request.current_app = self.name

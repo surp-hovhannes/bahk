@@ -109,18 +109,20 @@ buttons, tables and theme controls. The additional stylesheet only handles
 content wrapping and responsive overflow. Staff retain their permission-filtered
 admin navigation; nonstaff receive only moderation navigation and logout, with
 no new access to `/admin/`. The login also uses the native Bahk wordmark and
-login layout. The moderation link on the admin index now sits inside the main
-content column so it does not displace the existing dashboard grid.
+login layout. The admin's existing Quick actions panel includes a Moderation
+Dashboard link only for users with an active, explicit General or Crisis
+assignment. It reuses the native shortcut card and shield icon without adding
+crisis counts or content. Nonstaff still use their standalone moderation login.
 
 Validation used isolated SQLite test databases, the locmem email backend and
 mocked deliveries. External socket connections were blocked. No production
 account assignment, provider evaluation, deployment or live email was performed.
 
 - Full Django suite (`--parallel=2 --exclude-tag=performance --exclude-tag=slow`):
-  **2,201 tests passed, 38 skipped**, with blank AWS settings, metadata lookup
+  **2,202 tests completed successfully (38 skipped)**, with blank AWS settings, metadata lookup
   disabled and an in-memory Celery broker/result backend. External sockets were
   blocked. The earlier Redis/S3 runtime failures pass with this safe test setup.
-- Focused moderation/admin discovery/dashboard regression suite: 52 tests passed.
+- Focused moderation/admin discovery/dashboard regression suite: 53 tests passed.
   Native-theme and nonstaff navigation/login tests preserve scoped access. HTTP tests
   reproduced both blockers before the fixes, then verified crisis form/bulk
   publication denial, forged Save as new denial, and foreign-key authorization
@@ -132,6 +134,9 @@ account assignment, provider evaluation, deployment or live email was performed.
 - Repository Ruff lint passed. New moderation files pass Ruff format check.
   The whole-repository format check has the same 307 unformatted files on this
   branch and the unchanged stacked base; unrelated formatting was not applied.
+- GitHub's Django workflow only runs for pushes or PRs targeting `main`, so
+  the stacked feature-branch base does not trigger remote CI. Local validation
+  above runs the same required Django and Ruff checks without changing CI scope.
 - Django-rendered synthetic dashboard and admin validation pages were inspected
   in Chromium at desktop and 390px mobile widths. Crisis publication and forged
   foreign-key errors are visible; general-only pages contain no crisis title.
@@ -140,6 +145,8 @@ account assignment, provider evaluation, deployment or live email was performed.
   light/dark screenshots use the same declared typography and header colors as
   the rendered regular admin. External font requests were blocked, so both use
   the same local fallback during offline QA.
+  Quick actions also passed desktop/mobile light/dark visibility, click-through
+  and overflow checks; General-only destinations preserve crisis privacy.
 - The additive moderation migration reports no model-state changes. Migration
   checking disabled the test-only offline video-storage shim, which cannot be
   serialized by the existing project's migration autodetector.
