@@ -1,1 +1,11 @@
-{% extends 'moderation/base.html' %}{% block content %}<section><h1>Moderation sign in</h1><p>Use your existing Fast &amp; Pray account. Access requires an assigned moderation responsibility.</p><form method="post">{% csrf_token %}{{ form.as_p }}<input type="hidden" name="next" value="{{ next }}"><button>Sign in</button></form></section>{% endblock %}
+{% extends "admin/login.html" %}
+{% load static %}
+
+{% block branding %}{% include "moderation/branding.html" %}{% endblock %}
+
+{% block content_title %}
+<div class="fp-login-brand" aria-label="Fast & Pray">
+  <img src="{% static 'admin/brand/wordmark.png' %}" alt="Fast & Pray" width="298" height="60">
+  <p>Moderation</p>
+</div>
+{% endblock %}

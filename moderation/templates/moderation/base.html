@@ -1,3 +1,38 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fast &amp; Pray · Moderation</title><style>
-body{font:16px system-ui;color:#243531;background:#f5f6f3;margin:0}main{max-width:1000px;margin:32px auto;padding:24px}header,section,article{background:white;border:1px solid #d6ddd8;border-radius:10px;padding:20px;margin-bottom:20px}a{color:#176952}nav{display:flex;gap:20px;align-items:center}section{overflow-x:auto}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:12px;border-bottom:1px solid #ddd}textarea,input,select,button{font:inherit;padding:8px;max-width:100%;box-sizing:border-box}textarea{width:100%;min-height:100px}label{display:block;margin:12px 0}button{background:#176952;color:white;border:0;border-radius:5px;cursor:pointer}.muted{color:#64746d}.content{white-space:pre-wrap;overflow-wrap:anywhere}.crisis-row{background:#fff2f0;font-weight:600}.urgent{border-left:5px solid #a32d32}form.inline{display:inline}
-</style></head><body><main><header><nav><a href="{% url 'moderation-dashboard' %}">Fast &amp; Pray · Moderation</a>{% if user.is_authenticated %}<form class="inline" method="post" action="{% url 'moderation-logout' %}">{% csrf_token %}<button>Sign out</button></form>{% endif %}</nav></header>{% block content %}{% endblock %}</main></body></html>
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/forms.css' %}">
+<link rel="stylesheet" href="{% static 'admin/css/fastandpray-moderation.css' %}">
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} fp-moderation{% endblock %}
+
+{% block branding %}
+{% if user.is_staff %}
+  {{ block.super }}
+{% else %}
+{% include "moderation/branding.html" %}
+{% endif %}
+{% endblock %}
+
+{% block userlinks %}
+{% if user.is_staff %}
+  {{ block.super }}
+{% else %}
+  <a href="{% url 'moderation-dashboard' %}">Moderation</a> /
+  <form id="logout-form" method="post" action="{% url 'moderation-logout' %}">
+    {% csrf_token %}<button type="submit">Log out</button>
+  </form>
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  {% if user.is_staff %}<a href="{% url 'admin:index' %}">Home</a> &rsaquo; {% endif %}
+  <a href="{% url 'moderation-dashboard' %}">Moderation</a>
+  {% if item %} &rsaquo; {{ item.label }}{% endif %}
+</div>
+{% endblock %}

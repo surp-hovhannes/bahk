@@ -103,15 +103,25 @@ fetched during implementation; no substitute case or scores were invented.
 
 ## Validation evidence
 
+The moderation pages extend Bahk's existing Django admin templates and reuse
+`fastandpray-admin.css`, native dashboard cards, icons, breadcrumbs, forms,
+buttons, tables and theme controls. The additional stylesheet only handles
+content wrapping and responsive overflow. Staff retain their permission-filtered
+admin navigation; nonstaff receive only moderation navigation and logout, with
+no new access to `/admin/`. The login also uses the native Bahk wordmark and
+login layout. The moderation link on the admin index now sits inside the main
+content column so it does not displace the existing dashboard grid.
+
 Validation used isolated SQLite test databases, the locmem email backend and
 mocked deliveries. External socket connections were blocked. No production
 account assignment, provider evaluation, deployment or live email was performed.
 
 - Full Django suite (`--parallel=2 --exclude-tag=performance --exclude-tag=slow`):
-  **2,197 tests passed, 38 skipped**, with blank AWS settings, metadata lookup
+  **2,201 tests passed, 38 skipped**, with blank AWS settings, metadata lookup
   disabled and an in-memory Celery broker/result backend. External sockets were
   blocked. The earlier Redis/S3 runtime failures pass with this safe test setup.
-- Focused permissions/admin regression suite: 34 tests passed. HTTP tests
+- Focused moderation/admin discovery/dashboard regression suite: 52 tests passed.
+  Native-theme and nonstaff navigation/login tests preserve scoped access. HTTP tests
   reproduced both blockers before the fixes, then verified crisis form/bulk
   publication denial, forged Save as new denial, and foreign-key authorization
   on acceptance/log creation and change for staff and superusers. Routine
@@ -126,7 +136,10 @@ account assignment, provider evaluation, deployment or live email was performed.
   in Chromium at desktop and 390px mobile widths. Crisis publication and forged
   foreign-key errors are visible; general-only pages contain no crisis title.
   No page-level horizontal overflow was found. Browser external requests were
-  aborted, with local static assets supplied directly.
+  aborted, with local static assets supplied directly. All 28 desktop/mobile,
+  light/dark screenshots use the same declared typography and header colors as
+  the rendered regular admin. External font requests were blocked, so both use
+  the same local fallback during offline QA.
 - The additive moderation migration reports no model-state changes. Migration
   checking disabled the test-only offline video-storage shim, which cannot be
   serialized by the existing project's migration autodetector.

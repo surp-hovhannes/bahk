@@ -1,0 +1,14 @@
+/* Structural review content only; colors, type and controls come from Bahk admin. */
+.fp-moderation .results {
+    overflow-x: auto;
+}
+
+.fp-moderation .fp-review-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.fp-moderation .aligned textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+}

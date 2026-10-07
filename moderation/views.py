@@ -20,6 +20,7 @@ from icons.models import IconFeedback
 from prayers.models import PrayerRequest
 from moderation.access import allowed, is_crisis, visible_prayers
 from moderation.models import Review
+from moderation.context import shell_context
 
 MODELS = {"prayer": PrayerRequest, "icon": IconFeedback, "reading": ReadingContext, "feast": FeastContext}
 
@@ -87,6 +88,7 @@ def describe(kind, obj):
         source=source,
         status=status,
         url=reverse("moderation-detail", args=[kind, obj.pk]),
+        crisis=kind == "prayer" and is_crisis(obj),
     )
 
 
@@ -116,7 +118,17 @@ def dashboard(request):
         stamp = "time_of_generation" if kind in {"reading", "feast"} else "created_at"
         items = [describe(kind, obj) for obj in queryset.order_by(stamp, "pk") if audit or not reviewed(kind, obj)]
         groups.append(dict(kind=kind, count=len(items), oldest=items[0] if items else None, items=items[:25]))
-    return render(request, "moderation/dashboard.html", {"groups": groups, "audit": audit, "selected_type": selected})
+    return render(
+        request,
+        "moderation/dashboard.html",
+        {
+            **shell_context(request),
+            "title": "Review dashboard",
+            "groups": groups,
+            "audit": audit,
+            "selected_type": selected,
+        },
+    )
 
 
 @protected
@@ -179,5 +191,13 @@ def detail(request, kind, pk):
         return render(
             request,
             "moderation/detail.html",
-            dict(item=describe(kind, obj), actions=actions, history=history, crisis=crisis, admin_url=admin_url),
+            dict(
+                **shell_context(request),
+                title=describe(kind, obj)["label"],
+                item=describe(kind, obj),
+                actions=actions,
+                history=history,
+                crisis=crisis,
+                admin_url=admin_url,
+            ),
         )

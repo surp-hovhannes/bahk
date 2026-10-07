@@ -1,1 +1,38 @@
-{% extends 'moderation/base.html' %}{% block content %}<article {% if crisis %}class="urgent"{% endif %}><h1>{{ item.label }}</h1><p>{{ item.status }}</p>{% if crisis %}<p><strong>Crisis escalation · designated responders only.</strong> Record human review or escalation. This tool does not assess clinical risk or provide an on-call service. Content stays unpublished.</p>{% endif %}<p class="muted">{{ item.source }}: {{ item.timestamp|default:'Unknown' }}</p><div class="content">{{ item.text }}</div>{% if item.kind == 'prayer' %}<h2>Moderation evidence</h2><pre class="content">{{ item.obj.moderation_result }}</pre>{% endif %}{% if admin_url %}<p><a href="{{ admin_url }}">Existing admin inspection / editing tools</a></p>{% endif %}</article><section><h2>Record review</h2><form method="post">{% csrf_token %}<label>Outcome <select name="action">{% for action in actions %}<option value="{{ action }}">{{ action|title }}</option>{% endfor %}</select></label><label>Review note (required; avoid unnecessary personal details)<textarea required maxlength="4000" name="note"></textarea></label><label>Expected outcome (required for misclassification)<input maxlength="80" name="expected_outcome"></label><label>Sanitized regression case reference<input maxlength="200" name="regression_reference"></label><button>Save review</button></form></section><section><h2>Audit trail</h2>{% for review in history %}<p>{{ review.created_at }} · {{ review.reviewer|default:'Deleted reviewer' }} · {{ review.outcome }}</p><div class="content">{{ review.note }}</div>{% if review.expected_outcome %}<p>Expected: {{ review.expected_outcome }} · Regression: {{ review.regression_reference }}</p>{% endif %}{% empty %}<p>No recorded human reviews.</p>{% endfor %}</section>{% endblock %}
+{% extends "moderation/base.html" %}
+
+{% block content %}
+<div id="content-main">
+  {% if admin_url %}<ul class="object-tools"><li><a href="{{ admin_url }}">Existing admin tools</a></li></ul>{% endif %}
+  <fieldset class="module aligned">
+    <h2>Review details</h2>
+    <div class="form-row"><label>Status:</label><div class="readonly"><span class="fp-admin-state fp-admin-state--{% if crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span></div></div>
+    {% if crisis %}
+    <div class="form-row"><p><strong>Crisis escalation · designated responders only.</strong> Record human review or escalation. This tool does not assess clinical risk or provide an on-call service. Content stays unpublished.</p></div>
+    {% endif %}
+    <div class="form-row"><label>Source date:</label><div class="readonly">{{ item.timestamp|default:'Unknown' }}<p class="help">{{ item.source }}</p></div></div>
+    <div class="form-row"><label>Content:</label><div class="readonly fp-review-content">{{ item.text }}</div></div>
+    {% if item.kind == 'prayer' %}<div class="form-row"><label>Moderation evidence:</label><div class="readonly fp-review-content">{{ item.obj.moderation_result }}</div></div>{% endif %}
+  </fieldset>
+  <form method="post">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <h2>Record review</h2>
+      <div class="form-row"><label for="review-action" class="required">Outcome:</label><select id="review-action" name="action">{% for action in actions %}<option value="{{ action }}">{{ action|title }}</option>{% endfor %}</select></div>
+      <div class="form-row"><label for="review-note" class="required">Review note:</label><textarea id="review-note" class="vLargeTextField" required maxlength="4000" name="note"></textarea><p class="help">Required; avoid unnecessary personal details.</p></div>
+      <div class="form-row"><label for="review-expected">Expected outcome:</label><input id="review-expected" class="vTextField" maxlength="80" name="expected_outcome"><p class="help">Required for misclassification.</p></div>
+      <div class="form-row"><label for="review-reference">Regression reference:</label><input id="review-reference" class="vTextField" maxlength="200" name="regression_reference"><p class="help">Use a sanitized regression case reference.</p></div>
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="Save review"></div>
+  </form>
+  <section class="module">
+    <h2>Audit trail</h2>
+    {% for review in history %}
+    <div class="form-row">
+      <p><strong>{{ review.created_at }} · {{ review.reviewer|default:'Deleted reviewer' }} · {{ review.outcome }}</strong></p>
+      <div class="fp-review-content">{{ review.note }}</div>
+      {% if review.expected_outcome %}<p class="help">Expected: {{ review.expected_outcome }} · Regression: {{ review.regression_reference }}</p>{% endif %}
+    </div>
+    {% empty %}<div class="form-row"><p>No recorded human reviews.</p></div>{% endfor %}
+  </section>
+</div>
+{% endblock %}

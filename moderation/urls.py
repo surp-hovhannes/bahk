@@ -1,14 +1,12 @@
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LogoutView
 from django.urls import path
 from moderation import views
-from moderation.forms import ModerationLoginForm
+from moderation.forms import ModerationLoginView
 
 urlpatterns = [
     path(
         "login/",
-        LoginView.as_view(
-            template_name="moderation/login.html", authentication_form=ModerationLoginForm, next_page="/moderation/"
-        ),
+        ModerationLoginView.as_view(),
         name="moderation-login",
     ),
     path("logout/", LogoutView.as_view(next_page="/moderation/login/"), name="moderation-logout"),

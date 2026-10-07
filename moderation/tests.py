@@ -401,3 +401,52 @@ class ModerationTests(TestCase):
         response = self.client.post(f"/admin/prayers/prayerrequest/{self.urgent.pk}/change/", payload)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(PrayerRequest.objects.count(), 2)
+
+    def test_admin_theme_reuse_keeps_nonstaff_navigation_scoped(self):
+        self.client.force_login(self.general)
+        response = self.client.get(reverse("moderation-dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "admin/css/fastandpray-admin.css")
+        self.assertContains(response, "fp-admin-section__grid")
+        self.assertContains(response, "fp-admin-app")
+        self.assertContains(response, "General moderation")
+        self.assertNotContains(response, 'href="/admin/"')
+        self.assertNotContains(response, "/admin/auth/user/")
+        self.assertNotContains(response, "/admin/password_change/")
+        self.assertNotContains(response, self.urgent.title)
+        detail = self.client.get(self.detail(self.routine))
+        self.assertContains(detail, 'id="nav-sidebar"')
+        self.assertContains(detail, "module aligned")
+        self.assertNotContains(detail, 'href="/admin/"')
+        self.assertNotContains(detail, "Existing admin tools")
+        self.assertEqual(self.client.get("/admin/").status_code, 302)
+
+    def test_admin_shell_does_not_promote_nonstaff_model_permissions(self):
+        from django.contrib.auth.models import Permission
+
+        self.general.user_permissions.add(*Permission.objects.filter(content_type__app_label="auth"))
+        self.client.force_login(self.general)
+        response = self.client.get(self.detail(self.routine))
+        self.assertNotContains(response, "/admin/auth/")
+        self.assertEqual(response.context["available_apps"], [])
+        self.assertEqual(response.context["admin_sections"][0]["slug"], "moderation")
+
+    def test_staff_shell_uses_existing_permission_filtered_admin_navigation(self):
+        from django.contrib.auth.models import Permission
+
+        self.staff.user_permissions.add(Permission.objects.get(codename="view_prayerrequest"))
+        Responsibility.objects.create(user=self.staff, general=True)
+        self.client.force_login(self.staff)
+        response = self.client.get(self.detail(self.routine))
+        self.assertContains(response, 'href="/admin/"')
+        self.assertContains(response, "/admin/prayers/prayerrequest/")
+        self.assertNotContains(response, "/admin/auth/user/")
+
+    def test_moderation_login_reuses_admin_brand_without_staff_login_gate(self):
+        response = self.client.get(reverse("moderation-login"))
+        self.assertContains(response, "admin/css/login.css")
+        self.assertContains(response, "admin/brand/wordmark.png")
+        self.assertNotContains(response, 'href="/admin/"')
+        self.assertContains(response, "Moderation")
+        response = self.client.post(reverse("moderation-login"), {"username": self.general.email, "password": "pass"})
+        self.assertRedirects(response, reverse("moderation-dashboard"))
