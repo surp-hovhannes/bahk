@@ -2,6 +2,7 @@
 {% load i18n %}
 
 {% block content %}
+{% if moderation_access %}<p><a href="{% url 'moderation-dashboard' %}">Moderation review dashboard</a></p>{% endif %}
 <div id="content-main" class="fp-dashboard">
   {% if admin_sections %}
     {% for section in admin_sections %}

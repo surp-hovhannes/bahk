@@ -115,7 +115,9 @@ class PrayerRequestModerationAdminTests(TestCase):
         self.assertNotIn('fp-admin-state--warning"></span>', pending)
 
     def test_queue_uses_annotated_counts_and_compact_pagination(self):
-        queryset = self.model_admin.get_queryset(self.factory.get("/admin/"))
+        request = self.factory.get("/admin/")
+        request.user = self.user
+        queryset = self.model_admin.get_queryset(request)
 
         self.assertEqual(self.model_admin.list_per_page, 50)
         self.assertEqual(self.model_admin.date_hierarchy, "created_at")

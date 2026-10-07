@@ -139,6 +139,9 @@ class FastAndPrayAdminSite(AdminSite):
     def each_context(self, request):
         """Add task-oriented navigation without bypassing Django permissions."""
         context = super().each_context(request)
+        from moderation.access import allowed
+
+        context["moderation_access"] = allowed(request.user, "general") or allowed(request.user, "crisis")
         context["admin_sections"] = self.group_app_list(context["available_apps"])
         return context
 

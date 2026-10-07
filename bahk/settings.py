@@ -126,6 +126,7 @@ INSTALLED_APPS = [
     'taggit',
     'adminsortable2',  # Install with: pip install django-admin-sortable2==2.2.1
     'prayers',
+    'moderation',
     'icons',
 ]
 

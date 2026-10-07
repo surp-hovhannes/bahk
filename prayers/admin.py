@@ -459,9 +459,12 @@ class PrayerRequestAdmin(admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            "requester", "icon"
-        ).annotate(
+        from moderation.access import allowed, crisis_query
+
+        queryset = super().get_queryset(request)
+        if not allowed(getattr(request, "user", None), "crisis"):
+            queryset = queryset.exclude(crisis_query())
+        return queryset.select_related("requester", "icon").annotate(
             _admin_acceptance_count=models.Count("acceptances", distinct=True),
             _admin_prayer_log_count=models.Count("prayer_logs", distinct=True),
         )
@@ -562,6 +565,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         - Checking for first_prayer_request_created milestones
         - Auto-accepting requester's own prayer request
         """
+        from moderation.access import visible_prayers
+
+        queryset = visible_prayers(queryset, request.user)
         pending_requests = queryset.filter(status="pending_moderation")
         count = 0
         now = timezone.now()
@@ -616,6 +622,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         - Setting moderated_at timestamp
         - Clearing requires_human_review flag
         """
+        from moderation.access import visible_prayers
+
+        queryset = visible_prayers(queryset, request.user)
         pending_requests = queryset.filter(status="pending_moderation")
         count = 0
         now = timezone.now()
@@ -638,6 +647,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
 
         This clears the requires_human_review flag and marks as reviewed.
         """
+        from moderation.access import visible_prayers
+
+        queryset = visible_prayers(queryset, request.user)
         count = queryset.update(requires_human_review=False, reviewed=True)
 
         self.message_user(request, f"{count} prayer request(s) marked as manually reviewed.")
@@ -659,7 +671,12 @@ class PrayerRequestAcceptanceAdmin(admin.ModelAdmin):
     fieldsets = ((None, {"fields": ("prayer_request", "user", "accepted_at")}),)
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("prayer_request", "user")
+        from moderation.access import allowed, crisis_query
+
+        queryset = super().get_queryset(request)
+        if not allowed(getattr(request, "user", None), "crisis"):
+            queryset = queryset.exclude(prayer_request__in=PrayerRequest.objects.filter(crisis_query()))
+        return queryset.select_related("prayer_request", "user")
 
 
 @admin.register(PrayerRequestPrayerLog)
@@ -676,7 +693,12 @@ class PrayerRequestPrayerLogAdmin(admin.ModelAdmin):
     fieldsets = ((None, {"fields": ("prayer_request", "user", "prayed_on_date", "created_at")}),)
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("prayer_request", "user")
+        from moderation.access import allowed, crisis_query
+
+        queryset = super().get_queryset(request)
+        if not allowed(getattr(request, "user", None), "crisis"):
+            queryset = queryset.exclude(prayer_request__in=PrayerRequest.objects.filter(crisis_query()))
+        return queryset.select_related("prayer_request", "user")
 
 
 @admin.register(FeastPrayer)
