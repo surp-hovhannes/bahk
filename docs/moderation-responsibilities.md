@@ -57,7 +57,11 @@ an AI provider, regenerate content, or change moderation state.
 
 Routine pending prayers reuse existing approve/reject behavior (events,
 milestones, requester acceptance). Crisis actions only record human review or
-escalation and leave the rejected content unpublished. This is not a clinical
+escalation and leave the rejected content unpublished. Django admin status edits
+and bulk approval also refuse crisis publication, even for designated staff or
+superusers. Forged Save as new requests are denied. Acceptance and prayer-log
+forms validate submitted prayer IDs against the actor's crisis responsibility
+on both creation and change; filtering autocomplete alone is insufficient. This is not a clinical
 assessment or an on-call/dispatch system. Icon resolution preserves the existing
 resolution fields and notes. Context acknowledgement applies to the current
 version/downvote total; additional downvotes can reopen its queue, and replacing
@@ -87,13 +91,15 @@ Retention and operational review cadence remain policy decisions for Matthew.
 
 ## Synthetic evaluation publication
 
-The approved publication candidate contains **33 synthetic cases and 144 observed rows**.
+The published [evaluation records](evaluations/clef-synthetic-evaluation.md) and
+[JSON fixture](evaluations/clef-synthetic-evaluation.json) contain **33 synthetic
+cases and 144 observed rows**. Offline final-cohort replay gives **31/33 strict
+and 33/33 permissive** agreement.
 One invented payment-handle case and its five rows are intentionally withheld.
 The full private historical baseline was 34 cases / 149 rows; its final cohort
 result was 32/34 strict and 34/34 permissive. Those denominators must not be
-presented as results for the public subset. The candidate download was blocked
-in the implementation workspace; no private archive or transcript was fetched, and no invented
-replacement evidence is committed.
+presented as results for the public subset. No private archive or transcript was
+fetched during implementation; no substitute case or scores were invented.
 
 ## Validation evidence
 
@@ -102,18 +108,25 @@ mocked deliveries. External socket connections were blocked. No production
 account assignment, provider evaluation, deployment or live email was performed.
 
 - Full Django suite (`--parallel=2 --exclude-tag=performance --exclude-tag=slow`):
-  2,188 tests; 38 skipped; one error and one failure. Both reproduced unchanged
-  at the stacked base `e693b177`: orphan-bookmark cleanup needs Redis and the
-  missing-S3-settings engagement report attempts S3 in this runtime.
-- Focused permission/queue/notification tests plus existing prayer, admin,
-  Clef and crisis-before-profanity tests passed after final changes.
+  **2,197 tests passed, 38 skipped**, with blank AWS settings, metadata lookup
+  disabled and an in-memory Celery broker/result backend. External sockets were
+  blocked. The earlier Redis/S3 runtime failures pass with this safe test setup.
+- Focused permissions/admin regression suite: 34 tests passed. HTTP tests
+  reproduced both blockers before the fixes, then verified crisis form/bulk
+  publication denial, forged Save as new denial, and foreign-key authorization
+  on acceptance/log creation and change for staff and superusers. Routine
+  approval and explicitly authorized crisis references still work.
 - Existing private offline replay harness: 14 tests passed; no archive input was
-  fetched or used. Public candidate replay remains blocked with its download.
+  fetched or used. All 33 published case blocks and 144 probability/outcome table
+  rows agree between Markdown and JSON; public final-cohort replay passes.
 - Repository Ruff lint passed. New moderation files pass Ruff format check.
   The whole-repository format check has the same 307 unformatted files on this
   branch and the unchanged stacked base; unrelated formatting was not applied.
-- Four Django-rendered synthetic pages were inspected in Chromium at desktop
-  and 390px mobile widths. No mobile page-level horizontal overflow was found.
+- Django-rendered synthetic dashboard and admin validation pages were inspected
+  in Chromium at desktop and 390px mobile widths. Crisis publication and forged
+  foreign-key errors are visible; general-only pages contain no crisis title.
+  No page-level horizontal overflow was found. Browser external requests were
+  aborted, with local static assets supplied directly.
 - The additive moderation migration reports no model-state changes. Migration
   checking disabled the test-only offline video-storage shim, which cannot be
   serialized by the existing project's migration autodetector.

@@ -258,3 +258,146 @@ class ModerationTests(TestCase):
         self.urgent.refresh_from_db()
         self.assertEqual(self.urgent.status, "rejected")
         self.assertTrue(self.urgent.requires_human_review)
+
+    def prayer_admin_payload(self, obj, status):
+        return {
+            "title": obj.title,
+            "description": obj.description,
+            "requester": obj.requester_id,
+            "duration_days": obj.duration_days,
+            "status": status,
+            "requires_human_review": "on",
+            "_save": "Save",
+        }
+
+    def test_crisis_admin_form_cannot_publish_even_for_designated_superuser(self):
+        Responsibility.objects.create(user=self.superuser, general=True, crisis=True)
+        self.client.force_login(self.superuser)
+        for severity, result in [("critical", {}), ("high", {"llm_check": {"suggested_action": "escalate"}})]:
+            with self.subTest(severity=severity):
+                PrayerRequest.objects.filter(pk=self.urgent.pk).update(
+                    moderation_severity=severity, moderation_result=result
+                )
+                self.urgent.refresh_from_db()
+                response = self.client.post(
+                    f"/admin/prayers/prayerrequest/{self.urgent.pk}/change/",
+                    self.prayer_admin_payload(self.urgent, "approved"),
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("status", response.context["adminform"].form.errors)
+                self.urgent.refresh_from_db()
+                self.assertEqual(self.urgent.status, "rejected")
+                self.assertTrue(self.urgent.requires_human_review)
+                self.assertFalse(self.urgent.acceptances.exists())
+
+    def test_admin_bulk_approval_skips_crisis_but_approves_routine(self):
+        Responsibility.objects.create(user=self.superuser, general=True, crisis=True)
+        PrayerRequest.objects.filter(pk=self.urgent.pk).update(status="pending_moderation")
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            "/admin/prayers/prayerrequest/",
+            {"action": "approve_requests", "_selected_action": [self.urgent.pk, self.routine.pk], "index": "0"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.urgent.refresh_from_db()
+        self.routine.refresh_from_db()
+        self.assertEqual(self.urgent.status, "pending_moderation")
+        self.assertTrue(self.urgent.requires_human_review)
+        self.assertEqual(self.routine.status, "approved")
+        self.assertFalse(self.urgent.acceptances.exists())
+
+    def test_related_admin_forms_reject_forged_crisis_ids_without_capability(self):
+        from django.contrib.auth.models import Permission
+        from prayers.models import PrayerRequestAcceptance, PrayerRequestPrayerLog
+
+        self.staff.user_permissions.add(*Permission.objects.filter(content_type__app_label="prayers"))
+        Responsibility.objects.create(user=self.staff, general=True)
+        for actor in [self.staff, self.superuser]:
+            self.client.force_login(actor)
+            for model, suffix in [
+                (PrayerRequestAcceptance, "prayerrequestacceptance"),
+                (PrayerRequestPrayerLog, "prayerrequestprayerlog"),
+            ]:
+                with self.subTest(actor=actor.username, model=suffix):
+                    response = self.client.post(
+                        f"/admin/prayers/{suffix}/add/",
+                        {
+                            "prayer_request": self.urgent.pk,
+                            "user": self.owner.pk,
+                            "prayed_on_date": "2026-10-07",
+                            "_save": "Save",
+                        },
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("prayer_request", response.context["adminform"].form.errors)
+                    self.assertFalse(model.objects.filter(prayer_request=self.urgent).exists())
+                    self.assertNotContains(response, self.urgent.title)
+
+    def test_related_admin_change_and_creation_permission_matrix(self):
+        from django.contrib.auth.models import Permission
+        from prayers.models import PrayerRequestAcceptance, PrayerRequestPrayerLog
+
+        self.staff.user_permissions.add(*Permission.objects.filter(content_type__app_label="prayers"))
+        for actor in [self.staff, self.superuser]:
+            for crisis_capability in [False, True]:
+                Responsibility.objects.update_or_create(
+                    user=actor, defaults={"general": True, "crisis": crisis_capability}
+                )
+                self.client.cookies.clear()
+                self.client.force_login(actor)
+                for model, suffix in [
+                    (PrayerRequestAcceptance, "prayerrequestacceptance"),
+                    (PrayerRequestPrayerLog, "prayerrequestprayerlog"),
+                ]:
+                    with self.subTest(actor=actor.username, crisis=crisis_capability, model=suffix):
+                        values = {"prayer_request": self.routine, "user": self.owner}
+                        if model is PrayerRequestPrayerLog:
+                            values["prayed_on_date"] = "2026-10-07"
+                        original = model.objects.create(**values)
+                        payload = {
+                            "prayer_request": self.urgent.pk,
+                            "user": self.owner.pk,
+                            "prayed_on_date": "2026-10-07",
+                            "_save": "Save",
+                        }
+                        response = self.client.post(f"/admin/prayers/{suffix}/{original.pk}/change/", payload)
+                        self.assertEqual(response.status_code, 302 if crisis_capability else 200)
+                        original.refresh_from_db()
+                        self.assertEqual(
+                            original.prayer_request_id, self.urgent.pk if crisis_capability else self.routine.pk
+                        )
+                        if not crisis_capability:
+                            self.assertIn("prayer_request", response.context["adminform"].form.errors)
+                            self.assertNotContains(response, self.urgent.title)
+                        original.delete()
+                        response = self.client.post(f"/admin/prayers/{suffix}/add/", payload)
+                        self.assertEqual(response.status_code, 302 if crisis_capability else 200)
+                        self.assertEqual(
+                            model.objects.filter(prayer_request=self.urgent).count(), int(crisis_capability)
+                        )
+                        model.objects.all().delete()
+
+    def test_crisis_publication_denied_for_crisis_only_staff_and_superuser(self):
+        from django.contrib.auth.models import Permission
+
+        self.staff.user_permissions.add(*Permission.objects.filter(content_type__app_label="prayers"))
+        for actor in [self.staff, self.superuser]:
+            Responsibility.objects.update_or_create(user=actor, defaults={"general": False, "crisis": True})
+            self.client.force_login(actor)
+            response = self.client.post(
+                f"/admin/prayers/prayerrequest/{self.urgent.pk}/change/",
+                self.prayer_admin_payload(self.urgent, "approved"),
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("status", response.context["adminform"].form.errors)
+            self.urgent.refresh_from_db()
+            self.assertEqual(self.urgent.status, "rejected")
+
+    def test_crisis_admin_cannot_forge_save_as_new_to_publish_a_copy(self):
+        Responsibility.objects.create(user=self.superuser, general=True, crisis=True)
+        self.client.force_login(self.superuser)
+        payload = self.prayer_admin_payload(self.urgent, "approved")
+        payload["_saveasnew"] = "Save as new"
+        response = self.client.post(f"/admin/prayers/prayerrequest/{self.urgent.pk}/change/", payload)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(PrayerRequest.objects.count(), 2)
