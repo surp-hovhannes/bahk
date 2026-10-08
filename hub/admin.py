@@ -12,7 +12,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.text import Truncator
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 from markdownx.admin import MarkdownxModelAdmin
 
@@ -49,6 +49,7 @@ from hub.services.feast_contexts import (
     enqueue_feast_context_regeneration,
 )
 from hub.services.reading_text_service import bible_api_budgets, fetch_all_reading_texts
+from hub.services.llm_models import can_activate
 from hub.tasks import (
     generate_reading_context_task,
     match_icon_to_feast_task,
@@ -1203,6 +1204,20 @@ class LLMPromptAdmin(admin.ModelAdmin):
             return
 
         prompt = queryset.first()
+        if not can_activate(prompt.model):
+            self.message_user(
+                request,
+                f"{prompt.model} is deprecated or retired; change the prompt's model before activating it.",
+                level=messages.ERROR
+            )
+            return
+
+        prompt.active = True
+        try:
+            prompt.clean()
+        except ValidationError as exc:
+            self.message_user(request, "; ".join(exc.messages), level=messages.ERROR)
+            return
 
         # First, deactivate the current active prompt for this applies_to type
         current_active = LLMPrompt.objects.filter(

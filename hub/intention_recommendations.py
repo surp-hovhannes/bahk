@@ -97,7 +97,7 @@ def llm_tags_for_intention(text, llm_prompt=None):
     """
     from hub.models import LLMPrompt
     from hub.services.llm_service import get_llm_service
-    from hub.services.llm_requests import anthropic_message, openai_chat_completion
+    from hub.services.llm_requests import anthropic_message, anthropic_text, openai_chat_completion
 
     if llm_prompt is None:
         llm_prompt = LLMPrompt.objects.filter(active=True, applies_to='intentions').first()
@@ -132,7 +132,7 @@ def llm_tags_for_intention(text, llm_prompt=None):
                 messages=[{"role": "user", "content": user_message}],
                 max_tokens=256,
             )
-            raw = resp.content[0].text.strip() if resp.content else ''
+            raw = anthropic_text(resp)
         else:
             resp = openai_chat_completion(
                 client,

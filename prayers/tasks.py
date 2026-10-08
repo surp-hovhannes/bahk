@@ -15,7 +15,8 @@ from events.models import Event, EventType, UserActivityFeed, UserMilestone
 from hub.models import LLMPrompt
 from hub.profanity import configure_profanity_filter
 from hub.services.icon_matching import IconMatchRequest
-from hub.services.llm_requests import anthropic_message
+from hub.services.llm_models import ANTHROPIC, DEFAULT_MODERATION_MODEL, UnsupportedModelError, provider_for
+from hub.services.llm_requests import anthropic_message, anthropic_text
 from hub.services.icon_match_router import match_icons
 from hub.services.icon_taxonomy_matching import assignment_current
 from icons.models import Icon
@@ -80,6 +81,26 @@ def match_icons_for_imported_prayers_task(prayer_ids, church_id):
             time.sleep(0.5)
 
 
+def _moderation_model(llm_prompt):
+    """Return the prompt's model if Anthropic serves it, else the default moderation model.
+
+    Moderation calls the Anthropic client directly, so a prompt configured with
+    another provider's model would fail every request.
+    """
+    try:
+        if provider_for(llm_prompt.model) == ANTHROPIC:
+            return llm_prompt.model
+    except UnsupportedModelError:
+        pass
+    logger.error(
+        "LLMPrompt id=%s uses %s, which moderation cannot call; using %s",
+        llm_prompt.id,
+        llm_prompt.model,
+        DEFAULT_MODERATION_MODEL,
+    )
+    return DEFAULT_MODERATION_MODEL
+
+
 def _get_moderation_prompt_and_service(prayer_request):
     """
     Get the moderation prompt and model info for prayer request moderation.
@@ -107,12 +128,12 @@ def _get_moderation_prompt_and_service(prayer_request):
         system_role = llm_prompt.role if llm_prompt.role else None
 
         logger.info(f"Using LLMPrompt (id={llm_prompt.id}, model={llm_prompt.model}) for prayer request moderation")
-        return llm_prompt.model, system_role, prompt_text
+        return _moderation_model(llm_prompt), system_role, prompt_text
 
     except LLMPrompt.DoesNotExist:
         # Fallback to hard-coded prompt
         logger.warning("No active LLMPrompt found for prayer_requests, using hard-coded fallback")
-        model_name = "claude-sonnet-4-5-20250929"
+        model_name = DEFAULT_MODERATION_MODEL
 
         # Hard-coded fallback prompt (same as our enhanced prompt)
         prompt_text = f"""You are evaluating a prayer request submitted to a Christian community app. Assess the request for appropriateness and genuine prayer needs.
@@ -260,7 +281,7 @@ def moderate_prayer_request_task(self, prayer_request_id):
             # Parse response
             import json
 
-            response_text = response.content[0].text
+            response_text = anthropic_text(response)
 
             # Extract JSON from response (handle markdown code blocks)
             if "```json" in response_text:

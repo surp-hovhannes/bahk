@@ -358,7 +358,9 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 - `REDIS_URL` (for cache and Celery)
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`
 - `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`
-- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (for AI-generated content)
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (for AI-generated content). Model IDs, fallbacks and
+  lifecycle live in `hub/services/llm_models.py` (see `docs/LLM_MODELS.md`); read Claude replies
+  with `anthropic_text`, never `content[0].text`
 - `BIBLE_API_KEY` (API.Bible text retrieval); see Key Features #6 for the spend-control
   vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT` (distinct passages, not
   readings), `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`

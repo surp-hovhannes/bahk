@@ -202,7 +202,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         # Mock the Anthropic client and response
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = [MagicMock()]
+        mock_response.content = [MagicMock(type="text")]
         mock_response.content[0].text = Feast.Designation.MARTYRS
         mock_client.messages.create.return_value = mock_response
         mock_anthropic_class.return_value = mock_client
@@ -252,7 +252,7 @@ class FeastDesignationLLMServiceTests(TestCase):
         # Mock response with partial match
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = [MagicMock()]
+        mock_response.content = [MagicMock(type="text")]
         mock_response.content[0].text = "Sundays, Dominical Feast Days"  # Exact match
         mock_client.messages.create.return_value = mock_response
         mock_anthropic_class.return_value = mock_client
@@ -573,7 +573,7 @@ class FeastContextAnthropicServiceTests(TestCase):
 
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = [MagicMock()]
+        mock_response.content = [MagicMock(type="text")]
         mock_response.content[0].text = '{"text": "Detailed", "short_text": "Short."}'
         mock_client.messages.create.return_value = mock_response
         mock_anthropic_class.return_value = mock_client
@@ -613,7 +613,7 @@ class FeastContextAnthropicServiceTests(TestCase):
 
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = [MagicMock()]
+        mock_response.content = [MagicMock(type="text")]
         mock_response.content[0].text = '{"text": "Detailed", "short_text": "Short."}'
         mock_client.messages.create.return_value = mock_response
         mock_anthropic_class.return_value = mock_client
