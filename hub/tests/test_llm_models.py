@@ -85,6 +85,22 @@ class ResolveModelTests(SimpleTestCase):
         self.assertFalse(can_activate("gpt-5"))
 
 
+class ModelChoicesTests(SimpleTestCase):
+    def test_every_choice_has_a_provider(self):
+        for model, _ in LLMPrompt.MODEL_CHOICES:
+            provider_for(model)
+
+    def test_claude_5_5_models_are_selectable(self):
+        choices = dict(LLMPrompt.MODEL_CHOICES)
+        for model in ("claude-sonnet-5-5", "claude-haiku-5-5"):
+            self.assertIn(model, choices)
+            self.assertTrue(can_activate(model))
+
+    def test_labels_mark_every_unselectable_choice(self):
+        for model, label in LLMPrompt.MODEL_CHOICES:
+            self.assertEqual(can_activate(model), not label.endswith(("(deprecated)", "(retired)")), model)
+
+
 class AnthropicRequestTests(SimpleTestCase):
     def test_sonnet_45_request_uses_immediate_replacement_with_thinking_parameters(self):
         client = Mock()

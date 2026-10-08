@@ -34,10 +34,10 @@ listed at the end (Anthropic **2026-09-30**, OpenAI **2026-10-08**); reverify be
 
 | Model ID | Where | Status | Shutdown | Treatment |
 | --- | --- | --- | --- | --- |
-| `claude-sonnet-5-5` | default generation, moderation fallback | active | – | `DEFAULT_CLAUDE_MODEL`, `DEFAULT_MODERATION_MODEL` |
-| `claude-haiku-5-5` | feast-designation fallback | active | – | `DEFAULT_CLAUDE_CLASSIFIER_MODEL` |
-| `claude-sonnet-4-6` | feast reference filter, seed | active | – | kept |
-| `claude-haiku-4-5-20251001` | dropdown, seed | active | – | kept |
+| `claude-sonnet-5-5` | dropdown, seed, default generation, moderation fallback | active | – | `DEFAULT_CLAUDE_MODEL`, `DEFAULT_MODERATION_MODEL` |
+| `claude-haiku-5-5` | dropdown, seed, feast-designation fallback | active | – | `DEFAULT_CLAUDE_CLASSIFIER_MODEL` |
+| `claude-sonnet-4-6` | dropdown, feast reference filter | active | – | kept |
+| `claude-haiku-4-5-20251001` | dropdown | active | – | kept |
 | `claude-sonnet-4-5-20250929` | dropdown; former fallback | deprecated | unresolved (Nov 24 email vs Nov 30 docs) | immediately → `claude-sonnet-5-5` when this code is deployed |
 | `claude-3-5-sonnet-20241022` | dropdown; former seed | retired 2025-10-28 | passed | → `claude-sonnet-5-5` |
 | `o4-mini` | dropdown | deprecated | 2026-10-23 | → `gpt-5.6-terra` |
@@ -46,7 +46,7 @@ listed at the end (Anthropic **2026-09-30**, OpenAI **2026-10-08**); reverify be
 | `gpt-5-nano` | dropdown | deprecated (2025-08-07 snapshot) | 2026-12-11 | → `gpt-5.6-luna` |
 | `gpt-4o-mini` | dropdown, seed, OpenAI designation fallback | no notice found | – | kept |
 | `gpt-4.1-mini` | `ICON_MATCH_MODEL` default, icon control profile | outside the dropdown; not reviewed here | – | see #511 / #549 |
-| `gpt-5.6-luna`, `gpt-5.6-terra` | icon taxonomy | outside the dropdown; not reviewed here | – | see #511 / #549 |
+| `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` | dropdown; OpenAI shutdown replacements; icon taxonomy (luna, terra) | active | – | selectable |
 
 The OpenAI replacements are the ones OpenAI's deprecation table recommends (notices of
 2026-04-22 and 2026-06-11). They are a safety net at shutdown, not chosen defaults:
@@ -54,11 +54,16 @@ The OpenAI replacements are the ones OpenAI's deprecation table recommends (noti
 picked on the prompts themselves. Request handling treats `gpt-5.6*` and `gpt-6*` as reasoning
 families (`max_completion_tokens`, no sampling parameters).
 
+## Dropdown
+
+`LLMPrompt.MODEL_CHOICES` lists the selectable models first (Claude Sonnet 5.5, Haiku 5.5,
+Sonnet 4.6, Haiku 4.5; GPT 5.6 Sol, Terra, Luna; GPT 4o Mini), then the legacy IDs labelled
+deprecated or retired. The legacy IDs stay so saved rows remain valid and editable; `clean()`
+stops them being newly selected or activated. Migration `0072` records the new choices; it is
+state-only (`sqlmigrate` shows no SQL). Approved by Der Hayr on 2026-10-08.
+
 ## Not in this change
 
-- **Dropdown choices.** Adding `claude-sonnet-5-5` / `claude-haiku-5-5` (and any OpenAI successor)
-  to `LLMPrompt.MODEL_CHOICES` needs an `AlterField` migration. Under AGENTS.md that goes in a
-  separate PR with Der Hayr's approval.
 - **Saved-row migration.** Moving active rows onto new models needs an approved read-only
   production audit first.
 - **Production.** Paid evaluations and rollout each need their own approval.

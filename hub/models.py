@@ -1027,17 +1027,24 @@ class GeocodingCache(models.Model):
 class LLMPrompt(models.Model):
     """Model for storing LLM prompts used to generate content."""
 
+    # Legacy IDs stay listed so saved rows remain valid and editable;
+    # LLMPrompt.clean() stops them being newly selected or activated.
     MODEL_CHOICES = [
-        ("o4-mini", "o4 Mini"),
-        ("gpt-4o-mini", "GPT 4o Mini"),
-        ("gpt-5-mini", "GPT 5 Mini"),
-        ("gpt-5-nano", "GPT 5 Nano"),
-        ("gpt-5-mini-2025-08-07", "GPT 5 Mini (2025-08-07)"),
-        ("gpt-5", "GPT 5"),
-        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+        ("claude-haiku-5-5", "Claude Haiku 5.5"),
         ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
-        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
-        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet")
+        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("gpt-5.6-sol", "GPT 5.6 Sol"),
+        ("gpt-5.6-terra", "GPT 5.6 Terra"),
+        ("gpt-5.6-luna", "GPT 5.6 Luna"),
+        ("gpt-4o-mini", "GPT 4o Mini"),
+        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5 (deprecated)"),
+        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet (retired)"),
+        ("o4-mini", "o4 Mini (deprecated)"),
+        ("gpt-5", "GPT 5 (deprecated)"),
+        ("gpt-5-mini", "GPT 5 Mini (deprecated)"),
+        ("gpt-5-nano", "GPT 5 Nano (deprecated)"),
+        ("gpt-5-mini-2025-08-07", "GPT 5 Mini 2025-08-07 (deprecated)"),
     ]
 
     APPLIES_TO_CHOICES = [

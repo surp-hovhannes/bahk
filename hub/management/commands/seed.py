@@ -126,7 +126,7 @@ class Command(BaseCommand):
                 active=True,
             ),
             models.LLMPrompt.objects.create(
-                model="claude-sonnet-4-6",
+                model="claude-sonnet-5-5",
                 role="You are a biblical scholar and theologian.",
                 prompt="Provide scholarly biblical context for the given passage.",
                 applies_to="readings",
@@ -141,7 +141,7 @@ class Command(BaseCommand):
                 active=True,
             ),
             models.LLMPrompt.objects.create(
-                model="claude-haiku-4-5-20251001",
+                model="claude-haiku-5-5",
                 role="You are a church historian and hagiographer.",
                 prompt=FEAST_PROMPT_TEMPLATE,
                 applies_to="feasts",
