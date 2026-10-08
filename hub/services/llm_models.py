@@ -38,17 +38,22 @@ THINKING_HEADROOM_TOKENS = 2048
 @dataclass(frozen=True)
 class ModelLifecycle:
     status: str
-    # First day the provider may stop serving the ID (conservative where notices conflict).
+    # Announced provider shutdown date; None when the evidence is unresolved.
     shutdown: Optional[datetime.date] = None
     # Reviewed replacement; None means a human must choose one.
     replacement: Optional[str] = None
+    # Application routing policy, independent of the provider's retirement date.
+    redirect_immediately: bool = False
 
 
 # IDs absent from this table are treated as active.
 MODEL_LIFECYCLE = {
     "claude-3-5-sonnet-20241022": ModelLifecycle(RETIRED, datetime.date(2025, 10, 28), "claude-sonnet-5-5"),
-    # Provider notices disagree on Nov 24 vs Nov 30; plan for reduced availability from Oct 30.
-    "claude-sonnet-4-5-20250929": ModelLifecycle(DEPRECATED, datetime.date(2026, 10, 30), "claude-sonnet-5-5"),
+    # Nov 24 vs Nov 30 retirement evidence is unresolved. Oct 30 is a planning
+    # target, not shutdown. Our policy is to route to Sonnet 5.5 immediately.
+    "claude-sonnet-4-5-20250929": ModelLifecycle(
+        DEPRECATED, replacement="claude-sonnet-5-5", redirect_immediately=True
+    ),
     # OpenAI's recommended replacements. The gpt-5 aliases resolve to the 2025-08-07 snapshots.
     "o4-mini": ModelLifecycle(DEPRECATED, datetime.date(2026, 10, 23), "gpt-5.6-terra"),
     "gpt-5": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11), "gpt-5.6-sol"),
@@ -92,15 +97,18 @@ def resolve_model(model: str, today: Optional[datetime.date] = None) -> str:
     """Return the model ID to send to the provider for a configured ``model``.
 
     Saved prompts keep their configured ID (it is their provenance); only the
-    request is redirected, and only once the provider has stopped serving it.
+    request is redirected. Sonnet 4.5 follows an immediate application policy;
+    other models keep their provider-shutdown routing rules.
     """
-    if not is_past_shutdown(model, today):
+    lifecycle = lifecycle_for(model)
+    if not lifecycle.redirect_immediately and not is_past_shutdown(model, today):
         return model
-    replacement = lifecycle_for(model).replacement
+    replacement = lifecycle.replacement
+    reason = "immediate routing policy" if lifecycle.redirect_immediately else "provider shutdown"
     if replacement is None:
         raise UnsupportedModelError(
-            f"Model {model!r} is past its provider shutdown date and has no reviewed "
+            f"Model {model!r} requires redirection ({reason}) and has no reviewed "
             "replacement. Select a supported model on the LLM prompt."
         )
-    logger.warning("Model %s is past shutdown; sending request to %s instead", model, replacement)
+    logger.warning("Model %s: %s; sending request to %s instead", model, reason, replacement)
     return replacement

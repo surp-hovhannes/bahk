@@ -12,7 +12,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.text import Truncator
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 from markdownx.admin import MarkdownxModelAdmin
 
@@ -1210,6 +1210,13 @@ class LLMPromptAdmin(admin.ModelAdmin):
                 f"{prompt.model} is deprecated or retired; change the prompt's model before activating it.",
                 level=messages.ERROR
             )
+            return
+
+        prompt.active = True
+        try:
+            prompt.clean()
+        except ValidationError as exc:
+            self.message_user(request, "; ".join(exc.messages), level=messages.ERROR)
             return
 
         # First, deactivate the current active prompt for this applies_to type

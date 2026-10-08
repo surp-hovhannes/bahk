@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.forms import modelform_factory
 from django.test import SimpleTestCase, TestCase
 
 from hub.models import LLMPrompt
@@ -16,12 +17,13 @@ from hub.services.llm_models import (
     ModelLifecycle,
     UnsupportedModelError,
     can_activate,
+    is_past_shutdown,
     provider_for,
     resolve_model,
 )
 from hub.services.llm_requests import LLMResponseError, anthropic_message, anthropic_text, openai_chat_completion
 
-BEFORE_SONNET_45_SHUTDOWN = datetime.date(2026, 10, 1)
+REFERENCE_DATE = datetime.date(2026, 10, 1)
 AFTER_ALL_SHUTDOWNS = datetime.date(2027, 1, 1)
 
 
@@ -43,12 +45,19 @@ class ResolveModelTests(SimpleTestCase):
             self.assertEqual(resolve_model(model, AFTER_ALL_SHUTDOWNS), model)
 
     def test_retired_claude_model_is_redirected(self):
-        self.assertEqual(resolve_model("claude-3-5-sonnet-20241022", BEFORE_SONNET_45_SHUTDOWN), "claude-sonnet-5-5")
+        self.assertEqual(resolve_model("claude-3-5-sonnet-20241022", REFERENCE_DATE), "claude-sonnet-5-5")
 
-    def test_deprecated_model_is_served_until_shutdown_then_redirected(self):
+    def test_sonnet_45_redirects_immediately_independent_of_retirement_date(self):
         model = "claude-sonnet-4-5-20250929"
-        self.assertEqual(resolve_model(model, BEFORE_SONNET_45_SHUTDOWN), model)
-        self.assertEqual(resolve_model(model, datetime.date(2026, 10, 30)), "claude-sonnet-5-5")
+        for day in (REFERENCE_DATE, datetime.date(2026, 10, 30), AFTER_ALL_SHUTDOWNS):
+            with self.subTest(day=day):
+                self.assertEqual(resolve_model(model, day), "claude-sonnet-5-5")
+                self.assertFalse(is_past_shutdown(model, day))
+        self.assertIsNone(MODEL_LIFECYCLE[model].shutdown)
+        with self.assertLogs("hub.services.llm_models", level="WARNING") as logs:
+            resolve_model(model, REFERENCE_DATE)
+        self.assertIn("immediate routing policy", logs.output[0])
+        self.assertNotIn("past shutdown", logs.output[0])
 
     def test_openai_models_follow_provider_replacements(self):
         self.assertEqual(resolve_model("o4-mini", datetime.date(2026, 10, 22)), "o4-mini")
@@ -77,6 +86,16 @@ class ResolveModelTests(SimpleTestCase):
 
 
 class AnthropicRequestTests(SimpleTestCase):
+    def test_sonnet_45_request_uses_immediate_replacement_with_thinking_parameters(self):
+        client = Mock()
+        with patch("hub.services.llm_models.datetime.date") as date_cls:
+            date_cls.today.return_value = REFERENCE_DATE
+            anthropic_message(client, model="claude-sonnet-4-5-20250929", messages=[], max_tokens=100)
+        client.messages.create.assert_called_once_with(
+            model="claude-sonnet-5-5", messages=[], max_tokens=100 + THINKING_HEADROOM_TOKENS,
+            output_config={"effort": "low"},
+        )
+
     def test_thinking_model_gets_effort_and_headroom(self):
         client = Mock()
 
@@ -140,6 +159,72 @@ class AnthropicTextTests(SimpleTestCase):
 
 
 class LLMPromptValidationTests(TestCase):
+    def _legacy_moderation_prompt(self, active=False):
+        return LLMPrompt.objects.create(
+            model="gpt-4o-mini", role="r", prompt="p", applies_to="prayer_requests", active=active,
+        )
+
+    def _edit_form(self, prompt, active):
+        form_class = modelform_factory(LLMPrompt, fields=["model", "role", "prompt", "applies_to", "active"])
+        return form_class(
+            data={"model": prompt.model, "role": prompt.role, "prompt": "edited",
+                  "applies_to": prompt.applies_to, "active": active},
+            instance=prompt,
+        )
+
+    def test_active_non_claude_moderation_row_stays_editable_in_form(self):
+        prompt = self._legacy_moderation_prompt(active=True)
+        form = self._edit_form(prompt, active=True)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        prompt.refresh_from_db()
+        self.assertEqual(prompt.model, "gpt-4o-mini")
+        self.assertEqual(prompt.prompt, "edited")
+        self.assertTrue(prompt.active)
+
+    def test_non_claude_moderation_row_can_be_deactivated_in_form(self):
+        prompt = self._legacy_moderation_prompt(active=True)
+        form = self._edit_form(prompt, active=False)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        prompt.refresh_from_db()
+        self.assertFalse(prompt.active)
+        self.assertEqual(prompt.model, "gpt-4o-mini")
+
+    def test_inactive_non_claude_moderation_row_stays_editable(self):
+        prompt = self._legacy_moderation_prompt()
+        prompt.prompt = "edited"
+        prompt.full_clean()
+
+    def test_non_claude_moderation_row_cannot_be_newly_activated(self):
+        prompt = self._legacy_moderation_prompt()
+        form = self._edit_form(prompt, active=True)
+        self.assertFalse(form.is_valid())
+        self.assertIn("Claude models only", str(form.errors))
+
+    def test_non_claude_reading_row_cannot_be_assigned_to_moderation(self):
+        prompt = LLMPrompt.objects.create(model="gpt-4o-mini", role="r", prompt="p")
+        prompt.applies_to = "prayer_requests"
+        with self.assertRaisesMessage(ValidationError, "Claude models only"):
+            prompt.clean()
+
+    def test_admin_action_rejects_provider_mismatch_before_deactivating_current_prompt(self):
+        from django.contrib.admin.sites import AdminSite
+        from hub.admin import LLMPromptAdmin
+
+        current = LLMPrompt.objects.create(
+            model="claude-sonnet-4-6", role="r", prompt="p", applies_to="prayer_requests", active=True,
+        )
+        legacy = self._legacy_moderation_prompt()
+        admin = LLMPromptAdmin(LLMPrompt, AdminSite())
+        with patch.object(admin, "message_user") as message:
+            admin.make_active(Mock(), LLMPrompt.objects.filter(pk=legacy.pk))
+        current.refresh_from_db()
+        legacy.refresh_from_db()
+        self.assertTrue(current.active)
+        self.assertFalse(legacy.active)
+        self.assertIn("Claude models only", message.call_args.args[1])
+
     def _prompt(self, **kwargs):
         defaults = {"model": "claude-sonnet-5-5", "role": "r", "prompt": "p", "applies_to": "readings"}
         defaults.update(kwargs)

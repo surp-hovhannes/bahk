@@ -989,4 +989,4 @@ def get_llm_service(model_name: str) -> LLMService:
     provider = provider_for(model_name)
     if provider == OPENAI:
         return OpenAIService()
-    return AnthropicService() 
+    return AnthropicService()

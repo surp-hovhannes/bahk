@@ -7,13 +7,21 @@ listed at the end (Anthropic **2026-09-30**, OpenAI **2026-10-08**); reverify be
 ## How models are chosen at runtime
 
 - `LLMPrompt.model` stays what the admin saved. It is the provenance of generated content and is
-  never rewritten by code.
+  never rewritten by code. A runtime redirect means the saved ID is the configured model,
+  rather than proof of which provider model generated a new response.
 - Every request goes through `resolve_model()` (in `anthropic_message` / `openai_chat_completion`).
-  Before a model's shutdown date the request is sent to the saved ID unchanged. After it, the
-  request goes to the reviewed replacement with a warning in the logs, or fails with
-  `UnsupportedModelError` if no replacement has been reviewed yet.
+  Sonnet 4.5 requests route immediately to `claude-sonnet-5-5` when this code is deployed,
+  independent of the retirement calendar. This is an application policy, not a provider
+  shutdown claim. October 30 is a conservative planning target; the November 24 email versus
+  November 30 documentation discrepancy remains unresolved, so its shutdown field is unset.
+  Other models retain their date-based rules: before shutdown they use the saved ID, and from
+  shutdown they use the reviewed replacement with a warning, or fail with `UnsupportedModelError`
+  if no replacement has been reviewed yet.
 - `LLMPrompt.clean()` (admin forms) and the admin "Make active" action refuse to newly select or
-  activate a deprecated or retired model. Existing rows stay editable.
+  activate a deprecated or retired model. Existing rows stay editable and can be deactivated
+  without changing their model, including legacy non-Claude moderation rows. Newly selecting,
+  activating or assigning a moderation prompt still requires Claude; the admin activation action
+  validates this before deactivating the current prompt.
 - Prayer-request moderation calls Anthropic directly, so its prompts must use a Claude model. A
   saved non-Claude moderation prompt falls back to `DEFAULT_MODERATION_MODEL` and logs an error.
   Refusals and empty replies raise errors, which send the request to human review.
@@ -30,7 +38,7 @@ listed at the end (Anthropic **2026-09-30**, OpenAI **2026-10-08**); reverify be
 | `claude-haiku-5-5` | feast-designation fallback | active | – | `DEFAULT_CLAUDE_CLASSIFIER_MODEL` |
 | `claude-sonnet-4-6` | feast reference filter, seed | active | – | kept |
 | `claude-haiku-4-5-20251001` | dropdown, seed | active | – | kept |
-| `claude-sonnet-4-5-20250929` | dropdown; former fallback | deprecated | 2026-10-30 (conservative; notices say Nov 24 or Nov 30) | → `claude-sonnet-5-5` |
+| `claude-sonnet-4-5-20250929` | dropdown; former fallback | deprecated | unresolved (Nov 24 email vs Nov 30 docs) | immediately → `claude-sonnet-5-5` when this code is deployed |
 | `claude-3-5-sonnet-20241022` | dropdown; former seed | retired 2025-10-28 | passed | → `claude-sonnet-5-5` |
 | `o4-mini` | dropdown | deprecated | 2026-10-23 | → `gpt-5.6-terra` |
 | `gpt-5` | dropdown | deprecated (2025-08-07 snapshot) | 2026-12-11 | → `gpt-5.6-sol` |

@@ -1074,16 +1074,22 @@ class LLMPrompt(models.Model):
         from hub.services.llm_models import ANTHROPIC, UnsupportedModelError, can_activate, provider_for
 
         super().clean()
-        try:
-            provider = provider_for(self.model)
-        except UnsupportedModelError as exc:
-            raise ValidationError({"model": str(exc)})
-        if self.applies_to == "prayer_requests" and provider != ANTHROPIC:
-            raise ValidationError({"model": "Prayer request moderation supports Claude models only."})
-
-        previous = LLMPrompt.objects.filter(pk=self.pk).values("model", "active").first() if self.pk else None
+        previous = (
+            LLMPrompt.objects.filter(pk=self.pk).values("model", "active", "applies_to").first()
+            if self.pk else None
+        )
         newly_selected = previous is None or previous["model"] != self.model
         newly_activated = self.active and (previous is None or not previous["active"])
+        newly_assigned = previous is None or previous["applies_to"] != self.applies_to
+        # Preserve legacy IDs for ordinary edits and deactivation. Validate
+        # provider compatibility when selecting, activating or changing workload.
+        if newly_selected or newly_activated or newly_assigned:
+            try:
+                provider = provider_for(self.model)
+            except UnsupportedModelError as exc:
+                raise ValidationError({"model": str(exc)})
+            if self.applies_to == "prayer_requests" and provider != ANTHROPIC:
+                raise ValidationError({"model": "Prayer request moderation supports Claude models only."})
         if (newly_selected or newly_activated) and not can_activate(self.model):
             raise ValidationError(
                 {"model": f"{self.model} is deprecated or retired; choose a supported model."}
