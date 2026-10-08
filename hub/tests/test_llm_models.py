@@ -10,7 +10,10 @@ from django.test import SimpleTestCase, TestCase
 
 from hub.models import LLMPrompt
 from hub.services.llm_models import (
+    DEPRECATED,
+    MODEL_LIFECYCLE,
     THINKING_HEADROOM_TOKENS,
+    ModelLifecycle,
     UnsupportedModelError,
     can_activate,
     provider_for,
@@ -47,10 +50,17 @@ class ResolveModelTests(SimpleTestCase):
         self.assertEqual(resolve_model(model, BEFORE_SONNET_45_SHUTDOWN), model)
         self.assertEqual(resolve_model(model, datetime.date(2026, 10, 30)), "claude-sonnet-5-5")
 
-    def test_shutdown_without_reviewed_replacement_raises(self):
+    def test_openai_models_follow_provider_replacements(self):
         self.assertEqual(resolve_model("o4-mini", datetime.date(2026, 10, 22)), "o4-mini")
-        with self.assertRaisesMessage(UnsupportedModelError, "no reviewed replacement"):
-            resolve_model("o4-mini", datetime.date(2026, 10, 23))
+        self.assertEqual(resolve_model("o4-mini", datetime.date(2026, 10, 23)), "gpt-5.6-terra")
+        self.assertEqual(resolve_model("gpt-5", AFTER_ALL_SHUTDOWNS), "gpt-5.6-sol")
+        self.assertEqual(resolve_model("gpt-5-nano", AFTER_ALL_SHUTDOWNS), "gpt-5.6-luna")
+
+    def test_shutdown_without_reviewed_replacement_raises(self):
+        lifecycle = ModelLifecycle(DEPRECATED, datetime.date(2026, 1, 1))
+        with patch.dict(MODEL_LIFECYCLE, {"gpt-legacy": lifecycle}):
+            with self.assertRaisesMessage(UnsupportedModelError, "no reviewed replacement"):
+                resolve_model("gpt-legacy", AFTER_ALL_SHUTDOWNS)
 
     def test_provider_for(self):
         self.assertEqual(provider_for("claude-haiku-5-5"), "anthropic")

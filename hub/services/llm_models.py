@@ -3,7 +3,7 @@
 Every model ID the app sends to a provider is decided here, so the dropdown on
 ``LLMPrompt``, the hard-coded fallbacks, and the request builders cannot drift
 apart. Lifecycle entries were verified against the provider deprecation pages
-on 2026-09-30 (issue #561); see docs/LLM_MODELS.md for sources.
+(Anthropic 2026-09-30, OpenAI 2026-10-08; issue #561); see docs/LLM_MODELS.md.
 """
 
 import datetime
@@ -49,12 +49,12 @@ MODEL_LIFECYCLE = {
     "claude-3-5-sonnet-20241022": ModelLifecycle(RETIRED, datetime.date(2025, 10, 28), "claude-sonnet-5-5"),
     # Provider notices disagree on Nov 24 vs Nov 30; plan for reduced availability from Oct 30.
     "claude-sonnet-4-5-20250929": ModelLifecycle(DEPRECATED, datetime.date(2026, 10, 30), "claude-sonnet-5-5"),
-    # OpenAI replacements are not mapped yet: pick one per workload after evaluation.
-    "o4-mini": ModelLifecycle(DEPRECATED, datetime.date(2026, 10, 23)),
-    "gpt-5": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11)),
-    "gpt-5-mini": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11)),
-    "gpt-5-nano": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11)),
-    "gpt-5-mini-2025-08-07": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11)),
+    # OpenAI's recommended replacements. The gpt-5 aliases resolve to the 2025-08-07 snapshots.
+    "o4-mini": ModelLifecycle(DEPRECATED, datetime.date(2026, 10, 23), "gpt-5.6-terra"),
+    "gpt-5": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11), "gpt-5.6-sol"),
+    "gpt-5-mini": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11), "gpt-5.6-terra"),
+    "gpt-5-nano": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11), "gpt-5.6-luna"),
+    "gpt-5-mini-2025-08-07": ModelLifecycle(DEPRECATED, datetime.date(2026, 12, 11), "gpt-5.6-terra"),
 }
 
 

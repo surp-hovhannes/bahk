@@ -1,8 +1,8 @@
 # LLM model inventory
 
 Tracks issue #561. The code source of truth is `hub/services/llm_models.py`; this page
-records why each entry is there. Lifecycle facts were verified on **2026-09-30** against the
-provider pages listed at the end; reverify before any rollout.
+records why each entry is there. Lifecycle facts were verified against the provider pages
+listed at the end (Anthropic **2026-09-30**, OpenAI **2026-10-08**); reverify before any rollout.
 
 ## How models are chosen at runtime
 
@@ -32,16 +32,19 @@ provider pages listed at the end; reverify before any rollout.
 | `claude-haiku-4-5-20251001` | dropdown, seed | active | – | kept |
 | `claude-sonnet-4-5-20250929` | dropdown; former fallback | deprecated | 2026-10-30 (conservative; notices say Nov 24 or Nov 30) | → `claude-sonnet-5-5` |
 | `claude-3-5-sonnet-20241022` | dropdown; former seed | retired 2025-10-28 | passed | → `claude-sonnet-5-5` |
-| `o4-mini` | dropdown | deprecated | 2026-10-23 | **replacement not chosen** |
-| `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5-mini-2025-08-07` | dropdown | deprecated (Aug 7 2025 snapshots) | 2026-12-11 | **replacement not chosen** |
+| `o4-mini` | dropdown | deprecated | 2026-10-23 | → `gpt-5.6-terra` |
+| `gpt-5` | dropdown | deprecated (2025-08-07 snapshot) | 2026-12-11 | → `gpt-5.6-sol` |
+| `gpt-5-mini`, `gpt-5-mini-2025-08-07` | dropdown | deprecated (2025-08-07 snapshot) | 2026-12-11 | → `gpt-5.6-terra` |
+| `gpt-5-nano` | dropdown | deprecated (2025-08-07 snapshot) | 2026-12-11 | → `gpt-5.6-luna` |
 | `gpt-4o-mini` | dropdown, seed, OpenAI designation fallback | no notice found | – | kept |
 | `gpt-4.1-mini` | `ICON_MATCH_MODEL` default, icon control profile | outside the dropdown; not reviewed here | – | see #511 / #549 |
 | `gpt-5.6-luna`, `gpt-5.6-terra` | icon taxonomy | outside the dropdown; not reviewed here | – | see #511 / #549 |
 
-The OpenAI replacements are left unset on purpose. OpenAI's deprecation table names
-`gpt-5.6-terra` / `-luna` / `-sol`, and `gpt-6-luna` / `gpt-6.1-sol` are newer candidates, but each
-needs a per-workload evaluation first. Request handling already treats `gpt-6*` as a reasoning
-family (`max_completion_tokens`, no sampling parameters).
+The OpenAI replacements are the ones OpenAI's deprecation table recommends (notices of
+2026-04-22 and 2026-06-11). They are a safety net at shutdown, not chosen defaults:
+`gpt-6-luna` / `gpt-6.1-sol` remain candidates for a per-workload evaluation before a new model is
+picked on the prompts themselves. Request handling treats `gpt-5.6*` and `gpt-6*` as reasoning
+families (`max_completion_tokens`, no sampling parameters).
 
 ## Not in this change
 
