@@ -126,7 +126,7 @@ class Command(BaseCommand):
                 active=True,
             ),
             models.LLMPrompt.objects.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-6",
                 role="You are a biblical scholar and theologian.",
                 prompt="Provide scholarly biblical context for the given passage.",
                 applies_to="readings",

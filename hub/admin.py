@@ -49,6 +49,7 @@ from hub.services.feast_contexts import (
     enqueue_feast_context_regeneration,
 )
 from hub.services.reading_text_service import bible_api_budgets, fetch_all_reading_texts
+from hub.services.llm_models import can_activate
 from hub.tasks import (
     generate_reading_context_task,
     match_icon_to_feast_task,
@@ -1203,6 +1204,13 @@ class LLMPromptAdmin(admin.ModelAdmin):
             return
 
         prompt = queryset.first()
+        if not can_activate(prompt.model):
+            self.message_user(
+                request,
+                f"{prompt.model} is deprecated or retired; change the prompt's model before activating it.",
+                level=messages.ERROR
+            )
+            return
 
         # First, deactivate the current active prompt for this applies_to type
         current_active = LLMPrompt.objects.filter(

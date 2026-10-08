@@ -12,7 +12,12 @@ from django.core.mail import mail_admins
 
 from hub.models import LLMPrompt, Reading, Feast
 from hub.services.feast_service import representative_date_for_feast_name
-from hub.services.llm_requests import anthropic_message, openai_chat_completion
+from hub.services.llm_models import (
+    DEFAULT_CLAUDE_CLASSIFIER_MODEL,
+    OPENAI,
+    provider_for,
+)
+from hub.services.llm_requests import anthropic_message, anthropic_text, openai_chat_completion
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +118,7 @@ If none match, return: []
         )
 
         if response and response.content:
-            raw_response = response.content[0].text
+            raw_response = anthropic_text(response)
             logger.debug(f"LLM filter raw response: '{raw_response}'")
             response_text = raw_response.strip()
             logger.debug(f"LLM filter cleaned response: '{response_text}'")
@@ -565,10 +570,7 @@ class AnthropicService(LLMService):
                 ],
                 max_tokens=1000,
             )
-            if response and response.content:
-                return response.content[0].text.strip()
-            logger.error("No content returned from Claude API.")
-            return None
+            return anthropic_text(response)
         except Exception as e:
             logger.error(f"Error generating context with Claude: {e}")
             return None
@@ -662,12 +664,7 @@ class AnthropicService(LLMService):
                 ],
                 max_tokens=2000,  # Increased for Armenian text which uses more tokens
             )
-            if response and response.content:
-                response_text = response.content[0].text.strip()
-                # Parse the JSON response
-                return _parse_feast_context_json(response_text)
-            logger.error("No content returned from Claude API.")
-            return None
+            return _parse_feast_context_json(anthropic_text(response))
         except Exception as e:
             logger.error(f"Error generating feast context with Claude: {e}")
             return None
@@ -684,7 +681,7 @@ class AnthropicService(LLMService):
             if llm_prompt and "claude" in llm_prompt.model:
                 model_name = llm_prompt.model
             else:
-                model_name = 'claude-sonnet-4-5-20250929'  # Default fallback
+                model_name = DEFAULT_CLAUDE_CLASSIFIER_MODEL
 
         # Hardcoded prompt for designation determination
         designation_options = [
@@ -736,7 +733,7 @@ class AnthropicService(LLMService):
                 max_tokens=200,
             )
             if response and response.content:
-                response_text = response.content[0].text.strip()
+                response_text = anthropic_text(response)
                 # Clean up the response and check if it matches one of the options
                 response_text = response_text.strip('"\'')  # Remove quotes if present
                 # Check if response matches any of the valid options
@@ -989,9 +986,7 @@ class OpenAIService(LLMService):
 
 def get_llm_service(model_name: str) -> LLMService:
     """Factory function to get the appropriate LLM service based on model name."""
-    if model_name.startswith(("gpt", "o1", "o3", "o4")):
+    provider = provider_for(model_name)
+    if provider == OPENAI:
         return OpenAIService()
-    elif "claude" in model_name:
-        return AnthropicService()
-    else:
-        raise ValueError(f"Unsupported model: {model_name}") 
+    return AnthropicService() 

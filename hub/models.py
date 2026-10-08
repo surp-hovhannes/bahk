@@ -1065,6 +1065,30 @@ class LLMPrompt(models.Model):
         help_text="If True, this prompt is the one currently used for generation",
     )
 
+    def clean(self):
+        """Reject selections that cannot be served.
+
+        Legacy rows keep their model for provenance and stay editable, but a
+        deprecated or retired model cannot be newly chosen or activated.
+        """
+        from hub.services.llm_models import ANTHROPIC, UnsupportedModelError, can_activate, provider_for
+
+        super().clean()
+        try:
+            provider = provider_for(self.model)
+        except UnsupportedModelError as exc:
+            raise ValidationError({"model": str(exc)})
+        if self.applies_to == "prayer_requests" and provider != ANTHROPIC:
+            raise ValidationError({"model": "Prayer request moderation supports Claude models only."})
+
+        previous = LLMPrompt.objects.filter(pk=self.pk).values("model", "active").first() if self.pk else None
+        newly_selected = previous is None or previous["model"] != self.model
+        newly_activated = self.active and (previous is None or not previous["active"])
+        if (newly_selected or newly_activated) and not can_activate(self.model):
+            raise ValidationError(
+                {"model": f"{self.model} is deprecated or retired; choose a supported model."}
+            )
+
     def save(self, *args, **kwargs):
         """Override save to ensure only one prompt can be active per applies_to type."""
         if self.active:
@@ -1087,14 +1111,9 @@ class LLMPrompt(models.Model):
         Raises:
             ValueError: If the model type is not supported.
         """
-        from hub.services.llm_service import OpenAIService, AnthropicService
+        from hub.services.llm_service import get_llm_service
 
-        if self.model.startswith(("gpt", "o1", "o3", "o4")):
-            return OpenAIService()
-        elif "claude" in self.model:
-            return AnthropicService()
-        else:
-            raise ValueError(f"Unsupported model: {self.model}")
+        return get_llm_service(self.model)
 
     def __str__(self):
         status = " (Active)" if self.active else ""
