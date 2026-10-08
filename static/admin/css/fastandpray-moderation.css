@@ -3,6 +3,30 @@
     overflow-x: auto;
 }
 
+.fp-moderation .fp-review-queue {
+    table-layout: fixed;
+}
+
+.fp-moderation .fp-review-queue th:first-child {
+    width: 42%;
+}
+
+.fp-moderation .fp-review-queue th:nth-child(2) {
+    width: 30%;
+}
+
+.fp-moderation .fp-review-queue th:nth-child(3) {
+    width: 28%;
+}
+
+.fp-moderation .fp-review-queue .fp-admin-state {
+    white-space: normal;
+}
+
+.fp-moderation .module .fp-review-queue td {
+    white-space: normal;
+}
+
 .fp-moderation .fp-review-content {
     white-space: pre-wrap;
     overflow-wrap: anywhere;

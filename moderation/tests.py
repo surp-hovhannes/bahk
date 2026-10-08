@@ -560,3 +560,53 @@ class ModerationTests(TestCase):
             PrayerRequest.objects.create(requester=self.owner, title=f"Bulk {n}", description="Synthetic")
         self.assertEqual(queries(), before)
         self.assertContains(self.client.get(url), "Showing the oldest 25 of 41.")
+
+    def test_dashboard_rechecks_crisis_authorization_after_reading_signal_ids(self):
+        from moderation import views
+
+        self.client.force_login(self.general)
+        original = views.outstanding_pks
+        for classification in [
+            {"moderation_severity": "critical"},
+            {"moderation_result": {"llm_check": {"suggested_action": "escalate"}}},
+        ]:
+            with self.subTest(classification=classification):
+                PrayerRequest.objects.filter(pk=self.routine.pk).update(
+                    moderation_severity="low", moderation_result=None
+                )
+
+                def classify_after_ids(kind, queryset):
+                    pks = original(kind, queryset)
+                    self.assertIn(self.routine.pk, pks)
+                    PrayerRequest.objects.filter(pk=self.routine.pk).update(**classification)
+                    return pks
+
+                with patch("moderation.views.outstanding_pks", side_effect=classify_after_ids):
+                    response = self.client.get(reverse("moderation-dashboard") + "?type=prayer")
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, self.routine.title)
+                self.assertNotContains(response, self.detail(self.routine))
+                self.assertEqual(response.context["groups"][0]["count"], 0)
+                self.assertEqual(response.context["groups"][0]["items"], [])
+
+    def test_dashboard_handles_deleted_signal_and_fills_preview_with_permitted_items(self):
+        from moderation import views
+
+        self.client.force_login(self.general)
+        for n in range(25):
+            PrayerRequest.objects.create(requester=self.owner, title=f"Next {n}", description="Synthetic")
+        original = views.outstanding_pks
+
+        def delete_after_ids(kind, queryset):
+            pks = original(kind, queryset)
+            PrayerRequest.objects.filter(pk=self.routine.pk).delete()
+            return pks
+
+        with patch("moderation.views.outstanding_pks", side_effect=delete_after_ids):
+            response = self.client.get(reverse("moderation-dashboard") + "?type=prayer")
+        self.assertEqual(response.status_code, 200)
+        group = response.context["groups"][0]
+        self.assertEqual(group["count"], 25)
+        self.assertEqual(len(group["items"]), 25)
+        self.assertNotContains(response, self.routine.title)
+        self.assertContains(response, "Next 24")

@@ -159,9 +159,12 @@ def dashboard(request):
         else:
             queryset = queryset.filter(queue).order_by(stamp, "pk")
             pks = outstanding_pks(kind, queryset)
-            count = len(pks)
-            by_pk = MODELS[kind].objects.in_bulk(pks[:PAGE_SIZE])
-            objects = [by_pk[pk] for pk in pks[:PAGE_SIZE]]
+            # Signal IDs are not an authorization snapshot: moderation may
+            # reclassify or delete a prayer between these reads. Retain the
+            # permission and queue filters for both the count and final fetch.
+            outstanding = queryset.filter(pk__in=pks)
+            count = outstanding.count()
+            objects = list(outstanding[:PAGE_SIZE])
         items = [describe(kind, obj) for obj in objects]
         groups.append(
             dict(kind=kind, count=count, oldest=None if audit else (items[0] if items else None), items=items)
