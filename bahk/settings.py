@@ -591,6 +591,12 @@ APP_URL = config('APP_URL', default='https://web.fastandpray.app')
 BACKEND_URL = 'https://api.fastandpray.app'
 SITE_URL = config('SITE_URL', default=FRONTEND_URL)  # Default to FRONTEND_URL if not specified
 
+# Receives link-only moderation notices when no active responder holds the
+# needed responsibility, so a crisis alert is never silently dropped.
+MODERATION_FALLBACK_EMAILS = config(
+    'MODERATION_FALLBACK_EMAILS', default='fastandprayhelp@gmail.com', cast=Csv()
+)
+
 # AWS S3 settings
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)

@@ -12,3 +12,11 @@
     max-width: 100%;
     box-sizing: border-box;
 }
+
+.fp-moderation .fp-review-evidence {
+    margin: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

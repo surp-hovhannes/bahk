@@ -150,8 +150,10 @@ class ModerationTests(TestCase):
         self.assertEqual([m.to for m in mail.outbox], [[self.general.email]])
         Responsibility.objects.filter(user=self.general).update(general=False)
         mail.outbox.clear()
-        _send_moderation_alert_email(self.routine, "requires_review")
-        self.assertEqual(mail.outbox, [])
+        with self.assertLogs("moderation.notifications", "ERROR"):
+            _send_moderation_alert_email(self.routine, "requires_review")
+        self.assertEqual([m.to for m in mail.outbox], [["fastandprayhelp@gmail.com"]])
+        self.assertNotIn(self.routine.title, mail.outbox[0].body)
 
     def test_mock_email_duplicates_and_revocation(self):
         duplicate = get_user_model().objects.create_user(username="duplicate", email="GENERAL@EXAMPLE.TEST")
@@ -477,3 +479,84 @@ class ModerationTests(TestCase):
         self.assertContains(response, "Moderation")
         response = self.client.post(reverse("moderation-login"), {"username": self.general.email, "password": "pass"})
         self.assertRedirects(response, reverse("moderation-dashboard"))
+
+    def test_outcome_has_no_default_and_errors_render_inline_keeping_the_note(self):
+        self.client.force_login(self.general)
+        detail = self.client.get(self.detail(self.routine))
+        self.assertContains(detail, '<option value="" selected>Choose an outcome…</option>', html=True)
+        self.assertContains(detail, "Approve and publish")
+        response = self.client.post(self.detail(self.routine), {"action": "", "note": "Checking with Fr."})
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Choose an outcome.", status_code=400)
+        self.assertContains(response, "Checking with Fr.", status_code=400)
+        self.routine.refresh_from_db()
+        self.assertEqual(self.routine.status, "pending_moderation")
+        response = self.client.post(
+            self.detail(self.routine), {"action": "misclassification", "note": "A long typed note"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "correct outcome", status_code=400)
+        self.assertContains(response, "A long typed note", status_code=400)
+        self.assertFalse(Review.objects.exists())
+
+    def test_moderation_evidence_is_formatted(self):
+        self.client.force_login(self.crisis)
+        response = self.client.get(self.detail(self.urgent))
+        self.assertContains(response, 'class="fp-review-evidence"')
+        self.assertContains(response, "&quot;suggested_action&quot;: &quot;escalate&quot;")
+        self.assertNotContains(response, "{&#x27;llm_check&#x27;")
+
+    def test_unassigned_user_gets_explanation_and_sign_out(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(self.detail(self.routine))
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "no moderation responsibility assigned", status_code=403)
+        self.assertContains(response, reverse("moderation-logout"), status_code=403)
+        self.assertNotContains(response, self.routine.title, status_code=403)
+
+    @override_settings(FEAST_CONTEXT_REGENERATION_THRESHOLD=5)
+    def test_regenerated_context_stays_queued_and_audit_shows_reviewed_items(self):
+        from hub.models import Church, Feast, FeastContext
+        from icons.models import Icon, IconFeedback
+
+        church = Church.objects.create(name="Synthetic church")
+        feast = Feast.objects.create(church=church, observance_id="synthetic-feast", name="Synthetic feast")
+        replaced = FeastContext.objects.create(
+            feast=feast, text="Downvoted text", short_text="Downvoted", thumbs_down=5, active=False
+        )
+        icon = Icon.objects.create(title="Synthetic icon", church=church)
+        with patch("moderation.notifications.send_mail"):
+            feedback = IconFeedback.objects.create(icon=icon, feedback_type="mislabel", description="Report")
+        self.client.force_login(self.general)
+        dashboard = reverse("moderation-dashboard")
+        response = self.client.get(dashboard + "?type=feast")
+        self.assertContains(response, f"Feast context #{replaced.pk}")
+        self.assertContains(response, "replaced by regeneration")
+        self.assertNotContains(self.client.get(dashboard + "?type=feast&status=audit"), f"#{replaced.pk}")
+
+        for kind, pk in [("feast", replaced.pk), ("icon", feedback.pk)]:
+            self.client.post(reverse("moderation-detail", args=[kind, pk]), {"action": "acknowledge", "note": "Seen"})
+        self.assertNotContains(self.client.get(dashboard + "?type=feast"), f"#{replaced.pk}")
+        self.assertContains(self.client.get(dashboard + "?type=feast&status=audit"), f"Feast context #{replaced.pk}")
+        self.assertContains(
+            self.client.get(dashboard + "?type=icon&status=audit"),
+            reverse("moderation-detail", args=["icon", feedback.pk]),
+        )
+
+    def test_dashboard_query_count_does_not_scale_with_queue_size(self):
+        self.client.force_login(self.general)
+        url = reverse("moderation-dashboard") + "?type=prayer"
+
+        def queries():
+            from django.db import connection
+            from django.test.utils import CaptureQueriesContext
+
+            with CaptureQueriesContext(connection) as captured:
+                self.assertEqual(self.client.get(url).status_code, 200)
+            return len(captured)
+
+        before = queries()
+        for n in range(40):
+            PrayerRequest.objects.create(requester=self.owner, title=f"Bulk {n}", description="Synthetic")
+        self.assertEqual(queries(), before)
+        self.assertContains(self.client.get(url), "Showing the oldest 25 of 41.")

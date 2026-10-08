@@ -3,12 +3,12 @@
 from django.contrib import admin
 from django.urls import reverse
 
-from moderation.access import allowed
+from moderation.access import can
 
 
 def shell_context(request):
-    can_general = allowed(request.user, "general")
-    can_crisis = allowed(request.user, "crisis")
+    can_general = can(request, "general")
+    can_crisis = can(request, "crisis")
     if request.user.is_active and request.user.is_staff:
         context = admin.site.each_context(request)
     else:

@@ -30,6 +30,13 @@ outside this application. This is an explicit trust boundary, not an attempt to
 sandbox an operator who controls the database. Do not give routine moderators
 superuser privileges. These capabilities do not grant model administration rights.
 
+**Unstaffed responsibilities:** if no active account holds the responsibility a
+notice needs (for example, before Crisis is first assigned), the notice is not
+dropped. It is logged at ERROR and sent, link only, to `MODERATION_FALLBACK_EMAILS`
+(comma-separated; defaults to the inbox that received moderation alerts before this
+change). The link still requires an assignment to open, so treat a fallback notice
+as a prompt to assign a responder.
+
 ## Safe initial assignment: Matthew / Fr Mesrop only
 
 No production permissions, credentials, guessed account IDs or email addresses are

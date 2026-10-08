@@ -1,5 +1,6 @@
 """Small review surface with object authorization before every read and write."""
 
+import json
 from functools import wraps
 
 from django.conf import settings
@@ -18,7 +19,7 @@ from django.views.decorators.http import require_http_methods
 from hub.models import FeastContext, ReadingContext
 from icons.models import IconFeedback
 from prayers.models import PrayerRequest
-from moderation.access import allowed, is_crisis, visible_prayers
+from moderation.access import can, is_crisis, visible_prayers
 from moderation.models import Review
 from moderation.context import shell_context
 
@@ -28,20 +29,26 @@ MODELS = {"prayer": PrayerRequest, "icon": IconFeedback, "reading": ReadingConte
 def protected(view):
     @wraps(view)
     def check(request, *args, **kwargs):
-        if not (allowed(request.user, "general") or allowed(request.user, "crisis")):
-            raise PermissionDenied
+        if not (can(request, "general") or can(request, "crisis")):
+            # Explain the refusal and offer a way out instead of a bare 403.
+            return render(
+                request,
+                "moderation/no_access.html",
+                {**shell_context(request), "title": "No moderation access"},
+                status=403,
+            )
         return view(request, *args, **kwargs)
 
     return never_cache(login_required(check, login_url="moderation-login"))
 
 
-def authorized(kind, user):
+def authorized(kind, request):
     if kind not in MODELS:
         raise Http404
     queryset = MODELS[kind].objects.all()
     if kind == "prayer":
-        return visible_prayers(queryset, user)
-    if not allowed(user, "general"):
+        return visible_prayers(queryset, request)
+    if not can(request, "general"):
         raise PermissionDenied
     return queryset
 
@@ -54,12 +61,26 @@ def version(kind, obj):
     return str(obj.thumbs_down)
 
 
-def reviewed(kind, obj):
-    return (
-        Review.objects.filter(kind=kind, object_id=obj.pk, signal_version=version(kind, obj))
-        .exclude(outcome="misclassification")
-        .exists()
+VERSION_FIELDS = {"prayer": ("moderated_at", "created_at"), "icon": ("created_at",)}
+
+
+def reviewed_signals(kind):
+    """(object_id, signal_version) pairs already closed by a human review."""
+    return set(
+        Review.objects.filter(kind=kind).exclude(outcome="misclassification").values_list("object_id", "signal_version")
     )
+
+
+def outstanding_pks(kind, queryset):
+    """Primary keys whose current signal has not been reviewed, from two lightweight queries."""
+    done = reviewed_signals(kind)
+    fields = VERSION_FIELDS.get(kind, ("thumbs_down",))
+    pks = []
+    for pk, *values in queryset.values_list("pk", *fields):
+        signal = str(next((value for value in values if value), values[-1]))
+        if (pk, signal) not in done:
+            pks.append(pk)
+    return pks
 
 
 def describe(kind, obj):
@@ -78,6 +99,8 @@ def describe(kind, obj):
     else:
         label, text, stamp = f"{kind.title()} context #{obj.pk}", obj.text, obj.time_of_generation
         status = f"{obj.thumbs_down} downvotes; feedback signal, not publication hold"
+        if not obj.active:
+            status += " · replaced by regeneration"
         source = "Context generation (not first flag)"
     return dict(
         kind=kind,
@@ -92,6 +115,18 @@ def describe(kind, obj):
     )
 
 
+PAGE_SIZE = 25
+
+ACTION_LABELS = {
+    "approve": "Approve and publish",
+    "reject": "Reject",
+    "acknowledge": "Acknowledge",
+    "resolve": "Resolve",
+    "escalated": "Escalated",
+    "misclassification": "Misclassification",
+}
+
+
 @protected
 @require_http_methods(["GET"])
 def dashboard(request):
@@ -101,23 +136,36 @@ def dashboard(request):
     for kind in MODELS:
         if selected and selected != kind:
             continue
-        if kind != "prayer" and not allowed(request.user, "general"):
+        if kind != "prayer" and not can(request, "general"):
             continue
-        queryset = authorized(kind, request.user)
+        queryset = authorized(kind, request)
         if kind == "prayer":
-            queryset = (
-                queryset.filter(status="rejected")
-                if audit
-                else queryset.filter(Q(requires_human_review=True) | Q(status="pending_moderation"))
-            )
+            queue = Q(requires_human_review=True) | Q(status="pending_moderation")
+            history = Q(status="rejected")
         elif kind == "icon":
-            queryset = queryset.filter(is_resolved=audit)
+            queue, history = Q(is_resolved=False), Q(is_resolved=True)
         else:
+            # Downvoted contexts stay queued after regeneration replaces them:
+            # the notice points at the downvoted text, not its successor.
             threshold = getattr(settings, f"{kind.upper()}_CONTEXT_REGENERATION_THRESHOLD", 5)
-            queryset = queryset.filter(active=True, thumbs_down__gte=threshold)
+            queue, history = Q(thumbs_down__gte=threshold), Q(pk__in=[])
         stamp = "time_of_generation" if kind in {"reading", "feast"} else "created_at"
-        items = [describe(kind, obj) for obj in queryset.order_by(stamp, "pk") if audit or not reviewed(kind, obj)]
-        groups.append(dict(kind=kind, count=len(items), oldest=items[0] if items else None, items=items[:25]))
+        if audit:
+            # Audit = everything already decided: rejected/resolved, or carrying a human review.
+            reviewed_ids = Review.objects.filter(kind=kind).values("object_id")
+            queryset = queryset.filter(history | Q(pk__in=reviewed_ids)).order_by(f"-{stamp}", "-pk")
+            count = queryset.count()
+            objects = list(queryset[:PAGE_SIZE])
+        else:
+            queryset = queryset.filter(queue).order_by(stamp, "pk")
+            pks = outstanding_pks(kind, queryset)
+            count = len(pks)
+            by_pk = MODELS[kind].objects.in_bulk(pks[:PAGE_SIZE])
+            objects = [by_pk[pk] for pk in pks[:PAGE_SIZE]]
+        items = [describe(kind, obj) for obj in objects]
+        groups.append(
+            dict(kind=kind, count=count, oldest=None if audit else (items[0] if items else None), items=items)
+        )
     return render(
         request,
         "moderation/dashboard.html",
@@ -127,6 +175,7 @@ def dashboard(request):
             "groups": groups,
             "audit": audit,
             "selected_type": selected,
+            "page_size": PAGE_SIZE,
         },
     )
 
@@ -135,7 +184,7 @@ def dashboard(request):
 @require_http_methods(["GET", "POST"])
 def detail(request, kind, pk):
     with transaction.atomic():
-        obj = get_object_or_404(authorized(kind, request.user).select_for_update(), pk=pk)
+        obj = get_object_or_404(authorized(kind, request).select_for_update(), pk=pk)
         actions = ["acknowledge", "misclassification"]
         crisis = kind == "prayer" and is_crisis(obj)
         if kind == "prayer" and not crisis and obj.status == "pending_moderation":
@@ -144,20 +193,26 @@ def detail(request, kind, pk):
             actions += ["resolve"]
         if crisis:
             actions += ["escalated"]
+        errors = {}
+        submitted = {}
         if request.method == "POST":
-            action = request.POST.get("action")
+            action = request.POST.get("action", "")
             note = request.POST.get("note", "").strip()
             expected = request.POST.get("expected_outcome", "").strip()[:80]
             reference = request.POST.get("regression_reference", "").strip()[:200]
-            if (
-                action not in actions
-                or not note
-                or len(note) > 4000
-                or (action == "misclassification" and not expected)
-            ):
-                raise PermissionDenied(
-                    "Choose an available action and provide a review note; classification errors need an expected outcome."
-                )
+            submitted = dict(action=action, note=note, expected_outcome=expected, regression_reference=reference)
+            if action and action not in actions:
+                # Only a forged or stale form submits an outcome that was never offered.
+                raise PermissionDenied("That outcome is not available for this item.")
+            if not action:
+                errors["action"] = "Choose an outcome."
+            if not note:
+                errors["note"] = "A review note is required."
+            elif len(note) > 4000:
+                errors["note"] = "Keep the note under 4,000 characters."
+            if action == "misclassification" and not expected:
+                errors["expected_outcome"] = "Say what the correct outcome should have been."
+        if request.method == "POST" and not errors:
             signal = version(kind, obj)
             if action in {"approve", "reject"}:
                 # Reuse existing event, milestone and acceptance behavior.
@@ -188,16 +243,24 @@ def detail(request, kind, pk):
         opts = obj._meta
         if request.user.is_staff and request.user.has_perm(f"{opts.app_label}.view_{opts.model_name}"):
             admin_url = reverse(f"admin:{opts.app_label}_{opts.model_name}_change", args=[pk])
+        item = describe(kind, obj)
+        evidence = None
+        if kind == "prayer" and obj.moderation_result:
+            evidence = json.dumps(obj.moderation_result, indent=2, sort_keys=True, default=str)
         return render(
             request,
             "moderation/detail.html",
             dict(
                 **shell_context(request),
-                title=describe(kind, obj)["label"],
-                item=describe(kind, obj),
-                actions=actions,
+                title=item["label"],
+                item=item,
+                actions=[(action, ACTION_LABELS.get(action, action.title())) for action in actions],
                 history=history,
                 crisis=crisis,
                 admin_url=admin_url,
+                evidence=evidence,
+                errors=errors,
+                submitted=submitted,
             ),
+            status=400 if errors else 200,
         )

@@ -10,8 +10,23 @@ def allowed(user, capability):
     )
 
 
-def crisis_query():
-    return Q(moderation_severity="critical") | Q(moderation_result__llm_check__suggested_action="escalate")
+def can(request, capability):
+    """``allowed`` for ``request.user``, looked up once per request."""
+    cache = request.__dict__.setdefault("_moderation_capabilities", {})
+    if capability not in cache:
+        cache[capability] = allowed(getattr(request, "user", None), capability)
+    return cache[capability]
+
+
+def crisis_query(prefix=""):
+    return Q(**{f"{prefix}moderation_severity": "critical"}) | Q(
+        **{f"{prefix}moderation_result__llm_check__suggested_action": "escalate"}
+    )
+
+
+def hide_crisis(queryset, request, prefix=""):
+    """Drop crisis prayers (or rows referencing one via ``prefix``) unless the user is a crisis responder."""
+    return queryset if can(request, "crisis") else queryset.exclude(crisis_query(prefix))
 
 
 def is_crisis(prayer):
@@ -22,7 +37,7 @@ def is_crisis(prayer):
     )
 
 
-def visible_prayers(queryset, user):
-    if allowed(user, "crisis"):
-        return queryset if allowed(user, "general") else queryset.filter(crisis_query())
-    return queryset.exclude(crisis_query()) if allowed(user, "general") else queryset.none()
+def visible_prayers(queryset, request):
+    if can(request, "crisis"):
+        return queryset if can(request, "general") else queryset.filter(crisis_query())
+    return queryset.exclude(crisis_query()) if can(request, "general") else queryset.none()

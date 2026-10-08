@@ -11,7 +11,7 @@
 
 {% block content %}
 <div id="content-main" class="fp-dashboard">
-  <p>Oldest first. Only queues covered by your assigned responsibilities are shown.</p>
+  <p>{% if audit %}Audit history, newest first: items already rejected, resolved or carrying a human review.{% else %}Oldest first.{% endif %} Only queues covered by your assigned responsibilities are shown.</p>
   <form method="get">
     <fieldset class="module aligned">
       <h2>Review filters</h2>
@@ -31,7 +31,7 @@
         <label for="review-status">View:</label>
         <select id="review-status" name="status">
           <option value="">Outstanding</option>
-          <option value="audit" {% if audit %}selected{% endif %}>Rejected / resolved audit</option>
+          <option value="audit" {% if audit %}selected{% endif %}>Reviewed / rejected / resolved (audit)</option>
         </select>
       </div>
     </fieldset>
@@ -64,11 +64,11 @@
                 <td><span class="fp-admin-state fp-admin-state--{% if item.crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span></td>
                 <td>{{ item.timestamp|default:'Unknown' }}</td>
               </tr>
-              {% empty %}<tr><td colspan="3">No outstanding items.</td></tr>{% endfor %}
+              {% empty %}<tr><td colspan="3">{% if audit %}No reviewed items.{% else %}No outstanding items.{% endif %}</td></tr>{% endfor %}
             </tbody>
           </table>
         </div>
-        <div class="form-row"><p class="help">Up to 25 oldest items shown.</p></div>
+        {% if group.count > page_size %}<div class="form-row"><p class="help">Showing the {% if audit %}newest{% else %}oldest{% endif %} {{ page_size }} of {{ group.count }}.</p></div>{% endif %}
       </article>
       {% endfor %}
     </div>

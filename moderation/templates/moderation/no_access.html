@@ -1,0 +1,19 @@
+{% extends "moderation/base.html" %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <section class="module">
+    <h2>No moderation access</h2>
+    <div class="form-row">
+      <p>You are signed in as <strong>{{ user.get_username }}</strong>{% if user.email %} ({{ user.email }}){% endif %}, but this account has no moderation responsibility assigned.</p>
+      <p>If you were sent a review link, sign in with the account that was assigned, or ask an administrator to assign you.</p>
+    </div>
+  </section>
+  <form method="post" action="{% url 'moderation-logout' %}">
+    {% csrf_token %}
+    <div class="submit-row"><input type="submit" class="default" value="Sign in with a different account"></div>
+  </form>
+</div>
+{% endblock %}

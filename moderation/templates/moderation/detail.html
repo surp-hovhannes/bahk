@@ -11,16 +11,31 @@
     {% endif %}
     <div class="form-row"><label>Source date:</label><div class="readonly">{{ item.timestamp|default:'Unknown' }}<p class="help">{{ item.source }}</p></div></div>
     <div class="form-row"><label>Content:</label><div class="readonly fp-review-content">{{ item.text }}</div></div>
-    {% if item.kind == 'prayer' %}<div class="form-row"><label>Moderation evidence:</label><div class="readonly fp-review-content">{{ item.obj.moderation_result }}</div></div>{% endif %}
+    {% if item.kind == 'prayer' %}<div class="form-row"><label>Moderation evidence:</label><div class="readonly">{% if evidence %}<pre class="fp-review-evidence">{{ evidence }}</pre>{% else %}No moderation result{% endif %}</div></div>{% endif %}
   </fieldset>
-  <form method="post">
+  <form method="post" novalidate>
     {% csrf_token %}
+    {% if errors %}<p class="errornote">Please correct the errors below. Your note has been kept.</p>{% endif %}
     <fieldset class="module aligned">
       <h2>Record review</h2>
-      <div class="form-row"><label for="review-action" class="required">Outcome:</label><select id="review-action" name="action">{% for action in actions %}<option value="{{ action }}">{{ action|title }}</option>{% endfor %}</select></div>
-      <div class="form-row"><label for="review-note" class="required">Review note:</label><textarea id="review-note" class="vLargeTextField" required maxlength="4000" name="note"></textarea><p class="help">Required; avoid unnecessary personal details.</p></div>
-      <div class="form-row"><label for="review-expected">Expected outcome:</label><input id="review-expected" class="vTextField" maxlength="80" name="expected_outcome"><p class="help">Required for misclassification.</p></div>
-      <div class="form-row"><label for="review-reference">Regression reference:</label><input id="review-reference" class="vTextField" maxlength="200" name="regression_reference"><p class="help">Use a sanitized regression case reference.</p></div>
+      <div class="form-row{% if errors.action %} errors{% endif %}">
+        {% if errors.action %}<ul class="errorlist"><li>{{ errors.action }}</li></ul>{% endif %}
+        <label for="review-action" class="required">Outcome:</label>
+        <select id="review-action" name="action" required>
+          <option value="" {% if not submitted.action %}selected{% endif %}>Choose an outcome…</option>
+          {% for value, label in actions %}<option value="{{ value }}" {% if submitted.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        {% if item.kind == 'prayer' and not crisis %}<p class="help">“Approve and publish” makes the request public immediately and cannot be undone here.</p>{% endif %}
+      </div>
+      <div class="form-row{% if errors.note %} errors{% endif %}">
+        {% if errors.note %}<ul class="errorlist"><li>{{ errors.note }}</li></ul>{% endif %}
+        <label for="review-note" class="required">Review note:</label><textarea id="review-note" class="vLargeTextField" required maxlength="4000" name="note">{{ submitted.note }}</textarea><p class="help">Required; avoid unnecessary personal details.</p>
+      </div>
+      <div class="form-row{% if errors.expected_outcome %} errors{% endif %}">
+        {% if errors.expected_outcome %}<ul class="errorlist"><li>{{ errors.expected_outcome }}</li></ul>{% endif %}
+        <label for="review-expected">Expected outcome:</label><input id="review-expected" class="vTextField" maxlength="80" name="expected_outcome" value="{{ submitted.expected_outcome }}"><p class="help">Required for misclassification.</p>
+      </div>
+      <div class="form-row"><label for="review-reference">Regression reference:</label><input id="review-reference" class="vTextField" maxlength="200" name="regression_reference" value="{{ submitted.regression_reference }}"><p class="help">Use a sanitized regression case reference.</p></div>
     </fieldset>
     <div class="submit-row"><input type="submit" class="default" value="Save review"></div>
   </form>

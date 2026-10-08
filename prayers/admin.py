@@ -488,11 +488,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def get_queryset(self, request):
-        from moderation.access import allowed, crisis_query
+        from moderation.access import hide_crisis
 
-        queryset = super().get_queryset(request)
-        if not allowed(getattr(request, "user", None), "crisis"):
-            queryset = queryset.exclude(crisis_query())
+        queryset = hide_crisis(super().get_queryset(request), request)
         return queryset.select_related("requester", "icon").annotate(
             _admin_acceptance_count=models.Count("acceptances", distinct=True),
             _admin_prayer_log_count=models.Count("prayer_logs", distinct=True),
@@ -596,7 +594,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         """
         from moderation.access import crisis_query, visible_prayers
 
-        queryset = visible_prayers(queryset, request.user)
+        queryset = visible_prayers(queryset, request)
         pending_requests = queryset.filter(status="pending_moderation").exclude(crisis_query())
         count = 0
         now = timezone.now()
@@ -653,7 +651,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         """
         from moderation.access import visible_prayers
 
-        queryset = visible_prayers(queryset, request.user)
+        queryset = visible_prayers(queryset, request)
         pending_requests = queryset.filter(status="pending_moderation")
         count = 0
         now = timezone.now()
@@ -678,7 +676,7 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         """
         from moderation.access import visible_prayers
 
-        queryset = visible_prayers(queryset, request.user)
+        queryset = visible_prayers(queryset, request)
         count = queryset.update(requires_human_review=False, reviewed=True)
 
         self.message_user(request, f"{count} prayer request(s) marked as manually reviewed.")
@@ -691,12 +689,9 @@ class PrayerRequestReferenceAdmin(admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "prayer_request":
-            from moderation.access import allowed, crisis_query
+            from moderation.access import hide_crisis
 
-            queryset = PrayerRequest.objects.all()
-            if not allowed(request.user, "crisis"):
-                queryset = queryset.exclude(crisis_query())
-            kwargs["queryset"] = queryset
+            kwargs["queryset"] = hide_crisis(PrayerRequest.objects.all(), request)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
@@ -714,11 +709,9 @@ class PrayerRequestAcceptanceAdmin(PrayerRequestReferenceAdmin):
     fieldsets = ((None, {"fields": ("prayer_request", "user", "accepted_at")}),)
 
     def get_queryset(self, request):
-        from moderation.access import allowed, crisis_query
+        from moderation.access import hide_crisis
 
-        queryset = super().get_queryset(request)
-        if not allowed(getattr(request, "user", None), "crisis"):
-            queryset = queryset.exclude(prayer_request__in=PrayerRequest.objects.filter(crisis_query()))
+        queryset = hide_crisis(super().get_queryset(request), request, "prayer_request__")
         return queryset.select_related("prayer_request", "user")
 
 
@@ -736,11 +729,9 @@ class PrayerRequestPrayerLogAdmin(PrayerRequestReferenceAdmin):
     fieldsets = ((None, {"fields": ("prayer_request", "user", "prayed_on_date", "created_at")}),)
 
     def get_queryset(self, request):
-        from moderation.access import allowed, crisis_query
+        from moderation.access import hide_crisis
 
-        queryset = super().get_queryset(request)
-        if not allowed(getattr(request, "user", None), "crisis"):
-            queryset = queryset.exclude(prayer_request__in=PrayerRequest.objects.filter(crisis_query()))
+        queryset = hide_crisis(super().get_queryset(request), request, "prayer_request__")
         return queryset.select_related("prayer_request", "user")
 
 

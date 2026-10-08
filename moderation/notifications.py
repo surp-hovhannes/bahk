@@ -24,11 +24,21 @@ def notify(kind, pk, capability="general", subject="Moderation item needs review
         # A notification failure must not change the core moderation decision.
         logger.exception("Failed to prepare moderation notice for %s %s", kind, pk)
         return
+    body = f"A moderation item needs your attention. Sign in to review it: {url}"
+    if not recipients:
+        # Never drop a notice silently: an unstaffed responsibility is an
+        # operational fault. The fallback notice still carries only a link.
+        logger.error("No active %s moderation responder for %s %s; using fallback inbox", capability, kind, pk)
+        recipients = list(getattr(settings, "MODERATION_FALLBACK_EMAILS", []))
+        body += (
+            f"\n\nNobody is currently assigned the {capability} moderation responsibility. "
+            "Assign a responder so this item can be reviewed."
+        )
     for address in recipients:
         try:
             send_mail(
                 subject,
-                f"A moderation item needs your attention. Sign in to review it: {url}",
+                body,
                 settings.DEFAULT_FROM_EMAIL,
                 [address],
                 fail_silently=False,
