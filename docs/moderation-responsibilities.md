@@ -75,9 +75,28 @@ version/downvote total; additional downvotes can reopen its queue, and replacing
 an active context naturally removes the old version from backlog.
 
 Every dashboard action stores actor, outcome, timestamp, required note and
-optional expected outcome / sanitized regression reference. Notes render as
+optional selected correction decision / published synthetic test reference. Notes render as
 escaped text. No private request is automatically exported to an evaluation.
 Rejected prayers and resolved icon reports remain available in the audit view.
+
+The review form uses **Decision** and **Notes**. **Report a review problem**
+requires a **Correct decision** selection appropriate to that content type;
+it records the suggestion without publishing or closing the item. Prayer
+reviews may select a **Related test case** from the committed published
+synthetic evaluation catalogue. Free-text decisions and unknown or withheld
+case IDs are rejected. Icon and generated-context reviews do not offer prayer
+test references. Previously saved free-text audit references remain visible.
+
+Crisis **Close after follow-up** and **Record escalation and close** are explicit
+closure actions: both remove the item from the outstanding queue. Neither sends
+a message or assigns another responder. The crisis detail page provides requester
+name, account ID, and a contact email link, including for requests anonymous in
+public. These details remain behind the existing Crisis authorization.
+Icon **Close report** records the resolution note and closes the report; it does
+not edit the icon. The duplicate icon acknowledgement action is not offered.
+Generated-context **Complete review** closes the current feedback signal without
+editing or regenerating the text. Review history displays these plain-language
+labels while retaining the stored audit values.
 
 Notices go to active accounts with the matching explicit assignment. Duplicate
 addresses are normalized, and each address receives a separate message. Email
@@ -126,7 +145,7 @@ mocked deliveries. External socket connections were blocked. No production
 account assignment, provider evaluation, deployment or live email was performed.
 
 - Full Django suite (`--parallel=2 --exclude-tag=performance --exclude-tag=slow`):
-  **2,202 tests completed successfully (38 skipped)**, with blank AWS settings, metadata lookup
+  **2,217 tests completed successfully (38 skipped)**, with blank AWS settings, metadata lookup
   disabled and an in-memory Celery broker/result backend. External sockets were
   blocked. The earlier Redis/S3 runtime failures pass with this safe test setup.
 - Focused moderation/admin discovery/dashboard regression suite: 53 tests passed.

@@ -37,6 +37,23 @@
     box-sizing: border-box;
 }
 
+.fp-moderation .aligned select {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.fp-moderation .aligned [hidden] {
+    display: none;
+}
+
+.fp-moderation .aligned summary {
+    cursor: pointer;
+}
+
+.fp-moderation .aligned details[open] summary {
+    margin-bottom: 12px;
+}
+
 .fp-moderation .fp-review-evidence {
     margin: 0;
     max-width: 100%;

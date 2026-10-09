@@ -71,6 +71,32 @@ class ModerationTests(TestCase):
         self.assertRedirects(response, reverse("moderation-dashboard"))
         self.assertEqual(self.client.get("/admin/").status_code, 302)
 
+    def test_crisis_reviewer_can_see_requester_contact_details(self):
+        self.owner.first_name = "Synthetic"
+        self.owner.last_name = "Requester"
+        self.owner.save(update_fields=["first_name", "last_name"])
+        self.urgent.is_anonymous = True
+        self.urgent.save(update_fields=["is_anonymous"])
+        self.client.force_login(self.crisis)
+        response = self.client.get(self.detail(self.urgent))
+        self.assertContains(response, "Synthetic Requester")
+        self.assertContains(response, f"account #{self.owner.pk}")
+        self.assertContains(response, 'href="mailto:owner@example.test"')
+        self.assertContains(response, "submitted anonymously for public display")
+        self.client.force_login(self.general)
+        self.assertEqual(self.client.get(self.detail(self.urgent)).status_code, 404)
+        response = self.client.get(self.detail(self.routine))
+        self.assertNotContains(response, "Contact email:")
+        self.assertNotContains(response, self.owner.email)
+
+    def test_crisis_requester_without_email_has_explicit_contact_empty_state(self):
+        self.owner.email = ""
+        self.owner.save(update_fields=["email"])
+        self.client.force_login(self.crisis)
+        response = self.client.get(self.detail(self.urgent))
+        self.assertContains(response, "No contact email on this account.")
+        self.assertNotContains(response, 'href="mailto:')
+
     def test_admin_quick_link_requires_explicit_responsibility_and_opens_scoped_dashboard(self):
         for general, crisis in [(False, False), (True, False), (False, True), (True, True)]:
             with self.subTest(general=general, crisis=crisis):
@@ -269,7 +295,7 @@ class ModerationTests(TestCase):
                 "action": "misclassification",
                 "note": "Synthetic review note",
                 "expected_outcome": "approve",
-                "regression_reference": "synthetic-case-reference",
+                "regression_reference": "case-01",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -277,7 +303,7 @@ class ModerationTests(TestCase):
         self.assertEqual(self.urgent.status, "rejected")
         self.assertTrue(self.urgent.requires_human_review)
         self.assertContains(self.client.get(reverse("moderation-dashboard")), self.urgent.title)
-        self.assertContains(self.client.get(self.detail(self.urgent)), "synthetic-case-reference")
+        self.assertContains(self.client.get(self.detail(self.urgent)), "case-01 — Healing for my mom")
 
     def test_notification_failure_does_not_change_moderation_state(self):
         with patch("moderation.notifications.get_user_model", side_effect=RuntimeError("Synthetic database failure")):
@@ -287,6 +313,124 @@ class ModerationTests(TestCase):
         self.urgent.refresh_from_db()
         self.assertEqual(self.urgent.status, "rejected")
         self.assertTrue(self.urgent.requires_human_review)
+
+    def test_unknown_or_withheld_test_reference_cannot_close_a_review(self):
+        self.client.force_login(self.crisis)
+        for reference in ["case-14", "case-99", "an arbitrary object id", "<script>bad()</script>"]:
+            with self.subTest(reference=reference):
+                response = self.client.post(
+                    self.detail(self.urgent),
+                    {
+                        "action": "acknowledge",
+                        "note": "Keep my notes",
+                        "regression_reference": reference,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertContains(response, "Choose an existing test case from the list.", status_code=400)
+                self.assertContains(response, "Keep my notes", status_code=400)
+                self.assertFalse(Review.objects.exists())
+                self.urgent.refresh_from_db()
+                self.assertTrue(self.urgent.requires_human_review)
+
+    def test_invalid_correct_decision_cannot_be_recorded(self):
+        self.client.force_login(self.general)
+        response = self.client.post(
+            self.detail(self.routine),
+            {
+                "action": "misclassification",
+                "note": "This needs review",
+                "expected_outcome": "free text decision",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Choose a correct decision from the list.", status_code=400)
+        self.assertFalse(Review.objects.exists())
+        self.routine.refresh_from_db()
+        self.assertEqual(self.routine.status, "pending_moderation")
+
+    def test_selected_case_is_saved_and_shown_even_without_a_corrected_decision(self):
+        self.client.force_login(self.crisis)
+        response = self.client.post(
+            self.detail(self.urgent),
+            {
+                "action": "acknowledge",
+                "note": "Synthetic follow-up completed",
+                "regression_reference": "case-15",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        review = Review.objects.get()
+        self.assertEqual(review.regression_reference, "case-15")
+        self.assertEqual(review.expected_outcome, "")
+        response = self.client.get(self.detail(self.urgent))
+        self.assertContains(response, "Related test case: case-15")
+        self.assertContains(response, "Close after follow-up")
+
+    def test_optional_test_catalogue_is_not_required_to_complete_a_review(self):
+        self.client.force_login(self.crisis)
+        with patch("moderation.forms.published_test_cases", return_value=()):
+            response = self.client.get(self.detail(self.urgent))
+            self.assertContains(response, "No test cases are currently available.")
+            response = self.client.post(
+                self.detail(self.urgent),
+                {
+                    "action": "acknowledge",
+                    "note": "Follow-up complete",
+                    "regression_reference": "",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Review.objects.get().regression_reference, "")
+
+    def test_old_audit_references_are_preserved_and_escaped(self):
+        Review.objects.create(
+            kind="prayer",
+            object_id=self.routine.pk,
+            reviewer=self.general,
+            outcome="misclassification",
+            note="Prior review",
+            signal_version="old",
+            expected_outcome="Legacy decision",
+            regression_reference="<script>legacy</script>",
+        )
+        self.client.force_login(self.general)
+        response = self.client.get(self.detail(self.routine))
+        self.assertContains(response, "Correct decision: Legacy decision")
+        self.assertContains(response, "Related test case: &lt;script&gt;legacy&lt;/script&gt;")
+        self.assertNotContains(response, "<script>legacy</script>")
+
+    def test_icon_report_has_one_explicit_closure_action_and_no_prayer_case_selector(self):
+        from hub.models import Church
+        from icons.models import Icon, IconFeedback
+
+        church = Church.objects.create(name="Report preview church")
+        icon = Icon.objects.create(title="Icon to correct", church=church)
+        with patch("moderation.notifications.send_mail"):
+            feedback = IconFeedback.objects.create(icon=icon, feedback_type="mislabel", description="Incorrect label")
+        url = reverse("moderation-detail", args=["icon", feedback.pk])
+        self.client.force_login(self.general)
+        response = self.client.get(url)
+        self.assertContains(response, '<option value="resolve">Close report</option>', html=True)
+        self.assertNotContains(response, '<option value="acknowledge">')
+        self.assertNotContains(response, 'id="review-reference"')
+        self.assertContains(response, "Open report")
+        for payload in [
+            {"action": "acknowledge", "note": "Seen"},
+            {"action": "resolve", "note": "Checked", "regression_reference": "case-01"},
+            {"action": "misclassification", "note": "Checked", "expected_outcome": "approve"},
+        ]:
+            self.assertIn(self.client.post(url, payload).status_code, [400, 403])
+            feedback.refresh_from_db()
+            self.assertFalse(feedback.is_resolved)
+            self.assertFalse(Review.objects.exists())
+        response = self.client.post(url, {"action": "resolve", "note": "Corrected the icon title"})
+        self.assertEqual(response.status_code, 302)
+        feedback.refresh_from_db()
+        self.assertTrue(feedback.is_resolved)
+        self.assertEqual(feedback.admin_notes, "Corrected the icon title")
+        icon.refresh_from_db()
+        self.assertEqual(icon.title, "Icon to correct")
 
     def prayer_admin_payload(self, obj, status):
         return {
@@ -483,11 +627,11 @@ class ModerationTests(TestCase):
     def test_outcome_has_no_default_and_errors_render_inline_keeping_the_note(self):
         self.client.force_login(self.general)
         detail = self.client.get(self.detail(self.routine))
-        self.assertContains(detail, '<option value="" selected>Choose an outcome…</option>', html=True)
+        self.assertContains(detail, '<option value="" selected>Choose a decision…</option>', html=True)
         self.assertContains(detail, "Approve and publish")
         response = self.client.post(self.detail(self.routine), {"action": "", "note": "Checking with Fr."})
         self.assertEqual(response.status_code, 400)
-        self.assertContains(response, "Choose an outcome.", status_code=400)
+        self.assertContains(response, "Choose a decision.", status_code=400)
         self.assertContains(response, "Checking with Fr.", status_code=400)
         self.routine.refresh_from_db()
         self.assertEqual(self.routine.status, "pending_moderation")
@@ -495,7 +639,7 @@ class ModerationTests(TestCase):
             self.detail(self.routine), {"action": "misclassification", "note": "A long typed note"}
         )
         self.assertEqual(response.status_code, 400)
-        self.assertContains(response, "correct outcome", status_code=400)
+        self.assertContains(response, "Choose the decision you think is correct.", status_code=400)
         self.assertContains(response, "A long typed note", status_code=400)
         self.assertFalse(Review.objects.exists())
 
@@ -535,7 +679,8 @@ class ModerationTests(TestCase):
         self.assertNotContains(self.client.get(dashboard + "?type=feast&status=audit"), f"#{replaced.pk}")
 
         for kind, pk in [("feast", replaced.pk), ("icon", feedback.pk)]:
-            self.client.post(reverse("moderation-detail", args=[kind, pk]), {"action": "acknowledge", "note": "Seen"})
+            action = "resolve" if kind == "icon" else "acknowledge"
+            self.client.post(reverse("moderation-detail", args=[kind, pk]), {"action": action, "note": "Reviewed"})
         self.assertNotContains(self.client.get(dashboard + "?type=feast"), f"#{replaced.pk}")
         self.assertContains(self.client.get(dashboard + "?type=feast&status=audit"), f"Feast context #{replaced.pk}")
         self.assertContains(

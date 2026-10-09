@@ -11,7 +11,7 @@
 
 {% block content %}
 <div id="content-main" class="fp-dashboard">
-  <p>{% if audit %}Audit history, newest first: items already rejected, resolved or carrying a human review.{% else %}Oldest first.{% endif %} Only queues covered by your assigned responsibilities are shown.</p>
+  <p>{% if audit %}Review history, newest first: items already rejected, closed or carrying a review.{% else %}Items needing review, oldest first.{% endif %} Only content covered by your assigned responsibilities is shown.</p>
   <form method="get">
     <fieldset class="module aligned">
       <h2>Review filters</h2>
@@ -30,8 +30,8 @@
       <div class="form-row">
         <label for="review-status">View:</label>
         <select id="review-status" name="status">
-          <option value="">Outstanding</option>
-          <option value="audit" {% if audit %}selected{% endif %}>Reviewed / rejected / resolved (audit)</option>
+          <option value="">Needs review</option>
+          <option value="audit" {% if audit %}selected{% endif %}>Review history</option>
         </select>
       </div>
     </fieldset>
@@ -64,7 +64,7 @@
                 <td><span class="fp-admin-state fp-admin-state--{% if item.crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span></td>
                 <td>{{ item.timestamp|default:'Unknown' }}</td>
               </tr>
-              {% empty %}<tr><td colspan="3">{% if audit %}No reviewed items.{% else %}No outstanding items.{% endif %}</td></tr>{% endfor %}
+              {% empty %}<tr><td colspan="3">{% if audit %}No review history yet.{% else %}No items need review.{% endif %}</td></tr>{% endfor %}
             </tbody>
           </table>
         </div>
