@@ -1,0 +1,69 @@
+{% extends "moderation/base.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="{% static 'admin/js/moderation-review.js' %}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  {% if admin_url %}<ul class="object-tools"><li><a href="{{ admin_url }}">Existing admin tools</a></li></ul>{% endif %}
+  <fieldset class="module aligned">
+    <h2>Review details</h2>
+    <div class="form-row"><label>Status:</label><div class="readonly"><span class="fp-admin-state fp-admin-state--{% if crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span></div></div>
+    {% if crisis %}
+    <div class="form-row"><p><strong>Crisis follow-up · designated reviewers only.</strong> Contact the requester and record the follow-up or escalation before closing this review. The prayer stays unpublished.</p></div>
+    <div class="form-row"><label>Requester:</label><div class="readonly">{{ item.obj.requester.get_full_name|default:item.obj.requester.username }} <span class="help">(account #{{ item.obj.requester_id }})</span></div></div>
+    <div class="form-row"><label>Contact email:</label><div class="readonly">{% if item.obj.requester.email %}<a href="mailto:{{ item.obj.requester.email }}">{{ item.obj.requester.email }}</a><p class="help">Opens your email app to compose a message. No message is sent by recording a review.</p>{% else %}No contact email on this account.{% endif %}</div></div>
+    {% if item.obj.is_anonymous %}<div class="form-row"><p class="help">This was submitted anonymously for public display. Requester details are available here to designated crisis reviewers.</p></div>{% endif %}
+    {% endif %}
+    <div class="form-row"><label>Source date:</label><div class="readonly">{{ item.timestamp|default:'Unknown' }}<p class="help">{{ item.source }}</p></div></div>
+    <div class="form-row"><label>Content:</label><div class="readonly fp-review-content">{{ item.text }}</div></div>
+    {% if item.kind == 'prayer' %}<div class="form-row"><label>Moderation evidence:</label><div class="readonly">{% if evidence %}<pre class="fp-review-evidence">{{ evidence }}</pre>{% else %}No moderation result{% endif %}</div></div>{% endif %}
+  </fieldset>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.errors %}<p class="errornote" role="alert">Please correct the errors below. Your notes have been kept.</p>{% endif %}
+    <fieldset class="module aligned">
+      <h2>Your decision</h2>
+      <div class="form-row{% if form.action.errors %} errors{% endif %}">
+        {{ form.action.errors }}
+        <label for="review-action" class="required">Decision:</label>
+        {{ form.action }}
+        <p class="help" id="review-action-help">{% if crisis %}Closing removes this item from the review queue. Recording an escalation does not send a message or assign another reviewer.{% elif item.kind == 'icon' %}Make any icon corrections first. “Close report” removes the report from the queue; it does not edit the icon.{% elif item.kind == 'prayer' %}“Approve and publish” makes the request public immediately and cannot be undone here.{% else %}“Complete review” removes this feedback from the queue. It does not edit or regenerate the context.{% endif %}</p>
+      </div>
+      <div class="form-row{% if form.note.errors %} errors{% endif %}">
+        {{ form.note.errors }}
+        <label for="review-note" class="required">Notes:</label>{{ form.note }}<p class="help" id="review-note-help">Explain your decision and any follow-up. Avoid unnecessary personal details.</p>
+      </div>
+      <div id="review-correction" class="form-row{% if form.expected_outcome.errors %} errors{% endif %}">
+        {{ form.expected_outcome.errors }}
+        <label for="review-expected">Correct decision:</label>{{ form.expected_outcome }}<p class="help" id="review-expected-help">For “Report a review problem,” choose what should happen instead. This records your suggestion without changing publication or review status.</p>
+      </div>
+      {% if item.kind == 'prayer' %}
+      <div class="form-row{% if form.regression_reference.errors %} errors{% endif %}">
+        <details {% if form.regression_reference.errors or form.regression_reference.value %}open{% endif %}>
+          <summary>Related test case (optional)</summary>
+          {{ form.regression_reference.errors }}
+          <label for="review-reference">Test case:</label>{{ form.regression_reference }}
+          <p class="help" id="review-reference-help">Select an existing synthetic example that illustrates the problem. Selecting a case does not create or run a test.{% if not form.test_cases %} No test cases are currently available.{% endif %}</p>
+        </details>
+      </div>
+      {% endif %}
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="Save review"></div>
+  </form>
+  <section class="module">
+    <h2>Review history</h2>
+    {% for review in history %}
+    <div class="form-row">
+      <p><strong>{{ review.created_at }} · {{ review.reviewer|default:'Deleted reviewer' }} · {{ review.decision_label }}</strong></p>
+      <div class="fp-review-content">{{ review.note }}</div>
+      {% if review.expected_outcome %}<p class="help">Correct decision: {{ review.correct_decision_label }}</p>{% endif %}
+      {% if review.regression_reference %}<p class="help">Related test case: {{ review.test_case_label }}</p>{% endif %}
+    </div>
+    {% empty %}<div class="form-row"><p>No reviews recorded yet.</p></div>{% endfor %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/forms.css' %}">
+<link rel="stylesheet" href="{% static 'admin/css/fastandpray-moderation.css' %}">
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} fp-moderation{% endblock %}
+
+{% block branding %}
+{% if user.is_staff %}
+  {{ block.super }}
+{% else %}
+{% include "moderation/branding.html" %}
+{% endif %}
+{% endblock %}
+
+{% block userlinks %}
+{% if user.is_staff %}
+  {{ block.super }}
+{% else %}
+  <a href="{% url 'moderation-dashboard' %}">Moderation</a> /
+  <form id="logout-form" method="post" action="{% url 'moderation-logout' %}">
+    {% csrf_token %}<button type="submit">Log out</button>
+  </form>
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  {% if user.is_staff %}<a href="{% url 'admin:index' %}">Home</a> &rsaquo; {% endif %}
+  <a href="{% url 'moderation-dashboard' %}">Moderation</a>
+  {% if item %} &rsaquo; {{ item.label }}{% endif %}
+</div>
+{% endblock %}

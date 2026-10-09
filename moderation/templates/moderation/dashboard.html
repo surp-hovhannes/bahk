@@ -1,0 +1,88 @@
+{% extends "moderation/base.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">
+{% endblock %}
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block coltype %}colMS{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+
+{% block content %}
+<div id="content-main" class="fp-dashboard">
+  <p>{% if audit %}Review history, newest first: items already rejected, closed or carrying a review.{% else %}Items needing review, oldest first.{% endif %} Only content covered by your assigned responsibilities is shown.</p>
+  <form method="get">
+    <fieldset class="module aligned">
+      <h2>Review filters</h2>
+      <div class="form-row">
+        <label for="review-type">Content:</label>
+        <select id="review-type" name="type">
+          <option value="">All permitted types</option>
+          <option value="prayer" {% if selected_type == 'prayer' %}selected{% endif %}>Prayer</option>
+          {% if can_general %}
+          <option value="icon" {% if selected_type == 'icon' %}selected{% endif %}>Icon</option>
+          <option value="reading" {% if selected_type == 'reading' %}selected{% endif %}>Reading</option>
+          <option value="feast" {% if selected_type == 'feast' %}selected{% endif %}>Feast</option>
+          {% endif %}
+        </select>
+      </div>
+      <div class="form-row">
+        <label for="review-status">View:</label>
+        <select id="review-status" name="status">
+          <option value="">Needs review</option>
+          <option value="audit" {% if audit %}selected{% endif %}>Review history</option>
+        </select>
+      </div>
+    </fieldset>
+    <div class="submit-row"><input type="submit" value="Filter"></div>
+  </form>
+  <section class="fp-admin-section" aria-labelledby="queues-heading">
+    <div class="fp-admin-section__heading">
+      <div class="fp-admin-section__title">
+        {% include "admin/includes/icon.html" with name="shield" %}
+        <h2 id="queues-heading">Review queues</h2>
+      </div>
+      <span>{{ groups|length }} content type{{ groups|length|pluralize }}</span>
+    </div>
+    <div class="fp-admin-section__grid">
+      {% for group in groups %}
+      <article class="module fp-admin-app">
+        <h3><span class="fp-admin-app__title">{% include "admin/includes/icon.html" with name="model" %}{{ group.kind|title }} · {{ group.count }}</span></h3>
+        {% if group.oldest %}
+        <div class="form-row">
+          <p class="help">Oldest source date: {{ group.oldest.timestamp|default:'Unknown' }}{% if group.oldest.timestamp %} ({{ group.oldest.timestamp|timesince }} ago){% endif %} · {{ group.oldest.source }}</p>
+        </div>
+        {% endif %}
+        <div class="results">
+          <table class="fp-review-queue">
+            <thead><tr><th scope="col">Item</th><th scope="col">Status</th><th scope="col">Source date</th></tr></thead>
+            <tbody>
+              {% for item in group.items %}
+              <tr>
+                <th scope="row"><a class="fp-model-link" href="{{ item.url }}">{{ item.label }}</a></th>
+                <td><span class="fp-admin-state fp-admin-state--{% if item.crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span></td>
+                <td>{{ item.timestamp|default:'Unknown' }}</td>
+              </tr>
+              {% empty %}<tr><td colspan="3">{% if audit %}No review history yet.{% else %}No items need review.{% endif %}</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if group.count > page_size %}<div class="form-row"><p class="help">Showing the {% if audit %}newest{% else %}oldest{% endif %} {{ page_size }} of {{ group.count }}.</p></div>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block sidebar %}
+<div id="content-related" class="fp-dashboard-sidebar">
+  <section class="module" aria-labelledby="responsibilities-heading">
+    <h2 id="responsibilities-heading">Your responsibilities</h2>
+    {% if can_general %}<p>General moderation</p>{% endif %}
+    {% if can_crisis %}<p>Crisis escalation</p>{% endif %}
+    <p>Open an item to review it and record your decision.</p>
+  </section>
+</div>
+{% endblock %}
