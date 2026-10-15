@@ -5,26 +5,77 @@
   const DEFAULT_HOST = "https://api.fastandpray.app";
   const pending = new Map();
   const cooldowns = new Map();
+  // Fast & Pray mark (bahk_landing public/favicon.svg), drawn in currentColor.
+  const LOGO_PATH = "M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 " +
+    "65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 " +
+    "6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 " +
+    "2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 " +
+    "6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z";
+  // Tokens mirror bahk_landing src/styles/global.css (hex forms). Figtree is used
+  // when the host page already loads it; the widget never fetches fonts itself.
   const styles = `
-    :host { display: block; color-scheme: light; font: 1rem/1.6 system-ui, sans-serif;
-      color: #243630; max-width: 42rem; }
+    :host { --_accent: var(--bahk-accent, #80273e); --_bg: var(--bahk-background, #fff);
+      --_fg: var(--bahk-text, #3b0714); --_fg-muted: #5b2030; --_muted: #6b7280;
+      --_border: var(--bahk-border, #e5e7eb);
+      --_accent-hover: var(--bahk-accent-hover, color-mix(in srgb, var(--_accent) 80%, black));
+      display: block; color-scheme: light; max-width: 42rem; color: var(--_fg);
+      font: 400 1rem/1.6 var(--bahk-font, Figtree, ui-sans-serif, system-ui, -apple-system,
+        "Segoe UI", Roboto, sans-serif);
+      -webkit-font-smoothing: antialiased; }
     * { box-sizing: border-box; }
-    section { background: var(--bahk-background, #fffdf8); border: 1px solid #d8dfd8;
-      border-radius: 1rem; padding: clamp(1rem, 4vw, 1.75rem); overflow-wrap: anywhere; }
-    h2 { font-size: 1.25rem; line-height: 1.3; margin: 0 0 .4rem; }
-    h3 { font-size: 1.1rem; margin: 1rem 0 .4rem; }
-    p { margin: .65rem 0; }
-    .meta, footer { color: #50645b; font-size: .875rem; }
+    section { position: relative; background: var(--_bg); border: 1px solid var(--_border);
+      border-radius: .5rem; padding: clamp(1.125rem, 4vw, 1.5rem); overflow: hidden;
+      overflow-wrap: anywhere; box-shadow: 0 1px 2px rgb(59 7 20 / .04); }
+    section::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px;
+      background: linear-gradient(to right, #b5244a, #e54670); }
+    h2 { margin: 0; color: var(--_accent); font-size: .75rem; font-weight: 700;
+      line-height: 1.4; letter-spacing: .08em; text-transform: uppercase; }
+    .byline { margin: .25rem 0 0; font-size: .875rem; line-height: 1.5; }
+    .byline p { margin: 0; }
+    .byline [role=status] { color: var(--_fg-muted); font-weight: 600; }
+    .content { margin-top: 1rem; }
+    h3 { margin: 0 0 .5rem; font-size: 1.375rem; font-weight: 700; line-height: 1.25;
+      letter-spacing: -.01em; }
+    p { margin: .75rem 0; }
+    .content > :first-child { margin-top: 0; }
+    .content > :last-child { margin-bottom: 0; }
+    .meta { color: var(--_muted); font-size: .875rem; }
+    .empty { color: var(--_fg-muted); }
     .description { white-space: pre-wrap; }
-    ul { padding-inline-start: 1.4rem; margin: 1rem 0; }
-    li { padding: .25rem 0; }
-    a { color: var(--bahk-accent, #205c46); text-underline-offset: .2em; }
-    button { font: inherit; color: #fff; background: var(--bahk-accent, #205c46);
-      border: 1px solid transparent; border-radius: .4rem; padding: .5rem 1rem;
-      min-height: 44px; cursor: pointer; }
-    button:disabled { background: #53655c; cursor: wait; }
-    :is(a, button):focus-visible { outline: 3px solid #a54f0e; outline-offset: 3px; }
-    footer { margin-top: 1.25rem; border-top: 1px solid #d8dfd8; padding-top: .75rem; }
+    ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--_border); }
+    li { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .375rem;
+      padding: .625rem 0; border-bottom: 1px solid var(--_border); }
+    li > span:first-child { font-weight: 600; }
+    li .ref { color: var(--_fg-muted); font-variant-numeric: tabular-nums; }
+    ul + .meta { margin-top: .75rem; font-size: .8125rem; }
+    a { color: var(--_accent); font-weight: 600; text-decoration-thickness: 1px;
+      text-underline-offset: .2em; }
+    a:hover { color: var(--_accent-hover); }
+    .more { display: inline-block; margin-top: .25rem; }
+    .more::after { content: " →"; content: " →" / ""; }
+    button { font: inherit; font-weight: 600; color: #fff; background: var(--_accent);
+      border: 1px solid transparent; border-radius: 9999px; padding: .5rem 1.375rem; min-height: 44px; cursor: pointer;
+      transition: background-color .15s; }
+    button:hover:not(:disabled) { background: var(--_accent-hover); }
+    button:disabled { color: var(--_fg-muted); background: #f3e8eb; cursor: wait; }
+    :is(a, button):focus-visible { outline: 2px solid var(--_accent); outline-offset: 2px;
+      border-radius: .25rem; }
+    button:focus-visible { border-radius: 9999px; }
+    footer { display: flex; align-items: center; margin-top: 1.25rem; padding-top: .875rem;
+      border-top: 1px solid var(--_border); font-size: .8125rem; line-height: 1; }
+    footer a { display: inline-flex; align-items: center; gap: .375rem; color: var(--_muted);
+      font-weight: 600; text-decoration: none; }
+    footer a:hover { color: var(--_accent); }
+    footer svg { width: 1rem; height: 1rem; flex: none; fill: currentColor; }
+    .skeleton { display: grid; gap: .625rem; }
+    .skeleton i { display: block; height: .875rem; border-radius: .25rem;
+      background: linear-gradient(90deg, #f3eef0 25%, #faf6f7 50%, #f3eef0 75%) 0 0 / 200% 100%;
+      animation: shimmer 1.4s ease-in-out infinite; }
+    .skeleton i:first-child { width: 55%; height: 1.25rem; }
+    .skeleton i:nth-child(3) { width: 80%; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    @media (prefers-reduced-motion: reduce) { .skeleton i { animation: none; } }
+    @media (forced-colors: active) { section::before { display: none; } footer svg { fill: CanvasText; } }
   `;
 
   function node(tag, text, className) {
@@ -32,6 +83,18 @@
     if (text !== undefined) element.textContent = text;
     if (className) element.className = className;
     return element;
+  }
+
+  function logo() {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 128 128");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", LOGO_PATH);
+    svg.append(path);
+    return svg;
   }
 
   function validDate(value) {
@@ -176,8 +239,14 @@
       const style = node("style", styles);
       const section = node("section");
       section.lang = "en";
-      section.setAttribute("aria-label", this.title);
-      section.append(node("h2", this.title));
+      section.setAttribute("aria-label", this.heading);
+      section.append(node("h2", this.heading));
+      const byline = node("div", undefined, "byline");
+      this.status = node("p", "Loading…");
+      this.status.setAttribute("role", "status");
+      this.status.setAttribute("aria-live", "polite");
+      this.status.setAttribute("aria-atomic", "true");
+      byline.append(this.status);
       if (options) {
         const meta = node("p", undefined, "meta");
         const time = node("time", new Intl.DateTimeFormat("en", {
@@ -185,19 +254,20 @@
         }).format(new Date(options.date + "T12:00:00Z")));
         time.dateTime = options.date;
         meta.append(time, document.createTextNode(` · ${options.timeZone}`));
-        section.append(meta);
+        byline.append(meta);
       }
-      this.status = node("p", "Loading…", "meta");
-      this.status.setAttribute("role", "status");
-      this.status.setAttribute("aria-live", "polite");
-      this.status.setAttribute("aria-atomic", "true");
-      this.content = node("div");
+      this.content = node("div", undefined, "content");
       this.content.setAttribute("aria-busy", "true");
+      const skeleton = node("div", undefined, "skeleton");
+      skeleton.setAttribute("aria-hidden", "true");
+      skeleton.append(node("i"), node("i"), node("i"));
+      this.content.append(skeleton);
       const footer = node("footer");
-      const link = node("a", "Fast & Pray");
+      const link = node("a");
       link.href = "https://fastandpray.app";
-      footer.append(document.createTextNode("From "), link);
-      section.append(this.status, this.content, footer);
+      link.append(logo(), document.createTextNode("Fast & Pray"));
+      footer.append(link);
+      section.append(byline, this.content, footer);
       this.shadowRoot.replaceChildren(style, section);
     }
 
@@ -212,6 +282,7 @@
         const data = await calendar(options);
         if (revision !== this.revision || !this.isConnected) return;
         checkEnvelope(data, options);
+        this.content.replaceChildren();
         this.render(data, options);
         this.content.setAttribute("aria-busy", "false");
       } catch (error) {
@@ -239,7 +310,7 @@
   }
 
   class FastingGuidance extends CalendarWidget {
-    get title() { return "Fasting guidance"; }
+    get heading() { return "Fasting guidance"; }
 
     render(data, options) {
       const fast = data.fast;
@@ -249,7 +320,7 @@
       }
       this.status.textContent = data.church.name;
       if (fast === null) {
-        this.content.append(node("p", "No fasting guidance is recorded for this date."));
+        this.content.append(node("p", "No fasting guidance is recorded for this date.", "empty"));
         return;
       }
       const heading = node("h3", fast.name || "Current fast");
@@ -260,7 +331,7 @@
       this.content.append(description);
       const href = publicLink(fast.learn_more_url);
       if (href) {
-        const link = node("a", "Learn more about this fast");
+        const link = node("a", "Learn more about this fast", "more");
         link.href = href;
         this.content.append(link);
       }
@@ -268,7 +339,7 @@
   }
 
   class DailyReadings extends CalendarWidget {
-    get title() { return "Daily readings"; }
+    get heading() { return "Daily readings"; }
 
     render(data, options) {
       if (!Array.isArray(data.readings) || !data.readings.every((reading) => reading &&
@@ -279,7 +350,7 @@
       }
       this.status.textContent = data.church.name;
       if (data.readings.length === 0) {
-        this.content.append(node("p", "No readings are recorded for this date."));
+        this.content.append(node("p", "No readings are recorded for this date.", "empty"));
         return;
       }
       const list = node("ul");
@@ -290,7 +361,8 @@
         const item = node("li");
         const book = node("span", reading.book || "Unknown book");
         if (reading.book) book.lang = options.language;
-        item.append(book, document.createTextNode(` ${start}${end}`));
+        // The leading space keeps the item's text content readable as "Book 1:2".
+        item.append(book, node("span", ` ${start}${end}`, "ref"));
         list.append(item);
       }
       this.content.append(list);

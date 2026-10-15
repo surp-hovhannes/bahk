@@ -82,7 +82,12 @@ test("renders hostile API text literally and rejects script URLs", async ({ page
   await expect(page.locator("bahk-daily-readings li").first()).toContainText("<b>Matthew</b>");
   await expect(page.locator("bahk-fasting-guidance a")).toHaveCount(1); // Attribution only.
   expect(await page.evaluate(() => window.compromised)).toBeUndefined();
-  await expect(page.locator("bahk-fasting-guidance img, bahk-fasting-guidance svg, bahk-fasting-guidance script")).toHaveCount(0);
+  // The only SVG is the static logo in the attribution footer; API text adds no elements.
+  await expect(page.locator("bahk-fasting-guidance svg")).toHaveCount(1);
+  await expect(page.locator("bahk-fasting-guidance footer a svg")).toHaveCount(1);
+  for (const tag of ["bahk-fasting-guidance", "bahk-daily-readings"]) {
+    await expect(page.locator(`${tag} .content`).locator("img, svg, script")).toHaveCount(0);
+  }
 });
 
 for (const attributes of [

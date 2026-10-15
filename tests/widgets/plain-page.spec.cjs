@@ -60,13 +60,14 @@ for (const [device, viewport] of Object.entries({
           await expect(page.locator(`${tag} [aria-busy]`)).toHaveAttribute("aria-busy", "false");
         }
         // Strong, conflicting host selectors do not enter either widget.
-        await expect(page.locator(`${tag} section`)).toHaveCSS("background-color", "rgb(255, 253, 248)");
+        await expect(page.locator(`${tag} section`)).toHaveCSS("background-color", "rgb(255, 255, 255)");
         await expect(page.locator(`${tag} section`)).toHaveCSS("border-top-style", "solid");
-        await expect(page.locator(`${tag} h2`)).toHaveCSS("color", "rgb(36, 54, 48)");
+        await expect(page.locator(`${tag} h2`)).toHaveCSS("color", "rgb(128, 39, 62)");
+        await expect(page.locator(`${tag} footer a svg`)).toHaveAttribute("aria-hidden", "true");
         expect(await page.locator(`${tag} h2`).evaluate((element) => getComputedStyle(element).fontFamily))
           .not.toContain("Georgia");
         if (state === "error") {
-          await expect(page.locator(`${tag} button`)).toHaveCSS("background-color", "rgb(83, 101, 92)");
+          await expect(page.locator(`${tag} button`)).toHaveCSS("background-color", "rgb(243, 232, 235)");
         }
       }
       // Widget section/heading/button styles do not escape into the host page.

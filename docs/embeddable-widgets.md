@@ -66,15 +66,27 @@ await readings.refresh();
 ```
 
 The components use shadow DOM to avoid changing the host site's styles. They
-fit their container up to 42rem and expose two optional CSS properties:
+follow the Fast & Pray design system (the tokens in `bahk_landing`'s
+`src/styles/global.css`): a white card with an 8px radius, the brand gradient as a
+thin top rule (fixed brand chrome, not themeable), maroon text, and a small Fast & Pray mark beside the footer
+attribution. They fit their container up to 42rem and expose optional CSS
+properties (defaults shown):
 
 ```css
 bahk-fasting-guidance,
 bahk-daily-readings {
-  --bahk-accent: #205c46;
-  --bahk-background: #fffdf8;
+  --bahk-accent: #80273e;      /* heading eyebrow, links, retry button */
+  --bahk-accent-hover: #661d30; /* defaults to the accent darkened 20% */
+  --bahk-background: #fff;     /* card surface */
+  --bahk-text: #3b0714;        /* body text */
+  --bahk-border: #e5e7eb;      /* card border and dividers */
+  --bahk-font: Figtree, ui-sans-serif, system-ui, sans-serif;
 }
 ```
+
+The widgets never download fonts. Figtree is used when the host page already
+loads it (as fastandpray.app does); otherwise the system UI font is used.
+The logo is inline SVG, so it needs no extra request or `img-src` allowance.
 
 Maintain readable contrast if overriding these colors. Each widget has an h2
 heading, a named section, a machine-readable date, a polite status region,
