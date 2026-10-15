@@ -6,7 +6,6 @@ import time
 from better_profanity import profanity
 from celery import shared_task
 from django.conf import settings
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -440,7 +439,7 @@ def moderate_prayer_request_task(self, prayer_request_id):
 
 
 def _send_moderation_alert_email(prayer_request, alert_type):
-    """Send email to admin about prayer request needing review."""
+    """Notify eligible assigned reviewers without emailing private request content."""
     subject_map = {
         "profanity_detected": "Prayer Request Rejected - Profanity Detected",
         "llm_rejected": "Prayer Request Rejected - Manual Review Needed",
@@ -462,38 +461,11 @@ def _send_moderation_alert_email(prayer_request, alert_type):
     elif severity == "high":
         subject = f"⚠️  HIGH PRIORITY: {subject}"
 
-    message = f"""
-A prayer request has been flagged during moderation and requires your attention.
+    from moderation.access import is_crisis
+    from moderation.notifications import notify
 
-Prayer Request ID: {prayer_request.id}
-Title: {prayer_request.title}
-Description: {prayer_request.description}
-Requester: {prayer_request.requester.email}
-Anonymous: {"Yes" if prayer_request.is_anonymous else "No"}
-Created: {prayer_request.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")}
-
-SEVERITY: {severity.upper() if severity else "Unknown"}
-Requires Human Review: {"Yes" if prayer_request.requires_human_review else "No"}
-Status: {prayer_request.status}
-
-Moderation Result:
-{prayer_request.moderation_result}
-
-Please review this prayer request in the Django admin panel.
-Admin URL: {settings.SITE_URL}/admin/prayers/prayerrequest/{prayer_request.id}/change/
-"""
-
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=["fastandprayhelp@gmail.com"],
-            fail_silently=False,
-        )
-        logger.info(f"Moderation alert email sent for prayer request {prayer_request.id}")
-    except Exception as e:
-        logger.error(f"Failed to send moderation alert email for prayer request {prayer_request.id}: {e}")
+    crisis = alert_type == "critical_safety_concern" or is_crisis(prayer_request)
+    notify("prayer", prayer_request.pk, "crisis" if crisis else "general", subject)
 
 
 @shared_task

@@ -1,0 +1,11 @@
+{% extends "admin/login.html" %}
+{% load static %}
+
+{% block branding %}{% include "moderation/branding.html" %}{% endblock %}
+
+{% block content_title %}
+<div class="fp-login-brand" aria-label="Fast & Pray">
+  <img src="{% static 'admin/brand/wordmark.png' %}" alt="Fast & Pray" width="298" height="60">
+  <p>Moderation</p>
+</div>
+{% endblock %}

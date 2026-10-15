@@ -308,6 +308,10 @@ class ReadingContextFeedbackView(APIView):
             active_context.refresh_from_db(fields=["thumbs_down"])
             threshold = getattr(settings, "READING_CONTEXT_REGENERATION_THRESHOLD", 5)
             regenerate = False
+            if active_context.thumbs_down == threshold:
+                from moderation.notifications import notify
+                from django.db import transaction as moderation_transaction
+                moderation_transaction.on_commit(lambda: notify("reading", active_context.pk))
             if active_context.thumbs_down >= threshold:
                 regenerate = True
                 # Force regeneration via Celery task

@@ -7,6 +7,7 @@ import uuid
 from django import forms
 from django.contrib import admin, messages
 from django.core.cache import cache
+from django.core.exceptions import PermissionDenied
 from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.shortcuts import redirect, render
@@ -395,9 +396,30 @@ class PrayerRequestAttentionFilter(admin.SimpleListFilter):
         return queryset
 
 
+class PrayerRequestAdminForm(forms.ModelForm):
+    """Crisis responsibility permits review, never publication through admin edits."""
+
+    class Meta:
+        model = PrayerRequest
+        fields = "__all__"
+
+    def clean(self):
+        from moderation.access import is_crisis
+
+        cleaned = super().clean()
+        if is_crisis(self.instance) and cleaned.get("status") == "approved":
+            self.add_error(
+                "status",
+                "Crisis requests cannot be published. Record review or escalation in the moderation dashboard.",
+            )
+        return cleaned
+
+
 @admin.register(PrayerRequest)
 class PrayerRequestAdmin(admin.ModelAdmin):
     """Admin interface for PrayerRequest model."""
+
+    form = PrayerRequestAdminForm
 
     list_display = (
         "image_preview",
@@ -458,10 +480,18 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         ("Metadata", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # This admin does not offer Save as new. Django otherwise treats a forged
+        # flag as an add, discarding the source object's crisis classification.
+        if request.method == "POST" and "_saveasnew" in request.POST:
+            raise PermissionDenied
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            "requester", "icon"
-        ).annotate(
+        from moderation.access import hide_crisis
+
+        queryset = hide_crisis(super().get_queryset(request), request)
+        return queryset.select_related("requester", "icon").annotate(
             _admin_acceptance_count=models.Count("acceptances", distinct=True),
             _admin_prayer_log_count=models.Count("prayer_logs", distinct=True),
         )
@@ -562,7 +592,10 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         - Checking for first_prayer_request_created milestones
         - Auto-accepting requester's own prayer request
         """
-        pending_requests = queryset.filter(status="pending_moderation")
+        from moderation.access import crisis_query, visible_prayers
+
+        queryset = visible_prayers(queryset, request)
+        pending_requests = queryset.filter(status="pending_moderation").exclude(crisis_query())
         count = 0
         now = timezone.now()
 
@@ -616,6 +649,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         - Setting moderated_at timestamp
         - Clearing requires_human_review flag
         """
+        from moderation.access import visible_prayers
+
+        queryset = visible_prayers(queryset, request)
         pending_requests = queryset.filter(status="pending_moderation")
         count = 0
         now = timezone.now()
@@ -638,6 +674,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
 
         This clears the requires_human_review flag and marks as reviewed.
         """
+        from moderation.access import visible_prayers
+
+        queryset = visible_prayers(queryset, request)
         count = queryset.update(requires_human_review=False, reviewed=True)
 
         self.message_user(request, f"{count} prayer request(s) marked as manually reviewed.")
@@ -645,8 +684,19 @@ class PrayerRequestAdmin(admin.ModelAdmin):
     mark_manually_reviewed.short_description = "Mark as manually reviewed"
 
 
+class PrayerRequestReferenceAdmin(admin.ModelAdmin):
+    """Authorize posted foreign keys as well as lists and autocomplete results."""
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "prayer_request":
+            from moderation.access import hide_crisis
+
+            kwargs["queryset"] = hide_crisis(PrayerRequest.objects.all(), request)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
 @admin.register(PrayerRequestAcceptance)
-class PrayerRequestAcceptanceAdmin(admin.ModelAdmin):
+class PrayerRequestAcceptanceAdmin(PrayerRequestReferenceAdmin):
     """Admin interface for PrayerRequestAcceptance model."""
 
     list_display = ("prayer_request", "user", "accepted_at")
@@ -659,11 +709,14 @@ class PrayerRequestAcceptanceAdmin(admin.ModelAdmin):
     fieldsets = ((None, {"fields": ("prayer_request", "user", "accepted_at")}),)
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("prayer_request", "user")
+        from moderation.access import hide_crisis
+
+        queryset = hide_crisis(super().get_queryset(request), request, "prayer_request__")
+        return queryset.select_related("prayer_request", "user")
 
 
 @admin.register(PrayerRequestPrayerLog)
-class PrayerRequestPrayerLogAdmin(admin.ModelAdmin):
+class PrayerRequestPrayerLogAdmin(PrayerRequestReferenceAdmin):
     """Admin interface for PrayerRequestPrayerLog model."""
 
     list_display = ("prayer_request", "user", "prayed_on_date", "created_at")
@@ -676,7 +729,10 @@ class PrayerRequestPrayerLogAdmin(admin.ModelAdmin):
     fieldsets = ((None, {"fields": ("prayer_request", "user", "prayed_on_date", "created_at")}),)
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("prayer_request", "user")
+        from moderation.access import hide_crisis
+
+        queryset = hide_crisis(super().get_queryset(request), request, "prayer_request__")
+        return queryset.select_related("prayer_request", "user")
 
 
 @admin.register(FeastPrayer)

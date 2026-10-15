@@ -279,39 +279,45 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get prayer requests based on action."""
-        if self.action == 'list':
-            queryset = PrayerRequest.objects.select_related('requester', 'icon')
-            
+        from moderation.access import allowed, crisis_query
+
+        def protect(queryset):
+            if allowed(self.request.user, "crisis"):
+                return queryset
+            # Preserve requesters' access to their own private submissions.
+            return queryset.exclude(crisis_query() & ~Q(requester=self.request.user))
+
+        if self.action == "list":
+            queryset = PrayerRequest.objects.select_related("requester", "icon")
+
             # Filter by mine parameter (user's own requests)
-            mine_param = self.request.query_params.get('mine', None)
-            is_mine_filter = mine_param and mine_param.lower() in ('true', '1', 'yes')
+            mine_param = self.request.query_params.get("mine", None)
+            is_mine_filter = mine_param and mine_param.lower() in ("true", "1", "yes")
             if is_mine_filter:
                 queryset = queryset.filter(requester=self.request.user)
-            
+
             # Filter by status if provided
-            status_param = self.request.query_params.get('status', None)
+            status_param = self.request.query_params.get("status", None)
             if status_param:
                 # Support comma-separated multiple statuses
-                status_list = [s.strip() for s in status_param.split(',')]
+                status_list = [s.strip() for s in status_param.split(",")]
                 # Build Q objects for OR logic when combining multiple statuses
                 q_objects = []
-                has_active = 'active' in status_list
-                
+                has_active = "active" in status_list
+
                 if has_active:
                     # 'active' means approved and not expired
-                    q_objects.append(
-                        Q(status='approved', expiration_date__gt=timezone.now())
-                    )
+                    q_objects.append(Q(status="approved", expiration_date__gt=timezone.now()))
                     # Remove 'active' from list and process other statuses
-                    status_list = [s for s in status_list if s != 'active']
-                
+                    status_list = [s for s in status_list if s != "active"]
+
                 # Validate and add other status values
-                valid_statuses = ['pending_moderation', 'approved', 'rejected', 'completed', 'deleted']
+                valid_statuses = ["pending_moderation", "approved", "rejected", "completed", "deleted"]
                 valid_status_list = [s for s in status_list if s in valid_statuses]
-                
+
                 if valid_status_list:
                     q_objects.append(Q(status__in=valid_status_list))
-                
+
                 # Apply filters with OR logic if we have any Q objects
                 if q_objects:
                     # Combine all Q objects with OR logic
@@ -325,32 +331,33 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
             elif not is_mine_filter:
                 # Default behavior: only approved, non-expired requests
                 # (skip default when mine filter is active - show all user's requests)
-                queryset = PrayerRequest.objects.get_active_approved().select_related('requester', 'icon')
-            
+                queryset = PrayerRequest.objects.get_active_approved().select_related("requester", "icon")
+
             if not self.request.user.is_staff and not is_mine_filter:
                 queryset = queryset.filter(
-                    status='approved',
+                    status="approved",
                     expiration_date__gt=timezone.now(),
                 )
 
-            return queryset
-        elif self.action == 'accepted':
+            return protect(queryset)
+        elif self.action == "accepted":
             # Get user's accepted requests
-            return PrayerRequest.objects.filter(
-                acceptances__user=self.request.user
-            ).select_related('requester', 'icon').distinct()
-        elif self.action == 'retrieve':
-            queryset = PrayerRequest.objects.select_related('requester', 'icon')
+            return protect(
+                PrayerRequest.objects.filter(acceptances__user=self.request.user)
+                .select_related("requester", "icon")
+                .distinct()
+            )
+        elif self.action == "retrieve":
+            queryset = PrayerRequest.objects.select_related("requester", "icon")
             if self.request.user.is_staff:
-                return queryset
-            return queryset.filter(
-                Q(requester=self.request.user) |
-                Q(status='approved', expiration_date__gt=timezone.now())
+                return protect(queryset)
+            return protect(queryset).filter(
+                Q(requester=self.request.user) | Q(status="approved", expiration_date__gt=timezone.now())
             )
         else:
             # For update/destroy and custom detail actions, include all statuses
             # Permissions will be checked separately
-            return PrayerRequest.objects.select_related('requester', 'icon')
+            return protect(PrayerRequest.objects.select_related("requester", "icon"))
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""

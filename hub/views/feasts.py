@@ -493,6 +493,10 @@ class FeastContextFeedbackView(APIView):
             active_context.refresh_from_db()
             threshold = getattr(settings, "FEAST_CONTEXT_REGENERATION_THRESHOLD", 5)
             regenerate = False
+            if active_context.thumbs_down == threshold:
+                from moderation.notifications import notify
+                from django.db import transaction as moderation_transaction
+                moderation_transaction.on_commit(lambda: notify("feast", active_context.pk))
             if active_context.thumbs_down >= threshold:
                 regenerate = True
                 # Force regeneration via Celery task
