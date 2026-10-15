@@ -1,7 +1,10 @@
 const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const path = require("node:path");
-const fixture = { ...require("./calendar.json"), feasts: [require("./feast.json")] };
+const base = require("./calendar.json");
+// The fast takes precedence; the feast appears as "Also commemorated".
+const fixture = { ...base, fast: { ...base.fast, thumbnail_url: "https://icons.example.test/fast.svg" },
+  feasts: [require("./feast.json")] };
 // A simple mocked icon so screenshots show the feast thumbnail layout.
 const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><rect width="56" height="56" fill="#f3e8eb"/>' +
   '<path d="M24 10h8v12h12v8H32v16h-8V30H12v-8h12z" fill="#b5244a"/></svg>';
@@ -61,7 +64,9 @@ for (const [device, viewport] of Object.entries({
           await expect(page.locator(`${tag} button`)).toBeDisabled();
           await expect(page.locator(`${tag} [aria-busy]`)).toHaveAttribute("aria-busy", "false");
         } else {
-          await expect(status).toHaveText("Example Church");
+          // The host church site implies the church, so the name is not shown.
+          await expect(status).toHaveText("");
+          await expect(page.locator(tag)).not.toContainText("Example Church");
           await expect(page.locator(`${tag} [aria-busy]`)).toHaveAttribute("aria-busy", "false");
         }
         // Strong, conflicting host selectors do not enter either widget.

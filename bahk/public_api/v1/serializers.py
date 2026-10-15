@@ -46,6 +46,7 @@ Invariants enforced here (also asserted in contract tests):
 
 import logging
 
+from django.conf import settings
 from django.utils.translation import get_language, override
 from rest_framework import serializers
 
@@ -188,6 +189,11 @@ class PublicReadOnlySerializer(serializers.ModelSerializer):
         return _localized(instance, field_name, self.context)
 
 
+def _share_url(path):
+    """Absolute web-app share link (``/share/...`` pages carry social previews)."""
+    return f"{settings.APP_URL.rstrip('/')}/share/{path}"
+
+
 # ---------------------------------------------------------------------------
 # Church
 # ---------------------------------------------------------------------------
@@ -299,20 +305,31 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
           ``null`` when empty
         * ``icon`` (object|null): nested IconPublicSerializer or ``None``
           when no icon is matched or its church differs from the Feast
+        * ``description`` (string|null): localized short summary from the
+          active ``FeastContext`` (AI-generated, two sentences); ``null``
+          until one exists or when contexts were not prefetched
+        * ``share_url`` (string|null): web-app share page for this feast on
+          the requested date; ``null`` when no ``date`` is in the context
 
     Queryset precondition: the nested ``icon`` is read from the instance's
     cached relation, so querysets feeding this serializer must use
-    ``select_related("icon")``. An unselected relation costs one extra
-    query per serialized feast; the contract tests pin the zero-query
-    contract with ``assertNumQueries(0)``.
+    ``select_related("icon")``, and the description is read only from the
+    ``public_active_contexts`` prefetch (see ``with_public_context``). An
+    unselected relation costs one extra query per serialized feast; the
+    contract tests pin the zero-query contract with ``assertNumQueries(0)``.
+
+    The share URL embeds the internal feast ID in its query string because
+    that is the web app's existing share format; no ``id`` field is exposed.
 
     Excluded: ``id``, ``observance_id``, ``church``, ``church_id``,
-    ``designation``, context/votes/LLM/prayer fields, and any other internal
-    metadata.
+    ``designation``, full context text, votes/LLM/prayer fields, and any
+    other internal metadata.
     """
 
     icon = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()
 
     def get_icon(self, instance):
         icon = instance.icon
@@ -322,11 +339,23 @@ class FeastPublicSerializer(PublicReadOnlySerializer):
 
     class Meta:
         model = Feast
-        fields = ["name", "icon"]
+        fields = ["name", "icon", "description", "share_url"]
         read_only_fields = list(fields)
 
     def get_name(self, obj):
         return self.localized(obj, "name")
+
+    def get_description(self, obj):
+        contexts = getattr(obj, "public_active_contexts", None)
+        if not contexts:
+            return None
+        return self.localized(contexts[0], "short_text")
+
+    def get_share_url(self, obj):
+        target_date = self.context.get("date")
+        if target_date is None:
+            return None
+        return _share_url(f"feast/{target_date.isoformat()}?id={obj.pk}")
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +380,7 @@ class FastPublicSerializer(PublicReadOnlySerializer):
         * ``image_url`` (string|null): URL of the uploaded image only
         * ``thumbnail_url`` (string|null): cached thumbnail URL only
         * ``learn_more_url`` (string|null): mapped from ``Fast.url``
+        * ``share_url`` (string): web-app share page for this fast
 
     Excluded: ``modal_id``, ``countdown``, ``joined``, ``participant_count``,
     ``days_to_feast``, ``has_passed``, ``next_fast_date``,
@@ -370,6 +400,7 @@ class FastPublicSerializer(PublicReadOnlySerializer):
     image_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     learn_more_url = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Fast
@@ -386,6 +417,7 @@ class FastPublicSerializer(PublicReadOnlySerializer):
             "image_url",
             "thumbnail_url",
             "learn_more_url",
+            "share_url",
         ]
         read_only_fields = list(fields)
 
@@ -407,3 +439,6 @@ class FastPublicSerializer(PublicReadOnlySerializer):
     def get_learn_more_url(self, obj):
         url = getattr(obj, "url", None)
         return url or None
+
+    def get_share_url(self, obj):
+        return _share_url(f"fast/{obj.pk}")

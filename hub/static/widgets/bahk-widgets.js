@@ -33,6 +33,7 @@
     .byline { margin: .25rem 0 0; font-size: .875rem; line-height: 1.5; }
     .byline p { margin: 0; }
     .byline [role=status] { color: var(--_fg-muted); font-weight: 600; }
+    .byline [role=status]:empty { display: none; }
     .content { margin-top: 1rem; }
     h3 { margin: 0 0 .5rem; font-size: 1.375rem; font-weight: 700; line-height: 1.25;
       letter-spacing: -.01em; }
@@ -42,22 +43,30 @@
     .meta { color: var(--_muted); font-size: .875rem; }
     .empty { color: var(--_fg-muted); }
     .description { white-space: pre-wrap; }
-    .verdict { margin: 0 0 1rem; font-size: 1.5rem; font-weight: 700; line-height: 1.2;
-      letter-spacing: -.015em; }
-    .item { display: flex; gap: .875rem; align-items: flex-start; padding: 1rem 0;
-      border-top: 1px solid var(--_border); }
-    .item:last-child { padding-bottom: 0; }
-    .item .body { min-width: 0; flex: 1; }
-    .item h3 { margin: .375rem 0 0; font-size: 1.125rem; }
-    .item .description { margin: .5rem 0 0; }
-    .item img { flex: none; width: 3.5rem; height: 3.5rem; border-radius: .5rem; object-fit: cover;
-      background: #f3e8eb; border: 1px solid var(--_border); }
+    .day { position: relative; display: flex; gap: 1rem; align-items: flex-start; margin: 0 -.5rem;
+      padding: .75rem .5rem; border-radius: .5rem; transition: background-color .15s; }
+    .content:has(> .day) { margin-top: .5rem; }
+    .day:has(a):hover { background: #fbf6f7; }
+    .day:has(a:focus-visible) { outline: 2px solid var(--_accent); outline-offset: 0; }
+    .art { flex: none; width: 5.5rem; height: auto; aspect-ratio: 3 / 4; border-radius: .375rem;
+      object-fit: cover; object-position: center top; background: #f3e8eb; border: 1px solid var(--_border); }
+    .body { min-width: 0; flex: 1; }
     .tag { display: inline-block; padding: .125rem .5rem; border-radius: 9999px; font-size: .6875rem;
       font-weight: 700; line-height: 1.5; letter-spacing: .06em; text-transform: uppercase; }
     .fast .tag { color: var(--_fg-muted); background: #f3e8eb; }
     .feast .tag { color: #fff; background: #b5244a; }
-    .item ~ :is(.empty, .meta) { margin-top: 0; padding-top: .875rem; border-top: 1px solid var(--_border); }
-    .empty + .meta { margin-top: .25rem; padding-top: 0; border-top: 0; }
+    .day h3 { margin: .375rem 0 0; font-size: 1.25rem; }
+    .day h3 a { color: inherit; font-weight: inherit; text-decoration: none; }
+    .day h3 a::after { content: ""; position: absolute; inset: 0; border-radius: .5rem; }
+    .day h3 a:focus-visible { outline: none; }
+    .day:has(a):hover h3 a { text-decoration: underline; text-decoration-thickness: 1px; }
+    .day .description { margin: .375rem 0 0; color: var(--_fg-muted); white-space: normal;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+    .cta { display: inline-block; margin-top: .5rem; color: var(--_accent); font-size: .875rem; font-weight: 600; }
+    .cta::after { content: " →"; content: " →" / ""; }
+    .also { margin: .75rem 0 0; padding-top: .75rem; border-top: 1px solid var(--_border);
+      color: var(--_fg-muted); font-size: .875rem; }
+    .also span { font-weight: 600; }
     ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--_border); }
     li { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .375rem;
       padding: .625rem 0; border-bottom: 1px solid var(--_border); }
@@ -67,8 +76,6 @@
     a { color: var(--_accent); font-weight: 600; text-decoration-thickness: 1px;
       text-underline-offset: .2em; }
     a:hover { color: var(--_accent-hover); }
-    .more { display: inline-block; margin-top: .25rem; }
-    .more::after { content: " →"; content: " →" / ""; }
     button { font: inherit; font-weight: 600; color: #fff; background: var(--_accent);
       border: 1px solid transparent; border-radius: 9999px; padding: .5rem 1.375rem; min-height: 44px; cursor: pointer;
       transition: background-color .15s; }
@@ -92,7 +99,7 @@
     @keyframes shimmer { to { background-position: -200% 0; } }
     @media (prefers-reduced-motion: reduce) { .skeleton i { animation: none; } }
     @media (forced-colors: active) { section::before { display: none; } footer svg { fill: CanvasText; }
-      .tag { border: 1px solid CanvasText; } }
+      .tag { border: 1px solid CanvasText; } .day:has(a:focus-visible) { outline-color: Highlight; } }
   `;
 
   function node(tag, text, className) {
@@ -334,7 +341,14 @@
 
   function nullableStrings(value, keys) {
     return value && typeof value === "object" &&
-      keys.every((key) => value[key] === null || typeof value[key] === "string");
+      keys.every((key) => value[key] === null || value[key] === undefined || typeof value[key] === "string");
+  }
+
+  // Cut on a word boundary so the card stays short even where line-clamp is unsupported.
+  function truncate(text, limit = 180) {
+    if (text.length <= limit) return text;
+    const cut = text.slice(0, limit);
+    return cut.slice(0, Math.max(cut.lastIndexOf(" "), limit * 0.6)).replace(/[\s,.;:–-]+$/, "") + "…";
   }
 
   class FastOrFeast extends CalendarWidget {
@@ -342,81 +356,95 @@
 
     render(data, options) {
       const { fast, feasts } = data;
-      if (fast !== null && !nullableStrings(fast, ["name", "description", "learn_more_url"])) {
+      if (fast !== null && !nullableStrings(fast, ["name", "description", "learn_more_url", "share_url",
+          "image_url", "thumbnail_url"])) {
         throw new Error("The API returned an unexpected fast.");
       }
-      if (!Array.isArray(feasts) || !feasts.every((feast) => nullableStrings(feast, ["name"]) &&
-          (feast.icon === null || nullableStrings(feast.icon, ["title", "thumbnail_url"])))) {
+      if (!Array.isArray(feasts) || !feasts.every((feast) =>
+          nullableStrings(feast, ["name", "description", "share_url"]) &&
+          (!feast.icon || nullableStrings(feast.icon, ["image_url", "thumbnail_url"])))) {
         throw new Error("The API returned unexpected feasts.");
       }
       const feastsUnavailable = Array.isArray(data.partial_failures) &&
         data.partial_failures.some((failure) => failure && failure.component === "feasts");
-      this.status.textContent = data.church.name;
+      this.status.textContent = "";
 
-      // Only stored data is described. A missing fast or feast is "not recorded",
-      // never "not observed": commemorations can fall on fast days.
-      if (fast || feasts.length) {
-        const kind = fast && feasts.length ? "both" : fast ? "fast" : "feast";
-        const verdict = node("p", { both: "Fast and feast day", fast: "Fast day", feast: "Feast day" }[kind], "verdict");
-        verdict.dataset.kind = kind;
-        this.content.append(verdict);
-      }
-      if (fast) this.content.append(this.fastItem(fast, options));
-      for (const feast of feasts) this.content.append(this.feastItem(feast, options));
-
-      if (!fast && !feasts.length && !feastsUnavailable) {
+      // A day is shown as one thing. A stored fast takes precedence, as in the app,
+      // where that day's commemorations become secondary remembrances.
+      let others = feasts;
+      if (fast) {
+        this.content.append(this.card({
+          kind: "fast", label: "Fast day", title: fast.name || "Current fast",
+          titled: Boolean(fast.name), description: fast.description,
+          href: publicLink(fast.share_url) || publicLink(fast.learn_more_url),
+          image: publicImage(fast.thumbnail_url) || publicImage(fast.image_url),
+        }, options));
+      } else if (feasts.length) {
+        const [feast] = feasts;
+        others = feasts.slice(1);
+        this.content.append(this.card({
+          kind: "feast", label: "Feast day", title: feast.name || "Feast",
+          titled: Boolean(feast.name), description: feast.description,
+          href: publicLink(feast.share_url),
+          image: feast.icon && (publicImage(feast.icon.thumbnail_url) || publicImage(feast.icon.image_url)),
+        }, options));
+      } else if (!feastsUnavailable) {
         this.content.append(node("p", "Nothing is recorded for this date.", "empty"));
-      } else if (!fast) {
-        this.content.append(node("p", "No fast is recorded for this date.", "empty"));
+      }
+
+      const names = others.map((feast) => feast.name).filter(Boolean);
+      if (names.length) {
+        const also = node("p", "Also commemorated: ", "also");
+        names.forEach((name, index) => {
+          if (index) also.append(document.createTextNode(", "));
+          const span = node("span", name);
+          span.lang = options.language;
+          also.append(span);
+        });
+        this.content.append(also);
       }
       if (feastsUnavailable) {
         this.content.append(node("p", "Feast information is temporarily unavailable.", "meta"));
       }
     }
 
-    fastItem(fast, options) {
-      const item = node("div", undefined, "item fast");
+    card({ kind, label, title, titled, description, href, image }, options) {
+      const card = node("article", undefined, `day ${kind}`);
+      if (image) {
+        const picture = node("img", undefined, "art");
+        // Decorative: the title is the adjacent text.
+        picture.alt = "";
+        picture.width = 88;
+        picture.height = 116;
+        picture.loading = "lazy";
+        picture.decoding = "async";
+        picture.referrerPolicy = "no-referrer";
+        picture.addEventListener("error", () => picture.remove());
+        picture.src = image;
+        card.append(picture);
+      }
       const body = node("div", undefined, "body");
-      body.append(node("span", "Fast", "tag"));
-      const heading = node("h3", fast.name || "Current fast");
-      if (fast.name) heading.lang = options.language;
-      body.append(heading);
-      const description = node("p", fast.description || "No fasting instructions are recorded for this fast.", "description");
-      if (fast.description) description.lang = options.language;
-      body.append(description);
-      const href = publicLink(fast.learn_more_url);
+      body.append(node("span", label, "tag"));
+      const heading = node("h3");
+      if (titled) heading.lang = options.language;
       if (href) {
-        const link = node("a", "Learn more about this fast", "more");
+        const link = node("a", title);
         link.href = href;
-        body.append(link);
+        link.target = "_blank";
+        link.rel = "noopener";
+        heading.append(link);
+      } else {
+        heading.textContent = title;
       }
-      item.append(body);
-      return item;
-    }
-
-    feastItem(feast, options) {
-      const item = node("div", undefined, "item feast");
-      const src = feast.icon && publicImage(feast.icon.thumbnail_url);
-      if (src) {
-        const image = node("img");
-        // Decorative: the feast name is the adjacent text.
-        image.alt = "";
-        image.width = 56;
-        image.height = 56;
-        image.loading = "lazy";
-        image.decoding = "async";
-        image.referrerPolicy = "no-referrer";
-        image.addEventListener("error", () => image.remove());
-        image.src = src;
-        item.append(image);
-      }
-      const body = node("div", undefined, "body");
-      body.append(node("span", "Feast", "tag"));
-      const heading = node("h3", feast.name || "Unnamed feast");
-      if (feast.name) heading.lang = options.language;
       body.append(heading);
-      item.append(body);
-      return item;
+      if (description) {
+        const summary = node("p", truncate(description.trim()), "description");
+        summary.lang = options.language;
+        body.append(summary);
+      }
+      if (href) body.append(node("span", "Read more in Fast & Pray", "cta"));
+      card.append(body);
+      return card;
     }
   }
 
@@ -430,7 +458,7 @@
             Number.isInteger(reading[key]) && reading[key] > 0))) {
         throw new Error("The API returned unexpected daily readings.");
       }
-      this.status.textContent = data.church.name;
+      this.status.textContent = "";
       if (data.readings.length === 0) {
         this.content.append(node("p", "No readings are recorded for this date.", "empty"));
         return;

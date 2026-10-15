@@ -5,7 +5,7 @@ never reuse the product API views: those routes cache, create calendar rows,
 fetch passage text, or schedule background work.
 """
 
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Prefetch, prefetch_related_objects
 from django.http import Http404
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
@@ -20,7 +20,7 @@ from bahk.public_api.v1.serializers import (
     ReadingPublicSerializer,
 )
 from bahk.public_api.v1.validation import PublicApiQuery, PublicApiView, resource_not_found
-from hub.models import Church, Day, Fast, Feast, Reading
+from hub.models import Church, Day, Fast, Feast, FeastContext, Reading
 from icons.models import Icon
 
 
@@ -38,6 +38,13 @@ def fasts_for_date(church, target_date):
 def readings_for_date(church, target_date):
     """Citations only; never compute or populate a missing day."""
     return Reading.objects.filter(day__church=church, day__date=target_date).order_by("sequence", "id")
+
+
+def with_public_context(feasts):
+    """Load each feast's active context in one query, for ``Feast.description``."""
+    active = FeastContext.objects.filter(active=True).order_by("-id")
+    prefetch_related_objects(feasts, Prefetch("contexts", queryset=active, to_attr="public_active_contexts"))
+    return feasts
 
 
 def feasts_for_date(church, target_date):
@@ -70,7 +77,7 @@ def feasts_for_date(church, target_date):
         if key in by_key:
             feast = by_key[key]
             resolved.setdefault(feast.pk, feast)
-    return list(resolved.values())
+    return with_public_context(list(resolved.values()))
 
 
 class PublicApiResourceView(PublicApiView):
@@ -253,10 +260,11 @@ class FeastByDateView(PublicApiResourceView):
             # Public v1 exposes stored commemorations only, so unavailable engine
             # data is equivalent to no resolved stored Feast for this endpoint.
             feasts = []
+        context = {**self.serializer_context(), "date": target_date}
         return Response(
             {
                 "date": target_date.isoformat(),
-                "feasts": FeastPublicSerializer(feasts, many=True, context=self.serializer_context()).data,
+                "feasts": FeastPublicSerializer(feasts, many=True, context=context).data,
             }
         )
 
@@ -278,7 +286,7 @@ class CalendarDayView(PublicApiResourceView):
         query = self.public_query()
         church = query.church(required=True)
         target_date = query.date("date", required=True)
-        context = self.serializer_context()
+        context = {**self.serializer_context(), "date": target_date}
         # Malformed duplicate Day memberships resolve to the lowest Fast ID.
         fast = fasts_for_date(church, target_date).first()
         readings = readings_for_date(church, target_date)

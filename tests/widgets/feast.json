@@ -1,1 +1,11 @@
-{ "name": "Exaltation of the Holy Cross", "icon": { "id": 12, "title": "Holy Cross", "image_url": null, "thumbnail_url": "https://icons.example.test/holy-cross.svg" } }
+{
+  "name": "Exaltation of the Holy Cross",
+  "icon": {
+    "id": 12,
+    "title": "Holy Cross",
+    "image_url": null,
+    "thumbnail_url": "https://icons.example.test/holy-cross.svg"
+  },
+  "description": "Commemorates the recovery of the Holy Cross. It is one of the five tabernacle feasts of the Armenian Church.",
+  "share_url": "https://web.fastandpray.app/share/feast/2026-03-01?id=31"
+}

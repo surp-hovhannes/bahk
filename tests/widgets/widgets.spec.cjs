@@ -51,11 +51,13 @@ test("empty stored data does not claim that fasting is unnecessary", async ({ pa
   await respond(page, (data) => ({ ...data, fast: null, readings: [] }));
   await mount(page);
   await expect(page.locator("bahk-fast-or-feast")).toContainText("Nothing is recorded for this date.");
-  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveCount(0);
+  await expect(page.locator("bahk-fast-or-feast .day")).toHaveCount(0);
   await expect(page.locator("bahk-daily-readings")).toContainText("No readings are recorded for this date.");
 });
 
-test("handles nullable text and unrelated feast partial failures", async ({ page }) => {
+const ICON = { contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 4"/>' };
+
+test("handles nullable text and feast partial failures", async ({ page }) => {
   await respond(page, (data) => {
     data.fast.name = null;
     data.fast.description = null;
@@ -66,49 +68,78 @@ test("handles nullable text and unrelated feast partial failures", async ({ page
   });
   await mount(page);
   await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("Current fast");
+  await expect(page.locator("bahk-fast-or-feast .fast .description")).toHaveCount(0);
   await expect(page.locator("bahk-fast-or-feast")).toContainText("Feast information is temporarily unavailable.");
-  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveText("Fast day");
-  await expect(page.locator("bahk-fast-or-feast")).toContainText("No fasting instructions are recorded for this fast.");
   await expect(page.locator("bahk-daily-readings li").first()).toHaveText("Unknown book 5:1–12");
 });
 
-test("a day with a fast and a feast shows both, fast first", async ({ page }) => {
-  await respond(page, (data) => ({ ...data, feasts: [feast] }));
-  await page.route("https://icons.example.test/**", (route) => route.fulfill({
-    contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>' }));
+test("a fast day is one card linking to its share page", async ({ page }) => {
+  await respond(page, (data) => ({ ...data, fast: { ...data.fast, thumbnail_url: "https://icons.example.test/fast.svg" } }));
+  await page.route("https://icons.example.test/**", (route) => route.fulfill(ICON));
   await mount(page);
-  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveText("Fast and feast day");
-  await expect(page.locator("bahk-fast-or-feast .item h3")).toHaveText(["Great Fast", "Exaltation of the Holy Cross"]);
-  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText(["Fast", "Feast"]);
+  await expect(page.locator("bahk-fast-or-feast .day")).toHaveCount(1);
+  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText("Fast day");
+  const link = page.locator("bahk-fast-or-feast .fast h3 a");
+  await expect(link).toHaveText("Great Fast");
+  await expect(link).toHaveAttribute("href", "https://web.fastandpray.app/share/fast/1");
+  await expect(link).toHaveAttribute("rel", "noopener");
+  await expect(page.locator("bahk-fast-or-feast .fast img")).toHaveAttribute("src", "https://icons.example.test/fast.svg");
+  // The stretched link makes the whole card clickable, not only the title.
+  const card = await page.locator("bahk-fast-or-feast .day").boundingBox();
+  const popup = page.waitForEvent("popup");
+  await page.mouse.click(card.x + card.width - 8, card.y + card.height - 8);
+  expect((await popup).url()).toBe("https://web.fastandpray.app/share/fast/1");
+});
+
+test("the fast wins on a day that also has a feast", async ({ page }) => {
+  await respond(page, (data) => ({ ...data, feasts: [feast] }));
+  await mount(page);
+  await expect(page.locator("bahk-fast-or-feast .day")).toHaveCount(1);
+  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText("Fast day");
+  await expect(page.locator("bahk-fast-or-feast .also")).toHaveText("Also commemorated: Exaltation of the Holy Cross");
+});
+
+test("a feast day shows its icon, truncated summary and share link", async ({ page }) => {
+  const long = { ...feast, description: "Word ".repeat(80).trim() };
+  const second = { ...feast, name: "St. Gregory", description: null, icon: null };
+  await respond(page, (data) => ({ ...data, fast: null, feasts: [long, second] }));
+  await page.route("https://icons.example.test/**", (route) => route.fulfill(ICON));
+  await mount(page);
+  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText("Feast day");
+  await expect(page.locator("bahk-fast-or-feast .feast h3 a")).toHaveAttribute("href", feast.share_url);
   const image = page.locator("bahk-fast-or-feast .feast img");
   await expect(image).toHaveAttribute("src", feast.icon.thumbnail_url);
   await expect(image).toHaveAttribute("alt", "");
   await expect(image).toHaveAttribute("referrerpolicy", "no-referrer");
-  await expect(page.locator("bahk-fast-or-feast")).not.toContainText("No fast is recorded");
+  const summary = await page.locator("bahk-fast-or-feast .description").textContent();
+  expect(summary.length).toBeLessThanOrEqual(181);
+  expect(summary.endsWith("…")).toBe(true);
+  await expect(page.locator("bahk-fast-or-feast .also")).toHaveText("Also commemorated: St. Gregory");
+  await expect(page.locator("bahk-fast-or-feast")).not.toContainText("No fast");
 });
 
-test("a feast without a stored fast says no fast is recorded, not that none is kept", async ({ page }) => {
-  await respond(page, (data) => ({ ...data, fast: null, feasts: [{ ...feast, icon: null }] }));
+test("a feast without a share link or summary still renders", async ({ page }) => {
+  await respond(page, (data) => ({ ...data, fast: null, feasts: [{ ...feast, icon: null, description: null, share_url: null }] }));
   await mount(page);
-  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveText("Feast day");
   await expect(page.locator("bahk-fast-or-feast .feast h3")).toHaveText("Exaltation of the Holy Cross");
-  await expect(page.locator("bahk-fast-or-feast")).toContainText("No fast is recorded for this date.");
-  await expect(page.locator("bahk-fast-or-feast img")).toHaveCount(0);
+  await expect(page.locator("bahk-fast-or-feast .feast a, bahk-fast-or-feast .feast img, bahk-fast-or-feast .cta")).toHaveCount(0);
 });
 
-test("unsafe or broken icon URLs never render an image", async ({ page }) => {
-  await respond(page, (data) => ({ ...data, feasts: [
-    { name: "A", icon: { ...feast.icon, thumbnail_url: "javascript:window.compromised=true" } },
-    { name: "B", icon: { ...feast.icon, thumbnail_url: "data:image/svg+xml,<svg onload=alert(1)>" } },
-    { name: "C", icon: { ...feast.icon, thumbnail_url: "http://icons.example.test/plain-http.png" } },
-    { name: "D", icon: { ...feast.icon, thumbnail_url: "https://icons.example.test/missing.png" } },
-  ] }));
-  await page.route("https://icons.example.test/**", (route) => route.fulfill({ status: 404 }));
-  await mount(page);
-  await expect(page.locator("bahk-fast-or-feast .feast h3")).toHaveText(["A", "B", "C", "D"]);
-  await expect(page.locator("bahk-fast-or-feast img")).toHaveCount(0); // D is removed on error.
-  expect(await page.evaluate(() => window.compromised)).toBeUndefined();
-});
+for (const [name, url] of [
+  ["script", "javascript:window.compromised=true"],
+  ["data", "data:image/svg+xml,<svg onload=alert(1)>"],
+  ["plain HTTP", "http://icons.example.test/plain-http.png"],
+  ["broken", "https://icons.example.test/missing.png"],
+]) {
+  test(`${name} icon URLs never render an image`, async ({ page }) => {
+    await respond(page, (data) => ({ ...data, fast: null, feasts: [{ ...feast, icon: { ...feast.icon, thumbnail_url: url } }] }));
+    await page.route("https://icons.example.test/**", (route) => route.fulfill({ status: 404 }));
+    await mount(page);
+    await expect(page.locator("bahk-fast-or-feast .feast h3")).toHaveText(feast.name);
+    await expect(page.locator("bahk-fast-or-feast img")).toHaveCount(0); // Broken images are removed on error.
+    expect(await page.evaluate(() => window.compromised)).toBeUndefined();
+  });
+}
 
 test("renders hostile API text literally and rejects script URLs", async ({ page }) => {
   await respond(page, (data) => {
@@ -116,13 +147,15 @@ test("renders hostile API text literally and rejects script URLs", async ({ page
     data.fast.name = "<script>window.compromised=true</script>";
     data.fast.description = '<svg onload="window.compromised=true">';
     data.fast.learn_more_url = "javascript:window.compromised=true";
+    data.fast.share_url = "javascript:window.compromised=true";
     data.readings[0].book = "<b>Matthew</b>";
     data.feasts = [{ name: '<img src=x onerror="window.compromised=true">', icon: null }];
     return data;
   });
   await mount(page);
   await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("<script>window.compromised=true</script>");
-  await expect(page.locator("bahk-fast-or-feast .feast h3")).toHaveText('<img src=x onerror="window.compromised=true">');
+  await expect(page.locator("bahk-fast-or-feast .description")).toHaveText('<svg onload="window.compromised=true">');
+  await expect(page.locator("bahk-fast-or-feast .also")).toContainText('<img src=x onerror="window.compromised=true">');
   await expect(page.locator("bahk-daily-readings li").first()).toContainText("<b>Matthew</b>");
   await expect(page.locator("bahk-fast-or-feast a")).toHaveCount(1); // Attribution only.
   expect(await page.evaluate(() => window.compromised)).toBeUndefined();

@@ -107,16 +107,21 @@ separate requests. No response data is stored in browser storage. Requests
 explicitly omit credentials, disable HTTP caching, and send no tracking or
 authorization headers. Nothing calls the legacy `/api/` product routes.
 
-- Fast or Feast leads with a short verdict ("Fast day", "Feast day" or "Fast
-  and feast day"), then the details: the fast first, then each feast in API
-  (service) order, each with a visible "Fast" or "Feast" label.
-  - The fast shows `fast.name`, `fast.description`, and an optional safe
-    `fast.learn_more_url`. The calendar contract chooses the lowest-ID active
-    fast when several exist. Descriptions are rendered as plain text,
-    preserving newlines; HTML and Markdown are not interpreted.
-  - Each feast shows `feasts[].name` and, when present, its icon's
-    `thumbnail_url` as a 56px decorative image. Full-size `image_url` is never
-    loaded. Public v1 has no feast description or link, so none is shown.
+- Fast or Feast shows the day as a single card. A stored fast takes
+  precedence, as it does in the app; otherwise the first feast in service
+  order is shown. Other commemorations are listed as "Also commemorated".
+  - The card shows a "Fast day" or "Feast day" label, the title, an image,
+    and the description cut to about three lines (180 characters, on a word
+    boundary). Descriptions are plain text; HTML and Markdown are not
+    interpreted.
+  - Fast: `fast.name`, `fast.description`, and `fast.thumbnail_url` (falling
+    back to `image_url`). The calendar contract picks the lowest-ID active fast.
+  - Feast: `feasts[].name`, `feasts[].description` (an AI-generated two-sentence
+    summary, which may be null), and the icon's `thumbnail_url` (falling back to
+    `image_url`).
+  - The whole card links to `share_url` on web.fastandpray.app and opens in a
+    new tab. A fast without one falls back to `learn_more_url`; with neither,
+    the card is shown without a link.
 - Daily readings display `readings[].book`, `start_chapter`, `start_verse`,
   `end_chapter`, and `end_verse`, preserving API order. Single verses,
   same-chapter ranges, and cross-chapter ranges have distinct formatting.
@@ -126,19 +131,17 @@ authorization headers. Nothing calls the legacy `/api/` product routes.
   rules; widgets do not infer food restrictions.
 - Missing stored data shows “… recorded for this date.” An empty response
   is not evidence that the church observes no fast or has no readings.
-  A feast day without a stored fast says “No fast is recorded for this date”,
-  never that the day is fast-free: commemorations can fall on fast days.
   A fast with no description says instructions are not recorded. A `feasts`
   entry in `partial_failures` shows “Feast information is temporarily
   unavailable” in Fast or Feast while the fast still renders; it does not
   affect daily readings.
 - API text is assigned with DOM text nodes, never HTML. Learn-more links
-  allow only absolute HTTP(S) URLs without embedded credentials. Feast icon
-  thumbnails must be absolute HTTPS URLs; they load lazily with
+  allow only absolute HTTP(S) URLs without embedded credentials. Card
+  images must be absolute HTTPS URLs; they load lazily with
   `referrerpolicy="no-referrer"` and are removed if they fail. No API
   scripts are loaded. A host with a Content Security Policy must allow the
-  icon storage host in `img-src` to show thumbnails; without it the widget
-  still shows feast names.
+  image storage host in `img-src` to show images; without it the widget
+  still shows the card text.
 
 Requests time out after ten seconds and show a manual retry. HTTP 404 advises
 checking the church ID and public-resource activation. HTTP 429/503 honors

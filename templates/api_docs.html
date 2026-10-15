@@ -73,14 +73,16 @@
       {% endfor %}
       <section class="docs-section" aria-labelledby="fields">
         <h2 id="fields">Response fields</h2>
-        <p>Examples show the exact current field sets. IDs are integers. Feast objects expose only
-          <code>name</code> and <code>icon</code>; they have no public identifier. Church <code>name</code>,
+        <p>Examples show the exact current field sets. IDs are integers. Feast objects expose
+          <code>name</code>, <code>icon</code>, <code>description</code> (an AI-generated two-sentence summary, or null)
+          and <code>share_url</code> (an opaque web-app link); they have no public identifier. Church <code>name</code>,
           Icon <code>title</code>, Feast <code>name</code>, and Fast <code>name</code> are strings.
           Icon image and thumbnail URLs are strings or null; thumbnails are returned only when already cached.
           Feast <code>icon</code> is an Icon object or null; it is null when absent or when its church differs from the Feast.</p>
         <p>Fast <code>church_id</code> is an integer; <code>description</code> and <code>culmination_feast</code>
           are strings or null; <code>year</code> is an integer or null. All three Fast date fields are ISO dates
-          or null. Fast image, thumbnail, and learn-more URLs are strings or null. Date bounds come from stored fast days.</p>
+          or null. Fast image, thumbnail, and learn-more URLs are strings or null;
+          <code>share_url</code> is always a web-app link. Date bounds come from stored fast days.</p>
         <p>Reading <code>sequence</code> is an integer or null; <code>book</code> is a string;
           chapter and verse fields are integers. Readings contain citations only, with no passage text.</p>
         <p>Calendar always returns <code>date</code>, <code>church</code>, <code>readings</code>,

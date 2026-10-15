@@ -12,7 +12,8 @@
     "start_date": "2026-03-01", "end_date": "2026-03-01",
     "culmination_feast": null, "culmination_feast_date": null, "year": null,
     "image_url": null, "thumbnail_url": null,
-    "learn_more_url": "https://fastandpray.app/"
+    "learn_more_url": "https://fastandpray.app/",
+    "share_url": "https://web.fastandpray.app/share/fast/1"
   },
   "feasts": [],
   "partial_failures": []
