@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fast &amp; Pray · Widget demo</title>
+  <style>
+    body { margin: 0; background: #f1f4ef; color: #243630; font: 1rem/1.6 system-ui, sans-serif; }
+    main { max-width: 68rem; margin: auto; padding: 2rem 1rem; }
+    h1 { margin: .25rem 0; line-height: 1.2; }
+    a { color: #205c46; }
+    form { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 2rem 0; }
+    label { display: grid; gap: .25rem; }
+    input, button { font: inherit; min-height: 44px; border: 1px solid #7c8e83; border-radius: .4rem; padding: .5rem; }
+    input { max-width: 100%; }
+    button { background: #205c46; color: white; cursor: pointer; padding-inline: 1rem; }
+    .widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); gap: 1.5rem; align-items: start; }
+    #notice { border-left: 3px solid #a54f0e; padding-left: 1rem; }
+  </style>
+  <script defer src="../../hub/static/widgets/bahk-widgets.js"></script>
+</head>
+<body>
+  <main>
+    <p>FAST &amp; PRAY · EMBEDS</p>
+    <h1>A daily invitation to fast and read</h1>
+    <p>Two small widgets for a parish website, personal page, or community resource.</p>
+    <p id="notice">This demo requests the live public API. Public v1 resources must be enabled and
+      the API must allow this page's origin through CORS. Church ID 1 is an example;
+      verify your church's ID in the <a href="https://api.fastandpray.app/api/v1/churches/">public church list</a>.
+      See the <a href="../embeddable-widgets.md">integration guide</a> for self-hosting and local testing.</p>
+    <form id="settings">
+      <label>Church ID <input name="church" type="number" min="1" step="1" value="1" required></label>
+      <label>Date (blank for today) <input name="date" type="date"></label>
+      <label>Time zone <input name="zone" placeholder="Browser's local time zone"></label>
+      <button type="submit">Update widgets</button>
+    </form>
+    <div class="widgets">
+      <bahk-fasting-guidance church-id="1"><a href="https://fastandpray.app">Fasting guidance at Fast &amp; Pray</a></bahk-fasting-guidance>
+      <bahk-daily-readings church-id="1"><a href="https://fastandpray.app">Daily readings at Fast &amp; Pray</a></bahk-daily-readings>
+    </div>
+    <noscript><p>Enable JavaScript to load daily guidance and readings.</p></noscript>
+  </main>
+  <script>
+    document.querySelector("#settings").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const values = new FormData(event.target);
+      for (const widget of document.querySelectorAll("bahk-fasting-guidance, bahk-daily-readings")) {
+        // Batch changes while disconnected to avoid intermediate requests.
+        const replacement = widget.cloneNode(true);
+        replacement.setAttribute("church-id", values.get("church"));
+        for (const [attribute, value] of [["date", values.get("date")], ["time-zone", values.get("zone")]]) {
+          if (value) replacement.setAttribute(attribute, value);
+          else replacement.removeAttribute(attribute);
+        }
+        widget.replaceWith(replacement);
+      }
+    });
+  </script>
+</body>
+</html>

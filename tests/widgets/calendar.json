@@ -1,0 +1,19 @@
+{
+  "date": "2026-03-01",
+  "church": { "id": 1, "name": "Example Church" },
+  "readings": [
+    { "id": 1, "sequence": 1, "book": "Matthew", "start_chapter": 5, "start_verse": 1, "end_chapter": 5, "end_verse": 12 },
+    { "id": 2, "sequence": 2, "book": "John", "start_chapter": 3, "start_verse": 16, "end_chapter": 3, "end_verse": 16 },
+    { "id": 3, "sequence": 3, "book": "Genesis", "start_chapter": 1, "start_verse": 31, "end_chapter": 2, "end_verse": 3 }
+  ],
+  "fast": {
+    "id": 1, "church_id": 1, "name": "Great Fast",
+    "description": "Make time for prayer and generosity.\nSpeak with your parish about fasting guidance.",
+    "start_date": "2026-03-01", "end_date": "2026-03-01",
+    "culmination_feast": null, "culmination_feast_date": null, "year": null,
+    "image_url": null, "thumbnail_url": null,
+    "learn_more_url": "https://fastandpray.app/"
+  },
+  "feasts": [],
+  "partial_failures": []
+}
