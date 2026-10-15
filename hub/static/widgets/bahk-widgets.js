@@ -5,12 +5,38 @@
   const DEFAULT_HOST = "https://api.fastandpray.app";
   const pending = new Map();
   const cooldowns = new Map();
-  // Fast & Pray mark (bahk_landing public/favicon.svg), drawn in currentColor.
-  const LOGO_PATH = "M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 " +
-    "65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 " +
-    "6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 " +
-    "2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 " +
-    "6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z";
+  // Fast & Pray grapevine mark, traced from the app icon (bahk_landing public/app-icon-1024.png).
+  // The vine path is in potrace units: drawn with translate(0 1024) scale(.1 -.1).
+  const LOGO_VINE = "M4655 9173 c-881 -79 -1711 -887 -1536 -1496 38 -134 55 -282 41 -356 -5 -29 -10 -57 -10 -62 0 -4 46 14 " +
+    "103 41 123 58 171 75 302 105 85 19 100 25 97 41 -62 461 113 932 436 1174 281 210 408 195 359 -42 -70 " +
+    "-344 -376 -673 -644 -695 -51 -5 -62 -9 -68 -27 -15 -45 -17 -339 -3 -381 l13 -40 135 -7 c74 -3 166 -11 " +
+    "204 -17 76 -13 95 -6 215 82 432 318 641 897 572 1586 -10 103 -27 111 -216 94z M2355 8366 c-449 -104 -708 " +
+    "-685 -498 -1116 203 -418 728 -474 1108 -118 101 94 119 141 113 307 -8 207 -51 295 -184 372 -70 39 -70 39 " +
+    "-84 -48 -64 -401 -388 -604 -609 -383 -170 170 -60 491 195 570 159 49 396 13 557 -84 l57 -35 0 36 c0 50 " +
+    "37 225 60 283 l20 50 -77 45 c-195 114 -470 164 -658 121z M8665 7525 c-392 -85 -620 -449 -655 -1045 -12 " +
+    "-209 -14 -217 -41 -225 -34 -11 -55 4 -113 85 -241 337 -537 480 -994 480 -729 0 -1234 -344 -1431 -975 -53 " +
+    "-170 -51 -173 104 -150 116 17 207 11 294 -20 24 -8 45 -14 46 -13 2 2 10 28 19 60 121 420 521 698 1006 " +
+    "698 412 0 695 -193 895 -612 189 -397 229 -793 146 -1438 -11 -80 -25 -190 -31 -245 -81 -683 -454 -1220 " +
+    "-1125 -1622 -953 -572 -1877 -774 -2546 -557 -543 175 -1564 948 -1893 1432 -313 461 -379 1247 -161 1921 " +
+    "133 410 351 733 762 1132 535 517 897 652 1204 447 217 -145 206 -497 -17 -564 -249 -75 -463 108 -504 432 " +
+    "-5 42 -12 79 -14 82 -12 12 -315 -186 -384 -251 -71 -67 5 -287 161 -469 251 -293 790 -273 1075 40 333 365 " +
+    "205 944 -253 1146 -312 139 -910 27 -1189 -222 -73 -65 -182 -134 -280 -176 -260 -113 -768 -798 -940 -1267 " +
+    "-185 -503 -225 -1103 -115 -1729 242 -1389 1452 -2393 3106 -2579 961 -109 2001 268 2770 1003 740 707 1053 " +
+    "2045 742 3170 -36 129 -48 161 -135 357 -52 118 -64 156 -64 198 0 308 316 705 750 941 266 145 325 198 324 " +
+    "295 -1 197 -230 303 -519 240z M4860 5735 c-416 -146 -562 -520 -321 -823 52 -66 89 -82 183 -82 69 0 211 " +
+    "-26 271 -49 29 -11 32 -6 17 33 -83 220 8 547 207 743 100 99 93 120 -57 167 -123 39 -209 42 -300 11z " +
+    "M5550 5624 c-149 -26 -214 -58 -299 -145 -271 -279 -241 -759 59 -927 234 -131 487 -101 656 79 309 328 282 " +
+    "761 -59 927 -101 49 -273 81 -357 66z M6250 5038 c-53 -300 -257 -556 -502 -630 -47 -14 -47 -11 3 -67 22 " +
+    "-25 55 -66 72 -91 74 -104 315 -123 466 -37 371 211 411 648 76 849 -100 60 -100 60 -115 -24z M4680 4740 " +
+    "c-352 -64 -535 -438 -368 -752 79 -148 280 -233 438 -186 l45 14 7 97 c19 264 130 450 329 552 68 35 68 47 " +
+    "3 121 -105 120 -294 184 -454 154z M5253 4445 c-110 -47 -260 -181 -306 -271 -156 -308 -20 -604 332 -725 " +
+    "299 -103 634 293 535 632 -51 176 -160 279 -342 324 -54 13 -114 31 -134 40 -44 18 -44 18 -85 0z M5894 " +
+    "4087 c52 -189 -22 -427 -182 -585 l-84 -84 34 -29 c337 -291 862 151 666 562 -19 41 -47 89 -63 107 l-28 34 " +
+    "-116 -7 c-90 -6 -129 -4 -174 8 l-59 16 6 -22z M4775 3723 c-29 -11 -64 -13 -130 -10 -119 6 -133 -1 -183 " +
+    "-102 -136 -270 -21 -553 257 -635 228 -67 469 97 488 331 7 72 -3 85 -106 142 -87 49 -167 125 -226 215 -27 " +
+    "42 -52 76 -55 75 -3 0 -23 -7 -45 -16z M5490 3369 c-46 -12 -85 -16 -132 -12 l-68 6 0 -41 c0 -51 -30 -148 " +
+    "-63 -204 -51 -87 -220 -218 -282 -218 -49 0 -3 -101 86 -186 188 -178 499 -173 667 11 77 84 96 143 97 290 " +
+    "0 155 -10 176 -125 268 -47 37 -92 75 -100 85 -14 17 -18 17 -80 1z";
   // Tokens mirror bahk_landing src/styles/global.css (hex forms). Figtree is used
   // when the host page already loads it; the widget never fetches fonts itself.
   const styles = `
@@ -89,7 +115,7 @@
     footer a { display: inline-flex; align-items: center; gap: .375rem; color: var(--_muted);
       font-weight: 600; text-decoration: none; }
     footer a:hover { color: var(--_accent); }
-    footer svg { width: 1rem; height: 1rem; flex: none; fill: currentColor; }
+    footer svg { width: 1.125rem; height: 1.125rem; flex: none; }
     .skeleton { display: grid; gap: .625rem; }
     .skeleton i { display: block; height: .875rem; border-radius: .25rem;
       background: linear-gradient(90deg, #f3eef0 25%, #faf6f7 50%, #f3eef0 75%) 0 0 / 200% 100%;
@@ -98,7 +124,7 @@
     .skeleton i:nth-child(3) { width: 80%; }
     @keyframes shimmer { to { background-position: -200% 0; } }
     @media (prefers-reduced-motion: reduce) { .skeleton i { animation: none; } }
-    @media (forced-colors: active) { section::before { display: none; } footer svg { fill: CanvasText; }
+    @media (forced-colors: active) { section::before { display: none; } footer svg { forced-color-adjust: none; }
       .tag { border: 1px solid CanvasText; } .day:has(a:focus-visible) { outline-color: Highlight; } }
   `;
 
@@ -111,13 +137,19 @@
 
   function logo() {
     const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("viewBox", "0 0 128 128");
-    svg.setAttribute("aria-hidden", "true");
-    svg.setAttribute("focusable", "false");
-    const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", LOGO_PATH);
-    svg.append(path);
+    const make = (tag, attributes) => {
+      const element = document.createElementNS(ns, tag);
+      for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
+      return element;
+    };
+    const svg = make("svg", { viewBox: "88 88 856 856", "aria-hidden": "true", focusable: "false" });
+    const gradient = make("linearGradient", { id: "bahk-logo-fill", x1: "1", y1: "0", x2: "0", y2: "1" });
+    gradient.append(make("stop", { offset: "0", "stop-color": "#b8264c" }),
+      make("stop", { offset: "1", "stop-color": "#85213b" }));
+    const defs = make("defs", {});
+    defs.append(gradient);
+    svg.append(defs, make("circle", { cx: "502", cy: "523", r: "401", fill: "url(#bahk-logo-fill)" }),
+      make("path", { transform: "translate(0 1024) scale(.1 -.1)", fill: "#ff6555", d: LOGO_VINE }));
     return svg;
   }
 
