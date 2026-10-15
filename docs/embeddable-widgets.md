@@ -176,6 +176,14 @@ The demo defaults to the live API and includes church, date, and timezone
 controls. It deliberately displays API errors when resources or CORS are
 unavailable; it never substitutes fixture data for a live response.
 
+`docs/examples/widgets-plain.html` is a second, minimal HTML embed page with
+deliberately conflicting host styles. Its E2E tests verify both widgets at
+1440px desktop and 390px mobile widths, including loaded, loading, and HTTP 503
+error states, recovery, and style isolation in both directions. Those tests
+use mocked HTTP responses from the contract-checked fixture; **they do not
+verify live API data**. Each screenshot is labeled with its mocked source and
+state. The example page itself requests the live public API by default.
+
 ```sh
 npm ci
 # Node.js 20 or newer is required for the browser test tooling.
@@ -188,6 +196,9 @@ API on ports 8765/8766. They cover rendering, loading, empty/null data,
 configuration errors, XSS, date rollover, fixed dates, localization metadata,
 retry behavior, timeout, stale requests, duplicate script loading, request
 sharing, credential omission, actual CORS enforcement, and the demo at 320px.
+The six plain-page screenshots are written to `/tmp/bahk-widget-screenshots/`
+(override with `WIDGET_SCREENSHOT_DIR`) and uploaded by widget CI as the
+`bahk-widget-e2e-screenshots` artifact, retained for 14 days.
 `tests.unit.test_widget_contract` checks the fixture against the actual Django
 calendar view. Run Python validation using the project runtime instructions
 in [AGENTS.md](../AGENTS.md). No backend implementation changes are included.

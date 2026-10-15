@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plain page · Fast &amp; Pray embed check</title>
+  <style>
+    body { margin: 0; padding: 24px; color: #7c1947; background: #f5f7fa; font: 16px/1.6 Georgia, serif; }
+    main { max-width: 1200px; margin: auto; }
+    h1 { margin: 0; font-size: 28px; line-height: 1.25; }
+    h2, p, a, li { color: #7c1947; font-family: Georgia, serif; }
+    h2 { font-size: 18px; }
+    section { padding: 12px; background: #eaf1fb; border: 3px dashed #7c1947; border-radius: 0; }
+    button { color: white; background: #7c1947; font: 16px Georgia, serif; border: 3px solid #7c1947; padding: 8px; }
+    #data-source { padding: 8px; background: #fff2c8; }
+    #host-control { margin: 20px 0; }
+    .embeds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr)); gap: 20px; }
+  </style>
+  <script defer src="../../hub/static/widgets/bahk-widgets.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Plain page widget embed</h1>
+    <p id="data-source">Data source: live public API by default. Church ID 1 is an example to verify.</p>
+    <p id="scenario">Two custom elements embedded in ordinary HTML, without a framework.</p>
+    <section id="host-control">
+      <h2>Host page style control</h2>
+      <p class="meta">This page uses burgundy Georgia text, blue sections, and dashed borders.
+        The widgets keep their own styles inside shadow DOM.</p>
+      <button type="button">Host page button</button>
+    </section>
+    <div class="embeds">
+      <bahk-fasting-guidance church-id="1" time-zone="UTC">
+        <a href="https://fastandpray.app">Fasting guidance at Fast &amp; Pray</a>
+      </bahk-fasting-guidance>
+      <bahk-daily-readings church-id="1" time-zone="UTC">
+        <a href="https://fastandpray.app">Daily readings at Fast &amp; Pray</a>
+      </bahk-daily-readings>
+    </div>
+    <noscript><p>Enable JavaScript to load the widgets.</p></noscript>
+  </main>
+</body>
+</html>

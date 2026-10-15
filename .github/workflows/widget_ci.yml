@@ -7,6 +7,7 @@ on:
       - 'hub/static/widgets/**'
       - 'tests/widgets/**'
       - 'docs/examples/widgets.html'
+      - 'docs/examples/widgets-plain.html'
       - 'package*.json'
       - '.github/workflows/widget_ci.yml'
 
@@ -23,3 +24,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm test
       - run: npm run test:widgets
+      - name: Upload plain-page E2E screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bahk-widget-e2e-screenshots
+          path: /tmp/bahk-widget-screenshots
+          if-no-files-found: error
+          retention-days: 14
