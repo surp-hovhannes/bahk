@@ -1,10 +1,13 @@
 const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const path = require("node:path");
-const fixture = require("./calendar.json");
+const fixture = { ...require("./calendar.json"), feasts: [require("./feast.json")] };
+// A simple mocked icon so screenshots show the feast thumbnail layout.
+const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><rect width="56" height="56" fill="#f3e8eb"/>' +
+  '<path d="M24 10h8v12h12v8H32v16h-8V30H12v-8h12z" fill="#b5244a"/></svg>';
 
 const screenshotDir = process.env.WIDGET_SCREENSHOT_DIR || "/tmp/bahk-widget-screenshots";
-const widgets = ["bahk-fasting-guidance", "bahk-daily-readings"];
+const widgets = ["bahk-fast-or-feast", "bahk-daily-readings"];
 
 for (const [device, viewport] of Object.entries({
   desktop: { width: 1440, height: 1000 },
@@ -31,6 +34,8 @@ for (const [device, viewport] of Object.entries({
           await route.fulfill({ json: fixture });
         }
       });
+      await page.route("https://icons.example.test/**", (route) =>
+        route.fulfill({ contentType: "image/svg+xml", body: ICON_SVG }));
       await page.goto("/docs/examples/widgets-plain.html");
       await page.locator("#data-source").evaluate((element) => {
         element.textContent = "DATA SOURCE: MOCKED public-v1 API fixture. No live API data.";
@@ -40,7 +45,7 @@ for (const [device, viewport] of Object.entries({
       }, state);
 
       if (state === "loaded") {
-        await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("Great Fast");
+        await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("Great Fast");
         await expect(page.locator("bahk-daily-readings li")).toHaveText([
           "Matthew 5:1–12", "John 3:16", "Genesis 1:31–2:3",
         ]);
@@ -94,7 +99,7 @@ for (const [device, viewport] of Object.entries({
         }
       }
       // Both loading and error states recover to real rendered widget content.
-      await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("Great Fast");
+      await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("Great Fast");
       await expect(page.locator("bahk-daily-readings li")).toHaveCount(3);
       expect(errors).toEqual([]);
     });

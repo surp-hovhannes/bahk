@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const fixture = require("./calendar.json");
+const feast = require("./feast.json");
 const script = "/hub/static/widgets/bahk-widgets.js";
 const calendar = "**/api/v1/calendar/**";
 
@@ -8,7 +9,7 @@ async function mount(page, attributes = 'church-id="1" date="2026-03-01" time-zo
   await page.addScriptTag({ url: script });
   await page.evaluate(({ attributes, tags }) => {
     // Test-only markup; widget content is always rendered with textContent.
-    document.querySelector("main").innerHTML = (tags || ["bahk-fasting-guidance", "bahk-daily-readings"])
+    document.querySelector("main").innerHTML = (tags || ["bahk-fast-or-feast", "bahk-daily-readings"])
       .map((tag) => `<${tag} ${attributes}></${tag}>`).join("");
   }, { attributes, tags });
 }
@@ -24,15 +25,15 @@ test("renders both documented resources and shares a single anonymous request", 
     await route.fulfill({ json: fixture });
   });
   await mount(page);
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("Great Fast");
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("Great Fast");
   await expect(page.locator("bahk-daily-readings li")).toHaveText(["Matthew 5:1–12", "John 3:16", "Genesis 1:31–2:3"]);
   const request = requests.find((entry) => entry.url().includes("tz=UTC"));
   expect(new URL(request.url()).searchParams.get("date")).toBe("2026-03-01");
   expect(requests.filter((entry) => entry.url() === request.url())).toHaveLength(1);
   expect(request.headers()).not.toHaveProperty("authorization");
   expect(request.headers()).not.toHaveProperty("cookie");
-  await expect(page.locator("bahk-fasting-guidance [aria-busy]")).toHaveAttribute("aria-busy", "false");
-  await expect(page.locator("bahk-fasting-guidance [role=status]")).toHaveAttribute("aria-live", "polite");
+  await expect(page.locator("bahk-fast-or-feast [aria-busy]")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("bahk-fast-or-feast [role=status]")).toHaveAttribute("aria-live", "polite");
 });
 
 test("has a loading state while the API is pending", async ({ page }) => {
@@ -40,7 +41,7 @@ test("has a loading state while the API is pending", async ({ page }) => {
   const gate = new Promise((resolve) => { release = resolve; });
   await page.route(calendar, async (route) => { await gate; await route.fulfill({ json: fixture }); });
   await mount(page);
-  await expect(page.locator("bahk-fasting-guidance [role=status]")).toHaveText("Loading…");
+  await expect(page.locator("bahk-fast-or-feast [role=status]")).toHaveText("Loading…");
   await expect(page.locator("bahk-daily-readings [aria-busy]")).toHaveAttribute("aria-busy", "true");
   release();
   await expect(page.locator("bahk-daily-readings li")).toHaveCount(3);
@@ -49,7 +50,8 @@ test("has a loading state while the API is pending", async ({ page }) => {
 test("empty stored data does not claim that fasting is unnecessary", async ({ page }) => {
   await respond(page, (data) => ({ ...data, fast: null, readings: [] }));
   await mount(page);
-  await expect(page.locator("bahk-fasting-guidance")).toContainText("No fasting guidance is recorded for this date.");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("Nothing is recorded for this date.");
+  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveCount(0);
   await expect(page.locator("bahk-daily-readings")).toContainText("No readings are recorded for this date.");
 });
 
@@ -63,9 +65,49 @@ test("handles nullable text and unrelated feast partial failures", async ({ page
     return data;
   });
   await mount(page);
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("Current fast");
-  await expect(page.locator("bahk-fasting-guidance")).toContainText("No fasting instructions are recorded for this fast.");
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("Current fast");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("Feast information is temporarily unavailable.");
+  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveText("Fast day");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("No fasting instructions are recorded for this fast.");
   await expect(page.locator("bahk-daily-readings li").first()).toHaveText("Unknown book 5:1–12");
+});
+
+test("a day with a fast and a feast shows both, fast first", async ({ page }) => {
+  await respond(page, (data) => ({ ...data, feasts: [feast] }));
+  await page.route("https://icons.example.test/**", (route) => route.fulfill({
+    contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>' }));
+  await mount(page);
+  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveText("Fast and feast day");
+  await expect(page.locator("bahk-fast-or-feast .item h3")).toHaveText(["Great Fast", "Exaltation of the Holy Cross"]);
+  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText(["Fast", "Feast"]);
+  const image = page.locator("bahk-fast-or-feast .feast img");
+  await expect(image).toHaveAttribute("src", feast.icon.thumbnail_url);
+  await expect(image).toHaveAttribute("alt", "");
+  await expect(image).toHaveAttribute("referrerpolicy", "no-referrer");
+  await expect(page.locator("bahk-fast-or-feast")).not.toContainText("No fast is recorded");
+});
+
+test("a feast without a stored fast says no fast is recorded, not that none is kept", async ({ page }) => {
+  await respond(page, (data) => ({ ...data, fast: null, feasts: [{ ...feast, icon: null }] }));
+  await mount(page);
+  await expect(page.locator("bahk-fast-or-feast .verdict")).toHaveText("Feast day");
+  await expect(page.locator("bahk-fast-or-feast .feast h3")).toHaveText("Exaltation of the Holy Cross");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("No fast is recorded for this date.");
+  await expect(page.locator("bahk-fast-or-feast img")).toHaveCount(0);
+});
+
+test("unsafe or broken icon URLs never render an image", async ({ page }) => {
+  await respond(page, (data) => ({ ...data, feasts: [
+    { name: "A", icon: { ...feast.icon, thumbnail_url: "javascript:window.compromised=true" } },
+    { name: "B", icon: { ...feast.icon, thumbnail_url: "data:image/svg+xml,<svg onload=alert(1)>" } },
+    { name: "C", icon: { ...feast.icon, thumbnail_url: "http://icons.example.test/plain-http.png" } },
+    { name: "D", icon: { ...feast.icon, thumbnail_url: "https://icons.example.test/missing.png" } },
+  ] }));
+  await page.route("https://icons.example.test/**", (route) => route.fulfill({ status: 404 }));
+  await mount(page);
+  await expect(page.locator("bahk-fast-or-feast .feast h3")).toHaveText(["A", "B", "C", "D"]);
+  await expect(page.locator("bahk-fast-or-feast img")).toHaveCount(0); // D is removed on error.
+  expect(await page.evaluate(() => window.compromised)).toBeUndefined();
 });
 
 test("renders hostile API text literally and rejects script URLs", async ({ page }) => {
@@ -75,17 +117,19 @@ test("renders hostile API text literally and rejects script URLs", async ({ page
     data.fast.description = '<svg onload="window.compromised=true">';
     data.fast.learn_more_url = "javascript:window.compromised=true";
     data.readings[0].book = "<b>Matthew</b>";
+    data.feasts = [{ name: '<img src=x onerror="window.compromised=true">', icon: null }];
     return data;
   });
   await mount(page);
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("<script>window.compromised=true</script>");
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("<script>window.compromised=true</script>");
+  await expect(page.locator("bahk-fast-or-feast .feast h3")).toHaveText('<img src=x onerror="window.compromised=true">');
   await expect(page.locator("bahk-daily-readings li").first()).toContainText("<b>Matthew</b>");
-  await expect(page.locator("bahk-fasting-guidance a")).toHaveCount(1); // Attribution only.
+  await expect(page.locator("bahk-fast-or-feast a")).toHaveCount(1); // Attribution only.
   expect(await page.evaluate(() => window.compromised)).toBeUndefined();
   // The only SVG is the static logo in the attribution footer; API text adds no elements.
-  await expect(page.locator("bahk-fasting-guidance svg")).toHaveCount(1);
-  await expect(page.locator("bahk-fasting-guidance footer a svg")).toHaveCount(1);
-  for (const tag of ["bahk-fasting-guidance", "bahk-daily-readings"]) {
+  await expect(page.locator("bahk-fast-or-feast svg")).toHaveCount(1);
+  await expect(page.locator("bahk-fast-or-feast footer a svg")).toHaveCount(1);
+  for (const tag of ["bahk-fast-or-feast", "bahk-daily-readings"]) {
     await expect(page.locator(`${tag} .content`).locator("img, svg, script")).toHaveCount(0);
   }
 });
@@ -100,7 +144,7 @@ for (const attributes of [
   test(`rejects invalid configuration: ${attributes}`, async ({ page }) => {
     await respond(page);
     await mount(page, attributes);
-    await expect(page.locator("bahk-fasting-guidance [role=status]")).toHaveText("Unable to load this widget.");
+    await expect(page.locator("bahk-fast-or-feast [role=status]")).toHaveText("Unable to load this widget.");
     await expect(page.locator("bahk-daily-readings button")).toBeEnabled();
   });
 }
@@ -114,9 +158,9 @@ test("uses local date in the selected timezone and rolls over at midnight", asyn
     return route.fulfill({ json: { ...fixture, date } });
   });
   await mount(page, 'church-id="1" time-zone="America/Los_Angeles"');
-  await expect(page.locator("bahk-fasting-guidance time")).toHaveAttribute("datetime", "2026-02-28");
+  await expect(page.locator("bahk-fast-or-feast time")).toHaveAttribute("datetime", "2026-02-28");
   await page.clock.fastForward(60000);
-  await expect(page.locator("bahk-fasting-guidance time")).toHaveAttribute("datetime", "2026-03-01");
+  await expect(page.locator("bahk-fast-or-feast time")).toHaveAttribute("datetime", "2026-03-01");
   await expect(page.locator("bahk-daily-readings li")).toHaveCount(3);
   expect(dates).toContain("2026-03-01");
   const count = dates.length;
@@ -132,9 +176,9 @@ test("an explicit date remains fixed and Armenian data is marked with its langua
     return data;
   });
   await mount(page, 'church-id="1" date="2026-03-01" time-zone="UTC" language="hy"');
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveAttribute("lang", "hy");
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveAttribute("lang", "hy");
   await page.clock.fastForward(120000);
-  await expect(page.locator("bahk-fasting-guidance time")).toHaveAttribute("datetime", "2026-03-01");
+  await expect(page.locator("bahk-fast-or-feast time")).toHaveAttribute("datetime", "2026-03-01");
 });
 
 test("throttling honors Retry-After and manual retry recovers", async ({ page }) => {
@@ -144,7 +188,7 @@ test("throttling honors Retry-After and manual retry recovers", async ({ page })
     ? { status: 429, headers: { "Retry-After": "120" }, json: { code: "throttled", message: "Wait", details: { retry_after: 120 } } }
     : { json: fixture }));
   await mount(page);
-  const button = page.locator("bahk-fasting-guidance button");
+  const button = page.locator("bahk-fast-or-feast button");
   await expect(button).toBeDisabled();
   await page.clock.fastForward(60000);
   await expect(button).toBeDisabled();
@@ -153,17 +197,17 @@ test("throttling honors Retry-After and manual retry recovers", async ({ page })
   await expect(button).toBeEnabled();
   await button.focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("Great Fast");
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("Great Fast");
 });
 
 test("disabled routes and malformed responses have useful errors", async ({ page }) => {
   await page.route(calendar, (route) => route.fulfill({ status: 404, json: { code: "not_found", message: "Not found", details: {} } }));
   await mount(page);
-  await expect(page.locator("bahk-fasting-guidance")).toContainText("whether public v1 resources are enabled");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("whether public v1 resources are enabled");
   await page.unroute(calendar);
   await respond(page, (data) => ({ ...data, date: "2025-01-01" }));
-  await page.locator("bahk-fasting-guidance button").click();
-  await expect(page.locator("bahk-fasting-guidance")).toContainText("unexpected calendar response");
+  await page.locator("bahk-fast-or-feast button").click();
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("unexpected calendar response");
 });
 
 test("service-unavailable retry hints work when Retry-After is not exposed", async ({ page }) => {
@@ -180,7 +224,7 @@ test("service-unavailable retry hints work when Retry-After is not exposed", asy
   await expect(button).toBeEnabled();
 });
 
-for (const tag of ["bahk-fasting-guidance", "bahk-daily-readings"]) {
+for (const tag of ["bahk-fast-or-feast", "bahk-daily-readings"]) {
   test(`${tag} can be embedded on its own`, async ({ page }) => {
     await respond(page);
     await mount(page, 'church-id="1" date="2026-03-01"', [tag]);
@@ -194,7 +238,7 @@ test("a timeout provides a retry instead of an endless loading state", async ({ 
   await page.route(calendar, () => {});
   await mount(page);
   await page.clock.fastForward(11000);
-  await expect(page.locator("bahk-fasting-guidance")).toContainText("Could not reach the public API");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("Could not reach the public API");
 });
 
 test("browser enforces real cross-origin CORS and no cookies are sent", async ({ page, context }) => {
@@ -217,11 +261,11 @@ test("attribute changes cannot render an older in-flight response; duplicate scr
     await route.fulfill({ json: { ...fixture, date, fast: { ...fixture.fast, name: date } } });
   });
   await mount(page);
-  await page.locator("bahk-fasting-guidance").evaluate((element) => element.setAttribute("date", "2026-03-02"));
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("2026-03-02");
+  await page.locator("bahk-fast-or-feast").evaluate((element) => element.setAttribute("date", "2026-03-02"));
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("2026-03-02");
   release();
   await page.addScriptTag({ url: script });
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("2026-03-02");
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("2026-03-02");
 });
 
 test("demo is readable at mobile width and supports form updates", async ({ page }) => {
@@ -230,7 +274,7 @@ test("demo is readable at mobile width and supports form updates", async ({ page
     ...fixture, date: new URL(route.request().url()).searchParams.get("date"),
   } }));
   await page.goto("/docs/examples/widgets.html");
-  await expect(page.locator("bahk-fasting-guidance h3")).toHaveText("Great Fast");
+  await expect(page.locator("bahk-fast-or-feast .fast h3")).toHaveText("Great Fast");
   await page.locator('[name="date"]').fill("2026-03-01");
   await page.locator('[name="zone"]').fill("UTC");
   await page.getByRole("button", { name: "Update widgets" }).click();

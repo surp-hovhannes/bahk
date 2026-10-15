@@ -42,6 +42,22 @@
     .meta { color: var(--_muted); font-size: .875rem; }
     .empty { color: var(--_fg-muted); }
     .description { white-space: pre-wrap; }
+    .verdict { margin: 0 0 1rem; font-size: 1.5rem; font-weight: 700; line-height: 1.2;
+      letter-spacing: -.015em; }
+    .item { display: flex; gap: .875rem; align-items: flex-start; padding: 1rem 0;
+      border-top: 1px solid var(--_border); }
+    .item:last-child { padding-bottom: 0; }
+    .item .body { min-width: 0; flex: 1; }
+    .item h3 { margin: .375rem 0 0; font-size: 1.125rem; }
+    .item .description { margin: .5rem 0 0; }
+    .item img { flex: none; width: 3.5rem; height: 3.5rem; border-radius: .5rem; object-fit: cover;
+      background: #f3e8eb; border: 1px solid var(--_border); }
+    .tag { display: inline-block; padding: .125rem .5rem; border-radius: 9999px; font-size: .6875rem;
+      font-weight: 700; line-height: 1.5; letter-spacing: .06em; text-transform: uppercase; }
+    .fast .tag { color: var(--_fg-muted); background: #f3e8eb; }
+    .feast .tag { color: #fff; background: #b5244a; }
+    .item ~ :is(.empty, .meta) { margin-top: 0; padding-top: .875rem; border-top: 1px solid var(--_border); }
+    .empty + .meta { margin-top: .25rem; padding-top: 0; border-top: 0; }
     ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--_border); }
     li { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .375rem;
       padding: .625rem 0; border-bottom: 1px solid var(--_border); }
@@ -75,7 +91,8 @@
     .skeleton i:nth-child(3) { width: 80%; }
     @keyframes shimmer { to { background-position: -200% 0; } }
     @media (prefers-reduced-motion: reduce) { .skeleton i { animation: none; } }
-    @media (forced-colors: active) { section::before { display: none; } footer svg { fill: CanvasText; } }
+    @media (forced-colors: active) { section::before { display: none; } footer svg { fill: CanvasText; }
+      .tag { border: 1px solid CanvasText; } }
   `;
 
   function node(tag, text, className) {
@@ -309,32 +326,97 @@
     }
   }
 
-  class FastingGuidance extends CalendarWidget {
-    get heading() { return "Fasting guidance"; }
+  function publicImage(value) {
+    const href = publicLink(value);
+    // HTTPS only: mixed-content images are blocked on HTTPS host pages anyway.
+    return href && href.startsWith("https:") ? href : null;
+  }
+
+  function nullableStrings(value, keys) {
+    return value && typeof value === "object" &&
+      keys.every((key) => value[key] === null || typeof value[key] === "string");
+  }
+
+  class FastOrFeast extends CalendarWidget {
+    get heading() { return "Fast or Feast"; }
 
     render(data, options) {
-      const fast = data.fast;
-      if (fast !== null && (!fast || typeof fast !== "object" ||
-          !["name", "description", "learn_more_url"].every((key) => fast[key] === null || typeof fast[key] === "string"))) {
-        throw new Error("The API returned unexpected fasting guidance.");
+      const { fast, feasts } = data;
+      if (fast !== null && !nullableStrings(fast, ["name", "description", "learn_more_url"])) {
+        throw new Error("The API returned an unexpected fast.");
       }
+      if (!Array.isArray(feasts) || !feasts.every((feast) => nullableStrings(feast, ["name"]) &&
+          (feast.icon === null || nullableStrings(feast.icon, ["title", "thumbnail_url"])))) {
+        throw new Error("The API returned unexpected feasts.");
+      }
+      const feastsUnavailable = Array.isArray(data.partial_failures) &&
+        data.partial_failures.some((failure) => failure && failure.component === "feasts");
       this.status.textContent = data.church.name;
-      if (fast === null) {
-        this.content.append(node("p", "No fasting guidance is recorded for this date.", "empty"));
-        return;
+
+      // Only stored data is described. A missing fast or feast is "not recorded",
+      // never "not observed": commemorations can fall on fast days.
+      if (fast || feasts.length) {
+        const kind = fast && feasts.length ? "both" : fast ? "fast" : "feast";
+        const verdict = node("p", { both: "Fast and feast day", fast: "Fast day", feast: "Feast day" }[kind], "verdict");
+        verdict.dataset.kind = kind;
+        this.content.append(verdict);
       }
+      if (fast) this.content.append(this.fastItem(fast, options));
+      for (const feast of feasts) this.content.append(this.feastItem(feast, options));
+
+      if (!fast && !feasts.length && !feastsUnavailable) {
+        this.content.append(node("p", "Nothing is recorded for this date.", "empty"));
+      } else if (!fast) {
+        this.content.append(node("p", "No fast is recorded for this date.", "empty"));
+      }
+      if (feastsUnavailable) {
+        this.content.append(node("p", "Feast information is temporarily unavailable.", "meta"));
+      }
+    }
+
+    fastItem(fast, options) {
+      const item = node("div", undefined, "item fast");
+      const body = node("div", undefined, "body");
+      body.append(node("span", "Fast", "tag"));
       const heading = node("h3", fast.name || "Current fast");
       if (fast.name) heading.lang = options.language;
-      this.content.append(heading);
+      body.append(heading);
       const description = node("p", fast.description || "No fasting instructions are recorded for this fast.", "description");
       if (fast.description) description.lang = options.language;
-      this.content.append(description);
+      body.append(description);
       const href = publicLink(fast.learn_more_url);
       if (href) {
         const link = node("a", "Learn more about this fast", "more");
         link.href = href;
-        this.content.append(link);
+        body.append(link);
       }
+      item.append(body);
+      return item;
+    }
+
+    feastItem(feast, options) {
+      const item = node("div", undefined, "item feast");
+      const src = feast.icon && publicImage(feast.icon.thumbnail_url);
+      if (src) {
+        const image = node("img");
+        // Decorative: the feast name is the adjacent text.
+        image.alt = "";
+        image.width = 56;
+        image.height = 56;
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.referrerPolicy = "no-referrer";
+        image.addEventListener("error", () => image.remove());
+        image.src = src;
+        item.append(image);
+      }
+      const body = node("div", undefined, "body");
+      body.append(node("span", "Feast", "tag"));
+      const heading = node("h3", feast.name || "Unnamed feast");
+      if (feast.name) heading.lang = options.language;
+      body.append(heading);
+      item.append(body);
+      return item;
     }
   }
 
@@ -370,6 +452,6 @@
     }
   }
 
-  if (!customElements.get("bahk-fasting-guidance")) customElements.define("bahk-fasting-guidance", FastingGuidance);
+  if (!customElements.get("bahk-fast-or-feast")) customElements.define("bahk-fast-or-feast", FastOrFeast);
   if (!customElements.get("bahk-daily-readings")) customElements.define("bahk-daily-readings", DailyReadings);
 })();

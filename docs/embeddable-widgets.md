@@ -1,4 +1,4 @@
-# Fasting guidance and daily readings embeds
+# Fast or Feast and daily readings embeds
 
 These two dependency-free JavaScript widgets use the anonymous, read-only
 [public v1 contract](public-api-contract.md). They require no API keys, login,
@@ -21,9 +21,9 @@ Elements, Shadow DOM, Fetch, and Intl timezone support.
 ```html
 <script defer src="https://YOUR-STATIC-HOST/widgets/bahk-widgets.js"></script>
 
-<bahk-fasting-guidance church-id="1" time-zone="America/Los_Angeles">
-  <a href="https://fastandpray.app">Fasting guidance at Fast &amp; Pray</a>
-</bahk-fasting-guidance>
+<bahk-fast-or-feast church-id="1" time-zone="America/Los_Angeles">
+  <a href="https://fastandpray.app">Fast or Feast at Fast &amp; Pray</a>
+</bahk-fast-or-feast>
 
 <bahk-daily-readings church-id="1" time-zone="America/Los_Angeles">
   <a href="https://fastandpray.app">Daily readings at Fast &amp; Pray</a>
@@ -73,7 +73,7 @@ attribution. They fit their container up to 42rem and expose optional CSS
 properties (defaults shown):
 
 ```css
-bahk-fasting-guidance,
+bahk-fast-or-feast,
 bahk-daily-readings {
   --bahk-accent: #80273e;      /* heading eyebrow, links, retry button */
   --bahk-accent-hover: #661d30; /* defaults to the accent darkened 20% */
@@ -107,10 +107,16 @@ separate requests. No response data is stored in browser storage. Requests
 explicitly omit credentials, disable HTTP caching, and send no tracking or
 authorization headers. Nothing calls the legacy `/api/` product routes.
 
-- Fasting guidance displays the calendar's `fast.name`, `fast.description`,
-  and an optional safe `fast.learn_more_url`. The calendar contract chooses
-  the lowest-ID active fast when several exist. Descriptions are rendered
-  as plain text, preserving newlines; HTML and Markdown are not interpreted.
+- Fast or Feast leads with a short verdict ("Fast day", "Feast day" or "Fast
+  and feast day"), then the details: the fast first, then each feast in API
+  (service) order, each with a visible "Fast" or "Feast" label.
+  - The fast shows `fast.name`, `fast.description`, and an optional safe
+    `fast.learn_more_url`. The calendar contract chooses the lowest-ID active
+    fast when several exist. Descriptions are rendered as plain text,
+    preserving newlines; HTML and Markdown are not interpreted.
+  - Each feast shows `feasts[].name` and, when present, its icon's
+    `thumbnail_url` as a 56px decorative image. Full-size `image_url` is never
+    loaded. Public v1 has no feast description or link, so none is shown.
 - Daily readings display `readings[].book`, `start_chapter`, `start_verse`,
   `end_chapter`, and `end_verse`, preserving API order. Single verses,
   same-chapter ranges, and cross-chapter ranges have distinct formatting.
@@ -118,13 +124,21 @@ authorization headers. Nothing calls the legacy `/api/` product routes.
   AI context. These widgets do not need an API.Bible key or retrieve Bible
   text. The fasting schema provides descriptions, not structured dietary
   rules; widgets do not infer food restrictions.
-- Missing stored data shows “No … recorded for this date.” An empty response
+- Missing stored data shows “… recorded for this date.” An empty response
   is not evidence that the church observes no fast or has no readings.
-  A fast with no description says instructions are not recorded. A feast-only
-  `partial_failures` entry does not block either of these widgets.
+  A feast day without a stored fast says “No fast is recorded for this date”,
+  never that the day is fast-free: commemorations can fall on fast days.
+  A fast with no description says instructions are not recorded. A `feasts`
+  entry in `partial_failures` shows “Feast information is temporarily
+  unavailable” in Fast or Feast while the fast still renders; it does not
+  affect daily readings.
 - API text is assigned with DOM text nodes, never HTML. Learn-more links
-  allow only absolute HTTP(S) URLs without embedded credentials. No API
-  images or scripts are loaded.
+  allow only absolute HTTP(S) URLs without embedded credentials. Feast icon
+  thumbnails must be absolute HTTPS URLs; they load lazily with
+  `referrerpolicy="no-referrer"` and are removed if they fail. No API
+  scripts are loaded. A host with a Content Security Policy must allow the
+  icon storage host in `img-src` to show thumbnails; without it the widget
+  still shows feast names.
 
 Requests time out after ten seconds and show a manual retry. HTTP 404 advises
 checking the church ID and public-resource activation. HTTP 429/503 honors

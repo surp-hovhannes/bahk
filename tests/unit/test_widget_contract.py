@@ -5,8 +5,9 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
+from bahk.public_api import reference
 from hub.models import Church, Day, Fast, Reading
 
 
@@ -39,3 +40,10 @@ class WidgetFixtureContractTests(TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), fixture)
+
+
+class WidgetFeastFixtureContractTests(SimpleTestCase):
+    def test_feast_fixture_matches_public_feast_shape(self):
+        feast = json.loads((Path(__file__).parents[1] / "widgets/feast.json").read_text())
+        self.assertEqual(set(feast), set(reference.FEAST))
+        self.assertEqual(set(feast["icon"]), set(reference.ICON))

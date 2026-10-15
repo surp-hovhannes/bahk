@@ -44,7 +44,7 @@
       <button type="submit">Update widgets</button>
     </form>
     <div class="widgets">
-      <bahk-fasting-guidance church-id="1"><a href="https://fastandpray.app">Fasting guidance at Fast &amp; Pray</a></bahk-fasting-guidance>
+      <bahk-fast-or-feast church-id="1"><a href="https://fastandpray.app">Fast or Feast at Fast &amp; Pray</a></bahk-fast-or-feast>
       <bahk-daily-readings church-id="1"><a href="https://fastandpray.app">Daily readings at Fast &amp; Pray</a></bahk-daily-readings>
     </div>
     <noscript><p>Enable JavaScript to load daily guidance and readings.</p></noscript>
@@ -53,7 +53,7 @@
     document.querySelector("#settings").addEventListener("submit", (event) => {
       event.preventDefault();
       const values = new FormData(event.target);
-      for (const widget of document.querySelectorAll("bahk-fasting-guidance, bahk-daily-readings")) {
+      for (const widget of document.querySelectorAll("bahk-fast-or-feast, bahk-daily-readings")) {
         // Batch changes while disconnected to avoid intermediate requests.
         const replacement = widget.cloneNode(true);
         replacement.setAttribute("church-id", values.get("church"));
