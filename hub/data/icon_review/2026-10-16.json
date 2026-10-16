@@ -1,0 +1,1836 @@
+{
+ "reviewed_on": "2026-10-16",
+ "about": "Staff review of the icon shown on each 2026 feast, and of catalogue icons whose titles or tags did not say what they depict. Apply with: python manage.py apply_icon_review <this file> (dry run), then again with --apply.",
+ "feasts": [
+  {
+   "feast_id": 2,
+   "name": "Fourth Sunday of Great Lent: Sunday of the Steward",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 11,
+   "name": "The Holy Apostles Andrew and Philip",
+   "choice": "icon",
+   "icon_id": 6,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 15,
+   "name": "Sts. Virgins Juliana and Basilla",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 21,
+   "name": "Sts. Clement the Bishop of Rome and Pancratius the Bishop of Taormina",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 23,
+   "name": "Holy Apostles Thaddeus and Bartholomew, First Illuminators of Armenia",
+   "choice": "icon",
+   "icon_id": 128,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 26,
+   "name": "Sts. Cornelius the Centurion, Simeon the Relative of Christ, Martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs That Perished in the East",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 32,
+   "name": "Sts. Patriarchs Ignatius the Bishop of Antioch, Addai the Bishop of Edessa and Maruthas the Bishop of Marv",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 33,
+   "name": "Sts. Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 34,
+   "name": "Holy Virgins Indes and Domna, and Clericus the Priest Along with the 20,000 Martyrs of Nicomedia",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 38,
+   "name": "Sts. David the Prophet-King and James the Apostle",
+   "choice": "icon",
+   "icon_id": 645,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 67,
+   "name": "Sts. Peter and Paul the Apostles",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 72,
+   "name": "The Holy Princes Sahak and Hamazasp",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 75,
+   "name": "Sts. Phocas the Patriarch and Irenaeus of Lyons, Follower of the Apostles",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 86,
+   "name": "Sts. Dionysius the Areopagite and the Apostles Timothy and Titus",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 88,
+   "name": "Holy Evangelists Matthew, Mark, Luke and John",
+   "choice": "icon",
+   "icon_id": 239,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 99,
+   "name": "Eve of the Nativity and Theophany of Our Lord Jesus Christ",
+   "choice": "keep",
+   "icon_id": 34,
+   "expected_icon_id": 34,
+   "fallback": false
+  },
+  {
+   "feast_id": 141,
+   "name": "Sts. Jacoc and Themistocles",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 147,
+   "name": "Holy Voskian Priests",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": 37,
+   "fallback": false
+  },
+  {
+   "feast_id": 158,
+   "name": "Eve of Great Lent",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 165,
+   "name": "Second Sunday of Great Lent: Sunday of the Expulsion",
+   "choice": "icon",
+   "icon_id": 242,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 172,
+   "name": "Third Sunday of Great Lent: Sunday of the Prodigal Son",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 183,
+   "name": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+   "choice": "icon",
+   "icon_id": 383,
+   "expected_icon_id": 364,
+   "fallback": false
+  },
+  {
+   "feast_id": 185,
+   "name": "Twenty Fourth day of Great Lent (Median day)",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 187,
+   "name": "Fifth Sunday of Great Lent: Sunday of the Judge",
+   "choice": "keep",
+   "icon_id": 2,
+   "expected_icon_id": 2,
+   "fallback": false
+  },
+  {
+   "feast_id": 200,
+   "name": "Sixth Sunday of Great Lent: Sunday of the Advent",
+   "choice": "icon",
+   "icon_id": 428,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 219,
+   "name": "Octave of Easter (New Sunday)",
+   "choice": "keep",
+   "icon_id": 151,
+   "expected_icon_id": 151,
+   "fallback": false
+  },
+  {
+   "feast_id": 226,
+   "name": "Third Sunday of Eastertide: Sunday of the World Church (Green Sunday)",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 232,
+   "name": "Fourth Sunday of Eastertide (Red Sunday)",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 278,
+   "name": "Sts. Princes Sahak and Joseph and the Martyrs Sergius and Bacchus",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 289,
+   "name": "Holy Martyrs Antoninus, Theophilus, Anicetus and Potinus",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": 3,
+   "fallback": false
+  },
+  {
+   "feast_id": 290,
+   "name": "Holy Prophet Daniel and His Companions Shadrach, Meshach and Abednego",
+   "choice": "icon",
+   "icon_id": 632,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 301,
+   "name": "Twelve Holy Apostles of Christ and St. Paul, the Thirteenth Apostle",
+   "choice": "icon",
+   "icon_id": 466,
+   "expected_icon_id": 500,
+   "fallback": false
+  },
+  {
+   "feast_id": 318,
+   "name": "St. Isaiah the Prophet",
+   "choice": "icon",
+   "icon_id": 632,
+   "expected_icon_id": 2,
+   "fallback": true
+  },
+  {
+   "feast_id": 321,
+   "name": "Sts. Cyprian the Bishop, the Forty-Five Martyrs and the Virgins Justina, Euphemia and Christina",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": 36,
+   "fallback": false
+  },
+  {
+   "feast_id": 322,
+   "name": "Sts. Athenogenes the Bishop and the Ten Disciples and Five Martyrs",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 326,
+   "name": "Holy Maccabees: Eleazar the Priest, Shamuna and Her Seven Sons",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": 3,
+   "fallback": false
+  },
+  {
+   "feast_id": 327,
+   "name": "Holy Twelve Prophets: Hosea, Amos, Micah, Joel, Obadiah, Nahum, Habakkuk, Jonah, Zephaniah, Haggai, Zechariah and Malachi",
+   "choice": "icon",
+   "icon_id": 632,
+   "expected_icon_id": 6,
+   "fallback": false
+  },
+  {
+   "feast_id": 331,
+   "name": "St. Eugenia the Virgin, Her Father Philip and Her Mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": 2,
+   "fallback": false
+  },
+  {
+   "feast_id": 345,
+   "name": "ASSUMPTION OF THE HOLY MOTHER OF GOD",
+   "choice": "icon",
+   "icon_id": 105,
+   "expected_icon_id": 636,
+   "fallback": false
+  },
+  {
+   "feast_id": 346,
+   "name": "Remembrance of the Dead",
+   "choice": "keep",
+   "icon_id": 450,
+   "expected_icon_id": 450,
+   "fallback": false
+  },
+  {
+   "feast_id": 353,
+   "name": "EXALTATION OF THE HOLY CROSS",
+   "choice": "icon",
+   "icon_id": 639,
+   "expected_icon_id": 623,
+   "fallback": false
+  },
+  {
+   "feast_id": 370,
+   "name": "Remembrance of the Prophet Elijah",
+   "choice": "icon",
+   "icon_id": 499,
+   "expected_icon_id": 164,
+   "fallback": true
+  },
+  {
+   "feast_id": 371,
+   "name": "Feast of the Discovery of St. Gregory's Relics",
+   "choice": "icon",
+   "icon_id": 291,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 375,
+   "name": "Eve of the Fast of the Transfiguration",
+   "choice": "icon",
+   "icon_id": 498,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 377,
+   "name": "St. Gregory the Illuminator's Sons and Grandsons: Sts. Aristakes, Vrtanes, Housik, Grigoris and Daniel",
+   "choice": "icon",
+   "icon_id": 378,
+   "expected_icon_id": 405,
+   "fallback": false
+  },
+  {
+   "feast_id": 381,
+   "name": "Eve of the Fast of the Assumption of the Holy Mother of God",
+   "choice": "keep",
+   "icon_id": 636,
+   "expected_icon_id": 636,
+   "fallback": false
+  },
+  {
+   "feast_id": 383,
+   "name": "Holy Apostles Thomas, James and Simon",
+   "choice": "icon",
+   "icon_id": 266,
+   "expected_icon_id": 3,
+   "fallback": false
+  },
+  {
+   "feast_id": 384,
+   "name": "Sts. John the Forerunner (Baptist) and Job the Righteous",
+   "choice": "keep",
+   "icon_id": 377,
+   "expected_icon_id": 377,
+   "fallback": false
+  },
+  {
+   "feast_id": 390,
+   "name": "St. Stephen Bishop of Rome and the Holy Priests, Deacons and Many Faithful",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": 4,
+   "fallback": false
+  },
+  {
+   "feast_id": 391,
+   "name": "Holy Archangels Gabriel and Michael and All the Heavenly Angels",
+   "choice": "icon",
+   "icon_id": 647,
+   "expected_icon_id": 5,
+   "fallback": false
+  },
+  {
+   "feast_id": 398,
+   "name": "St. Jeremiah the Prophet",
+   "choice": "icon",
+   "icon_id": 632,
+   "expected_icon_id": null,
+   "fallback": true
+  },
+  {
+   "feast_id": 400,
+   "name": "Sts. Stephen of Oulnia and the Martyrs Goharinus, Zamidus, Tuchicus and Raticus",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": 36,
+   "fallback": false
+  },
+  {
+   "feast_id": 401,
+   "name": "Holy Prophets Ezekiel, Ezra and Zachariah the Father of John the Baptist",
+   "choice": "icon",
+   "icon_id": 632,
+   "expected_icon_id": 637,
+   "fallback": true
+  },
+  {
+   "feast_id": 403,
+   "name": "Commemoration of the 318 Fathers of the Holy Council of Nicea (AD 325)",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 404,
+   "name": "Eve of the Fast of the Exaltation of the Holy Cross",
+   "choice": "icon",
+   "icon_id": 639,
+   "expected_icon_id": 138,
+   "fallback": false
+  },
+  {
+   "feast_id": 409,
+   "name": "Feast of the Birth of Holy Virgin Mary from Anna",
+   "choice": "icon",
+   "icon_id": 8,
+   "expected_icon_id": null,
+   "fallback": true
+  },
+  {
+   "feast_id": 411,
+   "name": "Feast of the Holy Church for the Dedication of the Holy Cross",
+   "choice": "icon",
+   "icon_id": 257,
+   "expected_icon_id": null,
+   "fallback": true
+  },
+  {
+   "feast_id": 415,
+   "name": "Eve of the Fast of the Holy Cross of Varag",
+   "choice": "icon",
+   "icon_id": 639,
+   "expected_icon_id": null,
+   "fallback": true
+  },
+  {
+   "feast_id": 422,
+   "name": "Sts. Theodoret the Priest of Antioch, Zenon the Soldier, Macarius, Eudoxius and Romulus",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 423,
+   "name": "Sts. Aret and His Companions, the Martyrs Artemius and Christopher and the Women Callinice and Aquilina",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 424,
+   "name": "The Twelve Holy Doctors of Church: Hierotheus of Athens, Dionysius the Areopagite, Sylvester of Rome, Athanasius of Alexandria, Cyril of Jerusalem, Ephraim the Syrian, Basil the Great, Gregory of Nyssa, Gregory the Theologian, Epiphanius of Cyprus, John Chrysostom, and Cyril of Alexandria",
+   "choice": "icon",
+   "icon_id": 479,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 425,
+   "name": "Sts. Anastasius the Priest, Varus the Soldier, Theodota and Her Sons, and Those Who Were Martyred with Her",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 427,
+   "name": "Sts. Akepsimas the Bishop, Joseph the Priest, Ayethalas the Deacon and Plato the Martyr",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 428,
+   "name": "Sts. Metrophanes, Alexander and Paul the Confessor, Patriarchs of Constantinople, and Notaries Marcian and Martyrius the Martyrs",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 430,
+   "name": "Eve of the Fast of Advent",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 436,
+   "name": "The Holy Fathers of Egypt: Paul the Hermit, Paul the Simple, Macarius the Great, Evagrius Ponticus, John of the Well, John the Dwarf, Nilus of Sinai, Arsenios the Great, Sisoes the Great, Daniel of Scetis, Serapion, Macarius of Alexandria, Poimen and Others",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 437,
+   "name": "Sts. Gregory and Nicholas the Wonderworkers, and the Other Nicholas the Bishop and Myron the Bishop",
+   "choice": "icon",
+   "icon_id": 10,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 442,
+   "name": "Sts. Abraham and Khoren, Moneyless Physicians Cosmas and Damian",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 443,
+   "name": "Sts. James the Apostle and His Brother John the Evangelist",
+   "choice": "icon",
+   "icon_id": 316,
+   "expected_icon_id": 498,
+   "fallback": false
+  },
+  {
+   "feast_id": 445,
+   "name": "Sts. Basil the Great and His Brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+   "choice": "icon",
+   "icon_id": 35,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 450,
+   "name": "Remembrance of the Prophet Jonah",
+   "choice": "icon",
+   "icon_id": 482,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 455,
+   "name": "St. Theodore the Tyron",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 469,
+   "name": "ASCENSION OF OUR LORD JESUS CHRIST",
+   "choice": "icon",
+   "icon_id": 433,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 472,
+   "name": "PENTECOST (Fiftieth day of Eastertide)",
+   "choice": "icon",
+   "icon_id": 122,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 476,
+   "name": "Feast of Holy Etchmiadzin",
+   "choice": "icon",
+   "icon_id": 271,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 500,
+   "name": "Feast of the Naming of Our Lord Jesus Christ",
+   "choice": "icon",
+   "icon_id": 37,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 502,
+   "name": "Eve of the Fast of the Catechumens",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 507,
+   "name": "Sts. Cyril of Jerusalem, Cyril the Bishop and Anna",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 520,
+   "name": "Appearance of the Holy Cross",
+   "choice": "icon",
+   "icon_id": 639,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 529,
+   "name": "Eve of the Fast of St. Gregory the Illuminator",
+   "choice": "icon",
+   "icon_id": 149,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 533,
+   "name": "Feast of the Discovery of St. Mary's Box",
+   "choice": "icon",
+   "icon_id": 272,
+   "expected_icon_id": null,
+   "fallback": true
+  },
+  {
+   "feast_id": 554,
+   "name": "Feast of the Holy Church",
+   "choice": "keep",
+   "icon_id": 297,
+   "expected_icon_id": 297,
+   "fallback": false
+  },
+  {
+   "feast_id": 557,
+   "name": "Feast of the Holy Cross of Varag",
+   "choice": "icon",
+   "icon_id": 639,
+   "expected_icon_id": null,
+   "fallback": true
+  },
+  {
+   "feast_id": 561,
+   "name": "Sts. Longinus the Centurion, Joseph the Father of God, Joseph of Arimathea and Lazarus and His Sisters Martha and Mary",
+   "choice": "icon",
+   "icon_id": 623,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 562,
+   "name": "Discovery of the Holy Cross",
+   "choice": "icon",
+   "icon_id": 639,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 563,
+   "name": "Sts. Hipparchus and His Companions Who Were Martyred in Samosata, and Sts. Severianus of Sebastia and Babylas and His 84 Disciples",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 565,
+   "name": "Feast of All Saints, the Old and the New, the Known and the Unknown",
+   "choice": "icon",
+   "icon_id": 632,
+   "expected_icon_id": 69,
+   "fallback": true
+  },
+  {
+   "feast_id": 574,
+   "name": "Sts. Gennaro the Bishop and Mercurius the Warrior",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 575,
+   "name": "Eve of the Fast of St. James the Bishop of Nisibis",
+   "choice": "icon",
+   "icon_id": 393,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 609,
+   "name": "Remembrance of the Ten Virgins",
+   "choice": "icon",
+   "icon_id": 465,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 613,
+   "name": "Eve of the Resurrection of Our Lord Jesus Christ",
+   "choice": "keep",
+   "icon_id": 137,
+   "expected_icon_id": 137,
+   "fallback": false
+  },
+  {
+   "feast_id": 622,
+   "name": "Sts. Epiphanius Bishop of Cyprus, Babylas the Patriarch, and His Three Disciples",
+   "choice": "icon",
+   "icon_id": 627,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 623,
+   "name": "Sts. Constantine the Emperor and His Mother Helen",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 624,
+   "name": "Sts. Theodotus of Galatia, and Thalelaus the Physician, and the Seven Martyred Virgins of Ancyra",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 646,
+   "name": "Sts. Patriarchs Barlaam, Anthimus and Irenaeus",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 652,
+   "name": "Sts. Menas, Hermogenes, Eugraphus and the Poor Men John and Alexis",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 654,
+   "name": "Feast of the Conception of the Holy Virgin Mary by Anna",
+   "choice": "icon",
+   "icon_id": 358,
+   "expected_icon_id": null,
+   "fallback": true
+  },
+  {
+   "feast_id": 658,
+   "name": "The Hermit Sts. Tryphon, Barsauma and Onuphrius",
+   "choice": "icon",
+   "icon_id": 234,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 659,
+   "name": "Blessing of the Pomegranates",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 660,
+   "name": "Sts. Gordius, Polyeuctus and Grigoris",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 661,
+   "name": "Eve of the Fast of the Prophet Elijah",
+   "choice": "icon",
+   "icon_id": 498,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 662,
+   "name": "St. Gregory the Theologian",
+   "choice": "icon",
+   "icon_id": 380,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 663,
+   "name": "Sts. Eugenius, Macarius, Valerius, Candidus and Aquila",
+   "choice": "none",
+   "icon_id": null,
+   "expected_icon_id": null,
+   "fallback": false
+  },
+  {
+   "feast_id": 664,
+   "name": "Eve of the Fast of Nativity",
+   "choice": "icon",
+   "icon_id": 460,
+   "expected_icon_id": null,
+   "fallback": false
+  }
+ ],
+ "icons": [
+  {
+   "icon_id": 4,
+   "choice": "update",
+   "expected_title": "St. Demetrios the Martyr",
+   "title": "St. Demetrios the Martyr",
+   "add_tags": [
+    "saint",
+    "martyr",
+    "soldier-saint",
+    "armor",
+    "spear",
+    "shield",
+    "halo",
+    "male"
+   ]
+  },
+  {
+   "icon_id": 5,
+   "choice": "update",
+   "expected_title": "St. Habibus of Edessa",
+   "title": "St. Habibus of Edessa",
+   "add_tags": [
+    "saint",
+    "martyr",
+    "fire",
+    "halo",
+    "mountains",
+    "two-men",
+    "prayer",
+    "martyrdom"
+   ]
+  },
+  {
+   "icon_id": 10,
+   "choice": "update",
+   "expected_title": "St. Gregory the Wonderworker",
+   "title": "St. Gregory the Wonderworker",
+   "add_tags": [
+    "saint",
+    "bishop",
+    "book",
+    "cross",
+    "white-beard",
+    "vestment",
+    "icon",
+    "greek-inscription"
+   ]
+  },
+  {
+   "icon_id": 35,
+   "choice": "update",
+   "expected_title": "St. Basil the Great and St. Gregory of Nyssa",
+   "title": "St. Basil the Great and St. Gregory of Nyssa",
+   "add_tags": [
+    "saint",
+    "basil-the-great",
+    "gregory-of-nyssa",
+    "holy-men",
+    "church-fathers",
+    "cross",
+    "scroll",
+    "halos"
+   ]
+  },
+  {
+   "icon_id": 67,
+   "choice": "update",
+   "expected_title": "St. Anthony the Great",
+   "title": "St. Anthony the Great",
+   "add_tags": [
+    "saint",
+    "monk",
+    "hermit",
+    "staff",
+    "lion",
+    "dog",
+    "beard",
+    "man"
+   ]
+  },
+  {
+   "icon_id": 72,
+   "choice": "update",
+   "expected_title": "St. Sarkis and St. Martiros",
+   "title": "St. Sarkis and St. Martiros",
+   "add_tags": [
+    "saint",
+    "martyr",
+    "horse",
+    "armor",
+    "halo",
+    "blessing",
+    "group",
+    "divine-hand"
+   ]
+  },
+  {
+   "icon_id": 172,
+   "choice": "update",
+   "expected_title": "StGregorytheIlluminatorIconinsideKhoorVarp",
+   "title": "St Gregory the Illuminator with scenes from his life",
+   "add_tags": [
+    "st-gregory-the-illuminator",
+    "bishop",
+    "crozier",
+    "saint",
+    "martyrdom",
+    "life-scenes",
+    "armenian-church",
+    "icon"
+   ]
+  },
+  {
+   "icon_id": 175,
+   "choice": "update",
+   "expected_title": "StGregoryofTatevandStJohnofVorodn",
+   "title": "St Gregory of Tatev and St John of Vorotn",
+   "add_tags": [
+    "saints",
+    "bishops",
+    "halos",
+    "church",
+    "armenian-saints",
+    "gregory-of-tatev",
+    "john-of-vorotn",
+    "religious-figures"
+   ]
+  },
+  {
+   "icon_id": 218,
+   "choice": "update",
+   "expected_title": "FortyMartyrsofSebastiaStJohnArmenianChurchicon",
+   "title": "Forty Martyrs of Sebastia",
+   "add_tags": [
+    "forty-martyrs",
+    "sebastia",
+    "martyrs",
+    "river",
+    "heaven",
+    "angels",
+    "group",
+    "martyrdom"
+   ]
+  },
+  {
+   "icon_id": 222,
+   "choice": "update",
+   "expected_title": "Hymnal, Adam and Eve, Walters Manuscript W.547, fol. 49v",
+   "title": "Adam and Eve with the Serpent",
+   "add_tags": [
+    "adam",
+    "eve",
+    "serpent",
+    "tree",
+    "fruit",
+    "temptation",
+    "garden-of-eden",
+    "biblical"
+   ]
+  },
+  {
+   "icon_id": 226,
+   "choice": "update",
+   "expected_title": "St.Movses Khorenatsi",
+   "title": "St. Movses Khorenatsi",
+   "add_tags": [
+    "saint",
+    "movses-khorenatsi",
+    "writing",
+    "book",
+    "quill",
+    "halo",
+    "beard",
+    "armenian-church"
+   ]
+  },
+  {
+   "icon_id": 230,
+   "choice": "update",
+   "expected_title": "ArmenianGenocideMartyrs",
+   "title": "Armenian Genocide Martyrs",
+   "add_tags": [
+    "armenian",
+    "martyrs",
+    "genocide",
+    "group",
+    "men",
+    "women",
+    "children",
+    "cross"
+   ]
+  },
+  {
+   "icon_id": 234,
+   "choice": "update",
+   "expected_title": "StOnophoriusKristineSargsyan",
+   "title": "St Onophrius",
+   "add_tags": [
+    "saint",
+    "st-onophrius",
+    "bearded-saint",
+    "scroll",
+    "staff",
+    "desert",
+    "trees",
+    "christ"
+   ]
+  },
+  {
+   "icon_id": 239,
+   "choice": "update",
+   "expected_title": "StJohnTheEvangelist",
+   "title": "St John the Evangelist",
+   "add_tags": [
+    "saint",
+    "evangelist",
+    "writing",
+    "scroll",
+    "halo",
+    "seated",
+    "armenian-script",
+    "icon"
+   ]
+  },
+  {
+   "icon_id": 242,
+   "choice": "update",
+   "expected_title": "Hymnal, Expulsion of Adam and Eve from Paradise, Walters Manuscript W.547, fol. 54v",
+   "title": "Expulsion of Adam and Eve from Paradise",
+   "add_tags": [
+    "adam",
+    "eve",
+    "angel",
+    "expulsion",
+    "paradise",
+    "garden-of-eden",
+    "god",
+    "man-and-woman"
+   ]
+  },
+  {
+   "icon_id": 251,
+   "choice": "update",
+   "expected_title": "CouncilofEphesusIconJerusalem",
+   "title": "Council of Ephesus",
+   "add_tags": [
+    "council",
+    "church-fathers",
+    "ecumenical-council",
+    "group",
+    "scroll",
+    "mandorla",
+    "halos",
+    "lectern"
+   ]
+  },
+  {
+   "icon_id": 253,
+   "choice": "update",
+   "expected_title": "GgK9VMEXYAARERT",
+   "title": "Theotokos with Child Christ",
+   "add_tags": [
+    "theotokos",
+    "child-christ",
+    "madonna-and-child",
+    "mother-of-god",
+    "armenian-art",
+    "armenian-orthodox",
+    "illuminated-manuscript",
+    "floral-borders"
+   ]
+  },
+  {
+   "icon_id": 360,
+   "choice": "update",
+   "expected_title": "ArmenianIconCouncilofEphesus",
+   "title": "Council of Ephesus",
+   "add_tags": [
+    "council",
+    "ephesus",
+    "saints",
+    "bishops",
+    "christ",
+    "virgin-mary",
+    "armenian-church",
+    "ecumenical-council"
+   ]
+  },
+  {
+   "icon_id": 361,
+   "choice": "update",
+   "expected_title": "ArmenianJesus-e1287363504305",
+   "title": "Christ Pantocrator with a Monk",
+   "add_tags": [
+    "christ",
+    "pantocrator",
+    "monk",
+    "armenian-script",
+    "blessing",
+    "throne",
+    "holy-book",
+    "armenian-church"
+   ]
+  },
+  {
+   "icon_id": 366,
+   "choice": "update",
+   "expected_title": "FZXk7bCXoAALkHg",
+   "title": "The Last Supper with Armenian Saints",
+   "add_tags": [
+    "jesus-christ",
+    "last-supper",
+    "apostles",
+    "saints",
+    "eucharist",
+    "armenian-church",
+    "holy-communion",
+    "christian-feast"
+   ]
+  },
+  {
+   "icon_id": 367,
+   "choice": "keep",
+   "expected_title": "FyhfTokWIAklGMn"
+  },
+  {
+   "icon_id": 368,
+   "choice": "update",
+   "expected_title": "FzkeZ6kWIAIl4lp",
+   "title": "Saint Gregory the Illuminator",
+   "add_tags": [
+    "saint-gregory-the-illuminator",
+    "armenian-apostolic",
+    "cross",
+    "book",
+    "saint",
+    "holy-man",
+    "armenia",
+    "religious-scenes"
+   ]
+  },
+  {
+   "icon_id": 369,
+   "choice": "update",
+   "expected_title": "GY-t1rJXoAU97oJ",
+   "title": "Coronation of the Virgin",
+   "add_tags": [
+    "virgin-mary",
+    "jesus-christ",
+    "god-the-father",
+    "holy-spirit",
+    "holy-trinity",
+    "coronation",
+    "divine-royalty",
+    "armenian-orthodox"
+   ]
+  },
+  {
+   "icon_id": 370,
+   "choice": "update",
+   "expected_title": "Ga0spIEacAEzhYn",
+   "title": "Bishop Blessing a Kneeling Figure",
+   "add_tags": [
+    "bishop",
+    "blessing",
+    "kneeling-figure",
+    "clerical-vestments",
+    "manuscript-illumination",
+    "religious-ritual",
+    "medieval",
+    "armenian-christianity"
+   ]
+  },
+  {
+   "icon_id": 380,
+   "choice": "update",
+   "expected_title": "StGregoryTheTheologian",
+   "title": "St Gregory the Theologian",
+   "add_tags": [
+    "saints",
+    "bishop",
+    "clerical-vestments",
+    "book",
+    "halo",
+    "blessing",
+    "church-fathers",
+    "st-gregory-the-theologian"
+   ]
+  },
+  {
+   "icon_id": 386,
+   "choice": "update",
+   "expected_title": "StGregorytheIlluminator2",
+   "title": "St Gregory the Illuminator",
+   "add_tags": [
+    "saint",
+    "st-gregory-the-illuminator",
+    "bishop",
+    "crozier",
+    "mitre",
+    "armenian-apostolic",
+    "religious-illumination",
+    "armenia"
+   ]
+  },
+  {
+   "icon_id": 387,
+   "choice": "update",
+   "expected_title": "StGregorytheIlluminator3",
+   "title": "St Gregory the Illuminator with King and Theotokos",
+   "add_tags": [
+    "st-gregory-the-illuminator",
+    "bishop",
+    "king",
+    "theotokos",
+    "christ-child",
+    "mountains",
+    "church",
+    "armenian-church"
+   ]
+  },
+  {
+   "icon_id": 388,
+   "choice": "update",
+   "expected_title": "StGregorytheIlluminatorreliefcarving",
+   "title": "St Gregory the Illuminator relief carving",
+   "add_tags": [
+    "saint",
+    "st-gregory-the-illuminator",
+    "armenian-christian",
+    "relief-carving",
+    "bishop",
+    "book",
+    "armenian-architecture",
+    "armenian-cross"
+   ]
+  },
+  {
+   "icon_id": 391,
+   "choice": "update",
+   "expected_title": "StJacobofNsibisArmenianIcon",
+   "title": "St Jacob of Nisibis",
+   "add_tags": [
+    "saint",
+    "bishop",
+    "cross",
+    "crozier",
+    "god",
+    "clouds",
+    "armenian-church",
+    "st-jacob-of-nsibis"
+   ]
+  },
+  {
+   "icon_id": 398,
+   "choice": "update",
+   "expected_title": "StNersesTheGreat",
+   "title": "St. Nerses I the Great",
+   "add_tags": [
+    "st-nerses-the-great",
+    "armenian-church",
+    "bishop",
+    "saint",
+    "mitre",
+    "staff",
+    "book",
+    "halo"
+   ]
+  },
+  {
+   "icon_id": 399,
+   "choice": "update",
+   "expected_title": "StNersesTheGreat2",
+   "title": "St. Nerses the Great",
+   "add_tags": [
+    "saint",
+    "bishop",
+    "armenian-apostolic",
+    "st-nerses-the-great",
+    "mitre",
+    "staff",
+    "religious-figure",
+    "portrait"
+   ]
+  },
+  {
+   "icon_id": 400,
+   "choice": "update",
+   "expected_title": "StNersestheGreat3",
+   "title": "St Nerses the Great",
+   "add_tags": [
+    "saint",
+    "st-nerses-the-great",
+    "bishop",
+    "episcopal-vestments",
+    "mitre",
+    "pastoral-staff",
+    "armenian-church",
+    "religious-figure"
+   ]
+  },
+  {
+   "icon_id": 401,
+   "choice": "update",
+   "expected_title": "StNersestheGreat4",
+   "title": "St. Nerses the Great",
+   "add_tags": [
+    "saint",
+    "bishop",
+    "armenian-apostolic",
+    "nerses-the-great",
+    "mitre",
+    "staff",
+    "holy-light",
+    "armenian-script"
+   ]
+  },
+  {
+   "icon_id": 406,
+   "choice": "update",
+   "expected_title": "Sthripsime2ZoomedIn",
+   "title": "Saint Hripsime",
+   "add_tags": [
+    "saint-hripsime",
+    "martyrdom",
+    "stone-throwing",
+    "soldiers",
+    "halo",
+    "kneeling",
+    "armenian-saint",
+    "female-saint"
+   ]
+  },
+  {
+   "icon_id": 407,
+   "choice": "update",
+   "expected_title": "StsThaddeusandBartholomew",
+   "title": "Saints Thaddeus and Bartholomew",
+   "add_tags": [
+    "saints",
+    "apostles",
+    "thaddeus",
+    "bartholomew",
+    "halos",
+    "knives",
+    "icon",
+    "armenian-script"
+   ]
+  },
+  {
+   "icon_id": 409,
+   "choice": "update",
+   "expected_title": "Untitled-design-24-Edited-1280x720",
+   "title": "St. Gregory of Narek",
+   "add_tags": [
+    "cross",
+    "book",
+    "halo",
+    "armenian-script",
+    "narek"
+   ]
+  },
+  {
+   "icon_id": 412,
+   "choice": "update",
+   "expected_title": "armeniansaintswithChristsupperV2",
+   "title": "Christ's Last Supper with Armenian Saints",
+   "add_tags": [
+    "jesus-christ",
+    "last-supper",
+    "armenian-saints",
+    "armenian-church-fathers",
+    "eucharist",
+    "holy-communion",
+    "armenian-orthodox",
+    "religious-icon"
+   ]
+  },
+  {
+   "icon_id": 417,
+   "choice": "update",
+   "expected_title": "stgregorytheilluminator",
+   "title": "St Gregory the Illuminator",
+   "add_tags": [
+    "st-gregory-the-illuminator",
+    "bishop",
+    "armenian-church",
+    "saint",
+    "religious-figure",
+    "blessing",
+    "staff",
+    "mitre"
+   ]
+  },
+  {
+   "icon_id": 418,
+   "choice": "update",
+   "expected_title": "sthripsimeandcompanions",
+   "title": "Saint Hripsime and Companions",
+   "add_tags": [
+    "saints",
+    "martyrs",
+    "women",
+    "companions",
+    "cross",
+    "halos",
+    "group-portrait",
+    "saint-hripsime"
+   ]
+  },
+  {
+   "icon_id": 422,
+   "choice": "update",
+   "expected_title": "1-walters547-pentecost-e1564932467613",
+   "title": "Pentecost",
+   "add_tags": [
+    "pentecost",
+    "virgin-mary",
+    "apostles",
+    "holy-spirit",
+    "holy-spirit-dove",
+    "armenian-church",
+    "bishop",
+    "tongues-of-fire"
+   ]
+  },
+  {
+   "icon_id": 424,
+   "choice": "update",
+   "expected_title": "1610-msarm13-pentecost-e1565782960534",
+   "title": "Pentecost",
+   "add_tags": [
+    "pentecost",
+    "holy-spirit",
+    "apostles",
+    "mary",
+    "tongues-of-fire",
+    "dove",
+    "armenian-church",
+    "apostolic-community"
+   ]
+  },
+  {
+   "icon_id": 426,
+   "choice": "update",
+   "expected_title": "5d746c9d77143c8832ef5497bd266090",
+   "title": "Saint holding a Gospel book under an architectural frame",
+   "add_tags": [
+    "saint",
+    "bishop",
+    "gospel-book",
+    "halo",
+    "architectural-frame",
+    "columns",
+    "armenian-inscription",
+    "crosses"
+   ]
+  },
+  {
+   "icon_id": 428,
+   "choice": "update",
+   "expected_title": "800px-ttoros roslin - last judgment - walters w539109v - open reverse-e1565991242225",
+   "title": "Last Judgment",
+   "add_tags": [
+    "last-judgment",
+    "christ-judge",
+    "angels",
+    "heavenly-host",
+    "weighing-of-souls",
+    "saved",
+    "damned",
+    "divine-court"
+   ]
+  },
+  {
+   "icon_id": 442,
+   "choice": "update",
+   "expected_title": "AssumptionofStMaryTheotokosArmenian",
+   "title": "Assumption of St Mary Theotokos",
+   "add_tags": [
+    "assumption-of-mary",
+    "virgin-mary",
+    "theotokos",
+    "apostles",
+    "angels",
+    "armenian-orthodox",
+    "armenian-illumination",
+    "funerary-scene"
+   ]
+  },
+  {
+   "icon_id": 448,
+   "choice": "update",
+   "expected_title": "GcxpUHSXAAADmvR",
+   "title": "Holy Trinity with Crucified Christ",
+   "add_tags": [
+    "holy-trinity",
+    "god-the-father",
+    "jesus-christ",
+    "crucifixion",
+    "angels",
+    "heavenly-host",
+    "divine-embrace",
+    "oval-mandorla"
+   ]
+  },
+  {
+   "icon_id": 452,
+   "choice": "update",
+   "expected_title": "IlluminatedManuscript1450(2)",
+   "title": "Saint Healing the Sick",
+   "add_tags": [
+    "saint",
+    "angel",
+    "healing",
+    "miracle",
+    "women",
+    "men",
+    "blessing",
+    "bandaged-limb"
+   ]
+  },
+  {
+   "icon_id": 453,
+   "choice": "update",
+   "expected_title": "IlluminatedManuscript1450(3)",
+   "title": "Last Supper and Judas Receiving the Silver",
+   "add_tags": [
+    "last-supper",
+    "jesus-christ",
+    "apostles",
+    "betrayal",
+    "judas-iscariot",
+    "silver-coins",
+    "armenian-orthodox",
+    "medieval-armenian"
+   ]
+  },
+  {
+   "icon_id": 454,
+   "choice": "update",
+   "expected_title": "IlluminatedManuscript1450(4)",
+   "title": "Transfiguration of Christ",
+   "add_tags": [
+    "transfiguration",
+    "christ",
+    "apostles",
+    "mandorla",
+    "armenian-art",
+    "armenian-orthodox",
+    "medieval-art",
+    "illuminated-manuscript"
+   ]
+  },
+  {
+   "icon_id": 455,
+   "choice": "update",
+   "expected_title": "IlluminatedManuscript1450(5)",
+   "title": "Resurrection of Lazarus",
+   "add_tags": [
+    "resurrection-of-lazarus",
+    "jesus-christ",
+    "lazarus",
+    "new-testament-event",
+    "miracle-scene",
+    "armenian-orthodox",
+    "disciples",
+    "burial",
+    "tomb"
+   ]
+  },
+  {
+   "icon_id": 456,
+   "choice": "update",
+   "expected_title": "IlluminatedManuscript1450",
+   "title": "Two-panel scene with seated figure and ring of rope",
+   "add_tags": [
+    "illuminated-manuscript",
+    "armenian-christianity",
+    "two-panel-scene",
+    "seated-figure",
+    "scroll",
+    "halo",
+    "ring-of-rope",
+    "kneeling-figure"
+   ]
+  },
+  {
+   "icon_id": 489,
+   "choice": "update",
+   "expected_title": "StJohntheEvangelist2",
+   "title": "St John the Evangelist",
+   "add_tags": [
+    "st-john-the-evangelist",
+    "gospel-writing",
+    "divine-inspiration",
+    "celestial-hand",
+    "illuminated-manuscript",
+    "armenian-christianity",
+    "byzantine-style",
+    "gold-leaf"
+   ]
+  },
+  {
+   "icon_id": 493,
+   "choice": "update",
+   "expected_title": "The-Gospel-of-Eight-Artists-Sarkis-Pitsak-14th-century.",
+   "title": "Saint Mark the Evangelist from The Gospel of Eight Artists by Sarkis Pitsak",
+   "add_tags": [
+    "saint-mark",
+    "evangelist",
+    "gospel-writer",
+    "armenian-orthodox",
+    "medieval-armor",
+    "scroll-hand",
+    "decorative-border",
+    "architectural-motif"
+   ]
+  },
+  {
+   "icon_id": 499,
+   "choice": "update",
+   "expected_title": "Transfiguration2",
+   "title": "Transfiguration of Christ",
+   "add_tags": [
+    "jesus-christ",
+    "transfiguration-of-christ",
+    "moses",
+    "elijah",
+    "peter-apostle",
+    "james-apostle",
+    "john-apostle",
+    "divine-light"
+   ]
+  },
+  {
+   "icon_id": 500,
+   "choice": "update",
+   "expected_title": "ca0d2d43c8ec1ccb71324d592268a67e",
+   "title": "Saint Paul handing a scroll to a scribe",
+   "add_tags": [
+    "saint-paul",
+    "apostle",
+    "scroll",
+    "scribe",
+    "handing-scroll",
+    "seated-figure",
+    "armenian-manuscript",
+    "medieval"
+   ]
+  },
+  {
+   "icon_id": 586,
+   "choice": "update",
+   "expected_title": "Christ-washing-feet-Sargis-Pistak",
+   "title": "Christ Washing the Feet of the Apostles",
+   "add_tags": [
+    "jesus-christ",
+    "apostles",
+    "foot-washing",
+    "last-supper",
+    "armenian-orthodox",
+    "illuminated-manuscript",
+    "armenian-miniature",
+    "sargis-pistak"
+   ]
+  },
+  {
+   "icon_id": 602,
+   "choice": "update",
+   "expected_title": "HolyTrinitySargisPistak",
+   "title": "Holy Trinity with the Four Evangelist Symbols",
+   "add_tags": [
+    "holy-trinity",
+    "god-the-father",
+    "jesus-christ",
+    "four-evangelists",
+    "winged-man",
+    "lion",
+    "ox",
+    "eagle",
+    "armenian-illuminated-manuscript"
+   ]
+  },
+  {
+   "icon_id": 604,
+   "choice": "update",
+   "expected_title": "Miniatures-Sargis-Pitsak",
+   "title": "Coronation Scene Miniature by Sargis Pitsak",
+   "add_tags": [
+    "coronation",
+    "king",
+    "blessing",
+    "divine-hand",
+    "royalty",
+    "medieval-armenian",
+    "sargis-pitsak",
+    "illuminated-manuscript"
+   ]
+  },
+  {
+   "icon_id": 609,
+   "choice": "update",
+   "expected_title": "Gospel-1336-Sargis-Pitsak",
+   "title": "Resurrection of Jesus Christ",
+   "add_tags": [
+    "resurrection",
+    "jesus-christ",
+    "apostles",
+    "angels",
+    "empty-tomb",
+    "heavenly-realm",
+    "armenian-illuminated",
+    "sargis-pitsak"
+   ]
+  },
+  {
+   "icon_id": 613,
+   "choice": "update",
+   "expected_title": "HolyTrinitySargisPistak",
+   "title": "Holy Trinity with the Four Evangelist Symbols",
+   "add_tags": [
+    "holy-trinity",
+    "god-the-father",
+    "jesus-christ",
+    "four-evangelists",
+    "winged-man",
+    "winged-lion",
+    "winged-ox",
+    "eagle"
+   ]
+  },
+  {
+   "icon_id": 623,
+   "choice": "update",
+   "expected_title": "689px-Crucifixion of Jesus, Sargis Pitsak (1346)",
+   "title": "Crucifixion of Jesus",
+   "add_tags": [
+    "crucifixion",
+    "jesus-christ",
+    "virgin-mary",
+    "taking-down-from-cross",
+    "sun",
+    "moon",
+    "medieval-armenian-art",
+    "sargis-pitsak"
+   ]
+  },
+  {
+   "icon_id": 645,
+   "choice": "update",
+   "expected_title": "Prophet David",
+   "title": "Prophet David",
+   "add_tags": [
+    "prophet-david",
+    "king",
+    "scroll",
+    "crown",
+    "royal-robes",
+    "saint",
+    "biblical-figure",
+    "holy-man"
+   ]
+  },
+  {
+   "icon_id": 646,
+   "choice": "update",
+   "expected_title": "Christ Praying in Gethsemane",
+   "title": "Christ Praying in Gethsemane",
+   "add_tags": [
+    "christ",
+    "praying",
+    "gethsemane",
+    "garden",
+    "disciples",
+    "apostles",
+    "jesus",
+    "prayer"
+   ]
+  },
+  {
+   "icon_id": 647,
+   "choice": "update",
+   "expected_title": "Synaxis of the Archangels",
+   "title": "Synaxis of the Archangels",
+   "add_tags": [
+    "archangels",
+    "christ-pantocrator",
+    "seraphim",
+    "angels",
+    "medallion",
+    "halo",
+    "feast",
+    "synaxis"
+   ]
+  }
+ ]
+}
