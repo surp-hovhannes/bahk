@@ -1,0 +1,523 @@
+{
+  "profile": {
+    "profile_id": "sonnet-control-v1",
+    "configured_model": "claude-sonnet-5",
+    "reasoning_effort": null,
+    "prompt_version": "control-v1",
+    "policy_version": "control-v1",
+    "prompt_hash": "7be739f4c5ac6a9cb8162574bc21f1806c41ec72e74ad328fecc475289a6bb2a",
+    "stage_prompt_hashes": {
+      "analyze": "de426c22d3eb1801f32a3f3c813a2d507e84c95e25fd8e8730f2c2fca47427d8",
+      "assess": "01465ccf9e2b1ef03163f9f1c054a3acf7f6135b782fd3d6d4e3619ff40dace8",
+      "verify": "645816d083cb79c83ea438e7b1b0933fbfcfcc24086565082030c3ba56b6fd29"
+    },
+    "policy_hash": "ede46beb912d5a09c56081c138160f1b270e1068426972ea9bca689cd12876ac",
+    "positive_limit": 8,
+    "profile_hash": "dfa4afdd85bf0d04e089c5cd4bd183b6bb1b05d7eb91242248d66925f9cd26a0"
+  },
+  "case_count": 12,
+  "verdicts": {
+    "exact": 3,
+    "acceptable": 4,
+    "wrong": 3,
+    "silent": 2,
+    "error": 0
+  },
+  "complete_count": 11,
+  "unsafe_assignment_count": 0,
+  "auto_assigned_count": 3,
+  "cases": [
+    {
+      "feast": "Remembrance of the Prophet Elijah",
+      "expectation": "fallback_only",
+      "verdict": "acceptable",
+      "top_id": 499,
+      "returned": 1,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 46.6,
+      "matches": [
+        {
+          "id": 499,
+          "relation": "related_specific",
+          "confidence": "low",
+          "relevance": 25,
+          "auto_assignable": false,
+          "reason": "The tag 'elijah' indicates the prophet appears as a secondary figure in a Transfiguration scene (title 'Transfiguration2', tags moses/jesus-christ/apostles/mount-tabor/transfiguration-of-christ). This is a distinct, unrequested event where Elijah is not the primary subject, so it only weakly relates to a requested remembrance/portrait of Elijah himself."
+        }
+      ]
+    },
+    {
+      "feast": "Sts. Atom and His Soldiers",
+      "expectation": "nothing_suitable",
+      "verdict": "silent",
+      "top_id": null,
+      "returned": 0,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 19.6,
+      "matches": []
+    },
+    {
+      "feast": "Holy Voskian Priests",
+      "expectation": "nothing_suitable",
+      "verdict": "silent",
+      "top_id": null,
+      "returned": 0,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 15.9,
+      "matches": []
+    },
+    {
+      "feast": "Remembrance of the Dead",
+      "expectation": "nothing_suitable",
+      "verdict": "wrong",
+      "top_id": 230,
+      "returned": 5,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 73.1,
+      "matches": [
+        {
+          "id": 230,
+          "relation": "thematic",
+          "confidence": "low",
+          "relevance": 65,
+          "auto_assignable": false,
+          "reason": "Depicts Armenian Genocide martyrs, a specific commemorative subject resonant with the theme of remembering the dead."
+        },
+        {
+          "id": 249,
+          "relation": "thematic",
+          "confidence": "low",
+          "relevance": 65,
+          "auto_assignable": false,
+          "reason": "Group depiction of Armenian Genocide martyrs, thematically tied to remembrance of the dead."
+        },
+        {
+          "id": 77,
+          "relation": "thematic",
+          "confidence": "low",
+          "relevance": 55,
+          "auto_assignable": false,
+          "reason": "Depiction of martyred saints, a universal commemoration resonant with remembrance of the dead."
+        },
+        {
+          "id": 428,
+          "relation": "thematic",
+          "confidence": "low",
+          "relevance": 50,
+          "auto_assignable": false,
+          "reason": "Last Judgment scene, involving the weighing of souls and fate of the dead, thematically related to remembrance of the departed."
+        },
+        {
+          "id": 359,
+          "relation": "thematic",
+          "confidence": "low",
+          "relevance": 48,
+          "auto_assignable": false,
+          "reason": "Group of holy martyrs, thematically linked to remembrance of the dead."
+        }
+      ]
+    },
+    {
+      "feast": "Feast of the Holy Cross",
+      "expectation": "nothing_suitable",
+      "verdict": "wrong",
+      "top_id": 257,
+      "returned": 5,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 86.9,
+      "matches": [
+        {
+          "id": 257,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 75,
+          "auto_assignable": false,
+          "reason": "Crucifixion icon explicitly tagged with 'calvary-cross', making the cross itself a specific depicted element central to the Holy Cross feast theme, though the scene is the Crucifixion narrative rather than a standalone veneration of the Cross."
+        },
+        {
+          "id": 447,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 70,
+          "auto_assignable": false,
+          "reason": "Illuminated Crucifixion manuscript tagged 'cross-inscription', tying the depiction specifically to the cross as an inscribed object, relevant to the Holy Cross theme."
+        },
+        {
+          "id": 623,
+          "relation": "related_specific",
+          "confidence": "low",
+          "relevance": 58,
+          "auto_assignable": false,
+          "reason": "Crucifixion miniature referencing Calvary, the site of the cross, giving specific but indirect relevance to the Holy Cross subject."
+        },
+        {
+          "id": 256,
+          "relation": "related_specific",
+          "confidence": "low",
+          "relevance": 55,
+          "auto_assignable": false,
+          "reason": "Crucifixion scene explicitly tagged as such, showing Christ affixed to the cross, relevant but not an identity match for the Holy Cross feast."
+        },
+        {
+          "id": 346,
+          "relation": "related_specific",
+          "confidence": "low",
+          "relevance": 55,
+          "auto_assignable": false,
+          "reason": "Crucifixion depiction tagged as a crucifixion-scene with themes of sacrifice and suffering, centering on the cross as instrument of Christ's passion."
+        }
+      ]
+    },
+    {
+      "feast": "Beheading of St. John the Forerunner (Baptist)",
+      "expectation": "fallback_only",
+      "verdict": "acceptable",
+      "top_id": 36,
+      "returned": 5,
+      "auto_assigned": [
+        36,
+        333
+      ],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 168.1,
+      "matches": [
+        {
+          "id": 36,
+          "relation": "subject_portrait",
+          "confidence": "high",
+          "relevance": 80,
+          "auto_assignable": true,
+          "reason": "Solo icon titled 'St. John the Baptist' with 'forerunner' tag confirming the requested identity; a generic portrait, not the beheading scene."
+        },
+        {
+          "id": 333,
+          "relation": "subject_portrait",
+          "confidence": "high",
+          "relevance": 78,
+          "auto_assignable": true,
+          "reason": "Portrait 'St John the Baptist 1' with 'forerunner' and 'st-john-the-baptist' tags confirming identity; hermit-like standing icon, a generic devotional portrait with no beheading depicted."
+        },
+        {
+          "id": 377,
+          "relation": "subject_portrait",
+          "confidence": "medium",
+          "relevance": 68,
+          "auto_assignable": false,
+          "reason": "Titled 'St John the Baptist' and tagged 'holy-portrait' with wings/scroll, a traditional standing icon (Angel of the Desert type), a generic portrait rather than a narrative beheading scene."
+        },
+        {
+          "id": 372,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 45,
+          "auto_assignable": false,
+          "reason": "Depicts St. John the Baptist alongside St. Atanagines in a specific narrative ('delivery-of-church-building'), a different scene from the requested Beheading."
+        },
+        {
+          "id": 338,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 42,
+          "auto_assignable": false,
+          "reason": "John the Baptist appears in a Theophany/Baptism scene, a distinct event from the requested Beheading."
+        }
+      ]
+    },
+    {
+      "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
+      "expectation": "fallback_only",
+      "verdict": "acceptable",
+      "top_id": 428,
+      "returned": 2,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 80.6,
+      "matches": [
+        {
+          "id": 428,
+          "relation": "thematic",
+          "confidence": "medium",
+          "relevance": 50,
+          "auto_assignable": false,
+          "reason": "Depicts Christ enthroned as Judge at the Last Judgment with divine court imagery; thematically resonant with the concept of 'the Judge' invoked by the feast name, but represents a distinct Last Judgment scene rather than the specific liturgical theme of the Sunday (traditionally tied to the parable of the unjust judge), and no specific requested scene is confirmed."
+        },
+        {
+          "id": 260,
+          "relation": "thematic",
+          "confidence": "low",
+          "relevance": 25,
+          "auto_assignable": false,
+          "reason": "A Christ in Majesty icon tagged with 'judgment' offers only a weak, generic thematic association with the idea of judgeship implied by the feast title, without depicting a specific judge figure or scene tied to the request."
+        }
+      ]
+    },
+    {
+      "feast": "Palm Sunday",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 101,
+      "returned": 5,
+      "auto_assigned": [
+        101,
+        301,
+        325,
+        464,
+        203
+      ],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 78.0,
+      "matches": [
+        {
+          "id": 101,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 100,
+          "auto_assignable": true,
+          "reason": "Title is exactly 'Palm Sunday' and tags explicitly mark it as a feast, directly depicting the requested Palm Sunday feast."
+        },
+        {
+          "id": 301,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 100,
+          "auto_assignable": true,
+          "reason": "Title 'Palm Sunday Entry into Jerusalem' with matching palm-sunday tag directly depicts the requested feast scene."
+        },
+        {
+          "id": 325,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 100,
+          "auto_assignable": true,
+          "reason": "Title 'Palm Sunday 2' and tag 'palmsunday' confirm direct depiction of the requested feast."
+        },
+        {
+          "id": 464,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 100,
+          "auto_assignable": true,
+          "reason": "Title 'Palm Sunday Illuminated Manuscript 1450' with matching palm-sunday tag directly names the requested feast."
+        },
+        {
+          "id": 203,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 95,
+          "auto_assignable": true,
+          "reason": "Title and tag both name Palm Sunday; an illuminated manuscript depiction of the requested feast, though framed around a specific artist/saint attribution."
+        }
+      ]
+    },
+    {
+      "feast": "Holy Forty Martyrs of Sebastia",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 77,
+      "returned": 2,
+      "auto_assigned": [
+        77,
+        218
+      ],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 27.5,
+      "matches": [
+        {
+          "id": 77,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 100,
+          "auto_assignable": true,
+          "reason": "Title '40 Martyrs of Sebastia' exactly identifies the requested group of Forty Martyrs of Sebastia; tags confirm group/martyr/saints status, satisfying identity constraints."
+        },
+        {
+          "id": 218,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 85,
+          "auto_assignable": true,
+          "reason": "Title contains 'FortyMartyrsofSebastia' identifying the same entity, with additional descriptive provenance (StJohnArmenianChurch icon) that does not conflict with the identity."
+        }
+      ]
+    },
+    {
+      "feast": "Remembrance of the Raising of Lazarus",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 455,
+      "returned": 1,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 21.7,
+      "matches": [
+        {
+          "id": 455,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 100,
+          "auto_assignable": false,
+          "reason": "Tags explicitly name 'lazarus' identifying the subject and 'resurrection-of-lazarus' naming the depicted event, which is the same scene as the requested Raising of Lazarus (synonymous terminology for the same scriptural miracle)."
+        }
+      ]
+    },
+    {
+      "feast": "Sts. Hripsime and Her Companions",
+      "expectation": "exact_exists",
+      "verdict": "wrong",
+      "top_id": 3,
+      "returned": 5,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "partial",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "invalid_verified_candidate"
+      ],
+      "elapsed_seconds": 117.0,
+      "matches": [
+        {
+          "id": 3,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 65,
+          "auto_assignable": false,
+          "reason": "Depicts St. Hripsime alongside a single named companion, St. Gayane, rather than the broader group of companions implied by the request; only the primary saint subject is fully covered."
+        },
+        {
+          "id": 352,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 55,
+          "auto_assignable": false,
+          "reason": "Solo portrait of St. Hripsime with detailed identifying tags, but omits any depiction of her companions, leaving the second requested subject uncovered."
+        },
+        {
+          "id": 118,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 50,
+          "auto_assignable": false,
+          "reason": "Solo icon of St. Hripsime identifies the core saint but does not depict her companions."
+        },
+        {
+          "id": 268,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 50,
+          "auto_assignable": false,
+          "reason": "Portrait titled 'Saint Hripsime' identifies only the primary saint, omitting the requested companions."
+        },
+        {
+          "id": 270,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 50,
+          "auto_assignable": false,
+          "reason": "Portrait titled 'Saint Hripsime' with descriptive tags identifies the saint alone, without her companions."
+        }
+      ]
+    },
+    {
+      "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+      "expectation": "fallback_only",
+      "verdict": "acceptable",
+      "top_id": 175,
+      "returned": 5,
+      "auto_assigned": [],
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "elapsed_seconds": 200.5,
+      "matches": [
+        {
+          "id": 175,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 80,
+          "auto_assignable": false,
+          "reason": "Title 'StGregoryofTatevandStJohnofVorodn' directly names both St. Gregory of Tatev and St. John of Vorodn (the standard transliteration of Vorotan), giving exact identity matches for two of the four requested saints."
+        },
+        {
+          "id": 389,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 70,
+          "auto_assignable": false,
+          "reason": "Title 'St. Hovhannes Vorotnetsi' is the traditional Armenian name for St. John of Vorotan, an exact identity match for that requested saint."
+        },
+        {
+          "id": 311,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 68,
+          "auto_assignable": false,
+          "reason": "Title 'St. John of Odzun' matches the requested John of Otzun (alternate transliteration of Odzun), an exact identity match for the Patriarch of Armenia."
+        },
+        {
+          "id": 381,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 68,
+          "auto_assignable": false,
+          "reason": "Title and tags ('St. Gregory of Tatev', 'st-gregory-of-tatev') directly and exactly identify the requested Gregory of Tatev."
+        },
+        {
+          "id": 200,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 65,
+          "auto_assignable": false,
+          "reason": "Manuscript titled 'St John of Vorodn manuscript' with tag 'st-john-of-vorodn' identifies the same figure as the requested John of Vorotan."
+        }
+      ]
+    }
+  ]
+}
