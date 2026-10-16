@@ -29,7 +29,9 @@ Each case has three label lists and a `note`:
 - `correct`: depicts the commemoration.
 - `acceptable`: a reasonable suggestion when nothing correct exists.
 - `assignable`: may be written to the feast with no human in the loop. **Defaults to
-  `correct`**, so a fallback is only assignable when a reviewer adds it here.
+  `correct`**, so a fallback is only assignable when a reviewer adds it here. Policy: a portrait
+  of the commemorated saint is assignable when no more specific depiction (such as the event
+  itself) exists; a scene in which the saint merely appears is not.
 
 ## Scoring
 
@@ -87,7 +89,7 @@ Re-scored with the scoring above and the labels as committed:
 | `nothing_suitable`: abstained | **2 / 4** | **2 / 4** | 0 / 4 (1 error) |
 | Wrong top-1 | **2** | 3 | 3 |
 | `status == "complete"` | 8 / 12 | 11 / 12 | 11 / 12 |
-| Assigned / unsafe | n/a | 3 / 1 | 4 / 1 |
+| Assigned / unsafe | n/a | 3 / 0 | 4 / 0 |
 
 Read it with these caveats:
 
@@ -96,16 +98,15 @@ Read it with these caveats:
    coverage fix that stops one malformed row from turning a batch `partial`. Three of its four
    `partial` outcomes were exactly that bug. The Sonnet arms ran through this harness with 300s,
    `feast_strict` and the fix. The like-for-like control is `--profile control-v1` through this
-   harness, which has not been run yet.
+   harness; see the live baseline below.
 2. **Sonnet's gain is all in `fallback_only`.** It returns a reasonable fallback where
    gpt-4.1-mini returned nothing. On `exact_exists` gpt-4.1-mini was as good or better
    (it ranked the Hripsime companions icon first; plain Sonnet did not), and it made fewer wrong
    top-1 picks.
-3. **The one unsafe assignment in each Sonnet arm is a labelling decision.** Both auto-assigned
-   a St John the Baptist *portrait* (icon 36) to *Beheading of St. John the Forerunner*. The
-   case marks it `acceptable` but not `assignable`. If a portrait may be written for an event
-   feast, add `"assignable": [36, 333]` to that case and re-score; if not, the matcher's
-   `feast_strict` policy is assigning things it should only suggest.
+3. **Both Sonnet arms auto-assigned a portrait to an event feast**: a St John the Baptist
+   portrait (icon 36) to *Beheading of St. John the Forerunner*, where no beheading scene
+   exists. Under the portrait policy above that is allowed, so the case lists the three Baptist
+   portraits as `assignable` and neither arm has an unsafe assignment.
 4. **n = 12, single run, no repeats**, and the cases over-represent hard ones. One label was
    already wrong once (Elijah: icon 499's tags include `elijah`) and two are still debatable
    (*Feast of the Holy Cross*, *Remembrance of the Dead*).
@@ -149,7 +150,6 @@ verdicts from run to run, so a single run of this matcher is not evidence of muc
   Every exported case is `"reviewed": false` with empty labels and the currently stored icon
   shown for reference. Fill in the labels, flip `reviewed` to `true`, and the scorer picks the
   case up; unreviewed cases are skipped and listed in `unreviewed_cases`.
-- Decide the portrait-for-event question above and encode it as `assignable` labels.
 - Put the catalogue before the request in `provider_payload()`; the assess payload is ~37k
   tokens, 96% of them the catalogue, identical across feasts, so prefix caching would cut most
   of the input cost of a full run.
