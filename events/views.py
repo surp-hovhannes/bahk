@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from django.utils.translation import activate, get_language_from_request
 
 from .models import Event, EventType, UserActivityFeed
+from .participation_analytics import analytics_events, transition_counts
 from .serializers import (
     EventSerializer, EventListSerializer, EventTypeSerializer,
     EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer,
@@ -182,13 +183,13 @@ class EventStatsView(APIView):
         last_30d = now - timedelta(days=30)
         
         # Basic counts
-        total_events = Event.objects.count()
-        events_last_24h = Event.objects.filter(timestamp__gte=last_24h).count()
-        events_last_7d = Event.objects.filter(timestamp__gte=last_7d).count()
-        events_last_30d = Event.objects.filter(timestamp__gte=last_30d).count()
+        total_events = analytics_events().count()
+        events_last_24h = analytics_events().filter(timestamp__gte=last_24h).count()
+        events_last_7d = analytics_events().filter(timestamp__gte=last_7d).count()
+        events_last_30d = analytics_events().filter(timestamp__gte=last_30d).count()
         
         # Top event types
-        top_event_types = list(Event.objects.values(
+        top_event_types = list(analytics_events().values(
             'event_type__name', 'event_type__code', 'event_type__category'
         ).annotate(
             count=Count('id')
@@ -200,22 +201,15 @@ class EventStatsView(APIView):
             day = last_30d + timedelta(days=i)
             day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
-            count = Event.objects.filter(
+            count = analytics_events().filter(
                 timestamp__gte=day_start,
                 timestamp__lt=day_end
             ).count()
             events_by_day[day.strftime('%Y-%m-%d')] = count
         
         # Fast join statistics
-        fast_joins_30d = Event.objects.filter(
-            event_type__code=EventType.USER_JOINED_FAST,
-            timestamp__gte=last_30d
-        ).count()
-        
-        fast_leaves_30d = Event.objects.filter(
-            event_type__code=EventType.USER_LEFT_FAST,
-            timestamp__gte=last_30d
-        ).count()
+        transitions = transition_counts(start=last_30d).get(None, {'joins': 0, 'leaves': 0})
+        fast_joins_30d, fast_leaves_30d = transitions['joins'], transitions['leaves']
         
         fast_join_stats = {
             'joins_last_30d': fast_joins_30d,
@@ -224,7 +218,7 @@ class EventStatsView(APIView):
         }
         
         # Recent milestone events
-        milestone_events = Event.objects.filter(
+        milestone_events = analytics_events().filter(
             event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
             timestamp__gte=last_30d
         ).select_related(
@@ -280,16 +274,12 @@ class UserEventStatsView(APIView):
             )
         
         # Get user events
-        user_events = Event.objects.filter(user=user)
+        user_events = analytics_events().filter(user=user)
         
         # Basic counts
         total_events = user_events.count()
-        fasts_joined = user_events.filter(
-            event_type__code=EventType.USER_JOINED_FAST
-        ).count()
-        fasts_left = user_events.filter(
-            event_type__code=EventType.USER_LEFT_FAST
-        ).count()
+        transitions = transition_counts(user_id=user.pk).get(None, {'joins': 0, 'leaves': 0})
+        fasts_joined, fasts_left = transitions['joins'], transitions['leaves']
         
         # Recent events
         recent_events = user_events.select_related(
@@ -335,7 +325,7 @@ class FastEventStatsView(APIView):
             )
         
         # Get fast-related events
-        fast_events = Event.objects.filter(
+        fast_events = analytics_events().filter(
             object_id=fast_id,
             content_type__app_label='hub',
             content_type__model='fast'
@@ -345,13 +335,8 @@ class FastEventStatsView(APIView):
         total_events = fast_events.count()
         current_participants = fast.profiles.count()
         
-        total_joins = fast_events.filter(
-            event_type__code=EventType.USER_JOINED_FAST
-        ).count()
-        
-        total_leaves = fast_events.filter(
-            event_type__code=EventType.USER_LEFT_FAST
-        ).count()
+        transitions = transition_counts(fast_id=fast.pk).get(None, {'joins': 0, 'leaves': 0})
+        total_joins, total_leaves = transitions['joins'], transitions['leaves']
         
         # Milestone events
         milestone_events = fast_events.filter(
@@ -370,22 +355,15 @@ class FastEventStatsView(APIView):
         last_30d = now - timedelta(days=30)
         
         join_timeline = {}
+        timeline_start = last_30d.replace(hour=0, minute=0, second=0, microsecond=0)
+        daily_transitions = transition_counts(
+            fast_id=fast.pk, start=timeline_start, end=timeline_start + timedelta(days=30),
+            group_by='day', tz=now.tzinfo,
+        )
         for i in range(30):
             day = last_30d + timedelta(days=i)
-            day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
-            
-            joins = fast_events.filter(
-                event_type__code=EventType.USER_JOINED_FAST,
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
-            
-            leaves = fast_events.filter(
-                event_type__code=EventType.USER_LEFT_FAST,
-                timestamp__gte=day_start,
-                timestamp__lt=day_end
-            ).count()
+            bucket = daily_transitions.get(day.date(), {'joins': 0, 'leaves': 0})
+            joins, leaves = bucket['joins'], bucket['leaves']
             
             join_timeline[day.strftime('%Y-%m-%d')] = {
                 'joins': joins,

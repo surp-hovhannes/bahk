@@ -58,6 +58,11 @@ app.autodiscover_tasks()
 
 # Configure scheduled tasks with Sentry Cron monitoring
 app.conf.beat_schedule = {
+    'send-post-fast-encouragement-daily': {
+        'task': 'notifications.tasks.send_post_fast_encouragement_task',
+        'schedule': crontab(hour=9, minute=0),
+        'options': {'sentry': {'monitor_slug': 'daily-post-fast-encouragement'}},
+    },
     'send-fast-notifications-every-day': {
         'task': 'hub.tasks.send_fast_reminder_task',
         'schedule': crontab(hour=0, minute=0),
@@ -210,6 +215,15 @@ app.conf.beat_schedule = {
         'options': {
             'sentry': {
                 'monitor_slug': 'weekly-reading-text-refresh',
+            }
+        }
+    },
+    'prewarm-next-day-readings-daily': {
+        'task': 'hub.tasks.prewarm_next_day_readings_task',
+        'schedule': crontab(hour=3, minute=30),  # 3:30 AM daily, before the Monday 04:00 refresh
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-next-day-readings-prewarm',
             }
         }
     },

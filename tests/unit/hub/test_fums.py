@@ -360,10 +360,10 @@ class ReadingTextExpiryTests(TestCase):
 
         self.assertEqual(_fields(reading, "fr")["text"], "")
 
-    @patch("hub.views.readings.fetch_passage_text")
+    @patch("hub.views.readings.fetch_missing_passage_texts_task")
     @patch("hub.views.readings.get_daily_readings", return_value=[])
     @patch("hub.views.readings.generate_reading_context_task")
-    def test_readings_api_blanks_expired_text(self, mock_gen_task, mock_scrape, mock_fetch):
+    def test_readings_api_blanks_expired_text(self, mock_gen_task, mock_scrape, mock_text_task):
         reading = _create_reading(day=self.day)
         _store_text(reading, fetched_at=timezone.now() - datetime.timedelta(days=31))
 

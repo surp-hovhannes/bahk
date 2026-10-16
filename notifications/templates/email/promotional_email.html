@@ -3,7 +3,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ email_content|striptags|truncatechars:50 }}</title>
+    <title>{% block email_title %}{{ email_content|striptags|truncatechars:50 }}{% endblock %}</title>
     <style type="text/css">
       @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500&display=swap');
       
@@ -144,12 +144,12 @@
       <tr>
         <td class="header">
           <img src="{{ site_url }}/email_images/logo.png" alt="Fast & Pray Logo" class="logo" />
-          <h1>{{ title|safe }}</h1>
+          <h1>{% block email_heading %}{{ title|safe }}{% endblock %}</h1>
         </td>
       </tr>
       <tr>
         <td class="content">
-          {{ email_content|safe }}
+          {% block email_body %}{{ email_content|safe }}{% endblock %}
         </td>
       </tr>
       <tr>

@@ -788,7 +788,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='{"approved": true, "reason": "ok"}')]
+            content=[SimpleNamespace(type="text", text='{"approved": true, "reason": "ok"}')]
         )
 
         with patch('anthropic.Anthropic') as mock_anthropic:
@@ -818,7 +818,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": true,
                 "reason": "Genuine prayer request for health",
                 "concerns": [],
@@ -869,7 +869,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": true,
                 "reason": "Appropriate prayer request",
                 "concerns": [],
@@ -906,7 +906,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": true,
                 "reason": "Appropriate prayer request",
                 "concerns": [],
@@ -943,7 +943,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         # Simulate an LLM response that explicitly requests human review via suggested_action,
         # even if it doesn't set requires_human_review.
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": false,
                 "reason": "Unclear intent; needs manual review",
                 "concerns": ["unclear intent"],
@@ -983,7 +983,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": false,
                 "reason": "Potential self-harm ideation; requires immediate admin attention",
                 "concerns": ["self-harm"],
@@ -1020,7 +1020,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": true,
                 "reason": "Appropriate but emotionally intense",
                 "concerns": ["emotional language"],
@@ -1055,7 +1055,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": true,
                 "reason": "Borderline appropriate, needs human review",
                 "concerns": ["unclear intent", "sensitive topic"],
@@ -1104,7 +1104,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": false,
                 "reason": "Contains self-harm language requiring immediate attention",
                 "concerns": ["self-harm", "safety risk"],
@@ -1153,7 +1153,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": false,
                 "reason": "Promotional spam, not a prayer request",
                 "concerns": ["spam", "promotional content"],
@@ -1192,7 +1192,7 @@ class PrayerRequestAPITests(BaseAPITestCase):
         )
 
         mock_response = SimpleNamespace(
-            content=[SimpleNamespace(text='''{
+            content=[SimpleNamespace(type="text", text='''{
                 "approved": true,
                 "reason": "Probably okay but would like human confirmation",
                 "concerns": ["edge case"],

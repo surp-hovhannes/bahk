@@ -12,7 +12,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.text import Truncator
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 from markdownx.admin import MarkdownxModelAdmin
 
@@ -44,10 +44,14 @@ from hub.models import (
     FastIntention,
 )
 from hub.services.bible_api_service import BibleAPIService
+from hub.services.feast_contexts import (
+    FeastContextRegenerationUnavailable,
+    enqueue_feast_context_regeneration,
+)
 from hub.services.reading_text_service import bible_api_budgets, fetch_all_reading_texts
+from hub.services.llm_models import can_activate
 from hub.tasks import (
     generate_reading_context_task,
-    generate_feast_context_task,
     match_icon_to_feast_task,
     fetch_armenian_reading_text_task,
 )
@@ -1200,6 +1204,20 @@ class LLMPromptAdmin(admin.ModelAdmin):
             return
 
         prompt = queryset.first()
+        if not can_activate(prompt.model):
+            self.message_user(
+                request,
+                f"{prompt.model} is deprecated or retired; change the prompt's model before activating it.",
+                level=messages.ERROR
+            )
+            return
+
+        prompt.active = True
+        try:
+            prompt.clean()
+        except ValidationError as exc:
+            self.message_user(request, "; ".join(exc.messages), level=messages.ERROR)
+            return
 
         # First, deactivate the current active prompt for this applies_to type
         current_active = LLMPrompt.objects.filter(
@@ -1482,11 +1500,25 @@ class FeastAdmin(admin.ModelAdmin):
 
     def force_regenerate_context(self, request, queryset):
         """Force enqueues context regeneration for selected feasts."""
-        count = queryset.count()
+        queued = 0
+        already_queued = 0
+        unavailable = 0
         for feast in queryset:
-            generate_feast_context_task.delay(feast.id, force_regeneration=True)
+            try:
+                _, created = enqueue_feast_context_regeneration(
+                    feast.id, actor_id=request.user.id
+                )
+            except FeastContextRegenerationUnavailable:
+                unavailable += 1
+            else:
+                queued += int(created)
+                already_queued += int(not created)
         self.message_user(
-            request, f"Initiated forced regeneration for {count} feasts."
+            request,
+            (
+                f"Queued forced regeneration for {queued} feasts; "
+                f"{already_queued} already queued; {unavailable} unavailable."
+            ),
         )
 
     force_regenerate_context.short_description = (
@@ -1538,17 +1570,28 @@ class FeastAdmin(admin.ModelAdmin):
                     level=messages.ERROR
                 )
             else:
-                count = feasts.count()
+                queued = 0
+                already_queued = 0
+                unavailable = 0
                 for feast in feasts:
-                    generate_feast_context_task.delay(
-                        feast.id,
-                        force_regeneration=True,
-                        improvement_instructions=improvement_instructions
-                    )
+                    try:
+                        _, created = enqueue_feast_context_regeneration(
+                            feast.id,
+                            actor_id=request.user.id,
+                            additional_instructions=improvement_instructions,
+                        )
+                    except FeastContextRegenerationUnavailable:
+                        unavailable += 1
+                    else:
+                        queued += int(created)
+                        already_queued += int(not created)
                 self.message_user(
                     request,
-                    f"Initiated context regeneration with instructions for {count} feasts.",
-                    level=messages.SUCCESS
+                    (
+                        f"Queued regeneration with instructions for {queued} feasts; "
+                        f"{already_queued} already queued; {unavailable} unavailable."
+                    ),
+                    level=messages.SUCCESS,
                 )
                 return redirect(reverse('admin:hub_feast_changelist'))
 
@@ -1577,6 +1620,8 @@ class FeastAdmin(admin.ModelAdmin):
 class FeastContextAdmin(admin.ModelAdmin):
     list_display = (
         "feast",
+        "version",
+        "operation",
         "prompt",
         "active",
         "thumbs_up",
@@ -1593,12 +1638,32 @@ class FeastContextAdmin(admin.ModelAdmin):
     search_fields = ("text", "short_text", "feast__name")
     ordering = ("-time_of_generation",)
     autocomplete_fields = ("feast", "prompt")
-    readonly_fields = ("time_of_generation",)
+    readonly_fields = (
+        "feast",
+        "version",
+        "operation",
+        "created_by",
+        "additional_instructions",
+        "restored_from",
+        "prompt",
+        "active",
+        "thumbs_up",
+        "thumbs_down",
+        "time_of_generation",
+        "text_en",
+        "text_hy",
+        "short_text_en",
+        "short_text_hy",
+    )
     exclude = ("text", "short_text")  # Avoid duplicate with translation fields
 
     fieldsets = (
         (None, {
-            'fields': ('feast', 'prompt', 'active', 'thumbs_up', 'thumbs_down', 'time_of_generation')
+            'fields': (
+                'feast', 'version', 'operation', 'created_by', 'additional_instructions',
+                'restored_from', 'prompt', 'active', 'thumbs_up', 'thumbs_down',
+                'time_of_generation',
+            )
         }),
         ('Context Translations', {
             'description': (
@@ -1610,9 +1675,15 @@ class FeastContextAdmin(admin.ModelAdmin):
         }),
     )
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
-            "feast", "feast__church", "prompt"
+            "feast", "feast__church", "prompt", "created_by", "restored_from"
         )
 
     def text_preview(self, obj):

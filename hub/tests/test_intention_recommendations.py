@@ -124,7 +124,7 @@ class LLMTagsForIntentionTest(TestCase):
         from unittest.mock import MagicMock
         service = MagicMock()
         service.client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text=raw)])
+            content=[MagicMock(type="text", text=raw)])
         return service
 
     def test_returns_validated_tags(self):

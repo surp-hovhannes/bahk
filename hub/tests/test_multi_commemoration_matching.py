@@ -6,6 +6,7 @@ import json
 from django.test import TestCase
 
 from hub.models import Church, Day, Feast
+from hub.services.feast_service import get_feast_for_date
 from hub.services.llm_service import _find_all_matching_feasts
 
 
@@ -21,6 +22,20 @@ class FindAllMatchingFeastsTests(TestCase):
         """Helper to create mock feasts.json data."""
         mock_data = json.dumps(feasts_list)
         return mock_open(read_data=mock_data)
+
+    def _engine_feast(self, feast_date, observance_id):
+        """Use real engine names without saving a feast or scheduling enrichment."""
+        observance = next(
+            entry for entry in get_feast_for_date(feast_date, self.church)
+            if entry['observance_id'] == observance_id
+        )
+        feast = Feast(
+            church=self.church,
+            observance_id=observance_id,
+            name=observance['name_en'],
+        )
+        feast.name_hy = observance['name_hy']
+        return feast
 
     @patch('os.path.exists', return_value=True)
     @patch('builtins.open', new_callable=mock_open, read_data='[]')
@@ -365,6 +380,50 @@ class FindAllMatchingFeastsTests(TestCase):
 
         self.assertEqual(matches, expected_matches)
         mock_llm_filter.assert_called_once_with(feast, expected_matches)
+
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    def test_presentation_date_collision_still_uses_semantic_filter(self, mock_llm_filter):
+        """Mary's Presentation must not inherit the separate Advent fast's context."""
+        feast = self._engine_feast(date(2027, 11, 21), 'presentation_of_the_holy_mother')
+        reference_name = "Presentation of Three-Year-Old St. Mary to the Church"
+        mock_llm_filter.side_effect = lambda feast, candidates: [
+            entry for entry in candidates if entry['name'] == reference_name
+        ]
+
+        matches = _find_all_matching_feasts(feast)
+
+        self.assertEqual([entry['name'] for entry in matches], [reference_name])
+        mock_llm_filter.assert_called_once()
+        self.assertIn(reference_name, [entry['name'] for entry in mock_llm_filter.call_args.args[1]])
+
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    def test_stale_date_preserves_stronger_cyricus_reference(self, mock_llm_filter):
+        """A wrong overlapping entry must not eliminate Cyricus's stronger name match."""
+        feast = self._engine_feast(date(2026, 1, 22), 'cyricus_and_his_mother')
+        reference_name = "Commemoration of St. Cyricus and his mother Julitta"
+        mock_llm_filter.side_effect = lambda feast, candidates: [
+            entry for entry in candidates if entry['name'] == reference_name
+        ]
+
+        matches = _find_all_matching_feasts(feast)
+
+        self.assertEqual([entry['name'] for entry in matches], [reference_name])
+        mock_llm_filter.assert_called_once()
+        candidates = mock_llm_filter.call_args.args[1]
+        self.assertEqual(candidates[0]['name'], reference_name)
+        self.assertEqual(candidates[0]['upcoming_dates'], ['2026-01-21'])
+
+    @patch('hub.services.llm_service._llm_filter_feast_matches')
+    def test_real_holy_church_window_keeps_exact_reference_shortcut(self, mock_llm_filter):
+        """Exact identity works on all three engine dates without semantic filtering."""
+        for day in (15, 16, 17):
+            with self.subTest(day=day):
+                feast = self._engine_feast(date(2026, 9, day), 'feast_of_the_holy_church')
+
+                matches = _find_all_matching_feasts(feast)
+
+                self.assertEqual([entry['name'] for entry in matches], ["Feast of the Holy Church"])
+        mock_llm_filter.assert_not_called()
 
     @patch('os.path.exists', return_value=False)
     def test_handles_missing_feasts_file(self, mock_exists):

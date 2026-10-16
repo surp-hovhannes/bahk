@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.shortcuts import redirect
-from .models import DeviceToken, PromoEmail, PromoEmailImage
+from .models import DeviceToken, PromoEmail, PromoEmailImage, PostFastEncouragementEmail
 from .utils import send_push_notification
 from .tasks import send_promo_email_task, send_push_notification_to_users_task
 from django.contrib.admin import SimpleListFilter
@@ -23,6 +23,25 @@ import logging
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+class PostFastEncouragementEmailForm(forms.ModelForm):
+    class Meta:
+        model = PostFastEncouragementEmail
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['fast'].required = True
+        self.fields['fast'].help_text = 'Only this fast receives this message. Fasts without a message send no email.'
+
+
+@admin.register(PostFastEncouragementEmail)
+class PostFastEncouragementEmailAdmin(admin.ModelAdmin):
+    form = PostFastEncouragementEmailForm
+    list_display = ('__str__', 'subject')
+    search_fields = ('fast__name', 'subject', 'message')
+    autocomplete_fields = ('fast',)
 
 
 class UserWithNoFastsFilter(SimpleListFilter):

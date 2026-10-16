@@ -15,7 +15,8 @@ from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from events.models import Event, EventType, UserActivityFeed
+from events.models import EventType, UserActivityFeed
+from events.participation_analytics import analytics_events, legacy_transition_events, transition_counts
 from hub.models import Fast
 
 
@@ -276,29 +277,9 @@ class Command(BaseCommand):
             .annotate(participant_count=Count("profiles"))
         )
 
-        # joins/leaves in period based on Events
-        joins = (
-            Event.objects.filter(
-                event_type__code=EventType.USER_JOINED_FAST,
-                timestamp__gte=start_dt,
-                timestamp__lte=end_dt,
-                content_type__model="fast",
-            )
-            .values("object_id")
-            .annotate(count=Count("id"))
-        )
-        leaves = (
-            Event.objects.filter(
-                event_type__code=EventType.USER_LEFT_FAST,
-                timestamp__gte=start_dt,
-                timestamp__lte=end_dt,
-                content_type__model="fast",
-            )
-            .values("object_id")
-            .annotate(count=Count("id"))
-        )
-        joins_map = {x["object_id"]: x["count"] for x in joins}
-        leaves_map = {x["object_id"]: x["count"] for x in leaves}
+        transitions = transition_counts(start=start_dt, end=end_dt, inclusive_end=True, group_by='fast')
+        joins_map = {key: counts['joins'] for key, counts in transitions.items()}
+        leaves_map = {key: counts['leaves'] for key, counts in transitions.items()}
 
         rows: List[FastEngagementRow] = []
         for fast in fasts:
@@ -386,7 +367,7 @@ class Command(BaseCommand):
         """
         Compute fast participation history for all users.
         Includes join/leave timestamps and current status.
-        Properly handles multiple join/leave cycles by tracking the most recent activity.
+        Audit periods preserve each join/leave cycle; unaudited legacy pairs use their most recent activity.
         """
         from django.contrib.contenttypes.models import ContentType
         
@@ -397,7 +378,7 @@ class Command(BaseCommand):
             return []
         
         # Get all join events
-        join_events = Event.objects.filter(
+        join_events = legacy_transition_events().filter(
             event_type__code=EventType.USER_JOINED_FAST,
             content_type=fast_content_type,
             timestamp__gte=start_dt,
@@ -405,7 +386,7 @@ class Command(BaseCommand):
         ).select_related('user').order_by('user_id', 'object_id', 'timestamp')
         
         # Get all leave events
-        leave_events = Event.objects.filter(
+        leave_events = legacy_transition_events().filter(
             event_type__code=EventType.USER_LEFT_FAST,
             content_type=fast_content_type,
             timestamp__gte=start_dt,
@@ -508,6 +489,28 @@ class Command(BaseCommand):
                 )
             )
         
+        from hub.models import FastParticipation
+        from django.db.models import Q
+
+        periods = FastParticipation.objects.filter(
+            Q(joined_at__gte=start_dt, joined_at__lte=end_dt)
+            | Q(left_at__gte=start_dt, left_at__lte=end_dt)
+        ).select_related('profile__user', 'fast__church')
+        for period in periods:
+            profile = period.profile
+            fast = period.fast
+            active = fast is not None and fast.pk in current_fast_map.get(profile.user_id, set())
+            period_status = ('left' if period.left_at is not None else
+                             'active' if not period.ended_at_unknown and active else 'unknown')
+            rows.append(UserFastParticipationRow(
+                user_id=profile.user_id, username=profile.user.username, email=profile.user.email,
+                fast_id=period.fast_original_id or period.fast_id,
+                fast_name=str(fast) if fast else period.fast_name,
+                church_name=fast.church.name if fast and fast.church else None,
+                joined_at=period.joined_at.isoformat() if period.joined_at else '',
+                left_at=period.left_at.isoformat() if period.left_at else None,
+                status=period_status,
+            ))
         return rows
 
     def _compute_retention_cohorts(self, start_dt: datetime, end_dt: datetime) -> List[RetentionCohortRow]:
@@ -584,7 +587,7 @@ class Command(BaseCommand):
 
     def _compute_other_metrics(self, start_dt: datetime, end_dt: datetime) -> Dict[str, Any]:
         # Events by type in range
-        events_in_range = Event.objects.filter(timestamp__gte=start_dt, timestamp__lte=end_dt)
+        events_in_range = analytics_events().filter(timestamp__gte=start_dt, timestamp__lte=end_dt)
         by_type = dict(
             events_in_range.values("event_type__code").annotate(count=Count("id")).values_list("event_type__code", "count")
         )
@@ -597,19 +600,13 @@ class Command(BaseCommand):
             .count()
         )
 
-        # Top fasts by joins in period
-        top_fasts_qs = (
-            events_in_range.filter(
-                event_type__code=EventType.USER_JOINED_FAST, content_type__model="fast"
-            )
-            .values("object_id")
-            .annotate(count=Count("id"))
-            .order_by("-count")[:10]
-        )
-        fast_id_to_name = {f.id: str(f) for f in Fast.objects.filter(id__in=[x["object_id"] for x in top_fasts_qs])}
+        # Rank recorded transitions, not duplicate/no-op Event rows.
+        transitions = transition_counts(start=start_dt, end=end_dt, inclusive_end=True, group_by='fast')
+        ranked = sorted(transitions.items(), key=lambda item: (-item[1]['joins'], item[0]))[:10]
+        fast_id_to_name = {f.id: str(f) for f in Fast.objects.filter(id__in=[key for key, _ in ranked])}
         top_fasts = [
-            {"fast_id": x["object_id"], "fast": fast_id_to_name.get(x["object_id"], str(x["object_id"])), "joins": x["count"]}
-            for x in top_fasts_qs
+            {'fast_id': key, 'fast': fast_id_to_name.get(key, str(key)), 'joins': counts['joins']}
+            for key, counts in ranked if counts['joins']
         ]
 
         # Screen View Analytics

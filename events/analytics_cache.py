@@ -32,7 +32,7 @@ class AnalyticsCacheService:
     HISTORICAL_DATA_TTL = 14400 # 4 hours
     
     CACHE_PREFIX = "analytics"
-    CACHE_VERSION = "v2"  # Increment to invalidate all analytics caches
+    CACHE_VERSION = "v3"  # Increment to invalidate all analytics caches
     
     @classmethod
     def _get_cache_key(cls, cache_type, **kwargs):

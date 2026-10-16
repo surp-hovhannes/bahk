@@ -235,6 +235,94 @@ class Fast(models.Model):
         return s
 
 
+class FastParticipationQuerySet(models.QuerySet):
+    def with_completion(self, *, as_of=None):
+        """Annotate ``is_completed`` in one query using the configured local calendar.
+
+        Unknown joins/closures are unconfirmed. Deleted fasts are evaluated as
+        of deletion, so an unfinished deleted fast cannot complete later.
+        """
+        from django.db.models.functions import TruncDate
+
+        tz = timezone.get_default_timezone()
+        today = as_of or timezone.localdate(timezone=tz)
+        return self.annotate(
+            _live_end=models.Max('fast__days__date', filter=models.Q(
+                fast__days__church_id=models.F('fast__church_id'))),
+            _joined_day=TruncDate('joined_at', tzinfo=tz),
+            _left_day=TruncDate('left_at', tzinfo=tz),
+            _deleted_day=TruncDate('fast_deleted_at', tzinfo=tz),
+        ).annotate(
+            _end=models.Case(
+                models.When(fast_id__isnull=True, then=models.F('fast_end_date')),
+                default=models.F('_live_end'), output_field=models.DateField(),
+            ),
+        ).annotate(
+            is_completed=models.Case(
+                models.When(
+                    models.Q(ended_at_unknown=False, joined_at__isnull=False,
+                             _joined_day__lte=models.F('_end'))
+                    & (models.Q(left_at__isnull=False, _left_day__gte=models.F('_end'),
+                                left_at__gte=models.F('joined_at'))
+                       | (models.Q(left_at__isnull=True, _end__lt=today)
+                          & (models.Q(fast_deleted_at__isnull=True)
+                             | models.Q(_end__lt=models.F('_deleted_day'))))),
+                    then=models.Value(True),
+                ),
+                default=models.Value(False), output_field=models.BooleanField(),
+            ),
+        )
+
+    def completed(self, *, as_of=None):
+        return self.with_completion(as_of=as_of).filter(is_completed=True)
+
+
+class FastParticipation(models.Model):
+    """Membership history; Profile.fasts remains the source of truth.
+
+    Known mid-fast joins can complete by staying past the final local calendar
+    day, or leaving anytime on that day. Post-end joins and unknown joins or
+    closures never confirm completion. Fast deletion preserves snapshots and
+    freezes completion at deletion; profile deletion erases history for privacy.
+    """
+    objects = FastParticipationQuerySet.as_manager()
+
+    profile = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='fast_participations')
+    fast = models.ForeignKey(
+        'Fast', null=True, blank=True, on_delete=models.SET_NULL, related_name='participations',
+    )
+    joined_at = models.DateTimeField(null=True, blank=True, help_text='UTC join timestamp; NULL means unknown.')
+    left_at = models.DateTimeField(null=True, blank=True, help_text='UTC leave timestamp; NULL when open or unknown.')
+    ended_at_unknown = models.BooleanField(default=False, db_default=False, help_text='Membership ended but its leave timestamp is unknown.')
+    fast_original_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    fast_name = models.CharField(max_length=128, blank=True, default='', db_default='')
+    fast_year = models.IntegerField(null=True, blank=True)
+    fast_end_date = models.DateField(null=True, blank=True)
+    fast_deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['profile', 'fast'],
+                condition=models.Q(left_at__isnull=True, ended_at_unknown=False),
+                name='unique_open_fast_participation',
+            ),
+        ]
+        indexes = [models.Index(fields=['fast', 'left_at'])]
+
+    @property
+    def completed(self):
+        """Use the same database predicate as scalable completion queries."""
+        if 'is_completed' in self.__dict__:
+            return self.is_completed
+        return type(self).objects.using(self._state.db).with_completion().filter(pk=self.pk).values_list(
+            'is_completed', flat=True,
+        ).first() or False
+
+    def __str__(self):
+        return f"FastParticipation(profile={self.profile_id}, fast={self.fast_id})"
+
+
 class Profile(models.Model):
     """Model for a user profile."""
 
@@ -939,17 +1027,24 @@ class GeocodingCache(models.Model):
 class LLMPrompt(models.Model):
     """Model for storing LLM prompts used to generate content."""
 
+    # Legacy IDs stay listed so saved rows remain valid and editable;
+    # LLMPrompt.clean() stops them being newly selected or activated.
     MODEL_CHOICES = [
-        ("o4-mini", "o4 Mini"),
-        ("gpt-4o-mini", "GPT 4o Mini"),
-        ("gpt-5-mini", "GPT 5 Mini"),
-        ("gpt-5-nano", "GPT 5 Nano"),
-        ("gpt-5-mini-2025-08-07", "GPT 5 Mini (2025-08-07)"),
-        ("gpt-5", "GPT 5"),
-        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+        ("claude-haiku-5-5", "Claude Haiku 5.5"),
         ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
-        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
-        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet")
+        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("gpt-5.6-sol", "GPT 5.6 Sol"),
+        ("gpt-5.6-terra", "GPT 5.6 Terra"),
+        ("gpt-5.6-luna", "GPT 5.6 Luna"),
+        ("gpt-4o-mini", "GPT 4o Mini"),
+        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5 (deprecated)"),
+        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet (retired)"),
+        ("o4-mini", "o4 Mini (deprecated)"),
+        ("gpt-5", "GPT 5 (deprecated)"),
+        ("gpt-5-mini", "GPT 5 Mini (deprecated)"),
+        ("gpt-5-nano", "GPT 5 Nano (deprecated)"),
+        ("gpt-5-mini-2025-08-07", "GPT 5 Mini 2025-08-07 (deprecated)"),
     ]
 
     APPLIES_TO_CHOICES = [
@@ -977,6 +1072,36 @@ class LLMPrompt(models.Model):
         help_text="If True, this prompt is the one currently used for generation",
     )
 
+    def clean(self):
+        """Reject selections that cannot be served.
+
+        Legacy rows keep their model for provenance and stay editable, but a
+        deprecated or retired model cannot be newly chosen or activated.
+        """
+        from hub.services.llm_models import ANTHROPIC, UnsupportedModelError, can_activate, provider_for
+
+        super().clean()
+        previous = (
+            LLMPrompt.objects.filter(pk=self.pk).values("model", "active", "applies_to").first()
+            if self.pk else None
+        )
+        newly_selected = previous is None or previous["model"] != self.model
+        newly_activated = self.active and (previous is None or not previous["active"])
+        newly_assigned = previous is None or previous["applies_to"] != self.applies_to
+        # Preserve legacy IDs for ordinary edits and deactivation. Validate
+        # provider compatibility when selecting, activating or changing workload.
+        if newly_selected or newly_activated or newly_assigned:
+            try:
+                provider = provider_for(self.model)
+            except UnsupportedModelError as exc:
+                raise ValidationError({"model": str(exc)})
+            if self.applies_to == "prayer_requests" and provider != ANTHROPIC:
+                raise ValidationError({"model": "Prayer request moderation supports Claude models only."})
+        if (newly_selected or newly_activated) and not can_activate(self.model):
+            raise ValidationError(
+                {"model": f"{self.model} is deprecated or retired; choose a supported model."}
+            )
+
     def save(self, *args, **kwargs):
         """Override save to ensure only one prompt can be active per applies_to type."""
         if self.active:
@@ -999,14 +1124,9 @@ class LLMPrompt(models.Model):
         Raises:
             ValueError: If the model type is not supported.
         """
-        from hub.services.llm_service import OpenAIService, AnthropicService
+        from hub.services.llm_service import get_llm_service
 
-        if self.model.startswith(("gpt", "o1", "o3", "o4")):
-            return OpenAIService()
-        elif "claude" in self.model:
-            return AnthropicService()
-        else:
-            raise ValueError(f"Unsupported model: {self.model}")
+        return get_llm_service(self.model)
 
     def __str__(self):
         status = " (Active)" if self.active else ""
@@ -1064,11 +1184,48 @@ class ReadingContext(models.Model):
 class FeastContext(models.Model):
     """Model for storing context for feast days, typically generated by an LLM."""
 
+    class Operation(models.TextChoices):
+        GENERATED = "generated", "Generated"
+        REGENERATED = "regenerated", "Regenerated"
+        MANUAL_EDIT = "manual_edit", "Manual edit"
+        RESTORED = "restored", "Restored"
+
     feast = models.ForeignKey(
         Feast,
         on_delete=models.CASCADE,
         related_name="contexts",
         help_text="The feast this context is for",
+    )
+    version = models.PositiveIntegerField(
+        default=1,
+        help_text="Monotonic version number within this feast's context history",
+    )
+    operation = models.CharField(
+        max_length=16,
+        choices=Operation.choices,
+        default=Operation.GENERATED,
+        help_text="The operation that created this context version",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_feast_contexts",
+        help_text="The staff user who created this context version",
+    )
+    additional_instructions = models.TextField(
+        blank=True,
+        default="",
+        help_text="Editorial instructions supplied when this version was generated",
+    )
+    restored_from = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restored_versions",
+        help_text="The prior version restored into this context version",
     )
     text = models.TextField(help_text="The generated context text (longer format)")
     short_text = models.TextField(
@@ -1099,6 +1256,17 @@ class FeastContext(models.Model):
 
     # Translations for user-facing fields
     i18n = TranslationField(fields=('text', 'short_text'))
+
+    class Meta:
+        # Do not add per-feast uniqueness here: feast consolidation reparents complete histories,
+        # and two source feasts can legitimately arrive with the same historical version numbers.
+        # Staff write paths must allocate the next version transactionally when they are added.
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1),
+                name="feast_context_version_positive",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if self.active:

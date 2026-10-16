@@ -15,6 +15,7 @@ from datetime import timedelta, timezone as dt_timezone
 import json
 import csv
 
+from .participation_analytics import analytics_events
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
 
 
@@ -236,7 +237,7 @@ class EventAdmin(admin.ModelAdmin):
         
         # Base queryset with engagement filters (exclude staff and pure analytics events)
         # Keep engagement analytics like DEVOTIONAL_VIEWED, CHECKLIST_USED, PRAYER_SET_VIEWED
-        base_qs = Event.objects.select_related('event_type', 'user', 'content_type')\
+        base_qs = analytics_events().select_related('event_type', 'user', 'content_type')\
             .exclude(user__is_staff=True)\
             .exclude(event_type__code__in=[
                 EventType.APP_OPEN,
@@ -573,7 +574,7 @@ class EventAdmin(admin.ModelAdmin):
         fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
 
         # Keep engagement analytics like DEVOTIONAL_VIEWED, CHECKLIST_USED, PRAYER_SET_VIEWED
-        base_qs = Event.objects.select_related('event_type', 'user', 'content_type')\
+        base_qs = analytics_events().select_related('event_type', 'user', 'content_type')\
             .exclude(user__is_staff=True)\
             .exclude(event_type__code__in=[
                 EventType.APP_OPEN,
