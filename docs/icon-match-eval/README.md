@@ -112,9 +112,38 @@ Read it with these caveats:
 5. **Latency.** Sonnet took 15-200s per case and one rubric case ran 707s against a 300s
    budget. Only the Celery feast path could carry it.
 
+## Clef judge
+
+`hub/services/icon_clef_judge.py` replaces the LLM's written verdicts with Cloudflare Clef
+probabilities and thresholds in code (the `prayers/clef_moderation.py` pattern). Two engines:
+
+- `--engine clef`: a lexical shortlist (words shared with the feast name, also matched inside
+  run-together titles), judged by Clef. No LLM call. Needs `CLOUDFLARE_WORKERSAI_ACCOUNT_ID`
+  and `CLOUDFLARE_WORKERSAI_API_KEY`.
+- `--engine llm+clef --profile control-v1`: the LLM matcher's positives, judged by Clef. Needs
+  both OpenAI and Cloudflare credentials.
+
+```bash
+python manage.py evaluate_icon_matching_cases --engine clef \
+  --catalogue-json hub/tests/data/icon_catalogue_snapshot_2026-09-13.json \
+  --cases-json     hub/tests/data/icon_match_cases_armenian_12.json \
+  --output-json    /tmp/clef.json --live
+```
+
+Each shortlisted icon costs one Clef call (three yes/no questions) plus one per feast. On the
+12 cases the lexical shortlist holds every labelled icon and is empty for *Holy Voskian
+Priests* and *Remembrance of the Dead*, so those two abstain without any call. That says
+nothing yet about the rest of the calendar, where Armenian names and synonyms will miss.
+
+**Not yet run against the live API.** `RUNG_THRESHOLD` (0.50) and `ASSIGN_THRESHOLD` (0.85)
+are starting points to tune here, the way `prayers/clef_moderation.py`'s were tuned on
+synthetic requests. Use full `clef`, not `clef-flash`, for anything that writes.
+
 ## Next steps
 
 - Run `control-v1` (and a newer OpenAI profile) through this harness to get a real baseline.
+- Run `--engine clef` and `--engine llm+clef` against the same cases and compare unsafe
+  assignments, desirable top-1 and seconds per feast.
 - Extend the cases: 91 of the 2026 calendar's 177 distinct feasts already carry a stored icon.
   Reviewing those is a gold set and a production data cleanup in one pass.
 - Decide the portrait-for-event question above and encode it as `assignable` labels.
