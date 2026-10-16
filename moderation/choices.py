@@ -17,9 +17,23 @@ ACTION_LABELS = {
 }
 
 
-def action_label(action, *, crisis=False):
+# A note is required only where someone later needs the reasoning: refusals,
+# escalations, crisis follow-up and problem reports. Routine approvals and
+# closures can be recorded in one step.
+NOTE_REQUIRED = {"reject", "escalated", "misclassification"}
+
+
+def note_required(action, *, crisis=False):
+    return action in NOTE_REQUIRED or (crisis and action == "acknowledge")
+
+
+def action_label(action, *, crisis=False, overturn=False):
     if action == "acknowledge" and crisis:
         return "Close after follow-up"
+    if action == "approve" and overturn:
+        return "Overturn rejection and publish"
+    if action == "acknowledge" and overturn:
+        return "Keep rejected"
     return ACTION_LABELS.get(action, action)
 
 

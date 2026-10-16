@@ -315,6 +315,19 @@ def moderate_prayer_request_task(self, prayer_request_id):
                     f"(severity={severity}, suggested_action={suggested_action}): {llm_result.get('reason')}"
                 )
 
+            # A word-list hit on a request the model would have approved is usually
+            # everyday language ("a damn hard market"): let a person decide.
+            elif not profanity_check["passed"] and suggested_action == "approve":
+                prayer_request.status = "pending_moderation"
+                prayer_request.requires_human_review = True
+                prayer_request.moderation_severity = "high"
+                prayer_request.moderation_result["reason"] = (
+                    "Contains a listed profanity word but otherwise reads as a genuine prayer request"
+                )
+                prayer_request.save()
+                _send_moderation_alert_email(prayer_request, "requires_review")
+                logger.info(f"Prayer request {prayer_request_id} has profanity but reads as genuine; sent to review")
+
             # Reject profanity only after the model has had a chance to escalate.
             elif not profanity_check["passed"]:
                 prayer_request.status = "rejected"

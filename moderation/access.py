@@ -19,9 +19,11 @@ def can(request, capability):
 
 
 def crisis_query(prefix=""):
-    return Q(**{f"{prefix}moderation_severity": "critical"}) | Q(
-        **{f"{prefix}moderation_result__llm_check__suggested_action": "escalate"}
-    )
+    # One indexed column. The moderation task writes "critical" for every
+    # escalation and migration 0002 backfilled older rows. Never test a JSON key
+    # here: a row without the key compares as NULL, and ``.exclude()`` would
+    # then hide it as well (failed moderations vanished from every queue).
+    return Q(**{f"{prefix}moderation_severity": "critical"})
 
 
 def hide_crisis(queryset, request, prefix=""):
@@ -30,11 +32,8 @@ def hide_crisis(queryset, request, prefix=""):
 
 
 def is_crisis(prayer):
-    result = prayer.moderation_result if isinstance(prayer.moderation_result, dict) else {}
-    evidence = result.get("llm_check")
-    return prayer.moderation_severity == "critical" or (
-        isinstance(evidence, dict) and evidence.get("suggested_action") == "escalate"
-    )
+    """Python twin of ``crisis_query``; the two must always agree."""
+    return prayer.moderation_severity == "critical"
 
 
 def visible_prayers(queryset, request):
