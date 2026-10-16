@@ -4,7 +4,7 @@ import json
 from functools import wraps
 
 from django.conf import settings
-from django.contrib import admin
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -19,11 +19,13 @@ from django.views.decorators.http import require_http_methods
 from hub.models import FeastContext, ReadingContext
 from icons.models import IconFeedback
 from prayers.models import PrayerRequest
-from moderation.access import can, is_crisis, visible_prayers
+from moderation.access import can, crisis_query, is_crisis, visible_prayers
 from moderation.models import Review
 from moderation.context import shell_context
 from moderation.choices import action_label, correct_decisions, published_test_cases
+from moderation.evidence import review_reason, summarize
 from moderation.forms import ReviewForm
+from prayers.review import publish_prayer_requests, reject_prayer_requests
 
 MODELS = {"prayer": PrayerRequest, "icon": IconFeedback, "reading": ReadingContext, "feast": FeastContext}
 
@@ -86,13 +88,19 @@ def outstanding_pks(kind, queryset):
 
 
 def describe(kind, obj):
+    flagged = None
     if kind == "prayer":
         label, text, stamp = obj.title, obj.description, obj.created_at
-        status = obj.get_status_display()
-        if obj.moderation_severity == "critical":
-            status = "CRISIS · " + status
-        elif obj.requires_human_review:
-            status = "Human review · " + status
+        flagged = obj.moderated_at or obj.created_at
+        if is_crisis(obj):
+            # Crisis requests are never published; "Rejected" read as turning someone away.
+            status = "Crisis · " + (
+                "Unpublished, needs follow-up" if obj.requires_human_review else "Unpublished, follow-up closed"
+            )
+        elif obj.requires_human_review or obj.status == "pending_moderation":
+            status = "Needs review · " + review_reason(obj)
+        else:
+            status = obj.get_status_display()
         source = "Request creation (not first flag)"
     elif kind == "icon":
         label, text, stamp = obj.icon_title_at_time or f"Icon #{obj.icon_id}", obj.description, obj.created_at
@@ -114,10 +122,64 @@ def describe(kind, obj):
         status=status,
         url=reverse("moderation-detail", args=[kind, obj.pk]),
         crisis=kind == "prayer" and is_crisis(obj),
+        flagged=flagged,
     )
 
 
 PAGE_SIZE = 25
+
+
+def queue_spec(kind):
+    """(needs-review filter, history filter, timestamp field) for a content type."""
+    if kind == "prayer":
+        return Q(requires_human_review=True) | Q(status="pending_moderation"), Q(status="rejected"), "created_at"
+    if kind == "icon":
+        return Q(is_resolved=False), Q(is_resolved=True), "created_at"
+    # Downvoted contexts stay queued after regeneration replaces them:
+    # the notice points at the downvoted text, not its successor.
+    threshold = getattr(settings, f"{kind.upper()}_CONTEXT_REGENERATION_THRESHOLD", 5)
+    return Q(thumbs_down__gte=threshold), Q(pk__in=[]), "time_of_generation"
+
+
+def visible_queues(request, selected=""):
+    """(title, kind, crisis) for each queue the user may see; crisis follow-up always comes first."""
+    queues = []
+    for kind in MODELS:
+        if selected and selected != kind:
+            continue
+        if kind == "prayer":
+            if can(request, "crisis"):
+                queues.append(("Crisis follow-up", kind, True))
+            if can(request, "general"):
+                queues.append(("Prayer", kind, False))
+        elif can(request, "general"):
+            queues.append((kind.title(), kind, None))
+    return queues
+
+
+def scoped(kind, request, crisis):
+    """Authorized objects, narrowed to crisis (True) or routine (False) prayers."""
+    queryset = authorized(kind, request)
+    if crisis is True:
+        return queryset.filter(crisis_query())
+    if crisis is False:
+        return queryset.exclude(crisis_query())
+    return queryset
+
+
+def outstanding(kind, request, crisis):
+    """Items in a queue whose current signal has no closing review, oldest first."""
+    queue, _, stamp = queue_spec(kind)
+    queryset = scoped(kind, request, crisis).filter(queue).order_by(stamp, "pk")
+    pks = outstanding_pks(kind, queryset)
+    # Signal IDs are not an authorization snapshot: moderation may
+    # reclassify or delete a prayer between these reads. Retain the
+    # permission and queue filters for both the count and final fetch.
+    return queryset.filter(pk__in=pks)
+
+
+def queue_crisis(kind, obj):
+    return is_crisis(obj) if kind == "prayer" else None
 
 
 @protected
@@ -126,41 +188,26 @@ def dashboard(request):
     groups = []
     selected = request.GET.get("type", "")
     audit = request.GET.get("status") == "audit"
-    for kind in MODELS:
-        if selected and selected != kind:
-            continue
-        if kind != "prayer" and not can(request, "general"):
-            continue
-        queryset = authorized(kind, request)
-        if kind == "prayer":
-            queue = Q(requires_human_review=True) | Q(status="pending_moderation")
-            history = Q(status="rejected")
-        elif kind == "icon":
-            queue, history = Q(is_resolved=False), Q(is_resolved=True)
-        else:
-            # Downvoted contexts stay queued after regeneration replaces them:
-            # the notice points at the downvoted text, not its successor.
-            threshold = getattr(settings, f"{kind.upper()}_CONTEXT_REGENERATION_THRESHOLD", 5)
-            queue, history = Q(thumbs_down__gte=threshold), Q(pk__in=[])
-        stamp = "time_of_generation" if kind in {"reading", "feast"} else "created_at"
+    for title, kind, crisis in visible_queues(request, selected):
+        _, history, stamp = queue_spec(kind)
         if audit:
             # Audit = everything already decided: rejected/resolved, or carrying a human review.
             reviewed_ids = Review.objects.filter(kind=kind).values("object_id")
-            queryset = queryset.filter(history | Q(pk__in=reviewed_ids)).order_by(f"-{stamp}", "-pk")
-            count = queryset.count()
-            objects = list(queryset[:PAGE_SIZE])
+            queryset = scoped(kind, request, crisis).filter(history | Q(pk__in=reviewed_ids))
+            queryset = queryset.order_by(f"-{stamp}", "-pk")
         else:
-            queryset = queryset.filter(queue).order_by(stamp, "pk")
-            pks = outstanding_pks(kind, queryset)
-            # Signal IDs are not an authorization snapshot: moderation may
-            # reclassify or delete a prayer between these reads. Retain the
-            # permission and queue filters for both the count and final fetch.
-            outstanding = queryset.filter(pk__in=pks)
-            count = outstanding.count()
-            objects = list(outstanding[:PAGE_SIZE])
-        items = [describe(kind, obj) for obj in objects]
+            queryset = outstanding(kind, request, crisis)
+        count = queryset.count()
+        items = [describe(kind, obj) for obj in queryset[:PAGE_SIZE]]
         groups.append(
-            dict(kind=kind, count=count, oldest=None if audit else (items[0] if items else None), items=items)
+            dict(
+                kind=kind,
+                title=title,
+                crisis=bool(crisis),
+                count=count,
+                oldest=None if audit else (items[0] if items else None),
+                items=items,
+            )
         )
     return render(
         request,
@@ -176,6 +223,35 @@ def dashboard(request):
     )
 
 
+CLOSING_ACTIONS = {"approve", "reject", "acknowledge", "resolve", "escalated"}
+
+
+def available_actions(kind, obj, crisis):
+    if crisis:
+        return ["acknowledge", "misclassification", "escalated"]
+    if kind == "prayer" and obj.status == "pending_moderation":
+        return ["approve", "reject", "misclassification"]
+    if kind == "prayer" and obj.status == "rejected":
+        # A reviewer can overturn an automated or earlier rejection.
+        return ["approve", "acknowledge", "misclassification"]
+    if kind == "icon":
+        return ["misclassification"] if obj.is_resolved else ["resolve", "misclassification"]
+    return ["acknowledge", "misclassification"]
+
+
+def after_review(request, kind, obj, label, action):
+    """Send the reviewer on to the next item in the same queue."""
+    if action not in CLOSING_ACTIONS:
+        messages.success(request, "Problem report saved. This item stays in the review queue.")
+        return redirect("moderation-detail", kind=kind, pk=obj.pk)
+    upcoming = outstanding(kind, request, queue_crisis(kind, obj)).exclude(pk=obj.pk).first()
+    if upcoming is None:
+        messages.success(request, f"Decision saved: {label}. This queue is now clear.")
+        return redirect("moderation-dashboard")
+    messages.success(request, f"Decision saved: {label}. Here is the next item in the queue.")
+    return redirect("moderation-detail", kind=kind, pk=upcoming.pk)
+
+
 @protected
 @require_http_methods(["GET", "POST"])
 def detail(request, kind, pk):
@@ -184,15 +260,16 @@ def detail(request, kind, pk):
         if kind == "prayer":
             queryset = queryset.select_related("requester")
         obj = get_object_or_404(queryset, pk=pk)
-        actions = ["acknowledge", "misclassification"]
         crisis = kind == "prayer" and is_crisis(obj)
-        if kind == "prayer" and not crisis and obj.status == "pending_moderation":
-            actions = ["approve", "reject", "misclassification"]
-        if kind == "icon":
-            actions = ["misclassification"] if obj.is_resolved else ["resolve", "misclassification"]
-        if crisis:
-            actions += ["escalated"]
-        form = ReviewForm(request.POST if request.method == "POST" else None, kind=kind, actions=actions, crisis=crisis)
+        overturn = kind == "prayer" and not crisis and obj.status == "rejected"
+        actions = available_actions(kind, obj, crisis)
+        form = ReviewForm(
+            request.POST if request.method == "POST" else None,
+            kind=kind,
+            actions=actions,
+            crisis=crisis,
+            overturn=overturn,
+        )
         if request.method == "POST":
             action = request.POST.get("action", "")
             if action and action not in actions:
@@ -204,10 +281,11 @@ def detail(request, kind, pk):
             expected = form.cleaned_data["expected_outcome"]
             reference = form.cleaned_data["regression_reference"]
             signal = version(kind, obj)
-            if action in {"approve", "reject"}:
-                # Reuse existing event, milestone and acceptance behavior.
-                handler = admin.site._registry[PrayerRequest]
-                getattr(handler, f"{action}_requests")(request, PrayerRequest.objects.filter(pk=pk))
+            if action == "approve":
+                # Same events, milestone and acceptance as automated approval.
+                publish_prayer_requests(PrayerRequest.objects.filter(pk=pk), restart_expiration=overturn)
+            elif action == "reject":
+                reject_prayer_requests(PrayerRequest.objects.filter(pk=pk))
             elif kind == "prayer" and action != "misclassification":
                 obj.requires_human_review = False
                 obj.reviewed = True
@@ -227,7 +305,8 @@ def detail(request, kind, pk):
                 regression_reference=reference,
                 signal_version=signal,
             )
-            return redirect("moderation-detail", kind=kind, pk=pk)
+            obj.refresh_from_db()
+            return after_review(request, kind, obj, action_label(action, crisis=crisis, overturn=overturn), action)
         history = list(Review.objects.filter(kind=kind, object_id=pk).select_related("reviewer"))
         expected_labels = dict(correct_decisions(kind))
         test_labels = dict(published_test_cases()) if kind == "prayer" else {}
@@ -240,9 +319,11 @@ def detail(request, kind, pk):
         if request.user.is_staff and request.user.has_perm(f"{opts.app_label}.view_{opts.model_name}"):
             admin_url = reverse(f"admin:{opts.app_label}_{opts.model_name}_change", args=[pk])
         item = describe(kind, obj)
-        evidence = None
+        evidence = summary = None
         if kind == "prayer" and obj.moderation_result:
             evidence = json.dumps(obj.moderation_result, indent=2, sort_keys=True, default=str)
+            summary = summarize(obj)
+        needs_review = outstanding(kind, request, queue_crisis(kind, obj)).filter(pk=pk).exists()
         return render(
             request,
             "moderation/detail.html",
@@ -253,8 +334,11 @@ def detail(request, kind, pk):
                 form=form,
                 history=history,
                 crisis=crisis,
+                overturn=overturn,
+                needs_review=needs_review,
                 admin_url=admin_url,
                 evidence=evidence,
+                summary=summary,
             ),
             status=400 if form.errors else 200,
         )

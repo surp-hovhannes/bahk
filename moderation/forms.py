@@ -4,7 +4,7 @@ from django.contrib.auth.views import LoginView
 from django.urls import reverse
 
 from moderation.context import shell_context
-from moderation.choices import action_label, correct_decisions, published_test_cases
+from moderation.choices import action_label, correct_decisions, note_required, published_test_cases
 
 
 class ReviewForm(forms.Form):
@@ -15,6 +15,7 @@ class ReviewForm(forms.Form):
     )
     note = forms.CharField(
         label="Notes",
+        required=False,
         max_length=4000,
         error_messages={
             "required": "Add a note explaining your decision.",
@@ -37,18 +38,27 @@ class ReviewForm(forms.Form):
         widget=forms.Select(attrs={"id": "review-reference", "aria-describedby": "review-reference-help"}),
     )
 
-    def __init__(self, *args, kind, actions, crisis=False, **kwargs):
+    def __init__(self, *args, kind, actions, crisis=False, overturn=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.crisis = crisis
         self.fields["action"].choices = [("", "Choose a decision…")] + [
-            (value, action_label(value, crisis=crisis)) for value in actions
+            (value, action_label(value, crisis=crisis, overturn=overturn)) for value in actions
         ]
+        # The page script marks the note required for these decisions as the reviewer picks one.
+        self.fields["action"].widget.attrs["data-note-required"] = " ".join(
+            value for value in actions if note_required(value, crisis=crisis)
+        )
         self.fields["expected_outcome"].choices = [("", "Choose the correct decision…")] + list(correct_decisions(kind))
         self.test_cases = published_test_cases() if kind == "prayer" else ()
         self.fields["regression_reference"].choices = [("", "No related test case")] + list(self.test_cases)
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get("action") == "misclassification" and not cleaned.get("expected_outcome"):
+        action = cleaned.get("action")
+        if action and note_required(action, crisis=self.crisis) and not cleaned.get("note"):
+            if "note" not in self.errors:
+                self.add_error("note", self.fields["note"].error_messages["required"])
+        if action == "misclassification" and not cleaned.get("expected_outcome"):
             if "expected_outcome" not in self.errors:
                 self.add_error("expected_outcome", "Choose the decision you think is correct.")
         return cleaned

@@ -47,8 +47,9 @@
     </div>
     <div class="fp-admin-section__grid">
       {% for group in groups %}
-      <article class="module fp-admin-app">
-        <h3><span class="fp-admin-app__title">{% include "admin/includes/icon.html" with name="model" %}{{ group.kind|title }} · {{ group.count }}</span></h3>
+      <article class="module fp-admin-app{% if group.crisis %} fp-review-group--crisis{% endif %}">
+        <h3><span class="fp-admin-app__title">{% include "admin/includes/icon.html" with name=group.crisis|yesno:"shield,model" %}{{ group.title }} · {{ group.count }}</span></h3>
+        {% if group.crisis and not audit %}<div class="form-row"><p class="help">Possible risk of harm. Designated reviewers only; contact the requester before closing.</p></div>{% endif %}
         {% if group.oldest %}
         <div class="form-row">
           <p class="help">Oldest source date: {{ group.oldest.timestamp|default:'Unknown' }}{% if group.oldest.timestamp %} ({{ group.oldest.timestamp|timesince }} ago){% endif %} · {{ group.oldest.source }}</p>
@@ -61,7 +62,7 @@
               {% for item in group.items %}
               <tr>
                 <th scope="row"><a class="fp-model-link" href="{{ item.url }}">{{ item.label }}</a></th>
-                <td><span class="fp-admin-state fp-admin-state--{% if item.crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span></td>
+                <td><span class="fp-admin-state fp-admin-state--{% if item.crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span>{% if item.crisis and item.flagged and not audit %}<p class="help fp-review-waiting">Flagged {{ item.flagged|timesince }} ago</p>{% endif %}</td>
                 <td>{{ item.timestamp|default:'Unknown' }}</td>
               </tr>
               {% empty %}<tr><td colspan="3">{% if audit %}No review history yet.{% else %}No items need review.{% endif %}</td></tr>{% endfor %}
