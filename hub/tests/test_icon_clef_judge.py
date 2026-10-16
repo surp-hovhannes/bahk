@@ -69,7 +69,7 @@ class PlacementTests(SimpleTestCase):
     def test_ladder_and_assignment(self):
         self.assertEqual(place(probs(event=0.9), True), ("exact_event", 0.9))
         self.assertEqual(place(probs(figures=0.9), False), ("exact_subject", 0.9))
-        # A portrait for an event feast is a suggestion, never an assignment.
+        # A portrait for an event feast sits below any depiction of the event.
         self.assertEqual(place(probs(figures=0.95), True), ("subject_portrait", 0.95))
         self.assertEqual(place(probs(related=0.7), False), ("related_specific", 0.7))
         self.assertEqual(place(probs(), True), (None, 0.0))
@@ -93,12 +93,25 @@ class JudgeTests(SimpleTestCase):
         self.assertEqual(outcome.call_count, 3)
         self.assertIn("clef_shortlist:lexical:2", outcome.diagnostics)
 
-    def test_portrait_for_event_feast_is_suggested_not_assigned(self):
+    def test_portrait_is_assigned_when_no_event_depiction_is_shortlisted(self):
         clef = FakeClef(names_event=0.95, by_title={"St. John the Baptist": probs(figures=0.97, related=0.99)})
         outcome = judge_icons(CATALOGUE, "Beheading of St. John the Forerunner (Baptist)", run=clef)
         self.assertEqual(outcome.matches[0]["id"], 3)
         self.assertEqual(outcome.matches[0]["relation"], "subject_portrait")
-        self.assertFalse(outcome.matches[0]["auto_assignable"])
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
+
+    def test_portrait_is_only_suggested_when_the_event_may_be_shortlisted(self):
+        # A possible depiction of the event, even one too uncertain to assign, outranks the portrait.
+        clef = FakeClef(
+            names_event=0.95,
+            by_title={
+                "St. John the Baptist": probs(figures=0.97, related=0.99),
+                "StGregoryofTatevandStJohnofVorodn": probs(event=0.6, related=0.7),
+            },
+        )
+        outcome = judge_icons(CATALOGUE, "Beheading of St. John the Forerunner (Baptist)", run=clef)
+        self.assertEqual([m["id"] for m in outcome.matches], [4, 3])
+        self.assertEqual([m["auto_assignable"] for m in outcome.matches], [False, False])
 
     def test_unrelated_candidates_are_omitted(self):
         outcome = judge_icons(CATALOGUE, "Feast of the Holy Cross", run=FakeClef())

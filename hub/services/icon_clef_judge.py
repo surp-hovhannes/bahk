@@ -111,12 +111,18 @@ def place(probabilities, names_event):
     return None, 0.0
 
 
-def assignable(relation, strength):
-    """Only a near-certain direct depiction is written without a human.
+def assignable(relation, strength, *, event_shortlisted=False):
+    """Only a near-certain depiction is written without a human.
 
-    A portrait for an event feast (subject_portrait) is suggested, never assigned.
+    A portrait of the commemorated saint for an event feast (subject_portrait)
+    is written only when no shortlisted icon reached the event rung: if the
+    catalogue may hold the event itself, that is the more specific depiction.
     """
-    return relation in ("exact_event", "exact_subject") and strength >= ASSIGN_THRESHOLD
+    if strength < ASSIGN_THRESHOLD:
+        return False
+    if relation == "subject_portrait":
+        return not event_shortlisted
+    return relation in ("exact_event", "exact_subject")
 
 
 def _confidence(strength):
@@ -175,7 +181,7 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
     outcome.call_count += len(shortlist)
 
     failures = sum(1 for _, probabilities in judged if probabilities is None)
-    matches = []
+    matches, strengths = [], {}
     for record, probabilities in judged:
         if probabilities is None:
             continue
@@ -191,10 +197,13 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
                 "relevance": round(strength * 100),
                 "reason": ", ".join(f"{name}={value:.2f}" for name, value in probabilities.items()),
                 "probabilities": probabilities,
-                "auto_assignable": assignable(relation, strength),
                 "provenance": "clef_judge",
             }
         )
+        strengths[record["id"]] = strength
+    event_shortlisted = any(m["relation"] == "exact_event" for m in matches)
+    for m in matches:
+        m["auto_assignable"] = assignable(m["relation"], strengths[m["id"]], event_shortlisted=event_shortlisted)
     matches.sort(key=lambda m: (RANK.index(m["relation"]), -m["relevance"], m["id"]))
     outcome.matches = matches[:max_results]
     if failures:
