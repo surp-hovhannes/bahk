@@ -18,12 +18,14 @@ class ClefError(Exception):
     """Raised when Clef cannot return a usable answer."""
 
 
-def run_clef(state, questions, *, model="clef", timeout=20):
+def run_clef(state, questions, *, model="clef", timeout=20, images=None):
     """Ask Clef ``questions`` about ``state`` and return its ``answers`` dict.
 
     ``questions`` maps question ids to definitions, e.g.
     ``{"spam": {"type": "noul", "instructions": "Is this spam?"}}``. Every
     question id is guaranteed to be present in the returned answers.
+    ``images`` is an optional list of up to four base64 data URLs (PNG, JPEG or
+    WebP) that Clef reads before the state; it does not accept remote URLs.
     """
     reject_public_work("llm")
     if model not in CLEF_MODELS:
@@ -36,7 +38,7 @@ def run_clef(state, questions, *, model="clef", timeout=20):
     try:
         response = requests.post(
             CLEF_URL.format(account_id=account_id, model=model),
-            json={"model": model, "state": state, "questions": questions},
+            json={"model": model, "state": state, "questions": questions, **({"images": images} if images else {})},
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=timeout,
         )

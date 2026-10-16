@@ -154,6 +154,10 @@ python manage.py evaluate_icon_matching_cases --engine clef \
   --output-json    /tmp/clef.json --live
 ```
 
+`--clef-images` also sends each shortlisted icon's image, downloaded from the `thumbnail_url`
+on each catalogue record (public S3 thumbnails, added to the snapshot from `/api/icons/` on
+2026-10-16).
+
 Each shortlisted icon costs one Clef call (three yes/no questions) plus one per feast. On the
 12 cases the lexical shortlist holds every labelled icon and is empty for *Holy Voskian
 Priests* and *Remembrance of the Dead*, so those two abstain without any call. That says
@@ -192,6 +196,31 @@ nothing yet about the rest of the calendar, where Armenian names and synonyms wi
   *St. Elisha* 0.73 as depicting the Prophet Elijah, so similar names can still mislead it.
 - *Palm Sunday 2* (icon 325), ranked second, is probably a correct Palm Sunday icon missing
   from the labels.
+
+### Closing the assignment gap
+
+Five of the 12 cases have an icon that may be written automatically (the four `exact_exists`
+cases, and the Beheading of St. John once portraits were allowed). What each change did, live,
+with `ASSIGN_THRESHOLD` at 0.85:
+
+| Run | Desirable top-1 | Auto-assigned (of 5) | Unsafe |
+|---|---|---|---|
+| gpt-4.1-mini, 3 runs | 6, 7, 6 | 3, 3, 3 | 2, 0, 1 |
+| Clef, metadata only (`results-clef-run3-portraits.json`) | 10 | 2 | 0 |
+| **Clef + icon image** (`results-clef-images-run1.json`, `--clef-images`) | **10** | **3** | **0** |
+| Clef + image + the feast's generated description | 8 | 2 | 1 |
+| Clef + image + explicit yes/no `criteria` | 9 | 3 | 0 |
+
+- **Images help.** Lazarus (`IlluminatedManuscript1450(5)`) rises from 0.79 to 0.90 and is
+  assigned, and the *St. Elisha* name confusion disappears. Clef now matches gpt-4.1-mini's
+  assignment rate with no unsafe write.
+- **Descriptions hurt**: a long description dilutes the yes/no questions. Not kept.
+- **Explicit criteria are noise at this size**: they traded the Lazarus assignment for Hripsime
+  and turned Elijah wrong. Not kept.
+- **The remaining gap is calibration, not wording.** With images, the remaining correct icons
+  (Forty Martyrs 0.81, Hripsime 0.77) score level with the wrong ones (a Crucifixion for the Holy
+  Cross 0.80, the Last Judgment for the Sunday of the Judge 0.82), so no threshold separates
+  them on these 12 cases. More labelled feasts are what will move it.
 
 Use full `clef`, not `clef-flash`, for anything that writes.
 

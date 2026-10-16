@@ -7,8 +7,10 @@ Labels are editorial judgements about a catalogue, not ground truth - extend
 report to see what the new labels say about it without paying for another run.
 """
 
+import base64
 import json
 import time
+import urllib.request
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
@@ -150,12 +152,41 @@ def evaluate_cases(catalogue, cases, profile, *, provider_factory=None, arm_time
     return {"profile": profile.metadata(), **run_cases(cases, match_case)}
 
 
-def evaluate_cases_clef(catalogue, cases, *, model="clef", profile=None, provider_factory=None, arm_timeout=None):
+IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
+
+
+def url_image_loader(catalogue, *, timeout=20):
+    """``image_for`` for the Clef judge, from each record's public ``thumbnail_url``.
+
+    Returns a base64 data URL, or None when a record has no URL or the download
+    is not a PNG, JPEG or WebP image. Downloads are cached for the run.
+    """
+    urls = {record["id"]: record.get("thumbnail_url") for record in catalogue}
+    cache = {}
+
+    def image_for(icon_id):
+        if icon_id not in cache:
+            cache[icon_id] = None
+            if urls.get(icon_id):
+                with urllib.request.urlopen(urls[icon_id], timeout=timeout) as response:
+                    content_type = response.headers.get_content_type()
+                    if content_type in IMAGE_TYPES:
+                        encoded = base64.b64encode(response.read()).decode()
+                        cache[icon_id] = f"data:{content_type};base64,{encoded}"
+        return cache[icon_id]
+
+    return image_for
+
+
+def evaluate_cases_clef(
+    catalogue, cases, *, model="clef", profile=None, provider_factory=None, arm_timeout=None, image_for=None
+):
     """Run every case through the Clef judge.
 
     Without ``profile`` the shortlist is lexical and no LLM is called. With one,
     the LLM matcher's positives are the shortlist and Clef makes the decision;
     a shortlist from an incomplete LLM outcome keeps the outcome ``partial``.
+    With ``image_for``, Clef also sees each shortlisted icon's image.
     """
     shortlister = None
     if profile is not None:
@@ -169,10 +200,14 @@ def evaluate_cases_clef(catalogue, cases, *, model="clef", profile=None, provide
 
     def match_case(case):
         if shortlister is None:
-            return judge_icons(catalogue, case["feast"], model=model)
+            return judge_icons(catalogue, case["feast"], model=model, image_for=image_for)
         shortlisted = shortlister(case)
         outcome = judge_icons(
-            catalogue, case["feast"], candidate_ids=[m["id"] for m in shortlisted.matches], model=model
+            catalogue,
+            case["feast"],
+            candidate_ids=[m["id"] for m in shortlisted.matches],
+            model=model,
+            image_for=image_for,
         )
         outcome.diagnostics.append(f"llm_shortlist_status:{shortlisted.status}")
         if shortlisted.status != "complete" and outcome.status == "complete":
@@ -183,6 +218,7 @@ def evaluate_cases_clef(catalogue, cases, *, model="clef", profile=None, provide
         "engine": "llm+clef" if profile else "clef",
         "clef_model": model,
         "thresholds": {"rung": RUNG_THRESHOLD, "assign": ASSIGN_THRESHOLD},
+        "images": image_for is not None,
         "shortlist": profile.metadata() if profile else {"source": "lexical", "limit": SHORTLIST_LIMIT},
     }
     return {"profile": engine, **run_cases(cases, match_case)}
@@ -227,6 +263,11 @@ class Command(BaseCommand):
         parser.add_argument("--engine", choices=("llm", "clef", "llm+clef"), default="llm")
         parser.add_argument("--profile", choices=tuple(REGISTERED_PROFILES))
         parser.add_argument("--clef-model", choices=CLEF_MODELS, default="clef")
+        parser.add_argument(
+            "--clef-images",
+            action="store_true",
+            help="Send each shortlisted icon's image to Clef, from the catalogue's thumbnail_url fields",
+        )
         parser.add_argument("--live", action="store_true")
         parser.add_argument("--rescore-json")
         parser.add_argument("--arm-timeout", type=float)
@@ -265,6 +306,7 @@ class Command(BaseCommand):
                         catalogue,
                         cases,
                         model=options["clef_model"],
+                        image_for=url_image_loader(catalogue) if options["clef_images"] else None,
                         profile=profile,
                         arm_timeout=options["arm_timeout"],
                     )

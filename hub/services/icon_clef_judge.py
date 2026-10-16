@@ -95,9 +95,10 @@ def lexical_shortlist(feast, records, limit=SHORTLIST_LIMIT):
     return [record for _, _, record in sorted(scored, key=lambda item: item[:2])[:limit]]
 
 
-def icon_state(feast, record):
+def icon_state(feast, record, *, with_image=False):
     tags = ", ".join(record["tags"]) or "(none)"
-    return f"Commemoration: {feast}\nIcon title: {record['title']}\nIcon tags: {tags}"
+    state = f"Commemoration: {feast}\nIcon title: {record['title']}\nIcon tags: {tags}"
+    return state + "\nThe icon's image is attached." if with_image else state
 
 
 def place(probabilities, names_event):
@@ -129,7 +130,7 @@ def _confidence(strength):
     return "high" if strength >= ASSIGN_THRESHOLD else ("medium" if strength >= 0.65 else "low")
 
 
-def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max_results=5):
+def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max_results=5, image_for=None):
     """Judge a shortlist for ``feast`` and return an ``IconMatchOutcome``.
 
     ``candidate_ids`` supplies the shortlist (for example an LLM matcher's
@@ -138,6 +139,10 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
     screened out before Clef. Any failed Clef call makes the outcome
     ``partial``, which ``icon_tasks`` never assigns from, because the failed
     icon might have been the better match.
+
+    ``image_for(icon_id)`` may return the icon's image as a base64 data URL;
+    Clef then judges the picture as well as its title and tags. An icon whose
+    image is unavailable is judged on its metadata alone.
     """
     # Checked here because worker threads would not see the request context otherwise.
     reject_public_work("llm")
@@ -157,8 +162,9 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
         outcome.elapsed_seconds = round(time.monotonic() - started, 3)
         return outcome
 
-    def ask(state, questions):
-        return noul_probabilities(run(state, questions, model=model), questions)
+    def ask(state, questions, images=None):
+        answers = run(state, questions, model=model, images=images) if images else run(state, questions, model=model)
+        return noul_probabilities(answers, questions)
 
     try:
         names_event = ask(f"Commemoration: {feast}", FEAST_QUESTIONS)["names_event"] >= RUNG_THRESHOLD
@@ -170,9 +176,14 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
 
     def judge(record):
         try:
-            return record, ask(icon_state(feast, record), ICON_QUESTIONS)
+            image = image_for(record["id"]) if image_for else None
+        except Exception:
+            image = None
+        try:
+            state = icon_state(feast, record, with_image=bool(image))
+            return record, ask(state, ICON_QUESTIONS, [image] if image else None), bool(image)
         except (ClefError, RuntimeError):
-            return record, None
+            return record, None, bool(image)
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         # One context copy per call, taken here so each worker sees this request's context.
@@ -180,9 +191,11 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
         judged = [future.result() for future in futures]
     outcome.call_count += len(shortlist)
 
-    failures = sum(1 for _, probabilities in judged if probabilities is None)
+    failures = sum(1 for _, probabilities, _ in judged if probabilities is None)
+    if image_for:
+        outcome.diagnostics.append(f"clef_images:{sum(1 for *_, imaged in judged if imaged)}/{len(judged)}")
     matches, strengths = [], {}
-    for record, probabilities in judged:
+    for record, probabilities, _ in judged:
         if probabilities is None:
             continue
         relation, strength = place(probabilities, names_event)
