@@ -112,9 +112,32 @@ Read it with these caveats:
 5. **Latency.** Sonnet took 15-200s per case and one rubric case ran 707s against a 300s
    budget. Only the Celery feast path could carry it.
 
+### Live baseline: gpt-4.1-mini through this harness
+
+`results-control-v1-run{1,2,3}.json`: the production profile (`control-v1`, gpt-4.1-mini),
+three runs on 2026-10-16 through this harness with the coverage fix
+(`fix/icon-match-coverage-cascade`) applied and the Celery path's default limits.
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| Desirable top-1 | 6 / 12 | 7 / 12 | 6 / 12 |
+| `exact_exists`: exact | 3 / 4 | 4 / 4 | 4 / 4 |
+| `fallback_only`: acceptable | 2 / 4 | 1 / 4 | 0 / 4 |
+| `nothing_suitable`: abstained | 1 / 4 | 2 / 4 | 2 / 4 |
+| Errors (`unavailable`) | 2 | 0 | 0 |
+| Assigned / **unsafe** | 3 / **2** | 3 / 0 | 4 / **1** |
+| Median seconds per feast | 6.3 | 6.2 | 6.4 |
+
+The production matcher **writes wrong icons**: in two of three runs it auto-assigned
+*Crucifixion* (icon 124) to *Feast of the Holy Cross*, and once *Bishop Mark of Arethusa and the
+Deacon Cyril* (icon 76) to *Holy Voskian Priests*, as `exact_subject` with high confidence,
+because both are "clergy martyrs". Neither involved a discarded row, so the coverage fix did not
+cause them; the same outcomes assign on `main`. It is also unstable: the same feast flips between
+verdicts from run to run, so a single run of this matcher is not evidence of much.
+
 ## Next steps
 
-- Run `control-v1` (and a newer OpenAI profile) through this harness to get a real baseline.
+- Run a newer OpenAI profile through this harness for comparison.
 - Extend the cases: 91 of the 2026 calendar's 177 distinct feasts already carry a stored icon.
   Reviewing those is a gold set and a production data cleanup in one pass. Against production:
 
