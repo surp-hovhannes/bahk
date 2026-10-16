@@ -112,6 +112,29 @@ Read it with these caveats:
 5. **Latency.** Sonnet took 15-200s per case and one rubric case ran 707s against a 300s
    budget. Only the Celery feast path could carry it.
 
+### Live baseline: gpt-4.1-mini through this harness
+
+`results-control-v1-run{1,2,3}.json`: the production profile (`control-v1`, gpt-4.1-mini),
+three runs on 2026-10-16 through this harness with the coverage fix
+(`fix/icon-match-coverage-cascade`) applied and the Celery path's default limits.
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| Desirable top-1 | 6 / 12 | 7 / 12 | 6 / 12 |
+| `exact_exists`: exact | 3 / 4 | 4 / 4 | 4 / 4 |
+| `fallback_only`: acceptable | 2 / 4 | 1 / 4 | 0 / 4 |
+| `nothing_suitable`: abstained | 1 / 4 | 2 / 4 | 2 / 4 |
+| Errors (`unavailable`) | 2 | 0 | 0 |
+| Assigned / **unsafe** | 3 / **2** | 3 / 0 | 4 / **1** |
+| Median seconds per feast | 6.3 | 6.2 | 6.4 |
+
+The production matcher **writes wrong icons**: in two of three runs it auto-assigned
+*Crucifixion* (icon 124) to *Feast of the Holy Cross*, and once *Bishop Mark of Arethusa and the
+Deacon Cyril* (icon 76) to *Holy Voskian Priests*, as `exact_subject` with high confidence,
+because both are "clergy martyrs". Neither involved a discarded row, so the coverage fix did not
+cause them; the same outcomes assign on `main`. It is also unstable: the same feast flips between
+verdicts from run to run, so a single run of this matcher is not evidence of much.
+
 ## Clef judge
 
 `hub/services/icon_clef_judge.py` replaces the LLM's written verdicts with Cloudflare Clef
@@ -135,15 +158,46 @@ Each shortlisted icon costs one Clef call (three yes/no questions) plus one per 
 Priests* and *Remembrance of the Dead*, so those two abstain without any call. That says
 nothing yet about the rest of the calendar, where Armenian names and synonyms will miss.
 
-**Not yet run against the live API.** `RUNG_THRESHOLD` (0.50) and `ASSIGN_THRESHOLD` (0.85)
-are starting points to tune here, the way `prayers/clef_moderation.py`'s were tuned on
-synthetic requests. Use full `clef`, not `clef-flash`, for anything that writes.
+### Live results
+
+`results-clef-run{1,2}.json` (lexical shortlist, no LLM) and `results-llm-clef-run1.json`
+(gpt-4.1-mini positives judged by Clef), 2026-10-16, full `clef` model, thresholds as committed.
+
+| | gpt-4.1-mini (3 runs) | Clef, lexical shortlist | gpt-4.1-mini shortlist + Clef |
+|---|---|---|---|
+| Desirable top-1 | 6, 7, 6 / 12 | **10 / 12** (both runs) | 6 / 12 |
+| `exact_exists`: exact | 3, 4, 4 / 4 | 3 / 4 | 2 / 4 |
+| `fallback_only`: acceptable | 2, 1, 0 / 4 | **3 / 4** | 1 / 4 |
+| `nothing_suitable`: abstained | 1, 2, 2 / 4 | **3 / 4** | 2 / 4 |
+| `complete` | 10, 12, 12 | **12** | 11 |
+| Assigned / **unsafe** | 3/**2**, 3/0, 4/**1** | 1 / **0** | 1 / **0** |
+| Median seconds per feast | ~6.3 | **~2** | ~8 |
+
+- **Clef with the lexical shortlist is the best arm here**: more desirable answers, no unsafe
+  writes, every outcome `complete`, about three times faster, and the two runs were identical
+  apart from timing. The gpt-4.1-mini runs disagreed with each other on several feasts.
+- **The LLM shortlist is the bottleneck in `llm+clef`.** Clef can only judge what gpt-4.1-mini
+  returned, so its misses (Elijah, Sunday of the Judge, Lazarus) stay misses.
+- **Clef is too cautious to assign.** It wrote only Palm Sunday. The correct icons for Lazarus
+  (0.79), Hripsime (0.78) and the Forty Martyrs (0.63-0.71) fall under `ASSIGN_THRESHOLD`
+  (0.85). Re-scoring the saved probabilities offline: at 0.75 Clef assigns Palm Sunday, Lazarus
+  and Hripsime with no unsafe write; at 0.70 it also writes a Crucifixion icon to the Holy
+  Cross, and icon 218 (the run-together Forty Martyrs title, labelled acceptable but not
+  assignable) to the Forty Martyrs. The margin is a few hundredths on one case each, so the threshold stays at 0.85 until
+  a larger labelled set can set it.
+- **Its errors are the debatable cases.** Top picks of a Crucifixion for the Holy Cross and
+  St. Gregory of Tatev icons for a feast that commemorates him (the label wants icon 175, which
+  shows two of the four saints) are scored `wrong` under the current labels. It also rated
+  *St. Elisha* 0.73 as depicting the Prophet Elijah, so similar names can still mislead it.
+- *Palm Sunday 2* (icon 325), ranked second, is probably a correct Palm Sunday icon missing
+  from the labels.
+
+Use full `clef`, not `clef-flash`, for anything that writes.
 
 ## Next steps
 
-- Run `control-v1` (and a newer OpenAI profile) through this harness to get a real baseline.
-- Run `--engine clef` and `--engine llm+clef` against the same cases and compare unsafe
-  assignments, desirable top-1 and seconds per feast.
+- Label more feasts, then set `ASSIGN_THRESHOLD` from them rather than from these 12.
+- Run a newer OpenAI profile through this harness for comparison.
 - Extend the cases: 91 of the 2026 calendar's 177 distinct feasts already carry a stored icon.
   Reviewing those is a gold set and a production data cleanup in one pass. Against production:
 

@@ -1,0 +1,747 @@
+{
+  "profile": {
+    "engine": "clef",
+    "clef_model": "clef",
+    "thresholds": {
+      "rung": 0.5,
+      "assign": 0.85
+    },
+    "shortlist": {
+      "source": "lexical",
+      "limit": 24
+    }
+  },
+  "case_count": 12,
+  "verdicts": {
+    "exact": 3,
+    "acceptable": 4,
+    "wrong": 2,
+    "abstained": 3,
+    "missed": 0,
+    "error": 0
+  },
+  "desirable_count": 10,
+  "by_expectation": {
+    "exact_exists": {
+      "exact": 3,
+      "acceptable": 1
+    },
+    "fallback_only": {
+      "acceptable": 3,
+      "wrong": 1
+    },
+    "nothing_suitable": {
+      "abstained": 3,
+      "wrong": 1
+    }
+  },
+  "complete_count": 12,
+  "assigned_count": 1,
+  "unsafe_assignment_count": 0,
+  "cases": [
+    {
+      "feast": "Remembrance of the Prophet Elijah",
+      "expectation": "fallback_only",
+      "verdict": "acceptable",
+      "top_id": 499,
+      "returned": 3,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:7",
+        "clef_names_event:False"
+      ],
+      "matches": [
+        {
+          "id": 499,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "medium",
+          "relevance": 65,
+          "reason": "depicts_event=0.65, all_figures=0.46, related=0.55",
+          "probabilities": {
+            "depicts_event": 0.6547,
+            "all_figures": 0.4574,
+            "related": 0.5542
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 630,
+          "relation": "exact_subject",
+          "match_tier": "exact_subject",
+          "confidence": "medium",
+          "relevance": 73,
+          "reason": "depicts_event=0.33, all_figures=0.73, related=0.84",
+          "probabilities": {
+            "depicts_event": 0.3297,
+            "all_figures": 0.7315,
+            "related": 0.8404
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 632,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "medium",
+          "relevance": 67,
+          "reason": "depicts_event=0.32, all_figures=0.45, related=0.67",
+          "probabilities": {
+            "depicts_event": 0.3191,
+            "all_figures": 0.448,
+            "related": 0.6736
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 1.6
+    },
+    {
+      "feast": "Sts. Atom and His Soldiers",
+      "expectation": "nothing_suitable",
+      "verdict": "abstained",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:3",
+        "clef_names_event:False"
+      ],
+      "matches": [],
+      "elapsed_seconds": 1.6
+    },
+    {
+      "feast": "Holy Voskian Priests",
+      "expectation": "nothing_suitable",
+      "verdict": "abstained",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:0"
+      ],
+      "matches": [],
+      "elapsed_seconds": 0.0
+    },
+    {
+      "feast": "Remembrance of the Dead",
+      "expectation": "nothing_suitable",
+      "verdict": "abstained",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:0"
+      ],
+      "matches": [],
+      "elapsed_seconds": 0.0
+    },
+    {
+      "feast": "Feast of the Holy Cross",
+      "expectation": "nothing_suitable",
+      "verdict": "wrong",
+      "top_id": 446,
+      "returned": 4,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:14",
+        "clef_names_event:True"
+      ],
+      "matches": [
+        {
+          "id": 446,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "medium",
+          "relevance": 71,
+          "reason": "depicts_event=0.71, all_figures=0.38, related=0.78",
+          "probabilities": {
+            "depicts_event": 0.708,
+            "all_figures": 0.3753,
+            "related": 0.7838
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 447,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "low",
+          "relevance": 57,
+          "reason": "depicts_event=0.57, all_figures=0.31, related=0.77",
+          "probabilities": {
+            "depicts_event": 0.5704,
+            "all_figures": 0.3133,
+            "related": 0.766
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 257,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "low",
+          "relevance": 56,
+          "reason": "depicts_event=0.56, all_figures=0.37, related=0.72",
+          "probabilities": {
+            "depicts_event": 0.5564,
+            "all_figures": 0.3742,
+            "related": 0.7247
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 426,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "low",
+          "relevance": 58,
+          "reason": "depicts_event=0.20, all_figures=0.36, related=0.58",
+          "probabilities": {
+            "depicts_event": 0.2017,
+            "all_figures": 0.3613,
+            "related": 0.5835
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 2.1
+    },
+    {
+      "feast": "Beheading of St. John the Forerunner (Baptist)",
+      "expectation": "fallback_only",
+      "verdict": "acceptable",
+      "top_id": 377,
+      "returned": 5,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:24",
+        "clef_names_event:True"
+      ],
+      "matches": [
+        {
+          "id": 377,
+          "relation": "subject_portrait",
+          "match_tier": "subject_portrait",
+          "confidence": "high",
+          "relevance": 92,
+          "reason": "depicts_event=0.14, all_figures=0.92, related=0.96",
+          "probabilities": {
+            "depicts_event": 0.1374,
+            "all_figures": 0.9243,
+            "related": 0.9554
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 333,
+          "relation": "subject_portrait",
+          "match_tier": "subject_portrait",
+          "confidence": "high",
+          "relevance": 91,
+          "reason": "depicts_event=0.22, all_figures=0.91, related=0.93",
+          "probabilities": {
+            "depicts_event": 0.22,
+            "all_figures": 0.9119,
+            "related": 0.9271
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 36,
+          "relation": "subject_portrait",
+          "match_tier": "subject_portrait",
+          "confidence": "high",
+          "relevance": 87,
+          "reason": "depicts_event=0.15, all_figures=0.87, related=0.94",
+          "probabilities": {
+            "depicts_event": 0.1531,
+            "all_figures": 0.8702,
+            "related": 0.9389
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 372,
+          "relation": "subject_portrait",
+          "match_tier": "subject_portrait",
+          "confidence": "medium",
+          "relevance": 79,
+          "reason": "depicts_event=0.14, all_figures=0.79, related=0.93",
+          "probabilities": {
+            "depicts_event": 0.1396,
+            "all_figures": 0.789,
+            "related": 0.9331
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 286,
+          "relation": "subject_portrait",
+          "match_tier": "subject_portrait",
+          "confidence": "low",
+          "relevance": 55,
+          "reason": "depicts_event=0.06, all_figures=0.55, related=0.87",
+          "probabilities": {
+            "depicts_event": 0.0637,
+            "all_figures": 0.5529,
+            "related": 0.8716
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 2.6
+    },
+    {
+      "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
+      "expectation": "fallback_only",
+      "verdict": "acceptable",
+      "top_id": 428,
+      "returned": 1,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:4",
+        "clef_names_event:True"
+      ],
+      "matches": [
+        {
+          "id": 428,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "low",
+          "relevance": 64,
+          "reason": "depicts_event=0.64, all_figures=0.26, related=0.55",
+          "probabilities": {
+            "depicts_event": 0.6354,
+            "all_figures": 0.2571,
+            "related": 0.5512
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 1.2
+    },
+    {
+      "feast": "Palm Sunday",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 301,
+      "returned": 5,
+      "assigned_id": 301,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:6",
+        "clef_names_event:True"
+      ],
+      "matches": [
+        {
+          "id": 301,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "high",
+          "relevance": 98,
+          "reason": "depicts_event=0.98, all_figures=0.63, related=0.98",
+          "probabilities": {
+            "depicts_event": 0.9751,
+            "all_figures": 0.6251,
+            "related": 0.9767
+          },
+          "auto_assignable": true,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 325,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "high",
+          "relevance": 98,
+          "reason": "depicts_event=0.98, all_figures=0.67, related=0.98",
+          "probabilities": {
+            "depicts_event": 0.9766,
+            "all_figures": 0.6715,
+            "related": 0.982
+          },
+          "auto_assignable": true,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 464,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "high",
+          "relevance": 97,
+          "reason": "depicts_event=0.97, all_figures=0.58, related=0.98",
+          "probabilities": {
+            "depicts_event": 0.9696,
+            "all_figures": 0.5758,
+            "related": 0.9769
+          },
+          "auto_assignable": true,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 463,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "high",
+          "relevance": 96,
+          "reason": "depicts_event=0.96, all_figures=0.37, related=0.97",
+          "probabilities": {
+            "depicts_event": 0.9624,
+            "all_figures": 0.3697,
+            "related": 0.9749
+          },
+          "auto_assignable": true,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 101,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "depicts_event=0.95, all_figures=0.75, related=0.98",
+          "probabilities": {
+            "depicts_event": 0.9462,
+            "all_figures": 0.7544,
+            "related": 0.9765
+          },
+          "auto_assignable": true,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 1.6
+    },
+    {
+      "feast": "Holy Forty Martyrs of Sebastia",
+      "expectation": "exact_exists",
+      "verdict": "acceptable",
+      "top_id": 218,
+      "returned": 3,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:12",
+        "clef_names_event:False"
+      ],
+      "matches": [
+        {
+          "id": 218,
+          "relation": "exact_subject",
+          "match_tier": "exact_subject",
+          "confidence": "medium",
+          "relevance": 71,
+          "reason": "depicts_event=0.44, all_figures=0.71, related=0.91",
+          "probabilities": {
+            "depicts_event": 0.4369,
+            "all_figures": 0.7103,
+            "related": 0.905
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 77,
+          "relation": "exact_subject",
+          "match_tier": "exact_subject",
+          "confidence": "low",
+          "relevance": 63,
+          "reason": "depicts_event=0.50, all_figures=0.63, related=0.94",
+          "probabilities": {
+            "depicts_event": 0.4964,
+            "all_figures": 0.6273,
+            "related": 0.9372
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 418,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "low",
+          "relevance": 55,
+          "reason": "depicts_event=0.33, all_figures=0.18, related=0.55",
+          "probabilities": {
+            "depicts_event": 0.3341,
+            "all_figures": 0.1798,
+            "related": 0.5518
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 2.0
+    },
+    {
+      "feast": "Remembrance of the Raising of Lazarus",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 455,
+      "returned": 1,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:1",
+        "clef_names_event:True"
+      ],
+      "matches": [
+        {
+          "id": 455,
+          "relation": "exact_event",
+          "match_tier": "exact_event",
+          "confidence": "medium",
+          "relevance": 79,
+          "reason": "depicts_event=0.79, all_figures=0.78, related=0.93",
+          "probabilities": {
+            "depicts_event": 0.7904,
+            "all_figures": 0.7796,
+            "related": 0.9314
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 1.3
+    },
+    {
+      "feast": "Sts. Hripsime and Her Companions",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 158,
+      "returned": 5,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:14",
+        "clef_names_event:False"
+      ],
+      "matches": [
+        {
+          "id": 158,
+          "relation": "exact_subject",
+          "match_tier": "exact_subject",
+          "confidence": "medium",
+          "relevance": 78,
+          "reason": "depicts_event=0.49, all_figures=0.78, related=0.97",
+          "probabilities": {
+            "depicts_event": 0.4946,
+            "all_figures": 0.7769,
+            "related": 0.9687
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 418,
+          "relation": "exact_subject",
+          "match_tier": "exact_subject",
+          "confidence": "medium",
+          "relevance": 71,
+          "reason": "depicts_event=0.30, all_figures=0.71, related=0.94",
+          "probabilities": {
+            "depicts_event": 0.2962,
+            "all_figures": 0.7066,
+            "related": 0.9362
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 270,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "depicts_event=0.26, all_figures=0.10, related=0.95",
+          "probabilities": {
+            "depicts_event": 0.2631,
+            "all_figures": 0.1038,
+            "related": 0.9454
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 554,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "depicts_event=0.25, all_figures=0.05, related=0.95",
+          "probabilities": {
+            "depicts_event": 0.246,
+            "all_figures": 0.0506,
+            "related": 0.9519
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 118,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 94,
+          "reason": "depicts_event=0.14, all_figures=0.10, related=0.94",
+          "probabilities": {
+            "depicts_event": 0.1379,
+            "all_figures": 0.0954,
+            "related": 0.9366
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 2.3
+    },
+    {
+      "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+      "expectation": "fallback_only",
+      "verdict": "wrong",
+      "top_id": 381,
+      "returned": 5,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "clef_shortlist:lexical:24",
+        "clef_names_event:False"
+      ],
+      "matches": [
+        {
+          "id": 381,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 96,
+          "reason": "depicts_event=0.11, all_figures=0.04, related=0.96",
+          "probabilities": {
+            "depicts_event": 0.109,
+            "all_figures": 0.0355,
+            "related": 0.9565
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 382,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 96,
+          "reason": "depicts_event=0.07, all_figures=0.04, related=0.96",
+          "probabilities": {
+            "depicts_event": 0.075,
+            "all_figures": 0.0404,
+            "related": 0.9585
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 331,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "depicts_event=0.12, all_figures=0.03, related=0.95",
+          "probabilities": {
+            "depicts_event": 0.12,
+            "all_figures": 0.0306,
+            "related": 0.9481
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 383,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "depicts_event=0.21, all_figures=0.03, related=0.95",
+          "probabilities": {
+            "depicts_event": 0.2145,
+            "all_figures": 0.0323,
+            "related": 0.9535
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        },
+        {
+          "id": 416,
+          "relation": "related_specific",
+          "match_tier": "related_specific",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "depicts_event=0.11, all_figures=0.03, related=0.95",
+          "probabilities": {
+            "depicts_event": 0.1055,
+            "all_figures": 0.0341,
+            "related": 0.9517
+          },
+          "auto_assignable": false,
+          "provenance": "clef_judge"
+        }
+      ],
+      "elapsed_seconds": 3.1
+    }
+  ],
+  "unreviewed_cases": []
+}
