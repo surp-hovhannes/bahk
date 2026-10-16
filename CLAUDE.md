@@ -177,6 +177,10 @@ Bahk (also known as Fast & Pray) is a Django-based web application for Christian
 
 This project runs in a **Docker development container**. All Python/Django commands must be executed inside the container using `docker exec`.
 
+**Exception: Claude Code cloud sessions** (`CLAUDE_CODE_REMOTE=true`) have no container. Run
+commands directly (`python manage.py ...`); the SessionStart hook has already activated `.venv`.
+See `docs/CLOUD_ENVIRONMENT.md`.
+
 ### Docker Container Names
 - **App container**: `bahk_devcontainer-app-1`
 - **Redis container**: `bahk_devcontainer-redis-1`
