@@ -14,6 +14,15 @@ Implements the lightweight review scope in #569 without changing automated praye
 | Both | Both capabilities | Both capabilities |
 | Staff/admin/superuser without assignments | No moderation dashboard or notices | No crisis access |
 
+**What counts as crisis:** a prayer request is a crisis request exactly when
+`moderation_severity == "critical"` (`moderation.access.crisis_query` / `is_crisis`).
+The moderation task writes `critical` for every escalation, and migration
+`moderation.0002` backfilled older rows whose stored result said `escalate`.
+Do not classify on the JSON result: a request without that key (a failed
+automated check, an old profanity rejection) compares as NULL, and an
+`.exclude()` on it hid those requests from every queue, from admin and from
+the public feed.
+
 Assignments require an active account. There is no superuser `has_perm` bypass.
 Only active existing superusers can manage assignment rows through Django admin;
 the form refuses assignments to the acting administrator's own account. Assignment
@@ -56,14 +65,30 @@ migration. This PR does not execute that bootstrap.
 ## Review behavior
 
 `/moderation/` shows oldest-first queues, backlog counts, source dates and a
-25-item preview per content type. Prayer ages are creation dates; context ages
+25-item preview per content type. Crisis reviewers see **Crisis follow-up** as
+its own queue, listed first and with its own 25-item preview, so routine
+backlog cannot push a crisis item out of view; each crisis row shows how long
+ago it was flagged. Queue status labels say why an item is waiting
+("Needs review · Automated check failed", "Low confidence", "Possible …",
+"Profanity, otherwise genuine"); crisis items read "Crisis · Unpublished,
+needs follow-up". The detail page summarizes the automated result (reason,
+concerns and one labelled bar per Clef score against its cutoff) with the raw
+JSON collapsed underneath. Prayer ages are creation dates; context ages
 are generation dates, **not first-flag timestamps**. Context queues use the
 existing configured regeneration thresholds and active versions. Downvotes are
 feedback signals rather than publication holds. Opening a page does not invoke
 an AI provider, regenerate content, or change moderation state.
 
 Routine pending prayers reuse existing approve/reject behavior (events,
-milestones, requester acceptance). Crisis actions only record human review or
+milestones, requester acceptance), shared with the admin actions through
+`prayers/review.py`. A non-crisis **rejected** request can be overturned
+(**Overturn rejection and publish**), which publishes it for its full duration
+from now; **Keep rejected** records the review without changing it. A request
+whose only problem is a profanity word-list match, and which the model would
+otherwise approve, goes to the General queue instead of being rejected.
+After a closing decision the reviewer is taken to the next item in the same
+queue, or back to the dashboard when the queue is clear. Items no longer in a
+queue show the decision form collapsed under **Record another decision**. Crisis actions only record human review or
 escalation and leave the rejected content unpublished. Django admin status edits
 and bulk approval also refuse crisis publication, even for designated staff or
 superusers. Forged Save as new requests are denied. Acceptance and prayer-log
@@ -74,12 +99,14 @@ resolution fields and notes. Context acknowledgement applies to the current
 version/downvote total; additional downvotes can reopen its queue, and replacing
 an active context naturally removes the old version from backlog.
 
-Every dashboard action stores actor, outcome, timestamp, required note and
+Every dashboard action stores actor, outcome, timestamp, note and
 optional selected correction decision / published synthetic test reference. Notes render as
 escaped text. No private request is automatically exported to an evaluation.
 Rejected prayers and resolved icon reports remain available in the audit view.
 
-The review form uses **Decision** and **Notes**. **Report a review problem**
+The review form uses **Decision** and **Notes**. A note is required to reject,
+record an escalation, close a crisis follow-up or report a review problem;
+routine approvals and closures may omit it. **Report a review problem**
 requires a **Correct decision** selection appropriate to that content type;
 it records the suggestion without publishing or closing the item. Prayer
 reviews may select a **Related test case** from the committed published
@@ -109,8 +136,10 @@ be recalled.
 
 ## Schema and rollback
 
-The additive migration creates assignment and review tables, with no data
-backfill or changes to prayer/context storage. Before any rollback, preserve the
+The additive migration creates assignment and review tables. `0002` backfills
+`moderation_severity = "critical"` on prayer requests whose stored result
+escalated; it changes no other prayer or context data, and its reverse is a no-op
+(the severity it writes is the one the task now writes itself). Before any rollback, preserve the
 review audit records under the approved retention policy. Rolling back the new
 app drops those tables; it does not erase prayer requests or existing icon notes.
 Retention and operational review cadence remain policy decisions for Matthew.

@@ -280,8 +280,11 @@ class ModerationTests(TestCase):
         PrayerRequest.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=2))
         self.client.force_login(self.general)
         response = self.client.get(reverse("moderation-dashboard") + "?type=prayer")
-        self.assertContains(response, "Prayer · 3")
+        self.assertContains(response, "Crisis follow-up · 1")
+        self.assertContains(response, "Prayer · 2")
         self.assertContains(response, self.urgent.title)
+        # Crisis follow-up is listed first even though routine requests are older.
+        self.assertLess(response.content.index(self.urgent.title.encode()), response.content.index(older.title.encode()))
         self.assertLess(
             response.content.index(older.title.encode()), response.content.index(self.routine.title.encode())
         )
@@ -446,7 +449,7 @@ class ModerationTests(TestCase):
     def test_crisis_admin_form_cannot_publish_even_for_designated_superuser(self):
         Responsibility.objects.create(user=self.superuser, general=True, crisis=True)
         self.client.force_login(self.superuser)
-        for severity, result in [("critical", {}), ("high", {"llm_check": {"suggested_action": "escalate"}})]:
+        for severity, result in [("critical", {}), ("critical", {"llm_check": {"suggested_action": "escalate"}})]:
             with self.subTest(severity=severity):
                 PrayerRequest.objects.filter(pk=self.urgent.pk).update(
                     moderation_severity=severity, moderation_result=result
@@ -713,7 +716,7 @@ class ModerationTests(TestCase):
         original = views.outstanding_pks
         for classification in [
             {"moderation_severity": "critical"},
-            {"moderation_result": {"llm_check": {"suggested_action": "escalate"}}},
+            {"moderation_severity": "critical", "moderation_result": {"llm_check": {"suggested_action": "escalate"}}},
         ]:
             with self.subTest(classification=classification):
                 PrayerRequest.objects.filter(pk=self.routine.pk).update(
@@ -755,3 +758,157 @@ class ModerationTests(TestCase):
         self.assertEqual(len(group["items"]), 25)
         self.assertNotContains(response, self.routine.title)
         self.assertContains(response, "Next 24")
+
+
+class ReviewExperienceTests(TestCase):
+    """Failed moderations stay reachable, and the review flow moves reviewers through the queue."""
+
+    @classmethod
+    def setUpTestData(cls):
+        EventType.objects.create(code=EventType.PRAYER_REQUEST_CREATED, name="Prayer created")
+        User = get_user_model()
+        cls.owner = User.objects.create_user(username="owner", email="owner@example.test")
+        cls.viewer = User.objects.create_user(username="viewer", email="viewer@example.test")
+        cls.general = User.objects.create_user(username="general", email="general@example.test")
+        cls.crisis = User.objects.create_user(username="crisis", email="crisis@example.test")
+        cls.superuser = User.objects.create_user(username="admin", is_staff=True, is_superuser=True)
+        Responsibility.objects.create(user=cls.general, general=True)
+        Responsibility.objects.create(user=cls.crisis, crisis=True)
+        cls.failed = PrayerRequest.objects.create(
+            requester=cls.owner,
+            title="Synthetic failed check",
+            description="Synthetic",
+            requires_human_review=True,
+            moderation_severity="high",
+            moderation_result={"profanity_check": {"passed": True}, "llm_check": {"error": "HTTP 503"}},
+        )
+        cls.urgent = PrayerRequest.objects.create(
+            requester=cls.owner,
+            title="Synthetic crisis",
+            description="Synthetic",
+            status="rejected",
+            requires_human_review=True,
+            moderation_severity="critical",
+            moderation_result={
+                "llm_check": {
+                    "suggested_action": "escalate",
+                    "engine": "clef",
+                    "model": "clef",
+                    "probabilities": {
+                        "genuine": 0.6,
+                        "crisis": 0.53,
+                        "spam": 0.02,
+                        "inappropriate": 0.02,
+                        "incoherent": 0.02,
+                        "private_info": 0.02,
+                    },
+                }
+            },
+        )
+
+    def detail(self, obj):
+        return reverse("moderation-detail", args=["prayer", obj.pk])
+
+    def test_failed_moderation_is_not_treated_as_crisis(self):
+        self.client.force_login(self.general)
+        response = self.client.get(reverse("moderation-dashboard"))
+        self.assertContains(response, self.failed.title)
+        self.assertContains(response, "Needs review · Automated check failed")
+        self.assertEqual(self.client.get(self.detail(self.failed)).status_code, 200)
+        self.client.force_login(self.superuser)
+        self.assertEqual(self.client.get(f"/admin/prayers/prayerrequest/{self.failed.pk}/change/").status_code, 200)
+
+    def test_human_approved_failed_moderation_reaches_the_public_feed(self):
+        from rest_framework.test import APIClient
+
+        self.client.force_login(self.general)
+        self.client.post(self.detail(self.failed), {"action": "approve"})
+        client = APIClient()
+        client.force_authenticate(self.viewer)
+        response = client.get(reverse("prayers:prayer-request-list"))
+        self.assertIn(self.failed.title, str(response.data))
+        self.assertNotIn(self.urgent.title, str(response.data))
+
+    def test_backfill_marks_older_escalations_critical(self):
+        from importlib import import_module
+
+        from django.apps import apps
+
+        legacy = PrayerRequest.objects.create(
+            requester=self.owner,
+            title="Synthetic legacy escalation",
+            description="Synthetic",
+            status="rejected",
+            moderation_severity="high",
+            moderation_result={"llm_check": {"suggested_action": "escalate"}},
+        )
+        migration = import_module("moderation.migrations.0002_mark_escalations_critical")
+        migration.mark_escalations_critical(apps, None)
+        legacy.refresh_from_db()
+        self.failed.refresh_from_db()
+        self.assertEqual(legacy.moderation_severity, "critical")
+        self.assertEqual(self.failed.moderation_severity, "high")
+
+    def test_crisis_queue_shows_plain_status_and_waiting_time(self):
+        self.client.force_login(self.crisis)
+        response = self.client.get(reverse("moderation-dashboard"))
+        self.assertContains(response, "Crisis follow-up · 1")
+        self.assertContains(response, "Crisis · Unpublished, needs follow-up")
+        self.assertContains(response, "Flagged")
+        self.assertNotContains(response, "CRISIS · Rejected")
+
+    def test_evidence_is_summarized_with_raw_result_collapsed(self):
+        self.client.force_login(self.crisis)
+        response = self.client.get(self.detail(self.urgent))
+        self.assertContains(response, "Crisis risk")
+        self.assertContains(response, "0.53")
+        self.assertContains(response, "escalates at 0.30 or more")
+        self.assertContains(response, "<summary>Raw moderation result</summary>", html=True)
+
+    def test_reviewer_moves_to_next_item_then_back_to_a_clear_queue(self):
+        second = PrayerRequest.objects.create(
+            requester=self.owner, title="Synthetic second", description="Synthetic", requires_human_review=True
+        )
+        self.client.force_login(self.general)
+        response = self.client.post(self.detail(self.failed), {"action": "approve"})
+        self.assertRedirects(response, self.detail(second), fetch_redirect_response=False)
+        self.assertContains(self.client.get(self.detail(second)), "Here is the next item in the queue.")
+        response = self.client.post(self.detail(second), {"action": "reject", "note": "Synthetic reason"})
+        self.assertRedirects(response, reverse("moderation-dashboard"), fetch_redirect_response=False)
+        self.assertContains(self.client.get(reverse("moderation-dashboard")), "This queue is now clear.")
+
+    def test_notes_are_required_only_where_reasoning_matters(self):
+        self.client.force_login(self.general)
+        response = self.client.post(self.detail(self.failed), {"action": "reject"})
+        self.assertContains(response, "Add a note explaining your decision.", status_code=400)
+        self.assertEqual(self.client.post(self.detail(self.failed), {"action": "approve"}).status_code, 302)
+        self.assertEqual(Review.objects.get().note, "")
+        self.client.force_login(self.crisis)
+        response = self.client.post(self.detail(self.urgent), {"action": "acknowledge"})
+        self.assertContains(response, "Add a note explaining your decision.", status_code=400)
+
+    def test_rejected_request_can_be_overturned_with_a_full_duration(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        rejected = PrayerRequest.objects.create(
+            requester=self.owner, title="Synthetic overturn", description="Synthetic", status="rejected"
+        )
+        PrayerRequest.objects.filter(pk=rejected.pk).update(expiration_date=timezone.now() - timedelta(days=1))
+        self.client.force_login(self.general)
+        page = self.client.get(self.detail(rejected))
+        self.assertContains(page, "Record another decision")
+        self.assertContains(page, "Overturn rejection and publish")
+        self.client.post(self.detail(rejected), {"action": "approve"})
+        rejected.refresh_from_db()
+        self.assertEqual(rejected.status, "approved")
+        self.assertGreater(rejected.expiration_date, timezone.now() + timedelta(days=rejected.duration_days - 1))
+        self.assertTrue(rejected.acceptances.filter(user=self.owner).exists())
+
+    def test_crisis_request_still_cannot_be_published(self):
+        self.client.force_login(self.crisis)
+        response = self.client.post(self.detail(self.urgent), {"action": "approve", "note": "Synthetic"})
+        self.assertEqual(response.status_code, 403)
+        self.urgent.refresh_from_db()
+        self.assertEqual(self.urgent.status, "rejected")

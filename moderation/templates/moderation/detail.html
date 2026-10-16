@@ -20,8 +20,38 @@
     {% endif %}
     <div class="form-row"><label>Source date:</label><div class="readonly">{{ item.timestamp|default:'Unknown' }}<p class="help">{{ item.source }}</p></div></div>
     <div class="form-row"><label>Content:</label><div class="readonly fp-review-content">{{ item.text }}</div></div>
-    {% if item.kind == 'prayer' %}<div class="form-row"><label>Moderation evidence:</label><div class="readonly">{% if evidence %}<pre class="fp-review-evidence">{{ evidence }}</pre>{% else %}No moderation result{% endif %}</div></div>{% endif %}
+    {% if item.kind == 'prayer' %}
+    <div class="form-row"><label>Automated check:</label><div class="readonly">
+      {% if summary %}
+      <div class="fp-review-summary">
+        {% if summary.reason %}<p><strong>{{ summary.reason }}</strong></p>{% endif %}
+        {% if summary.error %}<p>The automated check did not complete, so a person needs to decide. Error: {{ summary.error }}</p>{% endif %}
+        {% if summary.profanity %}<p>The profanity word list matched this request.</p>{% endif %}
+        {% if summary.concerns %}<p>Concerns: {{ summary.concerns|join:"; " }}</p>{% endif %}
+        {% if summary.scores %}
+        <ul class="fp-review-scores" aria-label="Decision model scores">
+          {% for score in summary.scores %}
+          <li class="{% if score.crossed %}{% if score.good %}fp-review-score--good{% else %}fp-review-score--flag{% endif %}{% endif %}">
+            <span class="fp-review-score__label">{{ score.label }}</span>
+            <span class="fp-review-score__bar" aria-hidden="true"><span style="width: {{ score.percent }}%"></span></span>
+            <span class="fp-review-score__value">{{ score.value|floatformat:2 }}</span>
+            <span class="help">{{ score.cutoff }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if summary.engine %}<p class="help">Checked by: {{ summary.engine }}{% if summary.model %} ({{ summary.model }}){% endif %}</p>{% endif %}
+      </div>
+      <details><summary>Raw moderation result</summary><pre class="fp-review-evidence">{{ evidence }}</pre></details>
+      {% else %}No moderation result{% endif %}
+    </div></div>
+    {% endif %}
   </fieldset>
+  {% if not needs_review %}
+  <details class="module fp-review-later"{% if form.errors %} open{% endif %}>
+    <summary>Record another decision</summary>
+    <p class="help">This item is not waiting in a review queue. You can still record a follow-up{% if overturn %}, overturn the rejection{% endif %} or report a problem.</p>
+  {% endif %}
   <form method="post" novalidate>
     {% csrf_token %}
     {% if form.errors %}<p class="errornote" role="alert">Please correct the errors below. Your notes have been kept.</p>{% endif %}
@@ -31,11 +61,11 @@
         {{ form.action.errors }}
         <label for="review-action" class="required">Decision:</label>
         {{ form.action }}
-        <p class="help" id="review-action-help">{% if crisis %}Closing removes this item from the review queue. Recording an escalation does not send a message or assign another reviewer.{% elif item.kind == 'icon' %}Make any icon corrections first. “Close report” removes the report from the queue; it does not edit the icon.{% elif item.kind == 'prayer' %}“Approve and publish” makes the request public immediately and cannot be undone here.{% else %}“Complete review” removes this feedback from the queue. It does not edit or regenerate the context.{% endif %}</p>
+        <p class="help" id="review-action-help">{% if crisis %}Closing removes this item from the review queue. Recording an escalation does not send a message or assign another reviewer.{% elif item.kind == 'icon' %}Make any icon corrections first. “Close report” removes the report from the queue; it does not edit the icon.{% elif overturn %}“Overturn rejection and publish” makes the request public immediately for its full duration and cannot be undone here.{% elif item.kind == 'prayer' %}“Approve and publish” makes the request public immediately and cannot be undone here.{% else %}“Complete review” removes this feedback from the queue. It does not edit or regenerate the context.{% endif %}</p>
       </div>
       <div class="form-row{% if form.note.errors %} errors{% endif %}">
         {{ form.note.errors }}
-        <label for="review-note" class="required">Notes:</label>{{ form.note }}<p class="help" id="review-note-help">Explain your decision and any follow-up. Avoid unnecessary personal details.</p>
+        <label for="review-note" id="review-note-label">Notes:</label>{{ form.note }}<p class="help" id="review-note-help">Required when rejecting, escalating, closing a crisis follow-up or reporting a problem; optional otherwise. Avoid unnecessary personal details.</p>
       </div>
       <div id="review-correction" class="form-row{% if form.expected_outcome.errors %} errors{% endif %}">
         {{ form.expected_outcome.errors }}
@@ -54,6 +84,7 @@
     </fieldset>
     <div class="submit-row"><input type="submit" class="default" value="Save review"></div>
   </form>
+  {% if not needs_review %}</details>{% endif %}
   <section class="module">
     <h2>Review history</h2>
     {% for review in history %}

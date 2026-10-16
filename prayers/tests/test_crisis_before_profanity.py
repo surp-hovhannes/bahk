@@ -124,10 +124,9 @@ class CrisisBeforeProfanityTests(BaseTestCase):
                 with self.subTest(engine=engine, case=case["id"]):
                     self.run_case(engine, case, decision, "rejected", "critical_safety_concern", "critical", True)
 
-    def test_profanity_rejects_all_noncritical_model_routes(self):
+    def test_profanity_rejects_noncritical_routes_the_model_would_not_approve(self):
         for engine in ("llm", "clef"):
             for approved, severity, action, review in (
-                (True, "low", "approve", False),
                 (False, "medium", "reject", False),
                 (True, "high", "flag_for_review", True),
             ):
@@ -140,6 +139,20 @@ class CrisisBeforeProfanityTests(BaseTestCase):
                         "reason": "Synthetic",
                     }
                     self.run_case(engine, CASES[3], decision, "rejected", "profanity_detected", severity, False)
+
+    def test_profanity_on_an_otherwise_approved_request_goes_to_human_review(self):
+        # A word-list hit ("a damn hard market") must not silently reject a
+        # request the model reads as genuine; a person decides instead.
+        for engine in ("llm", "clef"):
+            with self.subTest(engine=engine):
+                decision = {
+                    "approved": True,
+                    "severity": "low",
+                    "suggested_action": "approve",
+                    "requires_human_review": False,
+                    "reason": "Synthetic",
+                }
+                self.run_case(engine, CASES[3], decision, "pending_moderation", "requires_review", "high", True)
 
     def test_engine_error_with_profanity_remains_pending_for_review(self):
         for engine in ("llm", "clef"):
