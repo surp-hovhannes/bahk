@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from copy import deepcopy
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -426,6 +427,32 @@ class SemanticMatchingTests(SimpleTestCase):
         self.assertEqual(outcome.assessed_count, 2)
         self.assertEqual(outcome.status, "complete")
         self.assertIn("assignment_floor:exact_event", outcome.diagnostics)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_repeated_row_does_not_block_its_own_icon(self):
+        """A repeat of an accepted icon hides no other match."""
+
+        def mutate(stage, payload, result):
+            if stage == "assess":
+                result["matches"].append(deepcopy(result["matches"][0]))
+
+        outcome, _ = self.run_match(mutate=mutate)
+        self.assertEqual(outcome.status, "complete")
+        self.assertIn("invalid_assessed_candidate", outcome.diagnostics)
+        self.assertFalse(any(code.startswith("assignment_floor:") for code in outcome.diagnostics))
+        self.assertEqual([m["id"] for m in outcome.matches], [1])
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
+
+    def test_repeated_row_claiming_more_for_its_icon_still_bounds_assignment(self):
+        def mutate(stage, payload, result):
+            if stage == "assess":
+                stronger = deepcopy(next(m for m in result["matches"] if m["id"] == 2))
+                stronger["relation"] = "exact_subject"
+                result["matches"].append(stronger)
+
+        outcome, _ = self.run_match(matches=[self.match, candidate(2, "Other scene", "thematic")], mutate=mutate)
+        self.assertEqual(outcome.status, "complete")
+        self.assertIn("assignment_floor:exact_subject", outcome.diagnostics)
         self.assertFalse(outcome.matches[0]["auto_assignable"])
 
     def test_every_candidate_invalid_still_fails_its_batch(self):

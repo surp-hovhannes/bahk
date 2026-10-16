@@ -596,6 +596,14 @@ def _claimed_relation(match):
     return RELATIONS.index(relation) if relation in RELATIONS else 0
 
 
+def _repeats_claim(match, claimed):
+    """A discarded repeat of an accepted icon hides no other match, unless it claims more for that icon."""
+    icon_id = match.get("id") if isinstance(match, dict) else None
+    if type(icon_id) is not int or icon_id not in claimed:
+        return False
+    return _claimed_relation(match) >= claimed[icon_id]
+
+
 def _ids(actual, expected):
     if len(actual) != len(set(actual)) or set(actual) != set(expected):
         raise ValueError("incomplete_ids")
@@ -771,13 +779,14 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
                 if len(result["matches"]) > limits.positive_limit:
                     raise ValueError("positive_limit_exceeded")
                 valid, failures, discarded = [], [], []
-                seen = set()
+                # Accepted icon id -> strength its row claimed, before validation downgrades.
+                claimed = {}
                 for match in result["matches"]:
                     try:
                         validated = _matches([deepcopy(match)], batch, analysis)[0]
-                        if validated["id"] in seen:
+                        if validated["id"] in claimed:
                             raise ValueError("duplicate_candidate")
-                        seen.add(validated["id"])
+                        claimed[validated["id"]] = _claimed_relation(match)
                         valid.append(validated)
                     except ValueError as exc:
                         failures.append(str(exc))
@@ -804,7 +813,9 @@ def match_icons(icons, request, *, provider=None, limits=None, profile=None):
                 # that the batch's other records went unassessed. Bound automatic
                 # assignment by the strength the dropped rows claimed instead.
                 outcome.diagnostics.append("invalid_assessed_candidate")
-                dropped_floor = min([dropped_floor] + [_claimed_relation(m) for m in discarded])
+                dropped_floor = min(
+                    [dropped_floor] + [_claimed_relation(m) for m in discarded if not _repeats_claim(m, claimed)]
+                )
             if any(m["relation"] == "exact_event" for m in valid) and not result["exact_event_exists"]:
                 raise ValueError("contradictory_event_summary")
             if result["exact_event_exists"] and not any(m["relation"] == "exact_event" for m in valid):
