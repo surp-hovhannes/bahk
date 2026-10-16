@@ -39,7 +39,12 @@
    333,
    377
   ],
-  "note": "No Beheading scene exists. A St John the Baptist portrait is the intended fallback."
+  "note": "No Beheading scene exists. A St John the Baptist portrait is the intended fallback, and may be assigned automatically: a portrait of the commemorated saint is acceptable when no more specific depiction exists.",
+  "assignable": [
+   36,
+   333,
+   377
+  ]
  },
  {
   "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
