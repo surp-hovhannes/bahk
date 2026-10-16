@@ -56,3 +56,17 @@ def run_clef(state, questions, *, model="clef", timeout=20):
     if missing:
         raise ClefError(f"Clef response missing answers for: {sorted(missing)}")
     return answers
+
+
+def noul_probabilities(answers, names):
+    """Read the ``noul`` probability for each of ``names`` from Clef ``answers``."""
+    probabilities = {}
+    for name in names:
+        answer = answers.get(name) if isinstance(answers, dict) else None
+        value = answer.get("noul") if isinstance(answer, dict) else None
+        # Validate before coercion: bools and numeric strings are not JSON
+        # probabilities. The range check also rejects NaN and infinities.
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            raise ClefError(f"Clef returned an invalid probability for: {name}")
+        probabilities[name] = float(value)
+    return probabilities
