@@ -119,7 +119,7 @@ Read it with these caveats:
   Reviewing those is a gold set and a production data cleanup in one pass. Against production:
 
   ```bash
-  python manage.py export_icon_match_cases --church-id 1 --stored-icon-only \
+  python manage.py export_icon_match_cases --stored-icon-only \
     --catalogue-json catalogue.json --cases-json cases.json
   ```
 

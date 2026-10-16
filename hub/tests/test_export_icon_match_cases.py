@@ -29,9 +29,9 @@ class ExportIconMatchCasesTests(TestCase):
             Feast.objects.create(church=self.church, name="Holy Voskian Priests")
 
     def export(self, root, **options):
+        options.setdefault("church_id", self.church.pk)
         call_command(
             "export_icon_match_cases",
-            church_id=self.church.pk,
             catalogue_json=str(root / "catalogue.json"),
             cases_json=str(root / "cases.json"),
             stdout=StringIO(),
@@ -47,9 +47,9 @@ class ExportIconMatchCasesTests(TestCase):
         self.assertTrue(all(c["reviewed"] is False and c["correct"] == [] for c in cases))
         self.assertEqual(cases[1]["stored_icon"], {"id": self.icon.id, "title": "Palm Sunday"})
 
-    def test_stored_icon_only(self):
+    def test_stored_icon_only_for_the_default_church(self):
         with TemporaryDirectory() as directory:
-            _, cases = self.export(Path(directory), stored_icon_only=True)
+            _, cases = self.export(Path(directory), stored_icon_only=True, church_id=None)
         self.assertEqual([c["feast"] for c in cases], ["Palm Sunday"])
 
     def test_never_overwrites_a_case_file(self):

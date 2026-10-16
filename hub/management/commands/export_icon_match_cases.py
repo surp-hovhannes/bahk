@@ -38,15 +38,16 @@ class Command(BaseCommand):
     help = "Write a church's icon catalogue and unreviewed feast cases for evaluate_icon_matching_cases."
 
     def add_arguments(self, parser):
-        parser.add_argument("--church-id", type=int, required=True)
+        parser.add_argument("--church-id", type=int, help="Defaults to the default church")
         parser.add_argument("--catalogue-json", required=True)
         parser.add_argument("--cases-json", required=True)
         parser.add_argument("--stored-icon-only", action="store_true", help="Only feasts that already have an icon")
 
     def handle(self, *args, **options):
-        church = Church.objects.filter(pk=options["church_id"]).first()
+        church_id = options["church_id"] or Church.get_default_pk()
+        church = Church.objects.filter(pk=church_id).first()
         if church is None:
-            raise CommandError(f"No church with id {options['church_id']}")
+            raise CommandError(f"No church with id {church_id}")
         outputs = [Path(options["catalogue_json"]), Path(options["cases_json"])]
         if outputs[0].resolve() == outputs[1].resolve():
             raise CommandError("--catalogue-json and --cases-json must differ")
