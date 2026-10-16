@@ -26,6 +26,7 @@ from hub.services.icon_matching import IconMatchRequest
 # nothing correct exists. assignable: may be written to the feast without a human;
 # defaults to correct, so a fallback is only assignable when a reviewer says so.
 # All empty means the catalogue holds nothing suitable and silence is right.
+# A case marked "reviewed": false (see export_icon_match_cases) is not scored yet.
 VERDICTS = ("exact", "acceptable", "wrong", "abstained", "missed", "error")
 DESIRABLE = ("exact", "acceptable", "abstained")
 EXPECTATIONS = ("exact_exists", "fallback_only", "nothing_suitable")
@@ -187,9 +188,9 @@ def evaluate_cases_clef(catalogue, cases, *, model="clef", profile=None, provide
     return {"profile": engine, **run_cases(cases, match_case)}
 
 
-def rescore(report, cases):
+def rescore(report, cases, skip=()):
     """Re-score a saved report (or a bare list of outcome rows) against current labels."""
-    rows = report["cases"] if isinstance(report, dict) else report
+    rows = [row for row in (report["cases"] if isinstance(report, dict) else report) if row["feast"] not in skip]
     by_feast = {case["feast"]: case for case in cases}
     rescored = []
     for row in rows:
@@ -248,6 +249,10 @@ class Command(BaseCommand):
             cases = json.loads(Path(options["cases_json"]).read_text())
             if not isinstance(cases, list):
                 raise ValueError("Cases must be an array")
+            unreviewed = [case["feast"] for case in cases if case.get("reviewed") is False]
+            cases = [case for case in cases if case.get("reviewed") is not False]
+            if not cases:
+                raise ValueError("No reviewed cases to score")
             if options["live"]:
                 catalogue = json.loads(Path(options["catalogue_json"]).read_text())
                 if not isinstance(catalogue, list):
@@ -264,7 +269,8 @@ class Command(BaseCommand):
                         arm_timeout=options["arm_timeout"],
                     )
             else:
-                report = rescore(json.loads(Path(options["rescore_json"]).read_text()), cases)
+                report = rescore(json.loads(Path(options["rescore_json"]).read_text()), cases, skip=set(unreviewed))
+            report["unreviewed_cases"] = unreviewed
             output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         except (OSError, ValueError, TypeError, KeyError) as exc:
             raise CommandError(f"Invalid case evaluation inputs: {exc}") from exc

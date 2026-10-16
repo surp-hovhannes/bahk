@@ -145,7 +145,16 @@ synthetic requests. Use full `clef`, not `clef-flash`, for anything that writes.
 - Run `--engine clef` and `--engine llm+clef` against the same cases and compare unsafe
   assignments, desirable top-1 and seconds per feast.
 - Extend the cases: 91 of the 2026 calendar's 177 distinct feasts already carry a stored icon.
-  Reviewing those is a gold set and a production data cleanup in one pass.
+  Reviewing those is a gold set and a production data cleanup in one pass. Against production:
+
+  ```bash
+  python manage.py export_icon_match_cases --stored-icon-only \
+    --catalogue-json catalogue.json --cases-json cases.json
+  ```
+
+  Every exported case is `"reviewed": false` with empty labels and the currently stored icon
+  shown for reference. Fill in the labels, flip `reviewed` to `true`, and the scorer picks the
+  case up; unreviewed cases are skipped and listed in `unreviewed_cases`.
 - Decide the portrait-for-event question above and encode it as `assignable` labels.
 - Put the catalogue before the request in `provider_payload()`; the assess payload is ~37k
   tokens, 96% of them the catalogue, identical across feasts, so prefix caching would cut most
