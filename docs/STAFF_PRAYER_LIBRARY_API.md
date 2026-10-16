@@ -18,6 +18,12 @@ GET query parameters:
 
 Set export in the CLI produces the import content shape in a new file, retaining order, texts, translations, tags and descriptions, including empty sets/blank translations. IDs/church/revision belong to staff inspection/receipt output rather than new-record content import. Exporting existing content does not authorize duplicating it; default title-conflict checks still apply to re-import.
 
+Staff snapshots also include nullable `icon_id` for prayers, sets and set members.
+Revisions include these assignments, so a concurrent admin icon edit or a member's
+icon change invalidates an old revision. Re-inspect after updating to this contract;
+previous revision hashes must not be reused. Content export/import intentionally
+exclude icon assignments; retain them separately through staff inspection.
+
 ## Plan and execution contract
 
 POST strict UTF-8 JSON, <=5 MiB; duplicate keys, unknown fields, non-finite numbers and invalid Unicode are rejected. All fields below are top-level. `preview` defaults to true and must be a boolean.
@@ -43,6 +49,18 @@ Execution adds `preview:false`, a canonical UUID `operation_key` and `digest`. D
 | members.reorder | `{"id":SET_ID,"prayer_ids":[ID,...]}` | required |
 
 Prayer metadata: title/text/category required on create; optional title_hy/text_hy/tags. Set metadata: title/category required; optional title_hy/description/description_hy. Updates are partial and cannot be empty. Explicit blank/null HY values clear that translation; omissions preserve it. Categories morning/evening/general, prayer titles <=200, set titles <=128, tag names <=100. Base titles/texts are nonblank. Full bilingual completeness is collection-specific, not imposed on every historic prayer.
+
+`prayer.update` and `set.update` additionally accept `icon_id`: a positive integer
+assigns/replaces an existing icon in the selected church; `null` clears it. Boolean,
+zero, negative and non-integer IDs are rejected. Missing/cross-church icons return
+404 without changing content or creating a receipt. Referenced icons are locked
+until the operation completes. Existing staff/church-grant, revision, digest and
+receipt guards apply unchanged. Omitted fields, tags and ordered membership are
+preserved, and no AI matching task is scheduled. Icon changes in previews show
+`icon_change: {current_icon_id: ID_OR_NULL, requested_icon_id: ID_OR_NULL}`;
+completed update receipts include the saved `icon_id`. Create/import remain
+content-only and reject this field. The set icon is a fallback cover; an uploaded
+set image still takes precedence. No schema migration is required.
 
 Imports require a nonempty root array. Sets may have an empty prayers array, consistent with set.create and removal of the final member. Each member is exclusively a new prayer or `{"prayer_id":ID}`. Standalone import accepts only new prayers. New normalized title matches in church and duplicates within the input cause 409: no overwrite/skip or inferred merge. Reuse is explicit by ID, leaving its fields/tags untouched. New records reuse shared admin validation/translation helpers. The old browser admin importer remains its existing contract and does not accept this reference extension.
 

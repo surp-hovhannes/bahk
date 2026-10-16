@@ -11,7 +11,7 @@ class LLMRequestTests(SimpleTestCase):
 
         openai_chat_completion(
             client,
-            model="gpt-5-mini",
+            model="gpt-5.6-luna",
             messages=[{"role": "user", "content": "hello"}],
             max_tokens=100,
             temperature=0.2,
@@ -19,7 +19,7 @@ class LLMRequestTests(SimpleTestCase):
         )
 
         client.chat.completions.create.assert_called_once_with(
-            model="gpt-5-mini",
+            model="gpt-5.6-luna",
             messages=[{"role": "user", "content": "hello"}],
             max_completion_tokens=100,
         )

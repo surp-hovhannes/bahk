@@ -1027,17 +1027,24 @@ class GeocodingCache(models.Model):
 class LLMPrompt(models.Model):
     """Model for storing LLM prompts used to generate content."""
 
+    # Legacy IDs stay listed so saved rows remain valid and editable;
+    # LLMPrompt.clean() stops them being newly selected or activated.
     MODEL_CHOICES = [
-        ("o4-mini", "o4 Mini"),
-        ("gpt-4o-mini", "GPT 4o Mini"),
-        ("gpt-5-mini", "GPT 5 Mini"),
-        ("gpt-5-nano", "GPT 5 Nano"),
-        ("gpt-5-mini-2025-08-07", "GPT 5 Mini (2025-08-07)"),
-        ("gpt-5", "GPT 5"),
-        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+        ("claude-haiku-5-5", "Claude Haiku 5.5"),
         ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
-        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
-        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet")
+        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("gpt-5.6-sol", "GPT 5.6 Sol"),
+        ("gpt-5.6-terra", "GPT 5.6 Terra"),
+        ("gpt-5.6-luna", "GPT 5.6 Luna"),
+        ("gpt-4o-mini", "GPT 4o Mini"),
+        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5 (deprecated)"),
+        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet (retired)"),
+        ("o4-mini", "o4 Mini (deprecated)"),
+        ("gpt-5", "GPT 5 (deprecated)"),
+        ("gpt-5-mini", "GPT 5 Mini (deprecated)"),
+        ("gpt-5-nano", "GPT 5 Nano (deprecated)"),
+        ("gpt-5-mini-2025-08-07", "GPT 5 Mini 2025-08-07 (deprecated)"),
     ]
 
     APPLIES_TO_CHOICES = [
@@ -1065,6 +1072,36 @@ class LLMPrompt(models.Model):
         help_text="If True, this prompt is the one currently used for generation",
     )
 
+    def clean(self):
+        """Reject selections that cannot be served.
+
+        Legacy rows keep their model for provenance and stay editable, but a
+        deprecated or retired model cannot be newly chosen or activated.
+        """
+        from hub.services.llm_models import ANTHROPIC, UnsupportedModelError, can_activate, provider_for
+
+        super().clean()
+        previous = (
+            LLMPrompt.objects.filter(pk=self.pk).values("model", "active", "applies_to").first()
+            if self.pk else None
+        )
+        newly_selected = previous is None or previous["model"] != self.model
+        newly_activated = self.active and (previous is None or not previous["active"])
+        newly_assigned = previous is None or previous["applies_to"] != self.applies_to
+        # Preserve legacy IDs for ordinary edits and deactivation. Validate
+        # provider compatibility when selecting, activating or changing workload.
+        if newly_selected or newly_activated or newly_assigned:
+            try:
+                provider = provider_for(self.model)
+            except UnsupportedModelError as exc:
+                raise ValidationError({"model": str(exc)})
+            if self.applies_to == "prayer_requests" and provider != ANTHROPIC:
+                raise ValidationError({"model": "Prayer request moderation supports Claude models only."})
+        if (newly_selected or newly_activated) and not can_activate(self.model):
+            raise ValidationError(
+                {"model": f"{self.model} is deprecated or retired; choose a supported model."}
+            )
+
     def save(self, *args, **kwargs):
         """Override save to ensure only one prompt can be active per applies_to type."""
         if self.active:
@@ -1087,14 +1124,9 @@ class LLMPrompt(models.Model):
         Raises:
             ValueError: If the model type is not supported.
         """
-        from hub.services.llm_service import OpenAIService, AnthropicService
+        from hub.services.llm_service import get_llm_service
 
-        if self.model.startswith(("gpt", "o1", "o3", "o4")):
-            return OpenAIService()
-        elif "claude" in self.model:
-            return AnthropicService()
-        else:
-            raise ValueError(f"Unsupported model: {self.model}")
+        return get_llm_service(self.model)
 
     def __str__(self):
         status = " (Active)" if self.active else ""

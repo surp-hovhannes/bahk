@@ -15,6 +15,7 @@ from hub.services.feast_contexts import (
     get_feast_context_task_status,
     set_feast_context_task_status,
 )
+from hub.services.llm_models import DEFAULT_CLAUDE_CLASSIFIER_MODEL
 from hub.services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
@@ -379,7 +380,7 @@ def determine_feast_designation_task(self, feast_id: int):
         model_name = llm_prompt.model
     
     try:
-        service = get_llm_service(model_name if model_name else 'claude-sonnet-4-5-20250929')
+        service = get_llm_service(model_name if model_name else DEFAULT_CLAUDE_CLASSIFIER_MODEL)
         designation = service.determine_feast_designation(feast, model_name)
         
         if designation:

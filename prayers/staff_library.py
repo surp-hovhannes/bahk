@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from taggit.models import Tag
 
 from hub.models import Church
+from icons.models import Icon
 from prayers.import_utils import _apply_translations, validate_import_json
 from prayers.models import Prayer, PrayerLibraryChurchGrant, PrayerLibraryOperation, PrayerSet, PrayerSetMembership
 
@@ -47,7 +48,7 @@ def snapshot(obj):
     if isinstance(obj, PrayerSet) and obj.memberships.exclude(prayer__church_id=obj.church_id).exists():
         raise Conflict('Existing membership crosses church scope; repair separately before management.')
     fields = ('title', 'description') if isinstance(obj, PrayerSet) else ('title', 'text')
-    result = {'id': obj.pk, 'church_id': obj.church_id, 'category': obj.category}
+    result = {'id': obj.pk, 'church_id': obj.church_id, 'category': obj.category, 'icon_id': obj.icon_id}
     for field in fields:
         result[field] = getattr(obj, field)
         result[field + '_hy'] = (obj.i18n or {}).get(field + '_hy', '')
@@ -63,14 +64,20 @@ def revision(obj):
     return digest(snapshot(obj))
 
 
-def metadata(data, is_set=False, partial=False):
+def metadata(data, is_set=False, partial=False, church=None):
     allowed = {'title', 'title_hy', 'category'} | ({'description', 'description_hy'} if is_set else {'text', 'text_hy', 'tags'})
+    if partial:
+        allowed.add('icon_id')
     strict(data, allowed)
     required = set() if partial else ({'title', 'category'} if is_set else {'title', 'text', 'category'})
     if required - set(data) or (partial and not data):
         raise ValidationError('Missing required fields.')
     for key, value in data.items():
-        if key == 'category':
+        if key == 'icon_id':
+            if value is not None:
+                positive(value)
+                get_object_or_404(Icon.objects.select_for_update(), pk=value, church=church)
+        elif key == 'category':
             if not isinstance(value, str) or value not in {'morning', 'evening', 'general'}:
                 raise ValidationError('Invalid category.')
         elif key == 'tags':
@@ -95,7 +102,7 @@ def metadata(data, is_set=False, partial=False):
 
 
 def apply(obj, data):
-    for field in ('title', 'text', 'description', 'category'):
+    for field in ('title', 'text', 'description', 'category', 'icon_id'):
         if field in data:
             setattr(obj, field, data[field])
     _apply_translations(obj, data, 'set' if isinstance(obj, PrayerSet) else 'prayer')
@@ -215,11 +222,12 @@ def run(action, payload, church, if_match, preview=False):
     if verb == 'update' and kind != 'members':
         strict(payload, {'id', 'record'})
         data = payload.get('record')
-        metadata(data, is_set, partial=True)
+        metadata(data, is_set, partial=True, church=church)
         if 'title' in data:
             unique_title(model, church, data['title'], obj.pk)
         if preview:
-            return {**plan, 'changed_fields': sorted(data), 'tags': data.get('tags', [])}
+            changes = {'icon_change': {'current_icon_id': obj.icon_id, 'requested_icon_id': data['icon_id']}} if 'icon_id' in data else {}
+            return {**plan, 'changed_fields': sorted(data), 'tags': data.get('tags', []), **changes}
         apply(obj, data)
     elif verb == 'delete' and kind != 'members':
         strict(payload, {'id', 'affected_set_ids'} if not is_set else {'id'})
@@ -274,7 +282,10 @@ def run(action, payload, church, if_match, preview=False):
         resequence(obj, ids)
     else:
         raise ValidationError('Unknown library action.')
-    return {'id': obj.pk, 'revision': revision(obj), 'positions': plan['positions']}
+    result = {'id': obj.pk, 'revision': revision(obj), 'positions': plan['positions']}
+    if verb == 'update' and kind != 'members' and 'icon_id' in data:
+        result['icon_id'] = obj.icon_id
+    return result
 
 
 class StrictJSONParser(BaseParser):

@@ -176,8 +176,9 @@ dump.rdb
 # cursor rules
 .cursorrules
 
-# claude rules
-.claude/
+# claude rules (shared settings.json holds the cloud SessionStart hook)
+.claude/*
+!.claude/settings.json
 
 # push notifications
 certificate.pem
@@ -204,3 +205,6 @@ test_media/
 
 # Generated build artifact of scripts/scrape_bible_hy.py; not a source of truth.
 hub/data/bible_hy/validation_report.json
+
+# Claude Code cloud session setup log
+.venv-setup.log
