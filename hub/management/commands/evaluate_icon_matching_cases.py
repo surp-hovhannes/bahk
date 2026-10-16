@@ -112,7 +112,8 @@ def evaluate_cases(catalogue, cases, profile, *, provider_factory=None, arm_time
                 profile=profile,
             )
             row = {
-                **score(case, outcome.status, outcome.matches),
+                # Unavailable means nothing was assessed: an error, not a silence.
+                **score(case, outcome.status, outcome.matches, failed=outcome.status == "unavailable"),
                 "status": outcome.status,
                 "assessed": outcome.assessed_count,
                 "catalogue_count": outcome.catalogue_count,
@@ -140,7 +141,11 @@ def rescore(report, cases):
         case = by_feast.get(row["feast"])
         if case is None:
             raise ValueError(f"No labelled case for {row['feast']!r}")
-        failed = row.get("verdict") == "error" or "arm_failed" in row.get("diagnostics", ())
+        failed = (
+            row.get("verdict") == "error"
+            or row.get("status") == "unavailable"
+            or "arm_failed" in row.get("diagnostics", ())
+        )
         status, matches = row.get("status"), row.get("matches") or []
         rescored.append({**row, **score(case, status, matches, failed=failed)})
     missing = sorted(set(by_feast) - {row["feast"] for row in rows})

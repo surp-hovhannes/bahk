@@ -19,6 +19,13 @@ FALLBACK = {"feast": "Beheading", "correct": [], "acceptable": [3]}
 NOTHING = {"feast": "Remembrance of the Dead", "correct": [], "acceptable": []}
 
 
+class FailingProvider:
+    model = "offline-failing"
+
+    def call(self, stage, payload, schema, timeout):
+        raise RuntimeError("provider down")
+
+
 def match(icon_id, assignable=False):
     return {"id": icon_id, "auto_assignable": assignable}
 
@@ -97,6 +104,18 @@ class RescoreTests(SimpleTestCase):
         )
         self.assertEqual(relabelled["unsafe_assignment_count"], 0)
         self.assertEqual(relabelled["profile"], {"profile_id": "x"})
+
+    def test_unavailable_outcome_is_an_error_not_a_silence(self):
+        rows = [{"feast": "Remembrance of the Dead", "status": "unavailable", "matches": []}]
+        self.assertEqual(rescore(rows, [NOTHING])["verdicts"]["error"], 1)
+        report = evaluate_cases(
+            [{"id": 1, "title": "x", "tags": []}],
+            [NOTHING],
+            CONTROL,
+            provider_factory=lambda p: FailingProvider(),
+        )
+        self.assertEqual(report["verdicts"]["error"], 1)
+        self.assertEqual(report["desirable_count"], 0)
 
     def test_rescore_rejects_unlabelled_rows(self):
         with self.assertRaises(ValueError):
