@@ -6,7 +6,7 @@ This script tracks memory usage during the startup sequence to help identify
 what's causing high memory consumption at worker initialization.
 
 Usage:
-    heroku run python memory_debug.py -a yourapp
+    python memory_debug.py   (from the service's Shell tab on Render)
 """
 
 import os
