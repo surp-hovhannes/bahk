@@ -117,6 +117,19 @@ class RescoreTests(SimpleTestCase):
         self.assertEqual(report["verdicts"]["error"], 1)
         self.assertEqual(report["desirable_count"], 0)
 
+    def test_an_unfinished_run_that_found_nothing_is_an_error_not_a_silence(self):
+        rows = [{"feast": "Remembrance of the Dead", "status": "partial", "matches": []}]
+        report = rescore(rows, [NOTHING])
+        self.assertEqual(report["verdicts"]["error"], 1)
+        self.assertEqual(report["desirable_count"], 0)
+        # A partial run that did return matches is still scored on them, and never assigns.
+        rows = [{"feast": "Palm Sunday", "status": "partial", "matches": [match(1, True)]}]
+        report = rescore(rows, [EXACT])
+        self.assertEqual((report["verdicts"]["exact"], report["assigned_count"]), (1, 0))
+
+    def test_truthy_auto_assignable_counts_as_written_as_production_does(self):
+        self.assertEqual(score(EXACT, "complete", [{"id": 2, "auto_assignable": 1}])["assigned_id"], 2)
+
     def test_rescore_rejects_unlabelled_rows(self):
         with self.assertRaises(ValueError):
             rescore([{"feast": "Unknown", "status": "complete", "matches": []}], [EXACT])
@@ -154,6 +167,54 @@ class CommandTests(SimpleTestCase):
             report = json.loads((root / "out.json").read_text())
             self.assertEqual(report["verdicts"]["exact"], 1)
             self.assertEqual(report["assigned_count"], 1)
+
+    def run_command(self, root, cases, **options):
+        (root / "cases.json").write_text(json.dumps(cases))
+        (root / "report.json").write_text(json.dumps([]))
+        options.setdefault("rescore_json", str(root / "report.json"))
+        call_command(
+            "evaluate_icon_matching_cases",
+            cases_json=str(root / "cases.json"),
+            output_json=options.pop("output_json", str(root / "out.json")),
+            stdout=StringIO(),
+            **options,
+        )
+
+    def test_rejects_label_files_the_scorer_would_misread(self):
+        for cases in (
+            [EXACT, {**NOTHING, "feast": EXACT["feast"]}],
+            [EXACT, {**EXACT, "reviewed": False}],
+            [{**EXACT, "assignable": [3]}],
+        ):
+            with self.subTest(cases=cases), TemporaryDirectory() as directory:
+                with self.assertRaises(CommandError):
+                    self.run_command(Path(directory), cases)
+                self.assertFalse((Path(directory) / "out.json").exists())
+
+    def test_never_overwrites_an_existing_report(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "out.json").write_text("paid run")
+            with self.assertRaises(CommandError):
+                self.run_command(root, [EXACT])
+            self.assertEqual((root / "out.json").read_text(), "paid run")
+
+    def test_checks_the_output_path_before_any_billable_call(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "catalogue.json").write_text(json.dumps([{"id": 1, "title": "Palm Sunday", "tags": []}]))
+            with patch("hub.management.commands.evaluate_icon_matching_cases.OpenAIIconProvider") as provider:
+                with self.assertRaises(CommandError):
+                    self.run_command(
+                        root,
+                        [EXACT],
+                        rescore_json=None,
+                        live=True,
+                        profile=CONTROL.id,
+                        catalogue_json=str(root / "catalogue.json"),
+                        output_json=str(root / "missing" / "out.json"),
+                    )
+            provider.assert_not_called()
 
     def test_refuses_to_overwrite_an_input(self):
         with TemporaryDirectory() as directory:

@@ -10,6 +10,7 @@ marked `"reviewed": false`, so the file can be scored as labelling progresses.
 import json
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from hub.models import Church, Feast
@@ -44,10 +45,13 @@ class Command(BaseCommand):
         parser.add_argument("--stored-icon-only", action="store_true", help="Only feasts that already have an icon")
 
     def handle(self, *args, **options):
-        church_id = options["church_id"] or Church.get_default_pk()
-        church = Church.objects.filter(pk=church_id).first()
+        # Look the default church up rather than Church.get_default_pk(), which creates it.
+        if options["church_id"]:
+            church = Church.objects.filter(pk=options["church_id"]).first()
+        else:
+            church = Church.objects.filter(name=settings.DEFAULT_CHURCH_NAME).first()
         if church is None:
-            raise CommandError(f"No church with id {church_id}")
+            raise CommandError(f"No church {options['church_id'] or settings.DEFAULT_CHURCH_NAME!r}")
         outputs = [Path(options["catalogue_json"]), Path(options["cases_json"])]
         if outputs[0].resolve() == outputs[1].resolve():
             raise CommandError("--catalogue-json and --cases-json must differ")

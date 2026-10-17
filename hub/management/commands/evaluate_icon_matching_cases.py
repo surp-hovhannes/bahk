@@ -51,9 +51,31 @@ def verdict(case, matches):
 def assigned_id(status, matches):
     """The icon production would write: hub/tasks/icon_tasks.py writes only a
     complete outcome's first match, and only when it is auto_assignable."""
-    if status == "complete" and matches and matches[0].get("auto_assignable") is True:
+    if status == "complete" and matches and matches[0].get("auto_assignable"):
         return matches[0]["id"]
     return None
+
+
+def failed_outcome(status, matches):
+    """Nothing to score: unavailable, or an unfinished run that found nothing.
+
+    A partial run's silence is not an abstention: the matcher stopped looking.
+    """
+    return status == "unavailable" or (status != "complete" and not matches)
+
+
+def validate_cases(cases):
+    """Reject label files the scorer would misread, before anything is billed."""
+    names = [case["feast"] for case in cases]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        # Rows are matched to labels by name, so a repeated name would score one
+        # feast against another's labels.
+        raise ValueError(f"Duplicate feast names: {duplicates}")
+    for case in cases:
+        labelled = set(case.get("correct", ())) | set(case.get("acceptable", ()))
+        if "assignable" in case and not set(case["assignable"]) <= labelled:
+            raise ValueError(f"{case['feast']!r}: assignable ids must also be correct or acceptable")
 
 
 def score(case, status, matches, *, failed=False):
@@ -114,7 +136,7 @@ def evaluate_cases(catalogue, cases, profile, *, provider_factory=None, arm_time
             )
             row = {
                 # Unavailable means nothing was assessed: an error, not a silence.
-                **score(case, outcome.status, outcome.matches, failed=outcome.status == "unavailable"),
+                **score(case, outcome.status, outcome.matches, failed=failed_outcome(outcome.status, outcome.matches)),
                 "status": outcome.status,
                 "assessed": outcome.assessed_count,
                 "catalogue_count": outcome.catalogue_count,
@@ -142,12 +164,12 @@ def rescore(report, cases, skip=()):
         case = by_feast.get(row["feast"])
         if case is None:
             raise ValueError(f"No labelled case for {row['feast']!r}")
+        status, matches = row.get("status"), row.get("matches") or []
         failed = (
             row.get("verdict") == "error"
-            or row.get("status") == "unavailable"
+            or failed_outcome(status, matches)
             or "arm_failed" in row.get("diagnostics", ())
         )
-        status, matches = row.get("status"), row.get("matches") or []
         rescored.append({**row, **score(case, status, matches, failed=failed)})
     missing = sorted(set(by_feast) - {row["feast"] for row in rows})
     summary = summarise(rescored)
@@ -184,9 +206,15 @@ class Command(BaseCommand):
             }
             if output.resolve() in inputs:
                 raise ValueError("Output must not overwrite an input")
+            # Checked before any billable call, so a paid run is never lost or overwrites another.
+            if output.exists():
+                raise ValueError(f"Refusing to overwrite {output}")
+            if not output.parent.is_dir():
+                raise ValueError(f"No directory for {output}")
             cases = json.loads(Path(options["cases_json"]).read_text())
             if not isinstance(cases, list):
                 raise ValueError("Cases must be an array")
+            validate_cases(cases)
             unreviewed = [case["feast"] for case in cases if case.get("reviewed") is False]
             cases = [case for case in cases if case.get("reviewed") is not False]
             if not cases:
