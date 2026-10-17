@@ -16,7 +16,7 @@ import subprocess
 import sys
 import zipfile
 from collections import Counter, defaultdict
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
@@ -231,9 +231,13 @@ def routing(
     model="clef",
 ):
     """Execute real task body against invented/memory-only objects and mocks."""
-    code, _ = isolate(ROOT / "prayers/tasks.py", {"moderate_prayer_request_task"})
+    code, _ = isolate(
+        ROOT / "prayers/tasks.py",
+        {"moderate_prayer_request_task", "_lock_if_still_waiting", "_apply_moderation_result"},
+    )
     request = SimpleNamespace(
         id=1,
+        pk=1,
         title=title,
         description=description,
         reviewed=False,
@@ -247,9 +251,14 @@ def routing(
     email = Mock()
     namespace = {
         "PrayerRequest": SimpleNamespace(
-            objects=SimpleNamespace(get=Mock(return_value=request)),
+            objects=SimpleNamespace(
+                get=Mock(return_value=request),
+                select_for_update=Mock(return_value=SimpleNamespace(get=Mock(return_value=request))),
+            ),
             DoesNotExist=type("Missing", (Exception,), {}),
         ),
+        # The route is applied under a row lock; memory-only objects need no transaction.
+        "transaction": SimpleNamespace(atomic=nullcontext),
         "profanity": SimpleNamespace(contains_profanity=Mock(side_effect=[profane, False])),
         "settings": SimpleNamespace(PRAYER_MODERATION_ENGINE="clef", PRAYER_MODERATION_CLEF_MODEL=model),
         "clef_moderation_result": provider,
