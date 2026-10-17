@@ -13,9 +13,9 @@ report can be re-scored against the current labels for free (`--rescore-json`).
 
 **Catalogue.** `hub/tests/data/icon_catalogue_snapshot_2026-09-13.json`: all 440 production
 icons (id, title, tags) from the public `/api/icons/` endpoint on 2026-09-13, committed so runs
-are reproducible as the live catalogue grows. Production holds one church, so this is also the
-catalogue the feast task searches; with several churches, export one church's icons instead
-(`export_icon_match_cases`).
+are reproducible as the live catalogue grows. Every production icon belongs to one church, so
+this is also the catalogue the feast task searches; once icons span churches, export one
+church's icons instead (`export_icon_match_cases`).
 
 **Cases.** `hub/tests/data/icon_match_cases_armenian_12.json`: 12 feasts from the 2026 calendar,
 chosen (not sampled) to cover three situations the matcher must tell apart:
