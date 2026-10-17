@@ -455,6 +455,74 @@ class SemanticMatchingTests(SimpleTestCase):
         self.assertIn("assignment_floor:exact_subject", outcome.diagnostics)
         self.assertFalse(outcome.matches[0]["auto_assignable"])
 
+    def test_a_row_contradicting_an_accepted_icon_vetoes_it_in_either_order(self):
+        """Only an exact copy is harmless; any other row about the same icon is a disagreement."""
+        for change in (
+            {"conflict": True},
+            {"confidence": "low"},
+            {"identity_qualified": False},
+            {"full_request_coverage": False},
+            {"relation": "thematic"},
+        ):
+            for first in (False, True):
+                with self.subTest(change=change, contradiction_first=first):
+
+                    def mutate(stage, payload, result, change=change, first=first):
+                        if stage == "assess":
+                            other = {**deepcopy(result["matches"][0]), **change}
+                            result["matches"].insert(0 if first else len(result["matches"]), other)
+
+                    outcome, _ = self.run_match(mutate=mutate)
+                    self.assertEqual(outcome.status, "complete")
+                    self.assertIn("contradicted_candidate", outcome.diagnostics)
+                    self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_a_malformed_id_naming_an_accepted_icon_vetoes_it(self):
+        for icon_id in (1.0, "1", True):
+            with self.subTest(icon_id=icon_id):
+
+                def mutate(stage, payload, result, icon_id=icon_id):
+                    if stage == "assess":
+                        result["matches"].append(
+                            {**deepcopy(result["matches"][0]), "id": icon_id, "relation": "thematic"}
+                        )
+
+                outcome, _ = self.run_match(mutate=mutate)
+                self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_a_malformed_row_cannot_hide_behind_a_downgraded_row_for_its_icon(self):
+        """The repeat rule compares rows, not claims: a weaker valid row does not excuse a stronger bad one."""
+
+        def mutate(stage, payload, result):
+            if stage == "assess":
+                strong = candidate(2, "Other scene")
+                strong["evidence"][0]["quote"] = "not a substring of any source"
+                result["matches"].append(strong)
+
+        weak = candidate(2, "Other scene", full_request_coverage=False)
+        outcome, _ = self.run_match(matches=[self.match, weak], mutate=mutate)
+        self.assertEqual(outcome.matches[0]["id"], 1)
+        self.assertIn("assignment_floor:exact_subject", outcome.diagnostics)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_a_repair_that_still_drops_rows_keeps_the_first_attempts_claims(self):
+        def mutate(stage, payload, result):
+            if stage != "assess":
+                return
+            for match in result["matches"]:
+                if "validation_feedback" not in payload:
+                    match["evidence"][0]["quote"] = "fabricated"
+                elif match["id"] == 2:
+                    match["relation"] = "thematic"
+                    match["evidence"][0]["quote"] = "fabricated"
+
+        outcome, provider = self.run_match(
+            matches=[self.match, candidate(2, "Other scene", relevance=10)], mutate=mutate
+        )
+        self.assertEqual([c[0] for c in provider.calls], ["analyze", "assess", "assess", "verify"])
+        self.assertIn("assignment_floor:exact_subject", outcome.diagnostics)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
     def test_every_candidate_invalid_still_fails_its_batch(self):
         def mutate(stage, payload, result):
             if stage == "assess":

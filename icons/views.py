@@ -308,7 +308,8 @@ class IconMatchView(views.APIView):
                 match_data['icon'] = IconSerializer(icon).data
             matches.append(match_data)
         response_data = {**outcome.to_dict(), 'matches': matches}
-        if outcome.status == 'complete' and use_match_cache:
+        # A run that discarded a row may have dropped the best icon: answer, but don't cache it.
+        if outcome.status == 'complete' and use_match_cache and 'invalid_assessed_candidate' not in outcome.diagnostics:
             cache.set(cache_key, response_data, IconViewCache.MATCH_TTL)
         response_status = 503 if outcome.status == 'unavailable' and not matches else 200
         return Response(response_data, status=response_status)
