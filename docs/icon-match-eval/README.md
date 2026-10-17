@@ -13,7 +13,9 @@ report can be re-scored against the current labels for free (`--rescore-json`).
 
 **Catalogue.** `hub/tests/data/icon_catalogue_snapshot_2026-09-13.json`: all 440 production
 icons (id, title, tags) from the public `/api/icons/` endpoint on 2026-09-13, committed so runs
-are reproducible as the live catalogue grows.
+are reproducible as the live catalogue grows. Every production icon belongs to one church, so
+this is also the catalogue the feast task searches; once icons span churches, export one
+church's icons instead (`export_icon_match_cases`).
 
 **Cases.** `hub/tests/data/icon_match_cases_armenian_12.json`: 12 feasts from the 2026 calendar,
 chosen (not sampled) to cover three situations the matcher must tell apart:
@@ -29,7 +31,8 @@ Each case has three label lists and a `note`:
 - `correct`: depicts the commemoration.
 - `acceptable`: a reasonable suggestion when nothing correct exists.
 - `assignable`: may be written to the feast with no human in the loop. **Defaults to
-  `correct`**, so a fallback is only assignable when a reviewer adds it here. Policy: a portrait
+  `correct`**, so a fallback is only assignable when a reviewer adds it here. When present it
+  replaces that default, and every id in it must also be `correct` or `acceptable`. Policy: a portrait
   of the commemorated saint is assignable when no more specific depiction (such as the event
   itself) exists; a scene in which the saint merely appears is not.
 
@@ -37,7 +40,8 @@ Each case has three label lists and a `note`:
 
 Per case, the top-ranked match gets one verdict: `exact`, `acceptable`, `wrong`, `abstained`
 (nothing returned, and nothing fits), `missed` (nothing returned, but something fits) or
-`error`. `desirable_count` is `exact + acceptable + abstained`; `by_expectation` breaks the
+`error` (unavailable, or a partial run that returned nothing: the matcher stopped looking, so
+its silence is not an abstention). `desirable_count` is `exact + acceptable + abstained`; `by_expectation` breaks the
 verdicts down per row of the table above.
 
 Assignment is scored the way production writes: `hub/tasks/icon_tasks.py` writes an icon only
@@ -57,6 +61,9 @@ python manage.py evaluate_icon_matching_cases \
   --output-json    /tmp/control-v1.json \
   --live
 ```
+
+Feast names must be unique within a case file, because report rows are matched to labels by
+name. The output file must not exist yet; both are checked before any billable call.
 
 Offline, after editing labels:
 

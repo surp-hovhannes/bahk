@@ -48,9 +48,27 @@ class ExportIconMatchCasesTests(TestCase):
         self.assertEqual(cases[1]["stored_icon"], {"id": self.icon.id, "title": "Palm Sunday"})
 
     def test_stored_icon_only_for_the_default_church(self):
+        other = Church.objects.create(name="Other parish")
+        other_icon = Icon.objects.create(
+            title="Palm Sunday",
+            church=other,
+            image=SimpleUploadedFile("other.jpg", b"fake", content_type="image/jpeg"),
+        )
+        with patch("hub.signals.match_icon_to_feast_task.delay"):
+            Feast.objects.create(church=other, name="Other feast", icon=other_icon)
         with TemporaryDirectory() as directory:
-            _, cases = self.export(Path(directory), stored_icon_only=True, church_id=None)
+            catalogue, cases = self.export(Path(directory), stored_icon_only=True, church_id=None)
         self.assertEqual([c["feast"] for c in cases], ["Palm Sunday"])
+        self.assertEqual([i["id"] for i in catalogue], [self.icon.id])
+
+    def test_a_missing_default_church_is_an_error_not_a_new_row(self):
+        Church.objects.filter(pk=self.church.pk).update(name="Renamed parish")
+        churches = Church.objects.count()
+        with TemporaryDirectory() as directory:
+            with self.assertRaises(CommandError):
+                self.export(Path(directory), church_id=None)
+            self.assertFalse((Path(directory) / "cases.json").exists())
+        self.assertEqual(Church.objects.count(), churches)
 
     def test_never_overwrites_a_case_file(self):
         with TemporaryDirectory() as directory:
