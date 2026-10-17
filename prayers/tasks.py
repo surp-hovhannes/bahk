@@ -256,6 +256,163 @@ def _llm_moderation_result(prayer_request):
     return llm_result
 
 
+def _lock_if_still_waiting(prayer_request):
+    """Lock the request's row and return it fresh, or None if it was moderated since it was read.
+
+    The model call can take many seconds; a reviewer may decide in the meantime, and their
+    decision must stand. Call inside a transaction: the dashboard's actions take the same lock.
+    """
+    locked = PrayerRequest.objects.select_for_update().get(pk=prayer_request.pk)
+    if locked.reviewed or locked.status != prayer_request.status:
+        return None
+    return locked
+
+
+def _apply_moderation_result(prayer_request, llm_result, profanity_check):
+    """Route a request on the model's result. Call with its row locked (_lock_if_still_waiting)."""
+    prayer_request_id = prayer_request.id
+    # Update prayer request based on LLM result
+    prayer_request.reviewed = True
+    prayer_request.moderated_at = timezone.now()
+
+    # Extract severity and review flags
+    valid_severities = {"low", "medium", "high", "critical"}
+    severity_raw = llm_result.get("severity")
+    severity = str(severity_raw).strip().lower() if severity_raw else "low"
+    if severity not in valid_severities:
+        severity = "low"
+
+    requires_review = bool(llm_result.get("requires_human_review", False))
+
+    default_action = "approve" if llm_result.get("approved") else "reject"
+    suggested_action_raw = llm_result.get("suggested_action")
+    suggested_action = str(suggested_action_raw).strip().lower() if suggested_action_raw else default_action
+
+    # Store moderation metadata
+    prayer_request.moderation_severity = severity
+    prayer_request.moderation_result = {
+        "profanity_check": profanity_check,
+        "llm_check": llm_result,
+        "reason": llm_result.get("reason", "Processed by automated moderation"),
+    }
+
+    # Safety takes precedence over profanity; keep these requests unpublished.
+    # Handle critical severity - always escalate
+    if severity == "critical" or suggested_action == "escalate":
+        prayer_request.moderation_severity = "critical"
+        prayer_request.status = "rejected"
+        prayer_request.requires_human_review = True
+        prayer_request.save()
+
+        # Send urgent email to admin
+        _send_moderation_alert_email(prayer_request, "critical_safety_concern")
+
+        logger.warning(
+            f"CRITICAL: Prayer request {prayer_request_id} flagged for safety concerns "
+            f"(severity={severity}, suggested_action={suggested_action}): {llm_result.get('reason')}"
+        )
+
+    # A word-list hit on a request the model would have approved is usually
+    # everyday language ("a damn hard market"): let a person decide.
+    elif not profanity_check["passed"] and suggested_action == "approve":
+        prayer_request.status = "pending_moderation"
+        prayer_request.requires_human_review = True
+        prayer_request.moderation_severity = "high"
+        prayer_request.moderation_result["reason"] = (
+            "Contains a listed profanity word but otherwise reads as a genuine prayer request"
+        )
+        prayer_request.save()
+        _send_moderation_alert_email(prayer_request, "requires_review")
+        logger.info(f"Prayer request {prayer_request_id} has profanity but reads as genuine; sent to review")
+
+    # Reject profanity only after the model has had a chance to escalate.
+    elif not profanity_check["passed"]:
+        prayer_request.status = "rejected"
+        prayer_request.requires_human_review = False
+        prayer_request.moderation_result["reason"] = "Content contains inappropriate language"
+        prayer_request.save()
+        _send_moderation_alert_email(prayer_request, "profanity_detected")
+        logger.info(f"Prayer request {prayer_request_id} rejected due to profanity")
+
+    # Handle high severity - flag for review regardless of approval
+    elif severity == "high" or requires_review or suggested_action == "flag_for_review":
+        prayer_request.status = "pending_moderation"
+        prayer_request.requires_human_review = True
+        prayer_request.save()
+
+        # Send email to admin for manual review
+        _send_moderation_alert_email(prayer_request, "requires_review")
+
+        logger.info(
+            f"Prayer request {prayer_request_id} flagged for human review (severity: {severity}): "
+            f"{llm_result.get('reason')}"
+        )
+
+    # Handle approved requests
+    elif llm_result.get("approved", False):
+        prayer_request.status = "approved"
+        prayer_request.requires_human_review = False
+
+        # Save immediately so milestone check sees the updated status
+        prayer_request.save()
+
+        # Create event for approved prayer request
+        Event.create_event(
+            event_type_code=EventType.PRAYER_REQUEST_CREATED,
+            user=prayer_request.requester,
+            target=prayer_request,
+            title=f"Prayer request created: {prayer_request.title}",
+            data={
+                "prayer_request_id": prayer_request.id,
+                "is_anonymous": prayer_request.is_anonymous,
+            },
+        )
+
+        # Check for first prayer request milestone
+        if prayer_request.requester.prayer_requests.filter(status="approved").count() == 1:
+            UserMilestone.create_milestone(
+                user=prayer_request.requester,
+                milestone_type="first_prayer_request_created",
+                related_object=prayer_request,
+                data={
+                    "prayer_request_id": prayer_request.id,
+                    "title": prayer_request.title,
+                },
+            )
+
+        # Automatically accept own prayer request
+        from prayers.models import PrayerRequestAcceptance
+
+        PrayerRequestAcceptance.objects.get_or_create(
+            prayer_request=prayer_request,
+            user=prayer_request.requester,
+            defaults={"counts_for_milestones": False},
+        )
+
+        logger.info(f"Prayer request {prayer_request_id} approved by LLM (severity: {severity})")
+
+    # Handle rejected requests
+    else:
+        prayer_request.status = "rejected"
+        prayer_request.requires_human_review = False
+        prayer_request.save()
+
+        # Send email to admin for awareness
+        _send_moderation_alert_email(prayer_request, "llm_rejected")
+
+        logger.info(
+            f"Prayer request {prayer_request_id} rejected by LLM (severity: {severity}): "
+            f"{llm_result.get('reason')}"
+        )
+
+    prayer_request.save()
+
+    result = {"success": True, "status": prayer_request.status, "llm_result": llm_result}
+    if not profanity_check["passed"] and severity != "critical" and suggested_action != "escalate":
+        result["reason"] = "profanity"
+    return result
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def moderate_prayer_request_task(self, prayer_request_id):
     """
@@ -295,167 +452,38 @@ def moderate_prayer_request_task(self, prayer_request_id):
             else:
                 llm_result = _llm_moderation_result(prayer_request)
 
-            # Update prayer request based on LLM result
-            prayer_request.reviewed = True
-            prayer_request.moderated_at = timezone.now()
-
-            # Extract severity and review flags
-            valid_severities = {"low", "medium", "high", "critical"}
-            severity_raw = llm_result.get("severity")
-            severity = str(severity_raw).strip().lower() if severity_raw else "low"
-            if severity not in valid_severities:
-                severity = "low"
-
-            requires_review = bool(llm_result.get("requires_human_review", False))
-
-            default_action = "approve" if llm_result.get("approved") else "reject"
-            suggested_action_raw = llm_result.get("suggested_action")
-            suggested_action = str(suggested_action_raw).strip().lower() if suggested_action_raw else default_action
-
-            # Store moderation metadata
-            prayer_request.moderation_severity = severity
-            prayer_request.moderation_result = {
-                "profanity_check": profanity_check,
-                "llm_check": llm_result,
-                "reason": llm_result.get("reason", "Processed by automated moderation"),
-            }
-
-            # Safety takes precedence over profanity; keep these requests unpublished.
-            # Handle critical severity - always escalate
-            if severity == "critical" or suggested_action == "escalate":
-                prayer_request.moderation_severity = "critical"
-                prayer_request.status = "rejected"
-                prayer_request.requires_human_review = True
-                prayer_request.save()
-
-                # Send urgent email to admin
-                _send_moderation_alert_email(prayer_request, "critical_safety_concern")
-
-                logger.warning(
-                    f"CRITICAL: Prayer request {prayer_request_id} flagged for safety concerns "
-                    f"(severity={severity}, suggested_action={suggested_action}): {llm_result.get('reason')}"
-                )
-
-            # A word-list hit on a request the model would have approved is usually
-            # everyday language ("a damn hard market"): let a person decide.
-            elif not profanity_check["passed"] and suggested_action == "approve":
-                prayer_request.status = "pending_moderation"
-                prayer_request.requires_human_review = True
-                prayer_request.moderation_severity = "high"
-                prayer_request.moderation_result["reason"] = (
-                    "Contains a listed profanity word but otherwise reads as a genuine prayer request"
-                )
-                prayer_request.save()
-                _send_moderation_alert_email(prayer_request, "requires_review")
-                logger.info(f"Prayer request {prayer_request_id} has profanity but reads as genuine; sent to review")
-
-            # Reject profanity only after the model has had a chance to escalate.
-            elif not profanity_check["passed"]:
-                prayer_request.status = "rejected"
-                prayer_request.requires_human_review = False
-                prayer_request.moderation_result["reason"] = "Content contains inappropriate language"
-                prayer_request.save()
-                _send_moderation_alert_email(prayer_request, "profanity_detected")
-                logger.info(f"Prayer request {prayer_request_id} rejected due to profanity")
-
-            # Handle high severity - flag for review regardless of approval
-            elif severity == "high" or requires_review or suggested_action == "flag_for_review":
-                prayer_request.status = "pending_moderation"
-                prayer_request.requires_human_review = True
-                prayer_request.save()
-
-                # Send email to admin for manual review
-                _send_moderation_alert_email(prayer_request, "requires_review")
-
-                logger.info(
-                    f"Prayer request {prayer_request_id} flagged for human review (severity: {severity}): "
-                    f"{llm_result.get('reason')}"
-                )
-
-            # Handle approved requests
-            elif llm_result.get("approved", False):
-                prayer_request.status = "approved"
-                prayer_request.requires_human_review = False
-
-                # Save immediately so milestone check sees the updated status
-                prayer_request.save()
-
-                # Create event for approved prayer request
-                Event.create_event(
-                    event_type_code=EventType.PRAYER_REQUEST_CREATED,
-                    user=prayer_request.requester,
-                    target=prayer_request,
-                    title=f"Prayer request created: {prayer_request.title}",
-                    data={
-                        "prayer_request_id": prayer_request.id,
-                        "is_anonymous": prayer_request.is_anonymous,
-                    },
-                )
-
-                # Check for first prayer request milestone
-                if prayer_request.requester.prayer_requests.filter(status="approved").count() == 1:
-                    UserMilestone.create_milestone(
-                        user=prayer_request.requester,
-                        milestone_type="first_prayer_request_created",
-                        related_object=prayer_request,
-                        data={
-                            "prayer_request_id": prayer_request.id,
-                            "title": prayer_request.title,
-                        },
-                    )
-
-                # Automatically accept own prayer request
-                from prayers.models import PrayerRequestAcceptance
-
-                PrayerRequestAcceptance.objects.get_or_create(
-                    prayer_request=prayer_request,
-                    user=prayer_request.requester,
-                    defaults={"counts_for_milestones": False},
-                )
-
-                logger.info(f"Prayer request {prayer_request_id} approved by LLM (severity: {severity})")
-
-            # Handle rejected requests
-            else:
-                prayer_request.status = "rejected"
-                prayer_request.requires_human_review = False
-                prayer_request.save()
-
-                # Send email to admin for awareness
-                _send_moderation_alert_email(prayer_request, "llm_rejected")
-
-                logger.info(
-                    f"Prayer request {prayer_request_id} rejected by LLM (severity: {severity}): "
-                    f"{llm_result.get('reason')}"
-                )
-
-            prayer_request.save()
-
-            result = {"success": True, "status": prayer_request.status, "llm_result": llm_result}
-            if not profanity_check["passed"] and severity != "critical" and suggested_action != "escalate":
-                result["reason"] = "profanity"
-            return result
+            with transaction.atomic():
+                waiting = _lock_if_still_waiting(prayer_request)
+                if waiting is None:
+                    logger.info(f"Prayer request {prayer_request_id} was moderated during the model call; keeping that")
+                    return {"success": True, "already_moderated": True}
+                return _apply_moderation_result(waiting, llm_result, profanity_check)
 
         except Exception as llm_error:
             logger.error(f"LLM moderation error for prayer request {prayer_request_id}: {llm_error}")
-            # If LLM fails, mark as pending and send email to admin
-            prayer_request.status = "pending_moderation"
-            prayer_request.requires_human_review = True
-            prayer_request.moderation_severity = "high"
-            prayer_request.moderation_result = {
-                "profanity_check": profanity_check,
-                "llm_check": {"error": str(llm_error)},
-                "reason": "LLM moderation failed, requires manual review",
-            }
-            prayer_request.save(
-                update_fields=[
-                    "status",
-                    "requires_human_review",
-                    "moderation_severity",
-                    "moderation_result",
-                    "updated_at",
-                ]
-            )
+            with transaction.atomic():
+                waiting = _lock_if_still_waiting(prayer_request)
+                if waiting is None:
+                    return {"success": True, "already_moderated": True}
+                prayer_request = waiting
+                # If LLM fails, mark as pending and send email to admin
+                prayer_request.status = "pending_moderation"
+                prayer_request.requires_human_review = True
+                prayer_request.moderation_severity = "high"
+                prayer_request.moderation_result = {
+                    "profanity_check": profanity_check,
+                    "llm_check": {"error": str(llm_error)},
+                    "reason": "LLM moderation failed, requires manual review",
+                }
+                prayer_request.save(
+                    update_fields=[
+                        "status",
+                        "requires_human_review",
+                        "moderation_severity",
+                        "moderation_result",
+                        "updated_at",
+                    ]
+                )
 
             # Send email to admin for manual review
             _send_moderation_alert_email(prayer_request, "llm_error")

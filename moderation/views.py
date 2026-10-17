@@ -270,6 +270,17 @@ def detail(request, kind, pk):
             crisis=crisis,
             overturn=overturn,
         )
+        if request.method == "POST" and kind == "prayer":
+            seen = request.POST.get("seen_status")
+            if seen and seen != obj.status:
+                # Another reviewer (or the automated check) decided after this form was
+                # opened; acting on it now would overturn a decision this reviewer never saw.
+                messages.warning(
+                    request,
+                    f"This request changed while you had it open; it is now {obj.status}. "
+                    "Nothing was saved. Review it again below.",
+                )
+                return redirect("moderation-detail", kind=kind, pk=obj.pk)
         if request.method == "POST":
             action = request.POST.get("action", "")
             if action and action not in actions:

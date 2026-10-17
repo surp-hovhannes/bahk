@@ -849,6 +849,73 @@ class ReviewExperienceTests(TestCase):
         self.assertEqual(legacy.moderation_severity, "critical")
         self.assertEqual(self.failed.moderation_severity, "high")
 
+    def test_backfill_reads_the_action_as_the_task_does(self):
+        from importlib import import_module
+
+        from django.apps import apps
+
+        legacy = PrayerRequest.objects.create(
+            requester=self.owner,
+            title="Synthetic legacy escalation",
+            description="Synthetic",
+            status="rejected",
+            moderation_severity="high",
+            moderation_result={"llm_check": {"suggested_action": " ESCALATE "}},
+        )
+        import_module("moderation.migrations.0002_mark_escalations_critical").mark_escalations_critical(apps, None)
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.moderation_severity, "critical")
+
+    def test_a_form_opened_before_another_decision_changes_nothing(self):
+        pending = PrayerRequest.objects.create(
+            requester=self.owner,
+            title="Synthetic flagged request",
+            description="Synthetic",
+            requires_human_review=True,
+            reviewed=True,
+            moderation_severity="high",
+        )
+        other = get_user_model().objects.create_user(username="other", email="other@example.test")
+        Responsibility.objects.create(user=other, general=True)
+        self.client.force_login(self.general)
+        self.assertContains(self.client.get(self.detail(pending)), 'name="seen_status" value="pending_moderation"')
+        self.client.force_login(other)
+        self.client.post(self.detail(pending), {"action": "reject", "note": "spam", "seen_status": "pending_moderation"})
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, "rejected")
+        # The first reviewer's form still says pending: approving from it must not overturn.
+        self.client.force_login(self.general)
+        response = self.client.post(self.detail(pending), {"action": "approve", "seen_status": "pending_moderation"})
+        self.assertRedirects(response, self.detail(pending))
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, "rejected")
+        self.assertFalse(Review.objects.filter(object_id=pending.pk, reviewer=self.general).exists())
+
+    @override_settings(PRAYER_MODERATION_ENGINE="clef")
+    def test_a_decision_made_during_the_model_call_stands(self):
+        from prayers.tasks import moderate_prayer_request_task
+
+        fresh = PrayerRequest.objects.create(requester=self.owner, title="Synthetic", description="Synthetic")
+        client = self.client
+        client.force_login(self.general)
+
+        def reviewer_rejects_meanwhile(prayer_request, model="clef"):
+            client.post(self.detail(prayer_request), {"action": "reject", "note": "not a prayer request"})
+            return {
+                "approved": True,
+                "reason": "ok",
+                "concerns": [],
+                "severity": "low",
+                "requires_human_review": False,
+                "suggested_action": "approve",
+            }
+
+        with patch("prayers.tasks.clef_moderation_result", side_effect=reviewer_rejects_meanwhile):
+            result = moderate_prayer_request_task(fresh.pk)
+        fresh.refresh_from_db()
+        self.assertEqual(fresh.status, "rejected")
+        self.assertTrue(result["already_moderated"])
+
     def test_crisis_queue_shows_plain_status_and_waiting_time(self):
         self.client.force_login(self.crisis)
         response = self.client.get(reverse("moderation-dashboard"))
