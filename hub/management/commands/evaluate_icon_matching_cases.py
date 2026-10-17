@@ -7,10 +7,8 @@ Labels are editorial judgements about a catalogue, not ground truth - extend
 report to see what the new labels say about it without paying for another run.
 """
 
-import base64
 import json
 import time
-import urllib.request
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
@@ -18,7 +16,13 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from hub.services.clef import CLEF_MODELS
-from hub.services.icon_clef_judge import ASSIGN_THRESHOLD, RUNG_THRESHOLD, SHORTLIST_LIMIT, judge_icons
+from hub.services.icon_clef_judge import (
+    ASSIGN_THRESHOLD,
+    RUNG_THRESHOLD,
+    SHORTLIST_LIMIT,
+    judge_icons,
+    thumbnail_image_loader,
+)
 from hub.services.icon_match_profiles import REGISTERED_PROFILES
 from hub.services.icon_match_service import MatchLimits, OpenAIIconProvider, match_icons
 from hub.services.icon_matching import IconMatchRequest
@@ -152,30 +156,9 @@ def evaluate_cases(catalogue, cases, profile, *, provider_factory=None, arm_time
     return {"profile": profile.metadata(), **run_cases(cases, match_case)}
 
 
-IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
-
-
 def url_image_loader(catalogue, *, timeout=20):
-    """``image_for`` for the Clef judge, from each record's public ``thumbnail_url``.
-
-    Returns a base64 data URL, or None when a record has no URL or the download
-    is not a PNG, JPEG or WebP image. Downloads are cached for the run.
-    """
-    urls = {record["id"]: record.get("thumbnail_url") for record in catalogue}
-    cache = {}
-
-    def image_for(icon_id):
-        if icon_id not in cache:
-            cache[icon_id] = None
-            if urls.get(icon_id):
-                with urllib.request.urlopen(urls[icon_id], timeout=timeout) as response:
-                    content_type = response.headers.get_content_type()
-                    if content_type in IMAGE_TYPES:
-                        encoded = base64.b64encode(response.read()).decode()
-                        cache[icon_id] = f"data:{content_type};base64,{encoded}"
-        return cache[icon_id]
-
-    return image_for
+    """``image_for`` for the Clef judge, from each catalogue record's ``thumbnail_url``."""
+    return thumbnail_image_loader({record["id"]: record.get("thumbnail_url") for record in catalogue}, timeout=timeout)
 
 
 def evaluate_cases_clef(

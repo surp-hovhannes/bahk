@@ -435,6 +435,32 @@ another St. John the Baptist are added as assignable on inspection. In the 12 or
 the four-saint feast with Gregory of Tatev now has his icons assignable, as the 2026 review
 chose.
 
+## In production
+
+`FEAST_ICON_MATCH_ENGINE` chooses who decides a new feast's icon in
+`match_icon_to_feast_task`:
+
+| Value | Who writes | Notes |
+|---|---|---|
+| `llm` (default) | the LLM matcher, through the icon match router | unchanged |
+| `clef_shadow` | the LLM matcher | Clef runs beside it and logs `Clef shadow for feast …: llm writes X, clef would write Y`, marked `[differs]` when they disagree |
+| `clef` | the Clef judge | see below |
+
+Whichever engine runs, only a complete outcome's first, auto-assignable match is written,
+under the same row lock and stale-row checks.
+
+With `clef`:
+- The judge sees each icon's `cached_thumbnail_url`, the 400×300 rendition it was calibrated
+  on.
+- An icon without a web URL (local development stores a relative path) is judged on title and
+  tags alone, which the thresholds were not calibrated for.
+- A Clef outage makes the outcome unavailable and writes nothing. It does not fall back to the
+  LLM.
+
+Suggested rollout: run `clef_shadow` for a few weeks of new feasts, read the `[differs]` lines,
+then switch to `clef`. The full `clef` model is used; the thresholds were not calibrated on
+`clef-flash`.
+
 ## Next steps
 
 - Re-run the calibration above after any change to a question, the placement rule, the

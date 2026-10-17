@@ -12,11 +12,14 @@ README.md. Re-run that calibration before changing a question, a threshold or
 the placement rule.
 """
 
+import base64
 import contextvars
 import math
 import re
 import time
 import unicodedata
+import urllib.parse
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 from bahk.public_api.work import reject_public_work
@@ -172,6 +175,36 @@ def title_names_only_the_feast(feast, record, records):
         for word in _words(record["title"])
         if word not in STOPWORDS and word not in common and not word.isdigit()
     )
+
+
+IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
+# Clef accepts images of up to 4 MiB; thumbnails are tens of kilobytes.
+IMAGE_MAX_BYTES = 4 * 1024 * 1024
+
+
+def thumbnail_image_loader(urls, *, timeout=20):
+    """``image_for`` for ``judge_icons``, from each icon's thumbnail URL.
+
+    ``urls`` maps icon id to the thumbnail's public URL: the cached 400x300 rendition
+    the thresholds were calibrated on. Returns a base64 data URL, or None when an
+    icon has no web URL, or the download is not a PNG, JPEG or WebP image within
+    Clef's size limit. Downloads are cached for the loader's lifetime.
+    """
+    cache = {}
+
+    def image_for(icon_id):
+        if icon_id not in cache:
+            cache[icon_id] = None
+            url = urls.get(icon_id)
+            if url and urllib.parse.urlsplit(url).scheme in ("http", "https"):
+                with urllib.request.urlopen(url, timeout=timeout) as response:
+                    content_type = response.headers.get_content_type()
+                    data = response.read(IMAGE_MAX_BYTES + 1)
+                if content_type in IMAGE_TYPES and len(data) <= IMAGE_MAX_BYTES:
+                    cache[icon_id] = f"data:{content_type};base64,{base64.b64encode(data).decode()}"
+        return cache[icon_id]
+
+    return image_for
 
 
 def icon_state(feast, record, *, with_image=False):

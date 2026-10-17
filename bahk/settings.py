@@ -477,6 +477,10 @@ CLOUDFLARE_WORKERSAI_API_KEY = config('CLOUDFLARE_WORKERSAI_API_KEY', default=''
 # "clef" (Cloudflare's Clef decision model, see prayers/clef_moderation.py).
 PRAYER_MODERATION_ENGINE = config('PRAYER_MODERATION_ENGINE', default='llm')
 PRAYER_MODERATION_CLEF_MODEL = config('PRAYER_MODERATION_CLEF_MODEL', default='clef')
+# Feast icon matching on feast creation: "llm" (the icon match router, unchanged), "clef"
+# (the Clef judge decides and writes, see hub/services/icon_clef_judge.py), or "clef_shadow"
+# (the LLM matcher writes; Clef runs beside it and logs what it would have written).
+FEAST_ICON_MATCH_ENGINE = config('FEAST_ICON_MATCH_ENGINE', default='llm')
 
 # API.BIBLE SETTINGS
 BIBLE_API_KEY = config('BIBLE_API_KEY', default='')

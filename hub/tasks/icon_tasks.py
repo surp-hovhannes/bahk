@@ -3,15 +3,62 @@
 import logging
 
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
 
 from hub.models import Feast
+from hub.services.icon_clef_judge import judge_icons, thumbnail_image_loader
 from hub.services.icon_matching import IconMatchRequest
 from hub.services.icon_match_router import match_icons
 from hub.services.icon_taxonomy_matching import assignment_current
 from icons.models import Icon
 
 logger = logging.getLogger(__name__)
+
+FEAST_ICON_ENGINES = ("llm", "clef", "clef_shadow")
+
+
+def feast_icon_engine():
+    """The configured FEAST_ICON_MATCH_ENGINE; an unknown value falls back to the LLM matcher."""
+    engine = str(getattr(settings, "FEAST_ICON_MATCH_ENGINE", "llm")).strip().lower()
+    if engine not in FEAST_ICON_ENGINES:
+        logger.warning("Unknown FEAST_ICON_MATCH_ENGINE %r; using llm.", engine)
+        return "llm"
+    return engine
+
+
+def _judge_with_clef(icons, feast_name):
+    """Clef decides, seeing each icon's cached thumbnail as it did when calibrated."""
+    image_for = thumbnail_image_loader({icon.id: icon.cached_thumbnail_url for icon in icons})
+    return judge_icons(icons, feast_name, image_for=image_for, max_results=1)
+
+
+def _written_icon(outcome):
+    """The icon this task would write from ``outcome``, or None."""
+    if outcome.status == "complete" and outcome.matches and outcome.matches[0].get("auto_assignable"):
+        return outcome.matches[0]["id"]
+    return None
+
+
+def _log_clef_shadow(feast_id, icons, feast_name, llm_outcome):
+    """Run Clef beside the LLM matcher and log what each would write. Clef writes nothing."""
+    try:
+        clef = _judge_with_clef(icons, feast_name)
+    except Exception:
+        logger.warning("Clef shadow failed for feast %s.", feast_id, exc_info=True)
+        return
+    llm_icon, clef_icon = _written_icon(llm_outcome), _written_icon(clef)
+    logger.info(
+        "Clef shadow for feast %s (%s): llm writes %s, clef would write %s (%s, top %s, %s)%s",
+        feast_id,
+        feast_name,
+        llm_icon,
+        clef_icon,
+        clef.status,
+        clef.matches[0]["id"] if clef.matches else None,
+        ", ".join(clef.diagnostics),
+        "" if llm_icon == clef_icon else " [differs]",
+    )
 
 
 def _match_icons_with_llm(icons, request, max_results=3):
@@ -29,6 +76,10 @@ def _match_icons_with_llm(icons, request, max_results=3):
 def match_icon_to_feast_task(self, feast_id: int, commemoration=None):
     """
     Match an icon to a feast using AI-powered icon matching.
+
+    FEAST_ICON_MATCH_ENGINE chooses who decides: the LLM matcher (``llm``), the Clef
+    judge (``clef``), or the LLM matcher with Clef logged beside it (``clef_shadow``).
+    Either way only a complete outcome's first, auto-assignable match is written.
 
     Args:
         feast_id: ID of the Feast to match an icon for
@@ -61,18 +112,23 @@ def match_icon_to_feast_task(self, feast_id: int, commemoration=None):
     prompt = feast.name
 
     try:
-        # Perform icon matching
-        outcome = match_icons(
-            icons,
-            IconMatchRequest(
-                kind="feast",
-                primary_text=prompt,
-                auto_assign_policy="feast_strict",
-                max_results=1,
-            ),
-            church_id=church.id,
-            commemoration=commemoration,
-        )
+        engine = feast_icon_engine()
+        if engine == "clef":
+            outcome = _judge_with_clef(icons, prompt)
+        else:
+            outcome = match_icons(
+                icons,
+                IconMatchRequest(
+                    kind="feast",
+                    primary_text=prompt,
+                    auto_assign_policy="feast_strict",
+                    max_results=1,
+                ),
+                church_id=church.id,
+                commemoration=commemoration,
+            )
+            if engine == "clef_shadow":
+                _log_clef_shadow(feast_id, icons, prompt, outcome)
 
         if outcome.status != "complete":
             logger.info("Icon matching for feast %s is %s: %s", feast_id, outcome.status, outcome.diagnostics)
