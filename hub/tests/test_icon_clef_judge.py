@@ -16,6 +16,7 @@ from hub.services.icon_clef_judge import (
     judge_icons,
     lexical_shortlist,
     place,
+    spelling_variant,
 )
 from hub.services.icon_match_profiles import CONTROL
 from hub.services.icon_match_service import serialize_catalogue
@@ -66,6 +67,34 @@ class LexicalShortlistTests(SimpleTestCase):
 
     def test_generic_words_alone_shortlist_nothing(self):
         self.assertEqual(lexical_shortlist("Remembrance of the Saints", serialize_catalogue(CATALOGUE)), [])
+
+    def test_a_rare_name_is_not_crowded_out_by_common_words(self):
+        # Thirty icons share "Gregory" and "Illuminator"; the one icon of Aristakes must still be judged.
+        records = serialize_catalogue(
+            [{"id": i, "title": f"St. Gregory the Illuminator {i}", "tags": []} for i in range(1, 31)]
+            + [{"id": 99, "title": "St. Aristakes", "tags": []}]
+        )
+        ids = [
+            r["id"]
+            for r in lexical_shortlist("St. Gregory the Illuminator's Sons: Sts. Aristakes and Vrtanes", records)
+        ]
+        self.assertEqual(ids[0], 99)
+        self.assertEqual(len(ids), 24)
+
+    def test_a_title_word_outranks_the_same_word_in_tags(self):
+        records = serialize_catalogue(
+            [{"id": i, "title": f"Crucifixion {i}", "tags": ["cross"]} for i in range(1, 31)]
+            + [{"id": 99, "title": "Exaltation of the Holy Cross", "tags": []}]
+        )
+        self.assertEqual(lexical_shortlist("Appearance of the Holy Cross", records)[0]["id"], 99)
+
+    def test_spelling_variants_of_a_name_match(self):
+        records = serialize_catalogue([{"id": 1, "title": "St Onophrius", "tags": []}])
+        self.assertEqual([r["id"] for r in lexical_shortlist("The Hermit Sts. Tryphon and Onuphrius", records)], [1])
+        self.assertTrue(spelling_variant("ghevond", "ghevont"))
+        self.assertFalse(spelling_variant("elijah", "elisha"))
+        self.assertFalse(spelling_variant("christ", "christian"))
+        self.assertFalse(spelling_variant("mark", "mary"))
 
 
 class PlacementTests(SimpleTestCase):

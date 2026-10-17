@@ -308,10 +308,83 @@ assignable icon, Clef assigns 14. Of the rest:
 
 Lowering the threshold reaches only the last group, and only by giving up the margin above.
 
+### Shortlist and ranking (2026-10-17)
+
+The calibration left most of the gap upstream of the threshold. Two changes ship:
+
+1. **A weighted shortlist.** Each shared word counts by how rare it is in the catalogue, title
+   words count double, and spelling variants of a name match (one edit from five letters, two
+   from eight).
+   - The plain word overlap ranked by shared-word count, then by id. Every "St. Gregory the
+     Illuminator" icon outranked the one St. Aristakes for his sons' feast, and the Exaltation
+     icon fell past the 24-icon cut for the Appearance of the Holy Cross.
+   - Spelling variants catch names like Onuphrius/Onophrius and Ghevond/Ghevont.
+   - Measured on the 130 feasts with a known icon (the 57 reviewed plus the 73 unreviewed
+     stored icons), the right icon reaches Clef for 123, up from 117, with about the same
+     number of icons judged.
+2. **The feast question covers eves.** "The eve of a feast, or of the fast before it,
+   remembers that feast's event." The Eves of the Fasts of the Assumption and of the Nativity
+   were closed by the event gate, so their feast icons could not place as depictions.
+
+On the 104 reviewed feasts, with the labels extended as described below:
+
+| | Before | After |
+|---|---|---|
+| Auto-assigned / unsafe | 14 / 0 | **16 / 0** |
+| Right top suggestion, 57 feasts with an icon | 40 | **45** |
+| Missed (no suggestion where an icon exists) | 2 | 1 |
+| Silent where nothing fits (of 47) | 19 | 11 |
+
+Other checks:
+- **12 original cases** (`results-clef-shortlist-12.json`): still 2 assigned, 0 unsafe.
+- **73 unreviewed feasts:** 24 assigned. 12 match the stored icon; the other 12 are each
+  another icon of the same feast or saint on inspection.
+
+Lower silence means more suggestions where nothing fits. A suggestion is never written, so
+it costs a reviewer a glance, not a wrong icon.
+
+**Labels.** The reviewer picked one icon per feast, so every variant surfaced other icons of
+the same scene that scored as wrong: another Ascension, another St. John the Baptist, and so on.
+- 23 such alternatives are now `assignable`, and 15 more that fit without being the chosen
+  depiction are `acceptable` only.
+- Each is marked "added on inspection (not by the reviewer)" in its `note`.
+- The before/after table uses these extended labels for both columns.
+
+**Clef is deterministic, but not stable under rewording.** Identical text gets identical
+answers. Reordering the same tags on an icon moved its probabilities by a median 0.03, often
+0.10–0.15, and at most 0.4.
+
+`clef-probabilities-reviewed-2026-10-17.jsonl` holds every judged icon with its tags both in
+the judge's sorted order and reversed:
+- In both orders, no wrong top pick on a labelled feast reaches 0.90. The highest are 0.872
+  sorted and 0.878 reversed, and both are icons judged acceptable rather than wrong.
+- Among the unreviewed feasts, one does: the Forty Martyrs of Sebastia for the Holy Sukiasian
+  Martyrs, at 0.915 reversed but 0.813 in the order production uses.
+
+Read that as the residual risk of a stray title or tag edit, roughly one feast in two hundred.
+A second pass in the other order before writing would not catch it: a correct pick (Nativity
+and Baptism for the Eve of the Nativity, 0.923 and 0.805) looks the same.
+
+**Tried and not kept:**
+
+| Idea | Why not |
+|---|---|
+| A Clef multiple-choice question ranking the whole catalogue in one call | It found Doubting Thomas for New Sunday. But icons that share no word with the feast are unsafe to judge: for the Median day of Lent, which names no one, St. Gregory the Theologian scored 0.95 on "shows every person named". Only suggestions could use it, and it added more noise than right answers. |
+| A bonus for shared word pairs ("holy cross") | Same recall. In a catalogue with 30 "St. Gregory the Illuminator" icons, it pushed the one Aristakes past the cut. |
+| Armenian ending normalisation (-ian/-ants) | No recall gain, and it joins "christ" with "christian". |
+| Ranking by strength across rungs, or confident claims first | Each gained one feast and lost two. |
+| Averaging or taking the minimum over both tag orders | Fewer assignments at any threshold with no unsafe write. |
+
+**What remains:** feasts whose icon shares no word with their name (New Sunday → Thomas, the
+Sunday of the Advent → the Last Judgment, the Remembrance of the Dead → the Harrowing of
+Hades), and Clef name confusions (Elisha for Elijah, the prophet Zechariah for Zachariah the
+father of John). Multi-saint feasts are also unassigned where the best icon shows one of the
+saints named (`related_specific`); whether those may be written is a policy decision.
+
 ## Next steps
 
-- Re-run the calibration above after any change to a question, the placement rule or the
-  catalogue's titles, and after the remaining 73 feasts are reviewed.
+- Re-run the calibration above after any change to a question, the placement rule, the
+  shortlist or the catalogue's titles, and after the remaining 73 feasts are reviewed.
 - Coverage now depends on ranking and shortlisting, not on the threshold (see the table
   above). Also decide whether a top `related_specific` icon may be written for a feast
   naming several saints.

@@ -13,6 +13,7 @@ the placement rule.
 """
 
 import contextvars
+import math
 import re
 import time
 import unicodedata
@@ -28,7 +29,8 @@ FEAST_QUESTIONS = {
         "type": "noul",
         "instructions": (
             "Does this commemoration remember a specific event or scene, such as a miracle, a martyrdom, "
-            "a finding or exaltation, or a feast of the Lord, rather than only honouring one or more persons?"
+            "a finding or exaltation, or a feast of the Lord, rather than only honouring one or more persons? "
+            "The eve of a feast, or of the fast before it, remembers that feast's event."
         ),
     },
 }
@@ -62,8 +64,8 @@ ICON_QUESTIONS = {
 # A probability at or above this places an icon on that rung of the ladder.
 RUNG_THRESHOLD = 0.50
 # Assignment needs a near-certain answer on the rung that justifies it. Calibrated on
-# 2026-10-16 with the placement rule in place(): the highest-scoring wrong top pick among
-# the reviewed feasts scored 0.853 (St. Elisha for the Eve of the Fast of the Prophet Elijah).
+# 2026-10-16 and re-checked with the weighted shortlist on 2026-10-17: no wrong top pick
+# among the reviewed feasts reached it, with each icon's tags in either order.
 ASSIGN_THRESHOLD = 0.90
 SHORTLIST_LIMIT = 24
 RANK = ("exact_event", "exact_subject", "subject_portrait", "related_specific")
@@ -72,29 +74,71 @@ MAX_WORKERS = 8
 STOPWORDS = frozenset(
     "a and day feast for great her his holy in of remembrance saint saints st sts sunday the their to".split()
 )
+WORD = re.compile(r"\w+")
 
 
-def _tokens(text):
-    text = unicodedata.normalize("NFKC", text).casefold()
-    return {t for t in re.findall(r"\w+", text) if len(t) > 1 and t not in STOPWORDS}
+def _words(text):
+    return [t for t in WORD.findall(unicodedata.normalize("NFKC", text).casefold()) if len(t) > 1]
+
+
+def spelling_variant(a, b):
+    """Whether two words are one name spelled two ways: one edit apart from five letters, two from eight.
+
+    Transliterated names drift (Onuphrius/Onophrius, Ghevond/Ghevont); an exact match would miss them.
+    """
+    if a == b:
+        return True
+    shorter = min(len(a), len(b))
+    if shorter < 5 or abs(len(a) - len(b)) > 2 or a[:2] != b[:2]:
+        return False
+    limit = 2 if shorter >= 8 else 1
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        current = [i]
+        for j, cb in enumerate(b, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb)))
+        if min(current) > limit:
+            return False
+        previous = current
+    return previous[-1] <= limit
 
 
 def lexical_shortlist(feast, records, limit=SHORTLIST_LIMIT):
-    """Icons sharing a word with the feast name, most shared words first.
+    """Icons sharing words with the feast name, the most distinctive overlap first.
 
-    Deliberately cheap and recall-oriented: Clef rejects what does not fit,
-    but it never sees what this leaves out. Words of four or more letters also
-    match inside run-together titles such as "StGregoryofTatevandStJohnofVorodn".
+    Deliberately cheap and recall-oriented: Clef rejects what does not fit, but it
+    never sees what this leaves out. A word counts by how rare it is in the catalogue,
+    so the one icon of Aristakes is not crowded out by the dozens sharing "Gregory" and
+    "Illuminator". A word in the title counts double, and a spelling variant counts as
+    the word. Words of four or more letters also match inside run-together titles such
+    as "StGregoryofTatevandStJohnofVorodn".
     """
-    wanted = _tokens(feast)
-    scored = []
+    docs, frequency = [], {}
     for record in records:
-        texts = [record["title"], *record["tags"]]
-        words = set().union(*(_tokens(text) for text in texts))
-        compact = "".join(re.findall(r"\w+", unicodedata.normalize("NFKC", " ".join(texts)).casefold()))
-        overlap = sum(1 for t in wanted if t in words or (len(t) >= 4 and t in compact))
-        if overlap:
-            scored.append((-overlap, record["id"], record))
+        title = set(_words(record["title"])) - STOPWORDS
+        tag_words = [_words(tag) for tag in record["tags"]]
+        tags = set().union(*tag_words) - STOPWORDS
+        texts = " ".join([record["title"], *record["tags"]])
+        compact = "".join(WORD.findall(unicodedata.normalize("NFKC", texts).casefold()))
+        docs.append((record, title, tags, compact))
+        for word in title | tags:
+            frequency[word] = frequency.get(word, 0) + 1
+
+    def weight(word):
+        return math.log((len(records) + 1) / (frequency.get(word, 0) + 1)) + 1
+
+    wanted = list(dict.fromkeys(w for w in _words(feast) if w not in STOPWORDS))
+    variants = {w: {v for v in frequency if spelling_variant(w, v)} | {w} for w in wanted}
+    scored = []
+    for record, title, tags, compact in docs:
+        score = 0.0
+        for word in wanted:
+            if variants[word] & title:
+                score += 2 * weight(word)
+            elif variants[word] & tags or (len(word) >= 4 and word in compact):
+                score += weight(word)
+        if score:
+            scored.append((-score, record["id"], record))
     return [record for _, _, record in sorted(scored, key=lambda item: item[:2])[:limit]]
 
 

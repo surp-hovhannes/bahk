@@ -29,12 +29,14 @@
    34,
    285
   ],
-  "acceptable": [],
+  "acceptable": [
+   338
+  ],
   "assignable": [
    34,
    285
   ],
-  "note": "Reviewer kept the stored icon. Also 285, added on inspection (not by the reviewer): Nativity and Baptism of Christ depicts both halves of this feast."
+  "note": "Reviewer kept the stored icon. Also 285, added on inspection (not by the reviewer): Nativity and Baptism of Christ depicts both halves of this feast. 338 acceptable but not assignable, added on inspection (not by the reviewer): the Theophany half of the feast only."
  },
  {
   "feast_id": 346,
@@ -56,11 +58,14 @@
   "correct": [
    37
   ],
-  "acceptable": [],
+  "acceptable": [
+   2,
+   413
+  ],
   "assignable": [
    37
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. 2 acceptable but not assignable, added on inspection (not by the reviewer): a portrait of Christ where the reviewer chose an event. 413 acceptable but not assignable, added on inspection (not by the reviewer): a portrait of Christ where the reviewer chose an event."
  },
  {
   "feast_id": 658,
@@ -169,13 +174,17 @@
   "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
   "date": "2026-03-07",
   "correct": [
-   383
+   383,
+   382,
+   416
   ],
   "acceptable": [],
   "assignable": [
-   383
+   383,
+   382,
+   416
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 382, added on inspection (not by the reviewer): another St. Gregory of Tatev. Also 416, added on inspection (not by the reviewer): another St. Gregory of Tatev."
  },
  {
   "feast_id": 2,
@@ -202,11 +211,13 @@
   "correct": [
    2
   ],
-  "acceptable": [],
+  "acceptable": [
+   428
+  ],
   "assignable": [
    2
   ],
-  "note": "Reviewer kept the stored icon."
+  "note": "Reviewer kept the stored icon. 428 acceptable but not assignable, added on inspection (not by the reviewer): eschatological readings; the reviewer kept Christ Pantocrator."
  },
  {
   "feast_id": 200,
@@ -215,11 +226,13 @@
   "correct": [
    428
   ],
-  "acceptable": [],
+  "acceptable": [
+   465
+  ],
   "assignable": [
    428
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. 465 acceptable but not assignable, added on inspection (not by the reviewer): an Advent parable; the reviewer chose the Last Judgment."
  },
  {
   "feast_id": 609,
@@ -256,11 +269,13 @@
   "correct": [
    151
   ],
-  "acceptable": [],
+  "acceptable": [
+   327
+  ],
   "assignable": [
    151
   ],
-  "note": "Reviewer kept the stored icon."
+  "note": "Reviewer kept the stored icon. 327 acceptable but not assignable, added on inspection (not by the reviewer): a Resurrection icon for the Easter octave; the reviewer chose Thomas."
  },
  {
   "feast_id": 226,
@@ -299,14 +314,18 @@
   "date": "2026-05-14",
   "correct": [
    433,
-   438
+   438,
+   437,
+   157
   ],
   "acceptable": [],
   "assignable": [
    433,
-   438
+   438,
+   437,
+   157
   ],
-  "note": "Reviewer chose this icon. Also 438, added on inspection (not by the reviewer): Another icon of the Ascension."
+  "note": "Reviewer chose this icon. Also 438, added on inspection (not by the reviewer): Another icon of the Ascension. Also 437, added on inspection (not by the reviewer): another Ascension. Also 157, added on inspection (not by the reviewer): another Ascension."
  },
  {
   "feast_id": 472,
@@ -314,14 +333,16 @@
   "date": "2026-05-24",
   "correct": [
    122,
-   466
+   466,
+   424
   ],
   "acceptable": [],
   "assignable": [
    122,
-   466
+   466,
+   424
   ],
-  "note": "Reviewer chose this icon. Also 466, added on inspection (not by the reviewer): Another icon of Pentecost."
+  "note": "Reviewer chose this icon. Also 466, added on inspection (not by the reviewer): Another icon of Pentecost. Also 424, added on inspection (not by the reviewer): another Pentecost."
  },
  {
   "feast_id": 661,
@@ -424,13 +445,15 @@
   "feast": "Feast of the Discovery of St. Gregory's Relics",
   "date": "2026-06-20",
   "correct": [
-   291
+   291,
+   117
   ],
   "acceptable": [],
   "assignable": [
-   291
+   291,
+   117
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 117, added on inspection (not by the reviewer): another portrait of St. Gregory the Illuminator, as the reviewer chose."
  },
  {
   "feast_id": 289,
@@ -460,12 +483,16 @@
   "date": "2026-06-28",
   "correct": [],
   "acceptable": [
-   272
+   272,
+   281,
+   9
   ],
   "assignable": [
-   272
+   272,
+   281,
+   9
   ],
-  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it. Also 281, added on inspection (not by the reviewer): a generic Theotokos and Child, as the reviewer's fallback. Also 9, added on inspection (not by the reviewer): a generic Theotokos portrait, as the reviewer's fallback."
  },
  {
   "feast_id": 301,
@@ -475,12 +502,15 @@
    466,
    424
   ],
-  "acceptable": [],
+  "acceptable": [
+   128,
+   500
+  ],
   "assignable": [
    466,
    424
   ],
-  "note": "Reviewer chose this icon. Also 424, added on inspection (not by the reviewer): Another icon of Pentecost, the scene the reviewer chose."
+  "note": "Reviewer chose this icon. Also 424, added on inspection (not by the reviewer): Another icon of Pentecost, the scene the reviewer chose. 128 acceptable but not assignable, added on inspection (not by the reviewer): two of the apostles; partial. 500 acceptable but not assignable, added on inspection (not by the reviewer): St. Paul is named; partial."
  },
  {
   "feast_id": 375,
@@ -555,11 +585,13 @@
   "correct": [
    632
   ],
-  "acceptable": [],
+  "acceptable": [
+   629
+  ],
   "assignable": [
    632
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. 629 acceptable but not assignable, added on inspection (not by the reviewer): one of the Twelve Prophets, where the reviewer chose a group fallback."
  },
  {
   "feast_id": 662,
@@ -612,13 +644,17 @@
   "feast": "ASSUMPTION OF THE HOLY MOTHER OF GOD",
   "date": "2026-08-16",
   "correct": [
-   105
+   105,
+   442,
+   636
   ],
   "acceptable": [],
   "assignable": [
-   105
+   105,
+   442,
+   636
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 442, added on inspection (not by the reviewer): another Assumption. Also 636, added on inspection (not by the reviewer): Dormition: the feast the reviewer's Assumption icon shows."
  },
  {
   "feast_id": 398,
@@ -638,13 +674,15 @@
   "feast": "Holy Apostles Thomas, James and Simon",
   "date": "2026-08-29",
   "correct": [
-   266
+   266,
+   151
   ],
   "acceptable": [],
   "assignable": [
-   266
+   266,
+   151
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 151, added on inspection (not by the reviewer): another Doubting of Thomas."
  },
  {
   "feast_id": 400,
@@ -673,13 +711,15 @@
   "feast": "Sts. John the Forerunner (Baptist) and Job the Righteous",
   "date": "2026-09-03",
   "correct": [
-   377
+   377,
+   333
   ],
   "acceptable": [],
   "assignable": [
-   377
+   377,
+   333
   ],
-  "note": "Reviewer kept the stored icon."
+  "note": "Reviewer kept the stored icon. Also 333, added on inspection (not by the reviewer): another St. John the Baptist."
  },
  {
   "feast_id": 403,
@@ -709,12 +749,15 @@
   "date": "2026-09-08",
   "correct": [],
   "acceptable": [
-   8
+   8,
+   276,
+   637
   ],
   "assignable": [
-   8
+   8,
+   276
   ],
-  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it. Also 276, added on inspection (not by the reviewer): The Presentation of Mary, the scene the reviewer's fallback shows. 637 acceptable but not assignable, added on inspection (not by the reviewer): Mary's parents: fitting, not chosen."
  },
  {
   "feast_id": 411,
@@ -722,12 +765,13 @@
   "date": "2026-09-12",
   "correct": [],
   "acceptable": [
-   257
+   257,
+   639
   ],
   "assignable": [
    257
   ],
-  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it. 639 acceptable but not assignable, added on inspection (not by the reviewer): the Holy Cross: plausible, not chosen."
  },
  {
   "feast_id": 353,
@@ -749,11 +793,13 @@
   "correct": [
    297
   ],
-  "acceptable": [],
+  "acceptable": [
+   122
+  ],
   "assignable": [
    297
   ],
-  "note": "Reviewer kept the stored icon."
+  "note": "Reviewer kept the stored icon. 122 acceptable but not assignable, added on inspection (not by the reviewer): Pentecost as the birth of the Church: plausible, not chosen."
  },
  {
   "feast_id": 415,
@@ -822,26 +868,32 @@
   "feast": "Holy Evangelists Matthew, Mark, Luke and John",
   "date": "2026-10-17",
   "correct": [
-   239
+   239,
+   300,
+   315
   ],
   "acceptable": [],
   "assignable": [
-   239
+   239,
+   300,
+   315
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 300, added on inspection (not by the reviewer): one of the four Evangelists, as the reviewer's St. John is. Also 315, added on inspection (not by the reviewer): one of the four Evangelists, as the reviewer's St. John is."
  },
  {
   "feast_id": 561,
   "feast": "Sts. Longinus the Centurion, Joseph the Father of God, Joseph of Arimathea and Lazarus and His Sisters Martha and Mary",
   "date": "2026-10-19",
   "correct": [
-   623
+   623,
+   447
   ],
   "acceptable": [],
   "assignable": [
-   623
+   623,
+   447
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 447, added on inspection (not by the reviewer): another Crucifixion."
  },
  {
   "feast_id": 422,
@@ -866,13 +918,15 @@
   "feast": "The Twelve Holy Doctors of Church: Hierotheus of Athens, Dionysius the Areopagite, Sylvester of Rome, Athanasius of Alexandria, Cyril of Jerusalem, Ephraim the Syrian, Basil the Great, Gregory of Nyssa, Gregory the Theologian, Epiphanius of Cyprus, John Chrysostom, and Cyril of Alexandria",
   "date": "2026-10-24",
   "correct": [
-   479
+   479,
+   35
   ],
   "acceptable": [],
   "assignable": [
-   479
+   479,
+   35
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 35, added on inspection (not by the reviewer): Basil and Gregory of Nyssa are among the Twelve Doctors, as the reviewer's partial pick is."
  },
  {
   "feast_id": 562,
@@ -952,24 +1006,29 @@
   "correct": [
    647
   ],
-  "acceptable": [],
+  "acceptable": [
+   262,
+   284
+  ],
   "assignable": [
    647
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. 262 acceptable but not assignable, added on inspection (not by the reviewer): one of the two archangels named. 284 acceptable but not assignable, added on inspection (not by the reviewer): archangels as a group, not the Synaxis chosen."
  },
  {
   "feast_id": 11,
   "feast": "The Holy Apostles Andrew and Philip",
   "date": "2026-11-14",
   "correct": [
-   6
+   6,
+   238
   ],
   "acceptable": [],
   "assignable": [
-   6
+   6,
+   238
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 238, added on inspection (not by the reviewer): another St. Andrew."
  },
  {
   "feast_id": 430,
@@ -1056,13 +1115,15 @@
   "feast": "Eve of the Fast of St. James the Bishop of Nisibis",
   "date": "2026-12-06",
   "correct": [
-   393
+   393,
+   391
   ],
   "acceptable": [],
   "assignable": [
-   393
+   393,
+   391
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 391, added on inspection (not by the reviewer): St. Jacob of Nisibis is St. James of Nisibis."
  },
  {
   "feast_id": 652,
@@ -1088,12 +1149,15 @@
   "date": "2026-12-09",
   "correct": [],
   "acceptable": [
-   358
+   358,
+   341,
+   637
   ],
   "assignable": [
-   358
+   358,
+   341
   ],
-  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it. Also 341, added on inspection (not by the reviewer): a generic Theotokos and Child, as the reviewer's fallback. 637 acceptable but not assignable, added on inspection (not by the reviewer): Mary's parents: fitting, not chosen."
  },
  {
   "feast_id": 32,
@@ -1136,13 +1200,15 @@
   "feast": "Sts. David the Prophet-King and James the Apostle",
   "date": "2026-12-24",
   "correct": [
-   645
+   645,
+   396
   ],
   "acceptable": [],
   "assignable": [
-   645
+   645,
+   396
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 396, added on inspection (not by the reviewer): another icon of David."
  },
  {
   "feast_id": 67,
@@ -1158,25 +1224,29 @@
   "feast": "Sts. James the Apostle and His Brother John the Evangelist",
   "date": "2026-12-29",
   "correct": [
-   316
+   316,
+   489
   ],
   "acceptable": [],
   "assignable": [
-   316
+   316,
+   489
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 489, added on inspection (not by the reviewer): another St. John the Evangelist."
  },
  {
   "feast_id": 664,
   "feast": "Eve of the Fast of Nativity",
   "date": "2026-12-29",
   "correct": [
-   460
+   460,
+   462
   ],
   "acceptable": [],
   "assignable": [
-   460
+   460,
+   462
   ],
-  "note": "Reviewer chose this icon."
+  "note": "Reviewer chose this icon. Also 462, added on inspection (not by the reviewer): another Nativity of Christ."
  }
 ]
