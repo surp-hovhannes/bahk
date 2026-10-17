@@ -10,7 +10,12 @@ from django.urls import reverse
 logger = logging.getLogger(__name__)
 
 
-def notify(kind, pk, capability="general", subject="Moderation item needs review"):
+def site_link(path):
+    return settings.SITE_URL.rstrip("/") + path
+
+
+def deliver(subject, body, capability, about):
+    """Email a link-only ``body`` to every active holder of ``capability``; ``about`` names it in logs."""
     try:
         addresses = (
             get_user_model()
@@ -19,20 +24,18 @@ def notify(kind, pk, capability="general", subject="Moderation item needs review
             .values_list("email", flat=True)
         )
         recipients = sorted({email.strip().lower() for email in addresses if email.strip()})
-        url = settings.SITE_URL.rstrip("/") + reverse("moderation-detail", args=[kind, pk])
     except Exception:
         # A notification failure must not change the core moderation decision.
-        logger.exception("Failed to prepare moderation notice for %s %s", kind, pk)
+        logger.exception("Failed to prepare moderation notice for %s", about)
         return
-    body = f"A moderation item needs your attention. Sign in to review it: {url}"
     if not recipients:
         # Never drop a notice silently: an unstaffed responsibility is an
         # operational fault. The fallback notice still carries only a link.
-        logger.error("No active %s moderation responder for %s %s; using fallback inbox", capability, kind, pk)
+        logger.error("No active %s moderation responder for %s; using fallback inbox", capability, about)
         recipients = list(getattr(settings, "MODERATION_FALLBACK_EMAILS", []))
         body += (
             f"\n\nNobody is currently assigned the {capability} moderation responsibility. "
-            "Assign a responder so this item can be reviewed."
+            "Assign a responder so this can be reviewed."
         )
     for address in recipients:
         try:
@@ -44,4 +47,18 @@ def notify(kind, pk, capability="general", subject="Moderation item needs review
                 fail_silently=False,
             )
         except Exception:
-            logger.exception("Failed to deliver moderation notice for %s %s", kind, pk)
+            logger.exception("Failed to deliver moderation notice for %s", about)
+
+
+def notify(kind, pk, capability="general", subject="Moderation item needs review"):
+    try:
+        url = site_link(reverse("moderation-detail", args=[kind, pk]))
+    except Exception:
+        logger.exception("Failed to prepare moderation notice for %s %s", kind, pk)
+        return
+    deliver(
+        subject,
+        f"A moderation item needs your attention. Sign in to review it: {url}",
+        capability,
+        f"{kind} {pk}",
+    )

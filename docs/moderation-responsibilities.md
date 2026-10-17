@@ -69,9 +69,14 @@ migration. This PR does not execute that bootstrap.
 its own queue, listed first and with its own 25-item preview, so routine
 backlog cannot push a crisis item out of view; each crisis row shows how long
 ago it was flagged. Queue status labels say why an item is waiting
-("Needs review · Automated check failed", "Low confidence", "Possible …",
-"Profanity, otherwise genuine"); crisis items read "Crisis · Unpublished,
-needs follow-up". The detail page summarizes the automated result (reason,
+("Needs review · Automated check failed", "Automated check didn't run",
+"Low confidence", "Possible …", "Profanity, otherwise genuine"); crisis items
+read "Crisis · Unpublished, needs follow-up". A new request the automated check
+hasn't reached yet reads "Awaiting automated check" and cannot be approved
+until the check stores a result (a failed check counts) or
+`MODERATION_AUTOMATED_CHECK_GRACE_MINUTES` (15) pass since submission. A
+reviewer's decision outranks a check that lands later, so approving earlier
+could publish a crisis request nobody screened. It can still be rejected. The detail page summarizes the automated result (reason,
 concerns and one labelled bar per Clef score against its cutoff) with the raw
 JSON collapsed underneath. Prayer ages are creation dates; context ages
 are generation dates, **not first-flag timestamps**. Context queues use the
@@ -91,7 +96,11 @@ queue, or back to the dashboard when the queue is clear. Items no longer in a
 queue show the decision form collapsed under **Record another decision**. Crisis actions only record human review or
 escalation and leave the rejected content unpublished. Django admin status edits
 and bulk approval also refuse crisis publication, even for designated staff or
-superusers. Forged Save as new requests are denied. Acceptance and prayer-log
+superusers. Bulk approval skips requests awaiting the automated check and says
+how many. A bulk action run by staff without a General assignment (Crisis is
+enough to reject or mark reviewed) changes nothing and says so, naming where an
+administrator adds one; selected rows outside the actor's assignment are
+counted in a warning rather than skipped silently. Forged Save as new requests are denied. Acceptance and prayer-log
 forms validate submitted prayer IDs against the actor's crisis responsibility
 on both creation and change; filtering autocomplete alone is insufficient. This is not a clinical
 assessment or an on-call/dispatch system. Icon resolution preserves the existing
@@ -128,8 +137,11 @@ labels while retaining the stored audit values.
 Notices go to active accounts with the matching explicit assignment. Duplicate
 addresses are normalized, and each address receives a separate message. Email
 contains a sign-in link, with no title, body, requester identity or model evidence.
-Prayer routing emits its existing alert events. New icon submissions notify
-General reviewers after commit; context feedback notifies General reviewers on
+Prayer routing emits its existing alert events. Icon reports are anonymous, so
+they are not emailed one by one: `moderation.tasks.send_icon_feedback_digest`
+runs daily at 8 AM and tells General reviewers how many reports arrived since
+the last digest and how many are open, with a link to the icon queue. A day
+with no new reports sends nothing. Context feedback notifies General reviewers on
 crossing the existing threshold (not on every subsequent vote). Revocation or
 inactivity removes future delivery eligibility. Historic mailbox content cannot
 be recalled.

@@ -5,6 +5,7 @@ import logging
 import uuid
 
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
@@ -405,12 +406,19 @@ class PrayerRequestAdminForm(forms.ModelForm):
 
     def clean(self):
         from moderation.access import is_crisis
+        from moderation.evidence import awaiting_check
 
         cleaned = super().clean()
         if is_crisis(self.instance) and cleaned.get("status") == "approved":
             self.add_error(
                 "status",
                 "Crisis requests cannot be published. Record review or escalation in the moderation dashboard.",
+            )
+        elif self.instance.pk and awaiting_check(self.instance) and cleaned.get("status") == "approved":
+            self.add_error(
+                "status",
+                "This request is awaiting the automated check. Approve it once the check has run, or "
+                f"{settings.MODERATION_AUTOMATED_CHECK_GRACE_MINUTES} minutes after it was submitted.",
             )
         return cleaned
 
@@ -582,6 +590,32 @@ class PrayerRequestAdmin(admin.ModelAdmin):
 
     prayer_log_count.short_description = "Prayer Logs"
 
+    def _assigned(self, request, queryset, verb, *, crisis=True):
+        """The selected requests the user's moderation assignment covers, saying why any are left out.
+
+        Without this, staff lacking an assignment were told "0 prayer request(s) approved."
+        and nothing else. ``crisis`` says whether a Crisis assignment alone may act.
+        """
+        from moderation.access import can, visible_prayers
+
+        if not (can(request, "general") or (crisis and can(request, "crisis"))):
+            self.message_user(
+                request,
+                f"You don't have a General moderation assignment, so no prayer requests were {verb}. "
+                "Another administrator can add one under Moderation › Responsibilities.",
+                messages.ERROR,
+            )
+            return None
+        covered = visible_prayers(queryset, request)
+        left_out = queryset.count() - covered.count()
+        if left_out:
+            self.message_user(
+                request,
+                f"{left_out} selected prayer request(s) were not {verb}: your moderation assignment doesn't cover them.",
+                messages.WARNING,
+            )
+        return covered
+
     def approve_requests(self, request, queryset):
         """Bulk action to approve prayer requests.
 
@@ -592,11 +626,24 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         - Checking for first_prayer_request_created milestones
         - Auto-accepting requester's own prayer request
         """
-        from moderation.access import crisis_query, visible_prayers
+        from moderation.access import crisis_query
+        from moderation.evidence import awaiting_check_query
 
-        queryset = visible_prayers(queryset, request)
-        count = publish_prayer_requests(queryset.filter(status="pending_moderation").exclude(crisis_query()))
+        queryset = self._assigned(request, queryset, "approved", crisis=False)
+        if queryset is None:
+            return
+        queryset = queryset.filter(status="pending_moderation").exclude(crisis_query())
+        awaiting = queryset.filter(awaiting_check_query()).count()
+        count = publish_prayer_requests(queryset.exclude(awaiting_check_query()))
         self.message_user(request, f"{count} prayer request(s) approved.")
+        if awaiting:
+            self.message_user(
+                request,
+                f"{awaiting} prayer request(s) were not approved: they are awaiting the automated check. "
+                f"Approve them once it has run, or {settings.MODERATION_AUTOMATED_CHECK_GRACE_MINUTES} minutes "
+                "after they were submitted.",
+                messages.WARNING,
+            )
 
     approve_requests.short_description = "Approve selected prayer requests"
 
@@ -607,9 +654,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
         - Setting moderated_at timestamp
         - Clearing requires_human_review flag
         """
-        from moderation.access import visible_prayers
-
-        queryset = visible_prayers(queryset, request)
+        queryset = self._assigned(request, queryset, "rejected")
+        if queryset is None:
+            return
         count = reject_prayer_requests(queryset.filter(status="pending_moderation"))
         self.message_user(request, f"{count} prayer request(s) rejected.")
 
@@ -620,9 +667,9 @@ class PrayerRequestAdmin(admin.ModelAdmin):
 
         This clears the requires_human_review flag and marks as reviewed.
         """
-        from moderation.access import visible_prayers
-
-        queryset = visible_prayers(queryset, request)
+        queryset = self._assigned(request, queryset, "marked as reviewed")
+        if queryset is None:
+            return
         count = queryset.update(requires_human_review=False, reviewed=True)
 
         self.message_user(request, f"{count} prayer request(s) marked as manually reviewed.")

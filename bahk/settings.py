@@ -601,6 +601,12 @@ MODERATION_FALLBACK_EMAILS = config(
     'MODERATION_FALLBACK_EMAILS', default='fastandprayhelp@gmail.com', cast=Csv()
 )
 
+# Minutes a new prayer request waits for its automated check before a reviewer may
+# approve it anyway. Approving earlier could publish a crisis request unchecked.
+MODERATION_AUTOMATED_CHECK_GRACE_MINUTES = config(
+    'MODERATION_AUTOMATED_CHECK_GRACE_MINUTES', default=15, cast=int
+)
+
 # AWS S3 settings
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
