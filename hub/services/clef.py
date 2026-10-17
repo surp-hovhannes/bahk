@@ -47,11 +47,16 @@ def run_clef(state, questions, *, model="clef", timeout=20):
         payload = response.json()
     except ValueError:
         payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
     if response.status_code != 200 or not payload.get("success"):
         errors = payload.get("errors") or response.text[:300]
         raise ClefError(f"Clef returned HTTP {response.status_code}: {errors}")
 
-    answers = (payload.get("result") or {}).get("answers") or {}
+    result = payload.get("result")
+    answers = result.get("answers") if isinstance(result, dict) else None
+    if not isinstance(answers, dict):
+        raise ClefError("Clef response carried no answers")
     missing = set(questions) - set(answers)
     if missing:
         raise ClefError(f"Clef response missing answers for: {sorted(missing)}")

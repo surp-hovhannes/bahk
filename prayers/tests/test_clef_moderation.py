@@ -157,6 +157,13 @@ class RunClefTests(SimpleTestCase):
             with self.assertRaisesMessage(ClefError, "crisis"):
                 run_clef("state", QUESTIONS)
 
+    def test_a_response_that_is_not_an_object_raises_a_clef_error(self):
+        for payload in ([], "ok", {"success": True, "result": []}, {"success": True, "result": {"answers": []}}):
+            with self.subTest(payload=payload):
+                with patch("hub.services.clef.requests.post", return_value=self.response(200, payload)):
+                    with self.assertRaises(ClefError):
+                        run_clef("state", QUESTIONS)
+
     @override_settings(CLOUDFLARE_WORKERSAI_API_KEY="")
     def test_missing_credentials_raise_without_calling_api(self):
         with patch("hub.services.clef.requests.post") as post:

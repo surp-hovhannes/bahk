@@ -54,6 +54,7 @@
   {% endif %}
   <form method="post" novalidate>
     {% csrf_token %}
+    {% if item.kind == 'prayer' %}<input type="hidden" name="seen_status" value="{{ item.obj.status }}">{% endif %}
     {% if form.errors %}<p class="errornote" role="alert">Please correct the errors below. Your notes have been kept.</p>{% endif %}
     <fieldset class="module aligned">
       <h2>Your decision</h2>
