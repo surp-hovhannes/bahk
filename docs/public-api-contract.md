@@ -218,7 +218,8 @@ Implementers' preconditions: mounted views validate `?lang` and pass the
 language to serializers as `context['lang']` — serializers never read the
 request. Fast `start_date`/`end_date` require querysets built with
 `Fast.objects.with_dates()`, and Feast serialization requires
-`select_related("icon")`; both preconditions are pinned by zero-query
+`select_related("icon")` plus the batched active-context prefetch
+(`with_public_context`); these preconditions are pinned by zero-query
 contract tests. Localized fields whose canonical value is empty serialize
 as `null` under the rule above.
 ### Church
@@ -244,6 +245,7 @@ as `null` under the rule above.
 | `image_url` | string | yes | URL of the original uploaded image only. |
 | `thumbnail_url` | string | yes | Cached thumbnail URL only. `null` when no cache. MUST NOT access `image_thumbnail.url`. |
 | `learn_more_url` | string | yes | Mapped from `Fast.url`. |
+| `share_url` | string | no | Web-app share page, `{APP_URL}/share/fast/{id}`. |
 
 Excluded (non-exhaustive): `modal_id`, `countdown`, `joined`,
 `participant_count`, `days_to_feast`, `has_passed`, `next_fast_date`,
@@ -275,14 +277,19 @@ Excluded (non-exhaustive): legacy `text*` and `text_hy*` fields,
 | --- | --- | --- | --- |
 | `name` | string | yes | Localized name. `null` when the stored value is empty (no-empty-string rule). |
 | `icon` | object (IconPublicSerializer) | yes | Nested icon, or `null` when no icon is matched. |
+| `description` | string | yes | Localized `short_text` of the active Feast context: an AI-generated two-sentence summary. `null` until a context exists. |
+| `share_url` | string | yes | Web-app share page for the requested date, `{APP_URL}/share/feast/{date}?id=…`. Always present on the feasts and calendar routes. |
 
-Feasts and calendar responses share the `{name, icon}` Feast shape. No Feast
-identifier is exposed: the surrogate `id` is unstable, and exposing
-`observance_id` requires a future contract decision for legacy and null values.
-The nested Icon retains its own `id`.
+Feasts and calendar responses share the `{name, icon, description, share_url}`
+Feast shape. No Feast identifier is exposed: the surrogate `id` is unstable,
+and exposing `observance_id` requires a future contract decision for legacy and
+null values. `share_url` reuses the web app's existing share format, whose
+query string carries the surrogate ID; treat it as an opaque link, never parse
+it. If the ID goes stale after a merge, the web app falls back to the date's
+first feast. The nested Icon retains its own `id`.
 
 Excluded (non-exhaustive): `id`, `observance_id`, `church`, `church_id`, `designation`,
-context/votes/LLM/prayer fields.
+full context `text`, votes/LLM/prayer fields.
 
 ### Icon
 
@@ -305,6 +312,7 @@ update, and an entry in this changelog. Entries are reverse-chronological.
 
 | Date | Change |
 | --- | --- |
+| 2026-10-15 | Added Feast `description` (active context `short_text`) and `share_url`, and Fast `share_url`, for the embeddable Fast or Feast widget. The additions are optional, so the change is compatible. Feast `share_url` is opaque and adds no identifier field. (PR #574.) |
 | 2026-09-13 | Reconciled PR #537’s removal of public Feast identifiers across feasts, calendar, and reference examples; retained PR #539’s canonical `with_dates()` annotations. |
 | 2026-09-11 | Review follow-up: restored the general excluded `feedback` family (covering the reading and feast context-feedback routes) and spelled out the icon families; documented view-resolved language passing (`context['lang']`; serializers never read the request), the `with_dates()` / `select_related("icon")` queryset preconditions, and empty localized values serializing as `null`; added a read-only serializer base whose `create()`/`update()` refuse. (Issue #497 review.) |
 | 2026-09-09 | #500: Added the semantic public reference at `/docs/`, gated by `PUBLIC_API_RESOURCES_ENABLED`, with exact routes, parameters, JSON examples, error/retry policy, freshness, and compatibility guidance. Added publication-state, route-sync, serializer-field, and accessibility regression coverage. |

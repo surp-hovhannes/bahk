@@ -1,0 +1,34 @@
+name: Embeddable widgets
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'hub/static/widgets/**'
+      - 'tests/widgets/**'
+      - 'docs/examples/widgets.html'
+      - 'docs/examples/widgets-plain.html'
+      - 'package*.json'
+      - '.github/workflows/widget_ci.yml'
+
+jobs:
+  browser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - run: npm run test:widgets
+      - name: Upload plain-page E2E screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bahk-widget-e2e-screenshots
+          path: /tmp/bahk-widget-screenshots
+          if-no-files-found: error
+          retention-days: 14
