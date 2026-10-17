@@ -94,6 +94,13 @@ class SemanticConsumerTests(TestCase):
                 self.assertEqual(self.post().status_code, expected)
                 self.assertEqual(matcher.call_count, 2)
 
+    def test_a_complete_run_that_discarded_a_row_is_not_cached(self):
+        outcome = IconMatchOutcome(status="complete", diagnostics=["invalid_assessed_candidate"])
+        with patch("icons.views.match_icons", return_value=outcome) as matcher:
+            self.assertEqual(self.post().status_code, 200)
+            self.assertEqual(self.post().status_code, 200)
+        self.assertEqual(matcher.call_count, 2)
+
     def test_out_of_scope_provider_id_cannot_escape_api(self):
         def mutate(stage, payload, result):
             if stage == "assess":
