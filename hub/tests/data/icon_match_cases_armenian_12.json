@@ -97,8 +97,17 @@
   "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
   "correct": [],
   "acceptable": [
-   175
+   175,
+   382,
+   383,
+   416
   ],
-  "note": "No icon covers all four. 175 covers two of them and is the best available partial."
+  "note": "No icon covers all four. 175 covers two of them and is the best available partial. Since 2026-10-17 one saint of a multi-saint feast may be written, so the icons of Gregory of Tatev are assignable; the 2026 review chose 383 for this feast.",
+  "assignable": [
+   175,
+   382,
+   383,
+   416
+  ]
  }
 ]

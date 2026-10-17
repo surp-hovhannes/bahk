@@ -15,6 +15,14 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
+from hub.services.clef import CLEF_MODELS
+from hub.services.icon_clef_judge import (
+    ASSIGN_THRESHOLD,
+    RUNG_THRESHOLD,
+    SHORTLIST_LIMIT,
+    judge_icons,
+    thumbnail_image_loader,
+)
 from hub.services.icon_match_profiles import REGISTERED_PROFILES
 from hub.services.icon_match_service import MatchLimits, OpenAIIconProvider, match_icons
 from hub.services.icon_matching import IconMatchRequest
@@ -112,28 +120,13 @@ def summarise(rows):
     }
 
 
-def evaluate_cases(catalogue, cases, profile, *, provider_factory=None, arm_timeout=None):
-    """Run every case live. Limits match the Celery feast path unless arm_timeout is given."""
-    provider_factory = provider_factory or (lambda p: OpenAIIconProvider(profile=p))
-    limits = replace(MatchLimits(), positive_limit=profile.positive_limit)
-    if arm_timeout is not None:
-        limits = replace(limits, total_seconds=arm_timeout)
+def run_cases(cases, match_case):
+    """Score ``match_case(case) -> IconMatchOutcome`` over every case."""
     rows = []
     for case in cases:
         started = time.monotonic()
         try:
-            outcome = match_icons(
-                catalogue,
-                IconMatchRequest(
-                    kind="feast",
-                    primary_text=case["feast"],
-                    auto_assign_policy="feast_strict",
-                    max_results=case.get("max_results", 5),
-                ),
-                provider=provider_factory(profile),
-                limits=limits,
-                profile=profile,
-            )
+            outcome = match_case(case)
             row = {
                 # Unavailable means nothing was assessed: an error, not a silence.
                 **score(case, outcome.status, outcome.matches, failed=failed_outcome(outcome.status, outcome.matches)),
@@ -152,7 +145,89 @@ def evaluate_cases(catalogue, cases, profile, *, provider_factory=None, arm_time
             }
         row["elapsed_seconds"] = round(time.monotonic() - started, 1)
         rows.append(row)
-    return {"profile": profile.metadata(), **summarise(rows)}
+    return summarise(rows)
+
+
+def llm_matcher(catalogue, profile, *, provider_factory=None, arm_timeout=None, max_results=5):
+    """The production LLM matcher. Limits match the Celery feast path unless arm_timeout is given."""
+    provider_factory = provider_factory or (lambda p: OpenAIIconProvider(profile=p))
+    limits = replace(MatchLimits(), positive_limit=profile.positive_limit)
+    if arm_timeout is not None:
+        limits = replace(limits, total_seconds=arm_timeout)
+
+    def match_case(case):
+        return match_icons(
+            catalogue,
+            IconMatchRequest(
+                kind="feast",
+                primary_text=case["feast"],
+                auto_assign_policy="feast_strict",
+                max_results=case.get("max_results", max_results),
+            ),
+            provider=provider_factory(profile),
+            limits=limits,
+            profile=profile,
+        )
+
+    return match_case
+
+
+def evaluate_cases(catalogue, cases, profile, *, provider_factory=None, arm_timeout=None):
+    """Run every case through the LLM matcher with ``profile``."""
+    match_case = llm_matcher(catalogue, profile, provider_factory=provider_factory, arm_timeout=arm_timeout)
+    return {"profile": profile.metadata(), **run_cases(cases, match_case)}
+
+
+def url_image_loader(catalogue, *, timeout=20):
+    """``image_for`` for the Clef judge, from each catalogue record's ``thumbnail_url``."""
+    return thumbnail_image_loader({record["id"]: record.get("thumbnail_url") for record in catalogue}, timeout=timeout)
+
+
+def evaluate_cases_clef(
+    catalogue, cases, *, model="clef", profile=None, provider_factory=None, arm_timeout=None, image_for=None
+):
+    """Run every case through the Clef judge.
+
+    Without ``profile`` the shortlist is lexical and no LLM is called. With one,
+    the LLM matcher's positives are the shortlist and Clef makes the decision;
+    a shortlist from an incomplete LLM outcome keeps the outcome ``partial``.
+    With ``image_for``, Clef also sees each shortlisted icon's image.
+    """
+    shortlister = None
+    if profile is not None:
+        shortlister = llm_matcher(
+            catalogue,
+            profile,
+            provider_factory=provider_factory,
+            arm_timeout=arm_timeout,
+            max_results=SHORTLIST_LIMIT,
+        )
+
+    def match_case(case):
+        if shortlister is None:
+            return judge_icons(catalogue, case["feast"], model=model, image_for=image_for)
+        # A case's max_results sizes the matcher's answer, not the shortlist Clef judges.
+        shortlisted = shortlister({k: v for k, v in case.items() if k != "max_results"})
+        outcome = judge_icons(
+            catalogue,
+            case["feast"],
+            candidate_ids=[m["id"] for m in shortlisted.matches],
+            model=model,
+            image_for=image_for,
+        )
+        outcome.diagnostics.append(f"llm_shortlist_status:{shortlisted.status}")
+        if shortlisted.status != "complete" and outcome.status == "complete":
+            outcome.status, outcome.catalogue_complete = "partial", False
+        return outcome
+
+    engine = {
+        "engine": "llm+clef" if profile else "clef",
+        "clef_model": model,
+        "thresholds": {"rung": RUNG_THRESHOLD, "assign": ASSIGN_THRESHOLD},
+        "images": image_for is not None,
+        "shortlist": profile.metadata() if profile else {"source": "lexical", "limit": SHORTLIST_LIMIT},
+    }
+    return {"profile": engine, **run_cases(cases, match_case)}
 
 
 def rescore(report, cases, skip=()):
@@ -181,15 +256,24 @@ def rescore(report, cases, skip=()):
 
 class Command(BaseCommand):
     help = (
-        "Score one registered profile against labelled cases (--live, billable), "
-        "or re-score a saved report against the current labels (--rescore-json, offline)."
+        "Score a matcher against labelled cases (--live, billable), "
+        "or re-score a saved report against the current labels (--rescore-json, offline). "
+        "--engine llm runs --profile; clef judges a lexical shortlist with Clef and calls no LLM; "
+        "llm+clef judges --profile's positives with Clef."
     )
 
     def add_arguments(self, parser):
         parser.add_argument("--cases-json", required=True)
         parser.add_argument("--output-json", required=True)
         parser.add_argument("--catalogue-json")
+        parser.add_argument("--engine", choices=("llm", "clef", "llm+clef"), default="llm")
         parser.add_argument("--profile", choices=tuple(REGISTERED_PROFILES))
+        parser.add_argument("--clef-model", choices=CLEF_MODELS, default="clef")
+        parser.add_argument(
+            "--clef-images",
+            action="store_true",
+            help="Send each shortlisted icon's image to Clef, from the catalogue's thumbnail_url fields",
+        )
         parser.add_argument("--live", action="store_true")
         parser.add_argument("--rescore-json")
         parser.add_argument("--arm-timeout", type=float)
@@ -197,8 +281,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options["live"] == bool(options["rescore_json"]):
             raise CommandError("Pass exactly one of --live (billable) or --rescore-json REPORT (offline)")
-        if options["live"] and not (options["catalogue_json"] and options["profile"]):
-            raise CommandError("--live requires --catalogue-json and --profile")
+        needs_profile = options["engine"] != "clef"
+        if options["live"] and not options["catalogue_json"]:
+            raise CommandError("--live requires --catalogue-json")
+        if options["live"] and needs_profile != bool(options["profile"]):
+            raise CommandError("--profile is required for --engine llm and llm+clef, and unused for clef")
         try:
             output = Path(options["output_json"])
             inputs = {
@@ -223,9 +310,18 @@ class Command(BaseCommand):
                 catalogue = json.loads(Path(options["catalogue_json"]).read_text())
                 if not isinstance(catalogue, list):
                     raise ValueError("Catalogue must be an array")
-                report = evaluate_cases(
-                    catalogue, cases, REGISTERED_PROFILES[options["profile"]], arm_timeout=options["arm_timeout"]
-                )
+                profile = REGISTERED_PROFILES[options["profile"]] if needs_profile else None
+                if options["engine"] == "llm":
+                    report = evaluate_cases(catalogue, cases, profile, arm_timeout=options["arm_timeout"])
+                else:
+                    report = evaluate_cases_clef(
+                        catalogue,
+                        cases,
+                        model=options["clef_model"],
+                        image_for=url_image_loader(catalogue) if options["clef_images"] else None,
+                        profile=profile,
+                        arm_timeout=options["arm_timeout"],
+                    )
             else:
                 report = rescore(json.loads(Path(options["rescore_json"]).read_text()), cases, skip=set(unreviewed))
             report["unreviewed_cases"] = unreviewed

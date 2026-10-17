@@ -1,0 +1,384 @@
+"""The Clef icon judge decides in code from Clef's probabilities, with no network."""
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from django.test import SimpleTestCase
+
+from bahk.public_api.work import public_request
+from hub.management.commands.evaluate_icon_matching_cases import evaluate_cases_clef
+from hub.services.clef import ClefError, run_clef
+from hub.services.icon_clef_judge import (
+    ASSIGN_THRESHOLD,
+    FEAST_QUESTIONS,
+    judge_icons,
+    lexical_shortlist,
+    place,
+    spelling_variant,
+    title_names_only_the_feast,
+)
+from hub.services.icon_match_profiles import CONTROL
+from hub.services.icon_match_service import serialize_catalogue
+from hub.tests.icon_match_fixtures import FixtureProvider, analysis_for, candidate
+
+CATALOGUE = [
+    {"id": 1, "title": "Palm Sunday Entry into Jerusalem", "tags": ["palm-sunday"]},
+    {"id": 2, "title": "Palm Sunday 2", "tags": []},
+    {"id": 3, "title": "St. John the Baptist", "tags": ["forerunner"]},
+    {"id": 4, "title": "StGregoryofTatevandStJohnofVorodn", "tags": ["icon"]},
+    {"id": 5, "title": "Crucifixion 4", "tags": ["cross"]},
+]
+
+
+class FakeClef:
+    """Answers by icon title; records every call and the request context it ran in."""
+
+    def __init__(self, names_event=0.9, by_title=None, fail_titles=(), names_several=0.9):
+        self.names_event = names_event
+        self.names_several = names_several
+        self.by_title = by_title or {}
+        self.fail_titles = set(fail_titles)
+        self.calls = []
+        self.contexts = []
+
+    def __call__(self, state, questions, model="clef", images=None):
+        self.calls.append((state, tuple(questions), model))
+        self.contexts.append(public_request.get())
+        if questions is FEAST_QUESTIONS or "names_event" in questions:
+            return {"names_event": {"noul": self.names_event}}
+        if "names_several" in questions:
+            return {"names_several": {"noul": self.names_several}}
+        title = state.split("\n")[1].removeprefix("Icon title: ")
+        if title in self.fail_titles:
+            raise ClefError("down")
+        values = self.by_title.get(title, {"depicts_event": 0.02, "all_figures": 0.02, "related": 0.02})
+        return {name: {"noul": value} for name, value in values.items()}
+
+
+def probs(event=0.02, figures=0.02, related=0.02):
+    return {"depicts_event": event, "all_figures": figures, "related": related}
+
+
+class LexicalShortlistTests(SimpleTestCase):
+    def test_shared_words_rank_and_run_together_titles_split(self):
+        records = serialize_catalogue(CATALOGUE)
+        self.assertEqual([r["id"] for r in lexical_shortlist("Palm Sunday", records)], [1, 2])
+        ids = [r["id"] for r in lexical_shortlist("Sts. John the Patriarch and Gregory of Tatev", records)]
+        self.assertEqual(ids[0], 4)
+        self.assertIn(3, ids)
+
+    def test_generic_words_alone_shortlist_nothing(self):
+        self.assertEqual(lexical_shortlist("Remembrance of the Saints", serialize_catalogue(CATALOGUE)), [])
+
+    def test_a_rare_name_is_not_crowded_out_by_common_words(self):
+        # Thirty icons share "Gregory" and "Illuminator"; the one icon of Aristakes must still be judged.
+        records = serialize_catalogue(
+            [{"id": i, "title": f"St. Gregory the Illuminator {i}", "tags": []} for i in range(1, 31)]
+            + [{"id": 99, "title": "St. Aristakes", "tags": []}]
+        )
+        ids = [
+            r["id"]
+            for r in lexical_shortlist("St. Gregory the Illuminator's Sons: Sts. Aristakes and Vrtanes", records)
+        ]
+        self.assertEqual(ids[0], 99)
+        self.assertEqual(len(ids), 24)
+
+    def test_a_title_word_outranks_the_same_word_in_tags(self):
+        records = serialize_catalogue(
+            [{"id": i, "title": f"Crucifixion {i}", "tags": ["cross"]} for i in range(1, 31)]
+            + [{"id": 99, "title": "Exaltation of the Holy Cross", "tags": []}]
+        )
+        self.assertEqual(lexical_shortlist("Appearance of the Holy Cross", records)[0]["id"], 99)
+
+    def test_spelling_variants_of_a_name_match(self):
+        records = serialize_catalogue([{"id": 1, "title": "St Onophrius", "tags": []}])
+        self.assertEqual([r["id"] for r in lexical_shortlist("The Hermit Sts. Tryphon and Onuphrius", records)], [1])
+        self.assertTrue(spelling_variant("ghevond", "ghevont"))
+        self.assertFalse(spelling_variant("elijah", "elisha"))
+        self.assertFalse(spelling_variant("christ", "christian"))
+        self.assertFalse(spelling_variant("mark", "mary"))
+
+
+class PlacementTests(SimpleTestCase):
+    def test_ladder_and_assignment(self):
+        self.assertEqual(place(probs(event=0.9, related=0.95), True), ("exact_event", 0.9))
+        self.assertEqual(place(probs(figures=0.9, related=0.95), False), ("exact_subject", 0.9))
+        # A portrait for an event feast sits below any depiction of the event.
+        self.assertEqual(place(probs(figures=0.95, related=0.99), True), ("subject_portrait", 0.95))
+        self.assertEqual(place(probs(related=0.7), False), ("related_specific", 0.7))
+        self.assertEqual(place(probs(), True), (None, 0.0))
+
+    def test_only_a_feast_that_names_an_event_has_a_depiction_of_it(self):
+        # The Median day of Great Lent remembers no event; Entry into Jerusalem is not its depiction.
+        self.assertEqual(place(probs(event=0.93, figures=0.59, related=0.86), False), ("exact_subject", 0.59))
+        self.assertEqual(place(probs(event=0.93, related=0.86), False), ("related_specific", 0.86))
+
+    def test_strength_is_capped_by_the_related_answer_it_implies(self):
+        self.assertEqual(place(probs(event=0.9, related=0.76), True), ("exact_event", 0.76))
+        self.assertEqual(place(probs(figures=0.97, related=0.6), False), ("exact_subject", 0.6))
+        self.assertLess(0.76, ASSIGN_THRESHOLD)
+
+
+class JudgeTests(SimpleTestCase):
+    def test_ranks_by_rung_and_assigns_only_near_certain_depictions(self):
+        clef = FakeClef(
+            names_event=0.9,
+            by_title={
+                "Palm Sunday 2": probs(event=0.7, figures=0.9, related=0.9),
+                "Palm Sunday Entry into Jerusalem": probs(event=0.95, figures=0.9, related=0.97),
+            },
+        )
+        outcome = judge_icons(CATALOGUE, "Palm Sunday", run=clef)
+        self.assertEqual(outcome.status, "complete")
+        self.assertTrue(outcome.catalogue_complete)
+        self.assertEqual([m["id"] for m in outcome.matches], [1, 2])
+        self.assertEqual([m["auto_assignable"] for m in outcome.matches], [True, False])
+        self.assertEqual(outcome.matches[0]["relation"], "exact_event")
+        self.assertEqual(outcome.call_count, 3)
+        self.assertIn("clef_shortlist:lexical:2", outcome.diagnostics)
+
+    def test_portrait_is_assigned_when_no_event_depiction_is_shortlisted(self):
+        clef = FakeClef(names_event=0.95, by_title={"St. John the Baptist": probs(figures=0.97, related=0.99)})
+        outcome = judge_icons(CATALOGUE, "Beheading of St. John the Forerunner (Baptist)", run=clef)
+        self.assertEqual(outcome.matches[0]["id"], 3)
+        self.assertEqual(outcome.matches[0]["relation"], "subject_portrait")
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
+
+    def test_portrait_is_only_suggested_when_the_event_may_be_shortlisted(self):
+        # A possible depiction of the event, even one too uncertain to assign, outranks the portrait.
+        clef = FakeClef(
+            names_event=0.95,
+            by_title={
+                "St. John the Baptist": probs(figures=0.97, related=0.99),
+                "StGregoryofTatevandStJohnofVorodn": probs(event=0.6, related=0.7),
+            },
+        )
+        outcome = judge_icons(CATALOGUE, "Beheading of St. John the Forerunner (Baptist)", run=clef)
+        self.assertEqual([m["id"] for m in outcome.matches], [4, 3])
+        self.assertEqual([m["auto_assignable"] for m in outcome.matches], [False, False])
+
+    def test_an_event_scene_is_not_assigned_to_a_day_that_names_no_event(self):
+        clef = FakeClef(
+            names_event=0.1,
+            by_title={"Palm Sunday Entry into Jerusalem": probs(event=0.93, figures=0.59, related=0.86)},
+        )
+        outcome = judge_icons(CATALOGUE, "Twenty Fourth day of Great Lent (Median day)", candidate_ids=[1], run=clef)
+        self.assertEqual(outcome.matches[0]["relation"], "exact_subject")
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_unrelated_candidates_are_omitted(self):
+        outcome = judge_icons(CATALOGUE, "Feast of the Holy Cross", run=FakeClef())
+        self.assertEqual(outcome.status, "complete")
+        self.assertEqual(outcome.matches, [])
+
+    def test_no_shortlist_means_silence_without_calls(self):
+        clef = FakeClef()
+        outcome = judge_icons(CATALOGUE, "Holy Voskian Priests", run=clef)
+        self.assertEqual((outcome.status, outcome.matches, clef.calls), ("complete", [], []))
+
+    def test_a_failed_icon_call_keeps_the_outcome_partial(self):
+        clef = FakeClef(by_title={"Palm Sunday Entry into Jerusalem": probs(event=0.95)}, fail_titles={"Palm Sunday 2"})
+        outcome = judge_icons(CATALOGUE, "Palm Sunday", run=clef)
+        self.assertEqual(outcome.status, "partial")
+        self.assertFalse(outcome.catalogue_complete)
+        self.assertIn("clef_icon_question_failed:1", outcome.diagnostics)
+
+    def test_invalid_probability_counts_as_a_failed_call(self):
+        def run(state, questions, model="clef"):
+            if "names_event" in questions:
+                return {"names_event": {"noul": 0.1}}
+            return {name: {"noul": "0.9"} for name in questions}
+
+        outcome = judge_icons(CATALOGUE, "Palm Sunday", run=run)
+        self.assertEqual(outcome.status, "partial")
+        self.assertEqual(outcome.matches, [])
+
+    def test_failed_feast_question_is_unavailable_and_asks_nothing_else(self):
+        def run(state, questions, model="clef"):
+            calls.append(questions)
+            raise ClefError("down")
+
+        calls = []
+        outcome = judge_icons(CATALOGUE, "Palm Sunday", run=run)
+        self.assertEqual(outcome.status, "unavailable")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(outcome.call_count, 1)
+
+    def test_without_every_image_nothing_is_assignable(self):
+        """The thresholds were calibrated with images; a metadata-only judgement only suggests."""
+        clef = FakeClef(
+            by_title={
+                "Palm Sunday Entry into Jerusalem": probs(event=0.97, figures=0.9, related=0.98),
+                "Palm Sunday 2": probs(event=0.6, related=0.7),
+            }
+        )
+
+        def image_for(icon_id):
+            if icon_id == 2:
+                raise OSError("S3 down")
+            return "data:image/jpeg;base64,eA=="
+
+        outcome = judge_icons(CATALOGUE, "Palm Sunday", run=clef, image_for=image_for)
+        self.assertEqual(outcome.status, "complete")
+        self.assertEqual(outcome.matches[0]["id"], 1)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+        self.assertIn("clef_images:1/2", outcome.diagnostics)
+        self.assertIn("clef_images_incomplete", outcome.diagnostics)
+        outcome = judge_icons(
+            CATALOGUE, "Palm Sunday", run=clef, image_for=lambda icon_id: "data:image/jpeg;base64,eA=="
+        )
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
+
+    def test_provided_shortlist_is_used_deduplicated(self):
+        clef = FakeClef(by_title={"Crucifixion 4": probs(related=0.8)})
+        outcome = judge_icons(CATALOGUE, "Palm Sunday", candidate_ids=[5, 5, 99], run=clef)
+        self.assertIn("clef_shortlist:provided:1", outcome.diagnostics)
+        self.assertEqual([m["id"] for m in outcome.matches], [5])
+
+    def test_public_reads_cannot_start_clef_work(self):
+        clef = FakeClef()
+        token = public_request.set(SimpleNamespace())
+        try:
+            with patch("bahk.public_api.traffic.report_failure"), self.assertRaises(RuntimeError):
+                judge_icons(CATALOGUE, "Palm Sunday", run=clef)
+        finally:
+            public_request.reset(token)
+        self.assertEqual(clef.calls, [])
+
+    def test_worker_threads_see_the_callers_request_context(self):
+        sentinel = object()
+        clef = FakeClef(by_title={"Palm Sunday 2": probs(event=0.9)})
+        token = public_request.set(sentinel)
+        try:
+            with patch("hub.services.icon_clef_judge.reject_public_work"):
+                judge_icons(CATALOGUE, "Palm Sunday", run=clef)
+        finally:
+            public_request.reset(token)
+        self.assertEqual(len(clef.contexts), 3)
+        self.assertTrue(all(context is sentinel for context in clef.contexts))
+
+
+class OneOfSeveralTests(SimpleTestCase):
+    """One saint of a multi-saint feast may be written when no icon shows them all."""
+
+    feast = "Sts. Gordius, Polyeuctus and Grigoris"
+
+    def catalogue(self, title):
+        # Enough other titles that the candidate's own words are not common ones.
+        return [{"id": 1, "title": title, "tags": []}] + [
+            {"id": i, "title": f"Crucifixion {i}", "tags": []} for i in range(2, 30)
+        ]
+
+    def judge(self, title, **clef):
+        clef = FakeClef(names_event=0.1, by_title={title: probs(related=0.96)}, **clef)
+        return judge_icons(self.catalogue(title), self.feast, candidate_ids=[1], run=clef), clef
+
+    def test_one_named_saint_is_written(self):
+        outcome, clef = self.judge("St. Grigoris")
+        self.assertEqual(outcome.matches[0]["relation"], "related_specific")
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
+        self.assertIn("clef_one_of_several", outcome.diagnostics)
+        self.assertEqual(outcome.call_count, 3)
+
+    def test_a_namesake_is_only_suggested(self):
+        # "of Aghvank" is not in the feast's name: this Grigoris may be someone else.
+        outcome, clef = self.judge("St. Grigoris of Aghvank")
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+        self.assertEqual(len(clef.calls), 2)
+
+    def test_a_feast_naming_one_saint_is_not_eligible(self):
+        outcome, _ = self.judge("St. Grigoris", names_several=0.1)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_below_the_threshold_is_only_suggested(self):
+        clef = FakeClef(names_event=0.1, by_title={"St. Grigoris": probs(related=0.85)})
+        outcome = judge_icons(self.catalogue("St. Grigoris"), self.feast, candidate_ids=[1], run=clef)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_a_title_naming_no_one_or_a_namesake_fails_the_title_check(self):
+        records = serialize_catalogue(
+            [
+                {"id": 1, "title": "Untitled Icon #2", "tags": ["mkhitar-gosh"]},
+                {"id": 2, "title": "St. Simeon", "tags": []},
+                {"id": 3, "title": "St. Theodosius", "tags": []},
+                {"id": 4, "title": "St. Andrew the Apostle", "tags": []},
+            ]
+            + [{"id": i, "title": f"Crucifixion {i}", "tags": []} for i in range(5, 30)]
+        )
+        by_id = {r["id"]: r for r in records}
+        self.assertFalse(title_names_only_the_feast("Sts. Mkhitar of Sebastia and Abraham", by_id[1], records))
+        self.assertFalse(title_names_only_the_feast("Holy Apostles Thomas, James and Simon", by_id[2], records))
+        self.assertFalse(title_names_only_the_feast("Sts. Theodotus of Galatia and Thalelaus", by_id[3], records))
+        self.assertTrue(title_names_only_the_feast("The Holy Apostles Andrew and Philip", by_id[4], records))
+
+    def test_title_check_ignores_medium_words_and_allows_spelling_variants(self):
+        records = serialize_catalogue(self.catalogue("St Onophrius illuminated manuscript 1450"))
+        self.assertTrue(title_names_only_the_feast("Sts. Tryphon and Onuphrius", records[0], records))
+        self.assertFalse(title_names_only_the_feast("Sts. Tryphon and Barsauma", records[0], records))
+
+
+class RunClefTests(SimpleTestCase):
+    def test_images_travel_in_the_request_body(self):
+        response = SimpleNamespace(
+            status_code=200, json=lambda: {"success": True, "result": {"answers": {"q": {"noul": 0.5}}}}
+        )
+        with (
+            self.settings(CLOUDFLARE_WORKERSAI_ACCOUNT_ID="acct", CLOUDFLARE_WORKERSAI_API_KEY="key"),
+            patch("hub.services.clef.requests.post", return_value=response) as post,
+        ):
+            run_clef("state", {"q": {"type": "noul", "instructions": "?"}}, images=["data:image/png;base64,eA=="])
+        self.assertEqual(post.call_args.kwargs["json"]["images"], ["data:image/png;base64,eA=="])
+
+
+class HarnessTests(SimpleTestCase):
+    cases = [
+        {"feast": "Palm Sunday", "correct": [1, 2], "acceptable": []},
+        {"feast": "Holy Voskian Priests", "correct": [], "acceptable": []},
+    ]
+
+    def test_clef_engine_needs_no_llm(self):
+        clef = FakeClef(by_title={"Palm Sunday Entry into Jerusalem": probs(event=0.95, related=0.97)})
+        with (
+            patch("hub.services.icon_clef_judge.run_clef", clef),
+            patch("hub.management.commands.evaluate_icon_matching_cases.OpenAIIconProvider") as provider,
+        ):
+            report = evaluate_cases_clef(CATALOGUE, self.cases)
+        provider.assert_not_called()
+        self.assertEqual(report["profile"]["engine"], "clef")
+        self.assertEqual(report["verdicts"]["exact"], 1)
+        self.assertEqual(report["verdicts"]["abstained"], 1)
+        self.assertEqual(report["assigned_count"], 1)
+        self.assertEqual(report["unsafe_assignment_count"], 0)
+
+    def test_llm_engine_shortlist_is_judged_by_clef(self):
+        records = [{"id": 7, "title": "Saint Narek", "tags": []}, {"id": 8, "title": "Other", "tags": []}]
+        clef = FakeClef(names_event=0.1, by_title={"Saint Narek": probs(figures=0.95, related=0.96)})
+        with patch("hub.services.icon_clef_judge.run_clef", clef):
+            report = evaluate_cases_clef(
+                records,
+                [{"feast": "Saint Narek", "correct": [7], "acceptable": []}],
+                profile=CONTROL,
+                provider_factory=lambda p: FixtureProvider(analysis_for("Saint Narek"), [candidate(7, "Saint Narek")]),
+            )
+        row = report["cases"][0]
+        self.assertEqual(report["profile"]["engine"], "llm+clef")
+        self.assertIn("clef_shortlist:provided:1", row["diagnostics"])
+        self.assertIn("llm_shortlist_status:complete", row["diagnostics"])
+        self.assertEqual((row["verdict"], row["assigned_id"]), ("exact", 7))
+
+
+class CalibrationDataTests(SimpleTestCase):
+    """The reviewed cases ASSIGN_THRESHOLD was set from stay scoreable against their snapshot."""
+
+    def test_reviewed_cases_match_their_catalogue_snapshot(self):
+        data = Path(__file__).resolve().parent / "data"
+        ids = {r["id"] for r in json.loads((data / "icon_catalogue_snapshot_2026-10-16.json").read_text())}
+        cases = json.loads((data / "icon_match_cases_2026_reviewed.json").read_text())
+        # The scorer keys saved rows by feast name.
+        self.assertEqual(len({case["feast"] for case in cases}), len(cases))
+        for case in cases:
+            labelled = set(case["correct"]) | set(case["acceptable"])
+            self.assertLessEqual(labelled | set(case["assignable"]), ids, case["feast"])
+            self.assertLessEqual(set(case["assignable"]), labelled, case["feast"])

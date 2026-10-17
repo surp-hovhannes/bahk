@@ -369,7 +369,9 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
   `PRAYER_MODERATION_ENGINE` (`llm` default, or `clef`) and `PRAYER_MODERATION_CLEF_MODEL`
   (`clef` default) choose the prayer request moderator. Run
   `python manage.py compare_clef_moderation` to compare Clef against past decisions (writes nothing, but
-  sends up to `--limit` real requests to Cloudflare and uses quota)
+  sends up to `--limit` real requests to Cloudflare and uses quota).
+  `FEAST_ICON_MATCH_ENGINE` (`llm` default, `clef_shadow`, or `clef`) chooses who writes a new
+  feast's icon; see `docs/icon-match-eval/README.md` ("In production")
 - `BIBLE_API_KEY` (API.Bible text retrieval); see Key Features #6 for the spend-control
   vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT` (distinct passages, not
   readings), `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`
