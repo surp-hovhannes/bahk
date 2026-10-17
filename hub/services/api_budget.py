@@ -1,6 +1,6 @@
 """Per-period spend budgets for metered third-party APIs.
 
-Backed by ``django.core.cache`` so a counter is shared across web dynos and Celery
+Backed by ``django.core.cache`` so a counter is shared across web processes and Celery
 workers (Redis in production, LocMemCache under ``tests.test_settings``).  Counters are
 namespaced by *local* calendar day or month and expire on their own; nothing resets them.
 

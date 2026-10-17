@@ -11,8 +11,7 @@ Sentry is configured in `bahk/settings.py`. The integration includes:
 3. Integration with Celery for background task monitoring
 4. Integration with Redis for cache operations
 5. User context association for better debugging
-6. Heroku-specific dyno tracking
-7. Celery Crons monitoring
+6. Celery Crons monitoring
 
 ## Environment Variables
 
@@ -21,17 +20,6 @@ The following environment variables should be set:
 - `SENTRY_DSN`: Your Sentry project DSN (required for Sentry to work)
 - `SENTRY_ENVIRONMENT`: The environment name (development, staging, production)
 - `SENTRY_RELEASE`: Optional version/release identifier
-
-## Heroku-Specific Configuration
-
-When running on Heroku, the following additional information is automatically captured:
-
-- `dyno`: The specific dyno instance (e.g., `web.1`, `worker.2`)
-- `dyno_type`: The type of dyno (e.g., `web`, `worker`)
-- `heroku_release`: The Heroku release version if available
-- `heroku_app`: The Heroku application name if available
-
-These tags allow you to filter Sentry issues by dyno and determine if errors are specific to certain dyno types or instances.
 
 ## Celery Crons Monitoring
 

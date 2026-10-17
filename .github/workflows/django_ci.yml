@@ -110,15 +110,6 @@ jobs:
         # Exclude performance and slow tests for faster CI runs
         python manage.py test --noinput --parallel --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
 
-    # Example Deployment step (conditional on push to main branch and specific Python version)
-    # - name: Deploy to Hosting Provider (e.g., Heroku)
-    #   if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.python-version == '3.11' # Deploy only once
-    #   uses: akhileshns/heroku-deploy@v3.13.15 # Example Heroku deploy action
-    #   with:
-    #     heroku_api_key: ${{ secrets.HEROKU_API_KEY }} # Store API key in GitHub secrets
-    #     heroku_app_name: "your-app-name" # Replace with your Heroku app name
-    #     heroku_email: "your-email@example.com" # Replace with your Heroku email
-    #     # Add other options like buildpacks, healthchecks etc. as needed
   participation-postgres:
     name: Participation concurrency (PostgreSQL 17)
     runs-on: ubuntu-latest

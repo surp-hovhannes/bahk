@@ -570,7 +570,7 @@ CORS_ALLOW_HEADERS = config(
 )
 ```
 
-#### **Heroku Configuration Options:**
+#### **Configuration Options:**
 
 **Option 1: Use Defaults (Recommended)**
 - ✅ No environment variables needed
@@ -578,11 +578,8 @@ CORS_ALLOW_HEADERS = config(
 - ✅ Ready to use immediately
 
 **Option 2: Custom Headers via Environment Variable**
+Set it in the Render dashboard (service → Environment):
 ```bash
-# Heroku CLI
-heroku config:set CORS_ALLOW_HEADERS="accept,authorization,content-type,x-app-version,x-platform,x-screen,x-join-source" --app your-app-name
-
-# Or via Heroku Dashboard → Settings → Config Vars
 CORS_ALLOW_HEADERS=accept,authorization,content-type,x-app-version,x-platform,x-screen,x-join-source
 ```
 
