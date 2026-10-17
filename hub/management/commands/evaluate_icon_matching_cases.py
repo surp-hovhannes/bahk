@@ -206,7 +206,8 @@ def evaluate_cases_clef(
     def match_case(case):
         if shortlister is None:
             return judge_icons(catalogue, case["feast"], model=model, image_for=image_for)
-        shortlisted = shortlister(case)
+        # A case's max_results sizes the matcher's answer, not the shortlist Clef judges.
+        shortlisted = shortlister({k: v for k, v in case.items() if k != "max_results"})
         outcome = judge_icons(
             catalogue,
             case["feast"],

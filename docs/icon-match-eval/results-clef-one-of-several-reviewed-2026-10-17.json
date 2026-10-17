@@ -105,7 +105,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.4
+      "elapsed_seconds": 2.3
     },
     {
       "feast": "Sts. Basil the Great and His Brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
@@ -201,7 +201,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 5.1
+      "elapsed_seconds": 4.9
     },
     {
       "feast": "Eve of the Nativity and Theophany of Our Lord Jesus Christ",
@@ -296,7 +296,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 5.3
+      "elapsed_seconds": 4.1
     },
     {
       "feast": "Remembrance of the Dead",
@@ -331,7 +331,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.6
+      "elapsed_seconds": 1.2
     },
     {
       "feast": "Feast of the Naming of Our Lord Jesus Christ",
@@ -426,7 +426,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.5
+      "elapsed_seconds": 3.4
     },
     {
       "feast": "The Hermit Sts. Tryphon, Barsauma and Onuphrius",
@@ -497,7 +497,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.4
+      "elapsed_seconds": 1.7
     },
     {
       "feast": "Eve of the Fast of the Catechumens",
@@ -577,7 +577,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.1
+      "elapsed_seconds": 1.2
     },
     {
       "feast": "Remembrance of the Prophet Jonah",
@@ -612,7 +612,7 @@
           "auto_assignable": true
         }
       ],
-      "elapsed_seconds": 1.8
+      "elapsed_seconds": 2.5
     },
     {
       "feast": "Holy Voskian Priests",
@@ -662,7 +662,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.4
+      "elapsed_seconds": 1.6
     },
     {
       "feast": "Eve of Great Lent",
@@ -757,7 +757,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.0
+      "elapsed_seconds": 2.1
     },
     {
       "feast": "St. Theodore the Tyron",
@@ -792,7 +792,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.4
+      "elapsed_seconds": 1.6
     },
     {
       "feast": "Second Sunday of Great Lent: Sunday of the Expulsion",
@@ -842,7 +842,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.4
+      "elapsed_seconds": 2.4
     },
     {
       "feast": "Sts. Cyril of Jerusalem, Cyril the Bishop and Anna",
@@ -861,7 +861,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 3.5
+      "elapsed_seconds": 3.8
     },
     {
       "feast": "Third Sunday of Great Lent: Sunday of the Prodigal Son",
@@ -880,7 +880,7 @@
         "clef_names_event:True"
       ],
       "matches": [],
-      "elapsed_seconds": 1.2
+      "elapsed_seconds": 1.4
     },
     {
       "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
@@ -995,7 +995,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 1.6
+      "elapsed_seconds": 1.8
     },
     {
       "feast": "Twenty Fourth day of Great Lent (Median day)",
@@ -1060,7 +1060,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.4
+      "elapsed_seconds": 1.3
     },
     {
       "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
@@ -1095,7 +1095,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.6
+      "elapsed_seconds": 1.9
     },
     {
       "feast": "Sixth Sunday of Great Lent: Sunday of the Advent",
@@ -1210,7 +1210,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.9
+      "elapsed_seconds": 3.8
     },
     {
       "feast": "Eve of the Resurrection of Our Lord Jesus Christ",
@@ -1305,7 +1305,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 4.0
+      "elapsed_seconds": 4.2
     },
     {
       "feast": "Octave of Easter (New Sunday)",
@@ -1324,7 +1324,7 @@
         "clef_names_event:True"
       ],
       "matches": [],
-      "elapsed_seconds": 1.6
+      "elapsed_seconds": 1.3
     },
     {
       "feast": "Third Sunday of Eastertide: Sunday of the World Church (Green Sunday)",
@@ -1419,7 +1419,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 4.0
+      "elapsed_seconds": 3.5
     },
     {
       "feast": "Fourth Sunday of Eastertide (Red Sunday)",
@@ -1499,7 +1499,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.7
+      "elapsed_seconds": 1.8
     },
     {
       "feast": "Appearance of the Holy Cross",
@@ -1594,7 +1594,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.5
+      "elapsed_seconds": 4.2
     },
     {
       "feast": "ASCENSION OF OUR LORD JESUS CHRIST",
@@ -1689,7 +1689,7 @@
           "auto_assignable": true
         }
       ],
-      "elapsed_seconds": 3.5
+      "elapsed_seconds": 3.7
     },
     {
       "feast": "PENTECOST (Fiftieth day of Eastertide)",
@@ -1784,7 +1784,7 @@
           "auto_assignable": true
         }
       ],
-      "elapsed_seconds": 3.3
+      "elapsed_seconds": 3.8
     },
     {
       "feast": "Eve of the Fast of the Prophet Elijah",
@@ -1849,7 +1849,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.9
+      "elapsed_seconds": 1.8
     },
     {
       "feast": "Remembrance of the Prophet Elijah",
@@ -1899,7 +1899,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.5
+      "elapsed_seconds": 2.1
     },
     {
       "feast": "Feast of Holy Etchmiadzin",
@@ -1949,7 +1949,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.5
+      "elapsed_seconds": 2.0
     },
     {
       "feast": "Sts. Princes Sahak and Joseph and the Martyrs Sergius and Bacchus",
@@ -2044,7 +2044,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 4.2
+      "elapsed_seconds": 4.3
     },
     {
       "feast": "Eve of the Fast of St. Gregory the Illuminator",
@@ -2139,7 +2139,7 @@
           "auto_assignable": true
         }
       ],
-      "elapsed_seconds": 3.6
+      "elapsed_seconds": 3.7
     },
     {
       "feast": "Sts. Epiphanius Bishop of Cyprus, Babylas the Patriarch, and His Three Disciples",
@@ -2190,7 +2190,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.8
+      "elapsed_seconds": 3.9
     },
     {
       "feast": "Sts. Constantine the Emperor and His Mother Helen",
@@ -2225,7 +2225,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.8
+      "elapsed_seconds": 3.1
     },
     {
       "feast": "Sts. Theodotus of Galatia, and Thalelaus the Physician, and the Seven Martyred Virgins of Ancyra",
@@ -2260,7 +2260,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 5.4
+      "elapsed_seconds": 3.0
     },
     {
       "feast": "Feast of the Discovery of St. Gregory's Relics",
@@ -2355,7 +2355,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.4
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "Holy Martyrs Antoninus, Theophilus, Anicetus and Potinus",
@@ -2550,7 +2550,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.5
+      "elapsed_seconds": 3.6
     },
     {
       "feast": "Twelve Holy Apostles of Christ and St. Paul, the Thirteenth Apostle",
@@ -2645,7 +2645,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 6.6
+      "elapsed_seconds": 3.9
     },
     {
       "feast": "Eve of the Fast of the Transfiguration",
@@ -2740,7 +2740,7 @@
           "auto_assignable": true
         }
       ],
-      "elapsed_seconds": 2.1
+      "elapsed_seconds": 1.7
     },
     {
       "feast": "St. Isaiah the Prophet",
@@ -2775,7 +2775,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.7
+      "elapsed_seconds": 1.5
     },
     {
       "feast": "Sts. Cyprian the Bishop, the Forty-Five Martyrs and the Virgins Justina, Euphemia and Christina",
@@ -2825,7 +2825,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.4
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "Sts. Athenogenes the Bishop and the Ten Disciples and Five Martyrs",
@@ -2920,7 +2920,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.8
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "St. Gregory the Illuminator's Sons and Grandsons: Sts. Aristakes, Vrtanes, Housik, Grigoris and Daniel",
@@ -3016,7 +3016,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.9
+      "elapsed_seconds": 4.6
     },
     {
       "feast": "Holy Maccabees: Eleazar the Priest, Shamuna and Her Seven Sons",
@@ -3035,7 +3035,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 1.8
+      "elapsed_seconds": 1.5
     },
     {
       "feast": "Holy Twelve Prophets: Hosea, Amos, Micah, Joel, Obadiah, Nahum, Habakkuk, Jonah, Zephaniah, Haggai, Zechariah and Malachi",
@@ -3100,7 +3100,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.8
+      "elapsed_seconds": 1.9
     },
     {
       "feast": "St. Gregory the Theologian",
@@ -3195,7 +3195,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.8
+      "elapsed_seconds": 2.6
     },
     {
       "feast": "St. Eugenia the Virgin, Her Father Philip and Her Mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs",
@@ -3260,7 +3260,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.6
+      "elapsed_seconds": 3.0
     },
     {
       "feast": "Sts. Eugenius, Macarius, Valerius, Candidus and Aquila",
@@ -3279,7 +3279,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 1.1
+      "elapsed_seconds": 0.8
     },
     {
       "feast": "Eve of the Fast of the Assumption of the Holy Mother of God",
@@ -3374,7 +3374,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.7
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "ASSUMPTION OF THE HOLY MOTHER OF GOD",
@@ -3469,7 +3469,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 4.8
+      "elapsed_seconds": 2.8
     },
     {
       "feast": "St. Jeremiah the Prophet",
@@ -3504,7 +3504,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.6
+      "elapsed_seconds": 1.4
     },
     {
       "feast": "Holy Apostles Thomas, James and Simon",
@@ -3599,7 +3599,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.0
+      "elapsed_seconds": 2.8
     },
     {
       "feast": "Sts. Stephen of Oulnia and the Martyrs Goharinus, Zamidus, Tuchicus and Raticus",
@@ -3664,7 +3664,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.2
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "Holy Prophets Ezekiel, Ezra and Zachariah the Father of John the Baptist",
@@ -3744,7 +3744,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.7
+      "elapsed_seconds": 3.4
     },
     {
       "feast": "Sts. John the Forerunner (Baptist) and Job the Righteous",
@@ -3840,7 +3840,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.3
+      "elapsed_seconds": 3.5
     },
     {
       "feast": "Commemoration of the 318 Fathers of the Holy Council of Nicea (AD 325)",
@@ -3920,7 +3920,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.7
+      "elapsed_seconds": 2.3
     },
     {
       "feast": "Eve of the Fast of the Exaltation of the Holy Cross",
@@ -4015,7 +4015,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 4.1
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "Feast of the Birth of Holy Virgin Mary from Anna",
@@ -4110,7 +4110,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.1
+      "elapsed_seconds": 3.3
     },
     {
       "feast": "Feast of the Holy Church for the Dedication of the Holy Cross",
@@ -4205,7 +4205,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.1
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "EXALTATION OF THE HOLY CROSS",
@@ -4490,7 +4490,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.3
+      "elapsed_seconds": 2.8
     },
     {
       "feast": "Sts. Patriarchs Barlaam, Anthimus and Irenaeus",
@@ -4525,7 +4525,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.1
+      "elapsed_seconds": 1.6
     },
     {
       "feast": "Feast of the Holy Cross of Varag",
@@ -4620,7 +4620,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.9
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "The Holy Princes Sahak and Hamazasp",
@@ -4700,7 +4700,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.2
+      "elapsed_seconds": 1.4
     },
     {
       "feast": "Sts. Phocas the Patriarch and Irenaeus of Lyons, Follower of the Apostles",
@@ -4735,7 +4735,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.6
+      "elapsed_seconds": 3.3
     },
     {
       "feast": "Sts. Dionysius the Areopagite and the Apostles Timothy and Titus",
@@ -4770,7 +4770,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.0
+      "elapsed_seconds": 3.2
     },
     {
       "feast": "Holy Evangelists Matthew, Mark, Luke and John",
@@ -4866,7 +4866,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 4.3
+      "elapsed_seconds": 4.1
     },
     {
       "feast": "Sts. Longinus the Centurion, Joseph the Father of God, Joseph of Arimathea and Lazarus and His Sisters Martha and Mary",
@@ -4966,7 +4966,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.4
+      "elapsed_seconds": 2.0
     },
     {
       "feast": "Sts. Aret and His Companions, the Martyrs Artemius and Christopher and the Women Callinice and Aquilina",
@@ -5061,7 +5061,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.9
+      "elapsed_seconds": 3.0
     },
     {
       "feast": "The Twelve Holy Doctors of Church: Hierotheus of Athens, Dionysius the Areopagite, Sylvester of Rome, Athanasius of Alexandria, Cyril of Jerusalem, Ephraim the Syrian, Basil the Great, Gregory of Nyssa, Gregory the Theologian, Epiphanius of Cyprus, John Chrysostom, and Cyril of Alexandria",
@@ -5157,7 +5157,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.6
+      "elapsed_seconds": 6.5
     },
     {
       "feast": "Discovery of the Holy Cross",
@@ -5252,7 +5252,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.0
+      "elapsed_seconds": 2.5
     },
     {
       "feast": "Sts. Anastasius the Priest, Varus the Soldier, Theodota and Her Sons, and Those Who Were Martyred with Her",
@@ -5287,7 +5287,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.4
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "Sts. Hipparchus and His Companions Who Were Martyred in Samosata, and Sts. Severianus of Sebastia and Babylas and His 84 Disciples",
@@ -5337,7 +5337,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.8
+      "elapsed_seconds": 2.2
     },
     {
       "feast": "Feast of All Saints, the Old and the New, the Known and the Unknown",
@@ -5372,7 +5372,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.5
+      "elapsed_seconds": 7.0
     },
     {
       "feast": "St. Stephen Bishop of Rome and the Holy Priests, Deacons and Many Faithful",
@@ -5407,7 +5407,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.0
+      "elapsed_seconds": 3.5
     },
     {
       "feast": "Sts. Akepsimas the Bishop, Joseph the Priest, Ayethalas the Deacon and Plato the Martyr",
@@ -5487,7 +5487,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.5
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "Sts. Metrophanes, Alexander and Paul the Confessor, Patriarchs of Constantinople, and Notaries Marcian and Martyrius the Martyrs",
@@ -5537,7 +5537,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 4.2
+      "elapsed_seconds": 2.8
     },
     {
       "feast": "Holy Archangels Gabriel and Michael and All the Heavenly Angels",
@@ -5632,7 +5632,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.6
+      "elapsed_seconds": 3.3
     },
     {
       "feast": "The Holy Apostles Andrew and Philip",
@@ -5727,7 +5727,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.4
+      "elapsed_seconds": 2.8
     },
     {
       "feast": "Eve of the Fast of Advent",
@@ -5762,7 +5762,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.5
+      "elapsed_seconds": 2.2
     },
     {
       "feast": "Sts. Virgins Juliana and Basilla",
@@ -5781,7 +5781,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 3.4
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "Sts. Clement the Bishop of Rome and Pancratius the Bishop of Taormina",
@@ -5816,7 +5816,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.4
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "Holy Apostles Thaddeus and Bartholomew, First Illuminators of Armenia",
@@ -5911,7 +5911,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.3
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "Sts. Gennaro the Bishop and Mercurius the Warrior",
@@ -5930,7 +5930,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 2.9
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "Sts. Jacoc and Themistocles",
@@ -5965,7 +5965,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 1.1
+      "elapsed_seconds": 0.8
     },
     {
       "feast": "The Holy Fathers of Egypt: Paul the Hermit, Paul the Simple, Macarius the Great, Evagrius Ponticus, John of the Well, John the Dwarf, Nilus of Sinai, Arsenios the Great, Sisoes the Great, Daniel of Scetis, Serapion, Macarius of Alexandria, Poimen and Others",
@@ -6000,7 +6000,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.4
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "Sts. Gregory and Nicholas the Wonderworkers, and the Other Nicholas the Bishop and Myron the Bishop",
@@ -6096,7 +6096,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.0
+      "elapsed_seconds": 3.7
     },
     {
       "feast": "Eve of the Fast of St. James the Bishop of Nisibis",
@@ -6191,7 +6191,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.8
+      "elapsed_seconds": 2.6
     },
     {
       "feast": "Sts. Menas, Hermogenes, Eugraphus and the Poor Men John and Alexis",
@@ -6276,7 +6276,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.6
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "Feast of the Conception of the Holy Virgin Mary by Anna",
@@ -6371,7 +6371,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.3
+      "elapsed_seconds": 2.9
     },
     {
       "feast": "Sts. Patriarchs Ignatius the Bishop of Antioch, Addai the Bishop of Edessa and Maruthas the Bishop of Marv",
@@ -6390,7 +6390,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 2.8
+      "elapsed_seconds": 2.7
     },
     {
       "feast": "Sts. Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides",
@@ -6409,7 +6409,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 2.9
+      "elapsed_seconds": 3.2
     },
     {
       "feast": "Holy Virgins Indes and Domna, and Clericus the Priest Along with the 20,000 Martyrs of Nicomedia",
@@ -6428,7 +6428,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 3.5
+      "elapsed_seconds": 2.4
     },
     {
       "feast": "Sts. Abraham and Khoren, Moneyless Physicians Cosmas and Damian",
@@ -6447,7 +6447,7 @@
         "clef_names_event:False"
       ],
       "matches": [],
-      "elapsed_seconds": 2.1
+      "elapsed_seconds": 2.3
     },
     {
       "feast": "Sts. David the Prophet-King and James the Apostle",
@@ -6527,7 +6527,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.2
+      "elapsed_seconds": 3.6
     },
     {
       "feast": "Sts. Peter and Paul the Apostles",
@@ -6622,7 +6622,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 2.7
+      "elapsed_seconds": 2.6
     },
     {
       "feast": "Sts. James the Apostle and His Brother John the Evangelist",
@@ -6718,7 +6718,7 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.6
+      "elapsed_seconds": 3.0
     },
     {
       "feast": "Eve of the Fast of Nativity",
@@ -6813,9 +6813,8 @@
           "auto_assignable": false
         }
       ],
-      "elapsed_seconds": 3.0
+      "elapsed_seconds": 2.4
     }
   ],
-  "unscored_cases": [],
   "unreviewed_cases": []
 }

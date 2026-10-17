@@ -98,13 +98,17 @@ def spelling_variant(a, b):
     """Whether two words are one name spelled two ways: one edit apart from five letters, two from eight.
 
     Transliterated names drift (Onuphrius/Onophrius, Ghevond/Ghevont); an exact match would miss them.
+    Loose on purpose: it only widens the shortlist, and Clef judges what it lets in.
     """
     if a == b:
         return True
     shorter = min(len(a), len(b))
     if shorter < 5 or abs(len(a) - len(b)) > 2 or a[:2] != b[:2]:
         return False
-    limit = 2 if shorter >= 8 else 1
+    return _within_edits(a, b, 2 if shorter >= 8 else 1)
+
+
+def _within_edits(a, b, limit):
     previous = list(range(len(b) + 1))
     for i, ca in enumerate(a, 1):
         current = [i]
@@ -155,14 +159,24 @@ def lexical_shortlist(feast, records, limit=SHORTLIST_LIMIT):
     return [record for _, _, record in sorted(scored, key=lambda item: item[:2])[:limit]]
 
 
+def _same_name(word, feast_word):
+    """Stricter than spelling_variant, which would join Simeon and Simon, or Theodosius and Theodotus:
+    the same word, a plural, or one letter apart in a name of eight letters or more (Onophrius)."""
+    if word == feast_word or word + "s" == feast_word or feast_word + "s" == word:
+        return True
+    return min(len(word), len(feast_word)) >= 8 and _within_edits(word, feast_word, 1)
+
+
 def title_names_only_the_feast(feast, record, records):
-    """Whether every distinctive word in the icon's title also appears in the feast's name.
+    """Whether the icon's title names someone, and only someone, the feast's name names.
 
     Clef cannot tell namesakes apart. It related St. Grigoris of Aghvank, St. Sergius (Sarkis)
-    and St. Jacob of Nisibis, at 0.89 to 0.95, to feasts naming a different Grigoris, the
+    and St. Jacob of Nisibis, at 0.88 to 0.95, to feasts naming a different Grigoris, the
     Sergius of Sergius and Bacchus, and a Jacoc. Each title carries a word the feast never
-    uses, so a title adding "of Aghvank" or "the Theologian" names someone else. Words in at least one title in
-    twenty (Christ, Gregory, Theotokos) or describing the medium do not count.
+    uses, so a title adding "of Aghvank" or "the Theologian" names someone else. A title with
+    no distinctive word at all ("Untitled Icon #2") names no one, and fails. Words in at
+    least ten titles and one title in twenty (Christ, Gregory, Theotokos), words describing
+    the medium, and numbers do not count.
     """
     counts = {}
     for other in records:
@@ -170,16 +184,25 @@ def title_names_only_the_feast(feast, record, records):
             counts[word] = counts.get(word, 0) + 1
     common = {w for w, n in counts.items() if n >= max(10, 0.05 * len(records))} | DESCRIPTIVE_TITLE_WORDS
     feast_words = set(_words(feast))
-    return all(
-        any(spelling_variant(word, f) for f in feast_words)
-        for word in _words(record["title"])
-        if word not in STOPWORDS and word not in common and not word.isdigit()
-    )
+    distinctive = [
+        word for word in _words(record["title"]) if word not in STOPWORDS and word not in common and not word.isdigit()
+    ]
+    return bool(distinctive) and all(any(_same_name(word, f) for f in feast_words) for word in distinctive)
 
 
 IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
 # Clef accepts images of up to 4 MiB; thumbnails are tens of kilobytes.
 IMAGE_MAX_BYTES = 4 * 1024 * 1024
+
+
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A thumbnail URL is fetched as stored: a redirect could lead off the bucket, or off http(s)."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_THUMBNAIL_OPENER = urllib.request.build_opener(_RefuseRedirects)
 
 
 def thumbnail_image_loader(urls, *, timeout=20):
@@ -188,7 +211,8 @@ def thumbnail_image_loader(urls, *, timeout=20):
     ``urls`` maps icon id to the thumbnail's public URL: the cached 400x300 rendition
     the thresholds were calibrated on. Returns a base64 data URL, or None when an
     icon has no web URL, or the download is not a PNG, JPEG or WebP image within
-    Clef's size limit. Downloads are cached for the loader's lifetime.
+    Clef's size limit. A redirect, a network error, or a download still running
+    after ``timeout`` seconds raises. Downloads are cached for the loader's lifetime.
     """
     cache = {}
 
@@ -197,11 +221,20 @@ def thumbnail_image_loader(urls, *, timeout=20):
             cache[icon_id] = None
             url = urls.get(icon_id)
             if url and urllib.parse.urlsplit(url).scheme in ("http", "https"):
-                with urllib.request.urlopen(url, timeout=timeout) as response:
+                deadline = time.monotonic() + timeout
+                chunks, size = [], 0
+                with _THUMBNAIL_OPENER.open(url, timeout=timeout) as response:
                     content_type = response.headers.get_content_type()
-                    data = response.read(IMAGE_MAX_BYTES + 1)
-                if content_type in IMAGE_TYPES and len(data) <= IMAGE_MAX_BYTES:
-                    cache[icon_id] = f"data:{content_type};base64,{base64.b64encode(data).decode()}"
+                    while size <= IMAGE_MAX_BYTES:
+                        if time.monotonic() > deadline:
+                            raise TimeoutError(f"Thumbnail download exceeded {timeout}s")
+                        chunk = response.read(64 * 1024)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        size += len(chunk)
+                if content_type in IMAGE_TYPES and size <= IMAGE_MAX_BYTES:
+                    cache[icon_id] = f"data:{content_type};base64,{base64.b64encode(b''.join(chunks)).decode()}"
         return cache[icon_id]
 
     return image_for
@@ -266,8 +299,10 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
     icon might have been the better match.
 
     ``image_for(icon_id)`` may return the icon's image as a base64 data URL;
-    Clef then judges the picture as well as its title and tags. An icon whose
-    image is unavailable is judged on its metadata alone.
+    Clef then judges the picture as well as its title and tags. The thresholds
+    were calibrated with every icon's image, so when ``image_for`` is given and
+    any shortlisted icon had to be judged without one (no image, or a failed
+    download), the outcome only suggests: nothing in it is auto-assignable.
     """
     # Checked here because worker threads would not see the request context otherwise.
     reject_public_work("llm")
@@ -291,13 +326,13 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
         answers = run(state, questions, model=model, images=images) if images else run(state, questions, model=model)
         return noul_probabilities(answers, questions)
 
+    outcome.call_count = 1
     try:
         names_event = ask(f"Commemoration: {feast}", FEAST_QUESTIONS)["names_event"] >= RUNG_THRESHOLD
     except (ClefError, RuntimeError):
         outcome.diagnostics.append("clef_feast_question_failed")
         outcome.elapsed_seconds = round(time.monotonic() - started, 3)
         return outcome
-    outcome.call_count = 1
 
     def judge(record):
         try:
@@ -317,8 +352,13 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
     outcome.call_count += len(shortlist)
 
     failures = sum(1 for _, probabilities, _ in judged if probabilities is None)
+    images_complete = True
     if image_for:
-        outcome.diagnostics.append(f"clef_images:{sum(1 for *_, imaged in judged if imaged)}/{len(judged)}")
+        imaged = sum(1 for *_, has_image in judged if has_image)
+        outcome.diagnostics.append(f"clef_images:{imaged}/{len(judged)}")
+        if imaged < len(judged):
+            images_complete = False
+            outcome.diagnostics.append("clef_images_incomplete")
     matches, strengths = [], {}
     by_record = {record["id"]: record for record, _, _ in judged}
     for record, probabilities, _ in judged:
@@ -347,6 +387,7 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
     top = matches[0] if matches else None
     if (
         not failures
+        and images_complete
         and top is not None
         and top["relation"] == "related_specific"
         and strengths[top["id"]] >= ASSIGN_THRESHOLD
@@ -363,6 +404,9 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
         if several:
             top["auto_assignable"] = True
             outcome.diagnostics.append("clef_one_of_several")
+    if not images_complete:
+        for m in matches:
+            m["auto_assignable"] = False
     outcome.matches = matches[:max_results]
     if failures:
         outcome.diagnostics.append(f"clef_icon_question_failed:{failures}")

@@ -9,7 +9,7 @@ from django.test import SimpleTestCase
 
 from bahk.public_api.work import public_request
 from hub.management.commands.evaluate_icon_matching_cases import evaluate_cases_clef
-from hub.services.clef import ClefError
+from hub.services.clef import ClefError, run_clef
 from hub.services.icon_clef_judge import (
     ASSIGN_THRESHOLD,
     FEAST_QUESTIONS,
@@ -43,7 +43,7 @@ class FakeClef:
         self.calls = []
         self.contexts = []
 
-    def __call__(self, state, questions, model="clef"):
+    def __call__(self, state, questions, model="clef", images=None):
         self.calls.append((state, tuple(questions), model))
         self.contexts.append(public_request.get())
         if questions is FEAST_QUESTIONS or "names_event" in questions:
@@ -204,6 +204,32 @@ class JudgeTests(SimpleTestCase):
         outcome = judge_icons(CATALOGUE, "Palm Sunday", run=run)
         self.assertEqual(outcome.status, "unavailable")
         self.assertEqual(len(calls), 1)
+        self.assertEqual(outcome.call_count, 1)
+
+    def test_without_every_image_nothing_is_assignable(self):
+        """The thresholds were calibrated with images; a metadata-only judgement only suggests."""
+        clef = FakeClef(
+            by_title={
+                "Palm Sunday Entry into Jerusalem": probs(event=0.97, figures=0.9, related=0.98),
+                "Palm Sunday 2": probs(event=0.6, related=0.7),
+            }
+        )
+
+        def image_for(icon_id):
+            if icon_id == 2:
+                raise OSError("S3 down")
+            return "data:image/jpeg;base64,eA=="
+
+        outcome = judge_icons(CATALOGUE, "Palm Sunday", run=clef, image_for=image_for)
+        self.assertEqual(outcome.status, "complete")
+        self.assertEqual(outcome.matches[0]["id"], 1)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+        self.assertIn("clef_images:1/2", outcome.diagnostics)
+        self.assertIn("clef_images_incomplete", outcome.diagnostics)
+        outcome = judge_icons(
+            CATALOGUE, "Palm Sunday", run=clef, image_for=lambda icon_id: "data:image/jpeg;base64,eA=="
+        )
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
 
     def test_provided_shortlist_is_used_deduplicated(self):
         clef = FakeClef(by_title={"Crucifixion 4": probs(related=0.8)})
@@ -271,10 +297,39 @@ class OneOfSeveralTests(SimpleTestCase):
         outcome = judge_icons(self.catalogue("St. Grigoris"), self.feast, candidate_ids=[1], run=clef)
         self.assertFalse(outcome.matches[0]["auto_assignable"])
 
+    def test_a_title_naming_no_one_or_a_namesake_fails_the_title_check(self):
+        records = serialize_catalogue(
+            [
+                {"id": 1, "title": "Untitled Icon #2", "tags": ["mkhitar-gosh"]},
+                {"id": 2, "title": "St. Simeon", "tags": []},
+                {"id": 3, "title": "St. Theodosius", "tags": []},
+                {"id": 4, "title": "St. Andrew the Apostle", "tags": []},
+            ]
+            + [{"id": i, "title": f"Crucifixion {i}", "tags": []} for i in range(5, 30)]
+        )
+        by_id = {r["id"]: r for r in records}
+        self.assertFalse(title_names_only_the_feast("Sts. Mkhitar of Sebastia and Abraham", by_id[1], records))
+        self.assertFalse(title_names_only_the_feast("Holy Apostles Thomas, James and Simon", by_id[2], records))
+        self.assertFalse(title_names_only_the_feast("Sts. Theodotus of Galatia and Thalelaus", by_id[3], records))
+        self.assertTrue(title_names_only_the_feast("The Holy Apostles Andrew and Philip", by_id[4], records))
+
     def test_title_check_ignores_medium_words_and_allows_spelling_variants(self):
         records = serialize_catalogue(self.catalogue("St Onophrius illuminated manuscript 1450"))
         self.assertTrue(title_names_only_the_feast("Sts. Tryphon and Onuphrius", records[0], records))
         self.assertFalse(title_names_only_the_feast("Sts. Tryphon and Barsauma", records[0], records))
+
+
+class RunClefTests(SimpleTestCase):
+    def test_images_travel_in_the_request_body(self):
+        response = SimpleNamespace(
+            status_code=200, json=lambda: {"success": True, "result": {"answers": {"q": {"noul": 0.5}}}}
+        )
+        with (
+            self.settings(CLOUDFLARE_WORKERSAI_ACCOUNT_ID="acct", CLOUDFLARE_WORKERSAI_API_KEY="key"),
+            patch("hub.services.clef.requests.post", return_value=response) as post,
+        ):
+            run_clef("state", {"q": {"type": "noul", "instructions": "?"}}, images=["data:image/png;base64,eA=="])
+        self.assertEqual(post.call_args.kwargs["json"]["images"], ["data:image/png;base64,eA=="])
 
 
 class HarnessTests(SimpleTestCase):

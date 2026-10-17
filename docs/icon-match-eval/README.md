@@ -409,9 +409,14 @@ What separates them is in the text. Every namesake's title carries a word the fe
 uses: "of Aghvank", "(Sarkis)", "of Nisibis", "of Sebastia", "the Theologian", "the
 Protomartyr". So the top icon is written only when all of the following hold:
 - `related` ≥ `ASSIGN_THRESHOLD`;
-- every distinctive word of its title appears in the feast's name
-  (`title_names_only_the_feast`). Spelling variants count, and words found in one title in
-  twenty, medium words like "icon" or "manuscript", and numbers are ignored;
+- its title has at least one distinctive word, and every one appears in the feast's name
+  (`title_names_only_the_feast`):
+  - A match is the same word, a plural, or one letter apart in a name of eight letters or more
+    (Onophrius/Onuphrius). That is stricter than the shortlist's spelling variants, which
+    would join Simeon and Simon, or Theodosius and Theodotus.
+  - Words in at least ten titles and one title in twenty (Christ, Gregory, Theotokos), medium
+    words like "icon" or "manuscript", and numbers are ignored.
+  - A title with nothing distinctive left ("Untitled Icon #2") names no one, and fails;
 - Clef answers that the feast names two or more persons or groups. This is one extra call,
   made only when the first two hold. It changed nothing on these feasts, but it keeps a
   single-saint feast out.
@@ -450,7 +455,7 @@ chose.
 | Value | Who writes | Notes |
 |---|---|---|
 | `llm` (default) | the LLM matcher, through the icon match router | unchanged |
-| `clef_shadow` | the LLM matcher | Clef runs beside it and logs `Clef shadow for feast …: llm writes X, clef would write Y`, marked `[differs]` when they disagree |
+| `clef_shadow` | the LLM matcher | after the LLM's write, Clef runs and logs `Clef shadow for feast …: llm writes X, clef would write Y`, marked `[differs]` when they disagree |
 | `clef` | the Clef judge | see below |
 
 Whichever engine runs, only a complete outcome's first, auto-assignable match is written,
@@ -458,9 +463,10 @@ under the same row lock and stale-row checks.
 
 With `clef`:
 - The judge sees each icon's `cached_thumbnail_url`, the 400×300 rendition it was calibrated
-  on.
-- An icon without a web URL (local development stores a relative path) is judged on title and
-  tags alone, which the thresholds were not calibrated for.
+  on. Downloads refuse redirects and stop at the timeout, however slowly bytes arrive.
+- The thresholds were calibrated with every icon's image. If any shortlisted icon is judged
+  without one (a failed download, or no web URL, as in local development), Clef only
+  suggests: the outcome carries `clef_images_incomplete` and nothing in it is written.
 - A Clef outage makes the outcome unavailable and writes nothing. It does not fall back to the
   LLM.
 

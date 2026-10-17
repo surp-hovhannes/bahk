@@ -1,5 +1,9 @@
 """FEAST_ICON_MATCH_ENGINE chooses who decides a new feast's icon."""
 
+import io
+import threading
+import urllib.error
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -77,9 +81,17 @@ class FeastIconEngineTests(TestCase):
 
     @override_settings(FEAST_ICON_MATCH_ENGINE="clef_shadow")
     def test_shadow_writes_the_llm_choice_and_logs_clefs(self):
-        _, clef, logger = self.run_task(llm=outcome(self.palm.id), clef=lambda *a, **k: outcome(self.other.id))
-        clef.assert_called_once()
+        written_before_shadow = []
+
+        def clef(*args, **kwargs):
+            written_before_shadow.append(Feast.objects.get(pk=self.feast.pk).icon_id)
+            return outcome(self.other.id)
+
+        _, clef_mock, logger = self.run_task(llm=outcome(self.palm.id), clef=clef)
+        clef_mock.assert_called_once()
         self.assertEqual(self.feast.icon_id, self.palm.id)
+        # The shadow runs after the LLM's write, so its latency never delays it.
+        self.assertEqual(written_before_shadow, [self.palm.id])
         shadow = [c for c in logger.info.call_args_list if c.args[0].startswith("Clef shadow")]
         self.assertEqual(len(shadow), 1)
         self.assertEqual(shadow[0].args[3:5], (self.palm.id, self.other.id))
@@ -100,51 +112,96 @@ class FeastIconEngineTests(TestCase):
             self.assertEqual(feast_icon_engine(), "llm")
         logger.warning.assert_called_once()
 
-    @override_settings(FEAST_ICON_MATCH_ENGINE="clef")
-    def test_end_to_end_with_the_real_judge(self):
-        def fake_clef(state, questions, model="clef", images=None):
-            if "names_event" in questions:
-                return {"names_event": {"noul": 0.9}}
-            depicts = "Entry into Jerusalem" in state
-            return {
-                "depicts_event": {"noul": 0.96 if depicts else 0.3},
-                "all_figures": {"noul": 0.8},
-                "related": {"noul": 0.97 if depicts else 0.6},
-            }
+    def fake_clef(self, state, questions, model="clef", images=None):
+        if "names_event" in questions:
+            return {"names_event": {"noul": 0.9}}
+        depicts = "Entry into Jerusalem" in state
+        return {
+            "depicts_event": {"noul": 0.96 if depicts else 0.3},
+            "all_figures": {"noul": 0.8},
+            "related": {"noul": 0.97 if depicts else 0.6},
+        }
 
+    def run_real_judge(self, opener):
         with (
-            patch("hub.services.icon_clef_judge.run_clef", fake_clef),
-            patch("hub.services.icon_clef_judge.urllib.request.urlopen") as urlopen,
+            patch("hub.services.icon_clef_judge.run_clef", self.fake_clef),
+            patch("hub.services.icon_clef_judge._THUMBNAIL_OPENER.open", side_effect=opener),
         ):
-            urlopen.side_effect = OSError("offline")
             match_icon_to_feast_task(self.feast.pk)
         self.feast.refresh_from_db()
+
+    @override_settings(FEAST_ICON_MATCH_ENGINE="clef")
+    def test_end_to_end_with_the_real_judge(self):
+        Icon.objects.filter(pk=self.other.pk).update(cached_thumbnail_url="https://example.com/palm2.jpg")
+        self.run_real_judge(lambda url, timeout: fake_response())
         self.assertEqual(self.feast.icon_id, self.palm.id)
+
+    @override_settings(FEAST_ICON_MATCH_ENGINE="clef")
+    def test_without_every_image_clef_only_suggests(self):
+        # The thresholds were calibrated with images: a failed download, or an icon with no
+        # thumbnail URL (here, Palm Sunday 2), must not lead to a write.
+        for opener in (lambda url, timeout: fake_response(), OSError("S3 down")):
+            with self.subTest(opener=opener):
+                self.run_real_judge(opener)
+                self.assertIsNone(self.feast.icon_id)
+
+
+def fake_response(body=b"jpeg-bytes", content_type="image/jpeg"):
+    response = MagicMock()
+    response.__enter__.return_value = response
+    response.headers.get_content_type.return_value = content_type
+    stream = io.BytesIO(body)
+    response.read.side_effect = lambda size=-1: stream.read(size)
+    return response
 
 
 class ThumbnailImageLoaderTests(SimpleTestCase):
-    def response(self, body=b"jpeg-bytes", content_type="image/jpeg"):
-        response = MagicMock()
-        response.__enter__.return_value = response
-        response.headers.get_content_type.return_value = content_type
-        response.read.side_effect = lambda limit=-1: body[:limit] if limit >= 0 else body
-        return response
+    OPEN = "hub.services.icon_clef_judge._THUMBNAIL_OPENER.open"
 
     def test_returns_a_cached_data_url(self):
-        with patch("hub.services.icon_clef_judge.urllib.request.urlopen", return_value=self.response()) as urlopen:
+        with patch(self.OPEN, return_value=fake_response()) as opener:
             image_for = thumbnail_image_loader({1: "https://example.com/a.jpg"})
             self.assertEqual(image_for(1), "data:image/jpeg;base64,anBlZy1ieXRlcw==")
             image_for(1)
-        urlopen.assert_called_once()
+        opener.assert_called_once()
 
     def test_skips_missing_non_web_non_image_and_oversized(self):
-        oversized = self.response(body=b"x" * (IMAGE_MAX_BYTES + 1))
-        with patch("hub.services.icon_clef_judge.urllib.request.urlopen") as urlopen:
+        with patch(self.OPEN) as opener:
             image_for = thumbnail_image_loader({1: None, 2: "file:///etc/passwd"})
             self.assertIsNone(image_for(1))
             self.assertIsNone(image_for(2))
-            urlopen.assert_not_called()
-            urlopen.return_value = self.response(content_type="text/html")
+            opener.assert_not_called()
+            opener.return_value = fake_response(content_type="text/html")
             self.assertIsNone(thumbnail_image_loader({3: "https://example.com/page"})(3))
-            urlopen.return_value = oversized
+            opener.return_value = fake_response(body=b"x" * (IMAGE_MAX_BYTES + 1))
             self.assertIsNone(thumbnail_image_loader({4: "https://example.com/big.jpg"})(4))
+
+    def test_a_slow_download_is_cut_off_by_the_total_deadline(self):
+        clock = iter(range(0, 1000, 5))
+        with (
+            patch(self.OPEN, return_value=fake_response(body=b"x" * (512 * 1024))),
+            patch("hub.services.icon_clef_judge.time.monotonic", side_effect=lambda: next(clock)),
+            self.assertRaises(TimeoutError),
+        ):
+            thumbnail_image_loader({1: "https://example.com/slow.jpg"}, timeout=12)(1)
+
+    def test_redirects_are_refused(self):
+        class Redirect(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", "ftp://127.0.0.1/x.png")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Redirect)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f"http://127.0.0.1:{server.server_port}/thumb.png"
+        with patch.dict("os.environ", {"NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"}):
+            with self.assertRaises(urllib.error.HTTPError) as refused:
+                thumbnail_image_loader({1: url}, timeout=5)(1)
+        self.assertEqual(refused.exception.code, 302)
