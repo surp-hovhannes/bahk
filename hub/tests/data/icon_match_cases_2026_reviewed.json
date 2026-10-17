@@ -712,14 +712,16 @@
   "date": "2026-09-03",
   "correct": [
    377,
-   333
+   333,
+   36
   ],
   "acceptable": [],
   "assignable": [
    377,
-   333
+   333,
+   36
   ],
-  "note": "Reviewer kept the stored icon. Also 333, added on inspection (not by the reviewer): another St. John the Baptist."
+  "note": "Reviewer kept the stored icon. Also 333, added on inspection (not by the reviewer): another St. John the Baptist. Also 36, added on inspection (not by the reviewer): another St. John the Baptist."
  },
  {
   "feast_id": 403,
@@ -870,15 +872,17 @@
   "correct": [
    239,
    300,
-   315
+   315,
+   492
   ],
   "acceptable": [],
   "assignable": [
    239,
    300,
-   315
+   315,
+   492
   ],
-  "note": "Reviewer chose this icon. Also 300, added on inspection (not by the reviewer): one of the four Evangelists, as the reviewer's St. John is. Also 315, added on inspection (not by the reviewer): one of the four Evangelists, as the reviewer's St. John is."
+  "note": "Reviewer chose this icon. Also 300, added on inspection (not by the reviewer): one of the four Evangelists, as the reviewer's St. John is. Also 315, added on inspection (not by the reviewer): one of the four Evangelists, as the reviewer's St. John is. Also 492, added on inspection (not by the reviewer): another St. Matthew, one of the four Evangelists."
  },
  {
   "feast_id": 561,
@@ -919,14 +923,16 @@
   "date": "2026-10-24",
   "correct": [
    479,
-   35
+   35,
+   380
   ],
   "acceptable": [],
   "assignable": [
    479,
-   35
+   35,
+   380
   ],
-  "note": "Reviewer chose this icon. Also 35, added on inspection (not by the reviewer): Basil and Gregory of Nyssa are among the Twelve Doctors, as the reviewer's partial pick is."
+  "note": "Reviewer chose this icon. Also 35, added on inspection (not by the reviewer): Basil and Gregory of Nyssa are among the Twelve Doctors, as the reviewer's partial pick is. Also 380, added on inspection (not by the reviewer): St. Gregory the Theologian is one of the Twelve Doctors named."
  },
  {
   "feast_id": 562,

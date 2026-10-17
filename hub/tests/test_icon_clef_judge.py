@@ -17,6 +17,7 @@ from hub.services.icon_clef_judge import (
     lexical_shortlist,
     place,
     spelling_variant,
+    title_names_only_the_feast,
 )
 from hub.services.icon_match_profiles import CONTROL
 from hub.services.icon_match_service import serialize_catalogue
@@ -34,8 +35,9 @@ CATALOGUE = [
 class FakeClef:
     """Answers by icon title; records every call and the request context it ran in."""
 
-    def __init__(self, names_event=0.9, by_title=None, fail_titles=()):
+    def __init__(self, names_event=0.9, by_title=None, fail_titles=(), names_several=0.9):
         self.names_event = names_event
+        self.names_several = names_several
         self.by_title = by_title or {}
         self.fail_titles = set(fail_titles)
         self.calls = []
@@ -46,6 +48,8 @@ class FakeClef:
         self.contexts.append(public_request.get())
         if questions is FEAST_QUESTIONS or "names_event" in questions:
             return {"names_event": {"noul": self.names_event}}
+        if "names_several" in questions:
+            return {"names_several": {"noul": self.names_several}}
         title = state.split("\n")[1].removeprefix("Icon title: ")
         if title in self.fail_titles:
             raise ClefError("down")
@@ -228,6 +232,49 @@ class JudgeTests(SimpleTestCase):
             public_request.reset(token)
         self.assertEqual(len(clef.contexts), 3)
         self.assertTrue(all(context is sentinel for context in clef.contexts))
+
+
+class OneOfSeveralTests(SimpleTestCase):
+    """One saint of a multi-saint feast may be written when no icon shows them all."""
+
+    feast = "Sts. Gordius, Polyeuctus and Grigoris"
+
+    def catalogue(self, title):
+        # Enough other titles that the candidate's own words are not common ones.
+        return [{"id": 1, "title": title, "tags": []}] + [
+            {"id": i, "title": f"Crucifixion {i}", "tags": []} for i in range(2, 30)
+        ]
+
+    def judge(self, title, **clef):
+        clef = FakeClef(names_event=0.1, by_title={title: probs(related=0.96)}, **clef)
+        return judge_icons(self.catalogue(title), self.feast, candidate_ids=[1], run=clef), clef
+
+    def test_one_named_saint_is_written(self):
+        outcome, clef = self.judge("St. Grigoris")
+        self.assertEqual(outcome.matches[0]["relation"], "related_specific")
+        self.assertTrue(outcome.matches[0]["auto_assignable"])
+        self.assertIn("clef_one_of_several", outcome.diagnostics)
+        self.assertEqual(outcome.call_count, 3)
+
+    def test_a_namesake_is_only_suggested(self):
+        # "of Aghvank" is not in the feast's name: this Grigoris may be someone else.
+        outcome, clef = self.judge("St. Grigoris of Aghvank")
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+        self.assertEqual(len(clef.calls), 2)
+
+    def test_a_feast_naming_one_saint_is_not_eligible(self):
+        outcome, _ = self.judge("St. Grigoris", names_several=0.1)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_below_the_threshold_is_only_suggested(self):
+        clef = FakeClef(names_event=0.1, by_title={"St. Grigoris": probs(related=0.85)})
+        outcome = judge_icons(self.catalogue("St. Grigoris"), self.feast, candidate_ids=[1], run=clef)
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
+
+    def test_title_check_ignores_medium_words_and_allows_spelling_variants(self):
+        records = serialize_catalogue(self.catalogue("St Onophrius illuminated manuscript 1450"))
+        self.assertTrue(title_names_only_the_feast("Sts. Tryphon and Onuphrius", records[0], records))
+        self.assertFalse(title_names_only_the_feast("Sts. Tryphon and Barsauma", records[0], records))
 
 
 class HarnessTests(SimpleTestCase):

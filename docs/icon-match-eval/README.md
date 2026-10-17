@@ -381,13 +381,66 @@ Hades), and Clef name confusions (Elisha for Elijah, the prophet Zechariah for Z
 father of John). Multi-saint feasts are also unassigned where the best icon shows one of the
 saints named (`related_specific`); whether those may be written is a policy decision.
 
+### One saint of several (2026-10-17)
+
+Staff policy, decided after the shortlist work: for a feast naming several saints, an icon of
+one of them may be written. The reviewer had already chosen such icons for many feasts
+(St. Andrew for Andrew and Philip, St. Matthew for the four Evangelists).
+
+These icons sit on the `related_specific` rung, and `related` alone was unsafe. It scores
+namesakes as high as the right saint, 0.88–0.95:
+- St. Grigoris of Aghvank for Sts. Gordius, Polyeuctus and Grigoris;
+- St. Sergius (Sarkis) for the Martyrs Sergius and Bacchus;
+- St. Jacob of Nisibis for Sts. Jacoc and Themistocles;
+- the Forty Martyrs of Sebastia for the Forty-Five Martyrs.
+
+A dedicated question ("at least one of the persons named, not someone who merely shares a
+name") scored those same namesakes 0.82–0.98, mostly above 0.95, and was dropped. Clef does not know which
+Grigoris is which.
+
+What separates them is in the text. Every namesake's title carries a word the feast never
+uses: "of Aghvank", "(Sarkis)", "of Nisibis", "of Sebastia", "the Theologian", "the
+Protomartyr". So the top icon is written only when all of the following hold:
+- `related` ≥ `ASSIGN_THRESHOLD`;
+- every distinctive word of its title appears in the feast's name
+  (`title_names_only_the_feast`). Spelling variants count, and words found in one title in
+  twenty, medium words like "icon" or "manuscript", and numbers are ignored;
+- Clef answers that the feast names two or more persons or groups. This is one extra call,
+  made only when the first two hold. It changed nothing on these feasts, but it keeps a
+  single-saint feast out.
+
+With the title check, no one-saint pick on a reviewed feast is wrong, at any threshold from
+0.85 to 0.90 and with tags in either order.
+
+| | Shortlist and ranking | + one saint of several |
+|---|---|---|
+| 104 reviewed: assigned / unsafe | 16 / 0 | **26 / 0** |
+| 12 original cases: assigned / unsafe | 2 / 0 | 3 / 0 |
+| 73 unreviewed: assigned | 24 | 34 |
+
+Of the five new one-saint picks on unreviewed feasts that differ from the stored icon:
+- **Four are right:** Sarkis, Nerses the Great, Thaddeus, and Joachim and Anna. The stored
+  icon for Joachim and Anna is a Resurrection icon.
+- **One is debatable:** St. Theodosius for Sts. Theodosius and the Children of Ephesus, where
+  the stored Seven Sleepers icon shows more of the commemoration.
+
+The title check also costs four right picks, whose titles add a word the feast doesn't use:
+- a Crucifixion for Longinus and his companions;
+- Ephrem, which the feast spells Ephraim;
+- King David Praying;
+- Mesrop Mashtots of Kapan.
+
+Labels: St. Gregory the Theologian for the Twelve Holy Doctors, another St. Matthew and
+another St. John the Baptist are added as assignable on inspection. In the 12 original cases,
+the four-saint feast with Gregory of Tatev now has his icons assignable, as the 2026 review
+chose.
+
 ## Next steps
 
 - Re-run the calibration above after any change to a question, the placement rule, the
   shortlist or the catalogue's titles, and after the remaining 73 feasts are reviewed.
-- Coverage now depends on ranking and shortlisting, not on the threshold (see the table
-  above). Also decide whether a top `related_specific` icon may be written for a feast
-  naming several saints.
+- Coverage now depends on ranking and shortlisting, not on the threshold (see the tables
+  above): feasts whose icon shares no word with their name, and Clef's name confusions.
 - Run a newer OpenAI profile through this harness for comparison.
 - Extend the cases: 91 of the 2026 calendar's 177 distinct feasts already carry a stored icon.
   Reviewing those is a gold set and a production data cleanup in one pass. Against production:

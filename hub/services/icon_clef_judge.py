@@ -35,6 +35,14 @@ FEAST_QUESTIONS = {
     },
 }
 
+# Asked only when one saint of a multi-saint feast is within reach of assignment.
+SEVERAL_QUESTIONS = {
+    "names_several": {
+        "type": "noul",
+        "instructions": "Does this commemoration name two or more persons or groups?",
+    },
+}
+
 # Asked once per shortlisted icon, against the feast and that icon's metadata.
 ICON_QUESTIONS = {
     "depicts_event": {
@@ -74,6 +82,8 @@ MAX_WORKERS = 8
 STOPWORDS = frozenset(
     "a and day feast for great her his holy in of remembrance saint saints st sts sunday the their to".split()
 )
+# Title words that describe an icon's medium rather than whom it shows.
+DESCRIPTIVE_TITLE_WORDS = frozenset("fresco icon illuminated manuscript miniature painting untitled".split())
 WORD = re.compile(r"\w+")
 
 
@@ -142,6 +152,28 @@ def lexical_shortlist(feast, records, limit=SHORTLIST_LIMIT):
     return [record for _, _, record in sorted(scored, key=lambda item: item[:2])[:limit]]
 
 
+def title_names_only_the_feast(feast, record, records):
+    """Whether every distinctive word in the icon's title also appears in the feast's name.
+
+    Clef cannot tell namesakes apart. It related St. Grigoris of Aghvank, St. Sergius (Sarkis)
+    and St. Jacob of Nisibis, at 0.89 to 0.95, to feasts naming a different Grigoris, the
+    Sergius of Sergius and Bacchus, and a Jacoc. Each title carries a word the feast never
+    uses, so a title adding "of Aghvank" or "the Theologian" names someone else. Words in at least one title in
+    twenty (Christ, Gregory, Theotokos) or describing the medium do not count.
+    """
+    counts = {}
+    for other in records:
+        for word in set(_words(other["title"])):
+            counts[word] = counts.get(word, 0) + 1
+    common = {w for w, n in counts.items() if n >= max(10, 0.05 * len(records))} | DESCRIPTIVE_TITLE_WORDS
+    feast_words = set(_words(feast))
+    return all(
+        any(spelling_variant(word, f) for f in feast_words)
+        for word in _words(record["title"])
+        if word not in STOPWORDS and word not in common and not word.isdigit()
+    )
+
+
 def icon_state(feast, record, *, with_image=False):
     tags = ", ".join(record["tags"]) or "(none)"
     state = f"Commemoration: {feast}\nIcon title: {record['title']}\nIcon tags: {tags}"
@@ -176,6 +208,8 @@ def assignable(relation, strength, *, event_shortlisted=False):
     A portrait of the commemorated saint for an event feast (subject_portrait)
     is written only when no shortlisted icon reached the event rung: if the
     catalogue may hold the event itself, that is the more specific depiction.
+    One saint of a multi-saint feast (related_specific) is decided in
+    judge_icons, because it needs the feast and the catalogue as well.
     """
     if strength < ASSIGN_THRESHOLD:
         return False
@@ -253,6 +287,7 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
     if image_for:
         outcome.diagnostics.append(f"clef_images:{sum(1 for *_, imaged in judged if imaged)}/{len(judged)}")
     matches, strengths = [], {}
+    by_record = {record["id"]: record for record, _, _ in judged}
     for record, probabilities, _ in judged:
         if probabilities is None:
             continue
@@ -276,6 +311,25 @@ def judge_icons(icons, feast, *, candidate_ids=None, model="clef", run=None, max
     for m in matches:
         m["auto_assignable"] = assignable(m["relation"], strengths[m["id"]], event_shortlisted=event_shortlisted)
     matches.sort(key=lambda m: (RANK.index(m["relation"]), -m["relevance"], m["id"]))
+    top = matches[0] if matches else None
+    if (
+        not failures
+        and top is not None
+        and top["relation"] == "related_specific"
+        and strengths[top["id"]] >= ASSIGN_THRESHOLD
+        and title_names_only_the_feast(feast, by_record[top["id"]], records)
+    ):
+        # Review policy: one saint of a multi-saint feast may be written, when nothing
+        # depicts them all. The top is related_specific only if no icon reached a higher rung.
+        try:
+            several = ask(f"Commemoration: {feast}", SEVERAL_QUESTIONS)["names_several"] >= RUNG_THRESHOLD
+        except (ClefError, RuntimeError):
+            several = False
+            outcome.diagnostics.append("clef_names_several_failed")
+        outcome.call_count += 1
+        if several:
+            top["auto_assignable"] = True
+            outcome.diagnostics.append("clef_one_of_several")
     outcome.matches = matches[:max_results]
     if failures:
         outcome.diagnostics.append(f"clef_icon_question_failed:{failures}")
