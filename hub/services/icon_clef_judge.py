@@ -6,9 +6,10 @@ malformed. Here each shortlisted icon gets the same few yes/no questions, Clef
 returns a probability for each, and suggestion and assignment are thresholds in
 code. This is the pattern ``prayers/clef_moderation.py`` uses for moderation.
 
-The thresholds are starting points, not calibrated values. Tune them against
-labelled cases with ``evaluate_icon_matching_cases --engine clef`` before any
-production use.
+The assignment threshold is calibrated against the staff-reviewed 2026 feasts
+(hub/tests/data/icon_match_cases_2026_reviewed.json); see docs/icon-match-eval/
+README.md. Re-run that calibration before changing a question, a threshold or
+the placement rule.
 """
 
 import contextvars
@@ -60,8 +61,10 @@ ICON_QUESTIONS = {
 
 # A probability at or above this places an icon on that rung of the ladder.
 RUNG_THRESHOLD = 0.50
-# Assignment needs a near-certain answer on the rung that justifies it.
-ASSIGN_THRESHOLD = 0.85
+# Assignment needs a near-certain answer on the rung that justifies it. Calibrated on
+# 2026-10-16 with the placement rule in place(): the highest-scoring wrong top pick among
+# the reviewed feasts scored 0.853 (St. Elisha for the Eve of the Fast of the Prophet Elijah).
+ASSIGN_THRESHOLD = 0.90
 SHORTLIST_LIMIT = 24
 RANK = ("exact_event", "exact_subject", "subject_portrait", "related_specific")
 MAX_WORKERS = 8
@@ -102,13 +105,24 @@ def icon_state(feast, record, *, with_image=False):
 
 
 def place(probabilities, names_event):
-    """Map one icon's probabilities onto the matcher's relation ladder, or None to omit it."""
-    if probabilities["depicts_event"] >= RUNG_THRESHOLD:
-        return "exact_event", probabilities["depicts_event"]
+    """Map one icon's probabilities onto the matcher's relation ladder, or None to omit it.
+
+    An icon depicts the event only when the commemoration names one. Shown an image,
+    Clef otherwise calls the nearest Gospel scene a depiction of a day that remembers
+    no event: Entry into Jerusalem scored 0.93 for the Median day of Great Lent.
+
+    A depiction or a portrait implies ``related``, so its strength is capped by it:
+    answers that disagree are not near-certain, however high one of them is. The Last
+    Judgment for the Sunday of the Judge scored 0.90 as the event but 0.76 as related,
+    and the reviewer chose a different icon.
+    """
+    related = probabilities["related"]
+    if names_event and probabilities["depicts_event"] >= RUNG_THRESHOLD:
+        return "exact_event", min(probabilities["depicts_event"], related)
     if probabilities["all_figures"] >= RUNG_THRESHOLD:
-        return ("subject_portrait" if names_event else "exact_subject"), probabilities["all_figures"]
-    if probabilities["related"] >= RUNG_THRESHOLD:
-        return "related_specific", probabilities["related"]
+        return ("subject_portrait" if names_event else "exact_subject"), min(probabilities["all_figures"], related)
+    if related >= RUNG_THRESHOLD:
+        return "related_specific", related
     return None, 0.0
 
 

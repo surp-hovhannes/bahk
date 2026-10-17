@@ -1,5 +1,7 @@
 """The Clef icon judge decides in code from Clef's probabilities, with no network."""
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -9,6 +11,7 @@ from bahk.public_api.work import public_request
 from hub.management.commands.evaluate_icon_matching_cases import evaluate_cases_clef
 from hub.services.clef import ClefError
 from hub.services.icon_clef_judge import (
+    ASSIGN_THRESHOLD,
     FEAST_QUESTIONS,
     judge_icons,
     lexical_shortlist,
@@ -67,12 +70,22 @@ class LexicalShortlistTests(SimpleTestCase):
 
 class PlacementTests(SimpleTestCase):
     def test_ladder_and_assignment(self):
-        self.assertEqual(place(probs(event=0.9), True), ("exact_event", 0.9))
-        self.assertEqual(place(probs(figures=0.9), False), ("exact_subject", 0.9))
+        self.assertEqual(place(probs(event=0.9, related=0.95), True), ("exact_event", 0.9))
+        self.assertEqual(place(probs(figures=0.9, related=0.95), False), ("exact_subject", 0.9))
         # A portrait for an event feast sits below any depiction of the event.
-        self.assertEqual(place(probs(figures=0.95), True), ("subject_portrait", 0.95))
+        self.assertEqual(place(probs(figures=0.95, related=0.99), True), ("subject_portrait", 0.95))
         self.assertEqual(place(probs(related=0.7), False), ("related_specific", 0.7))
         self.assertEqual(place(probs(), True), (None, 0.0))
+
+    def test_only_a_feast_that_names_an_event_has_a_depiction_of_it(self):
+        # The Median day of Great Lent remembers no event; Entry into Jerusalem is not its depiction.
+        self.assertEqual(place(probs(event=0.93, figures=0.59, related=0.86), False), ("exact_subject", 0.59))
+        self.assertEqual(place(probs(event=0.93, related=0.86), False), ("related_specific", 0.86))
+
+    def test_strength_is_capped_by_the_related_answer_it_implies(self):
+        self.assertEqual(place(probs(event=0.9, related=0.76), True), ("exact_event", 0.76))
+        self.assertEqual(place(probs(figures=0.97, related=0.6), False), ("exact_subject", 0.6))
+        self.assertLess(0.76, ASSIGN_THRESHOLD)
 
 
 class JudgeTests(SimpleTestCase):
@@ -80,8 +93,8 @@ class JudgeTests(SimpleTestCase):
         clef = FakeClef(
             names_event=0.9,
             by_title={
-                "Palm Sunday 2": probs(event=0.7, figures=0.9),
-                "Palm Sunday Entry into Jerusalem": probs(event=0.95, figures=0.9),
+                "Palm Sunday 2": probs(event=0.7, figures=0.9, related=0.9),
+                "Palm Sunday Entry into Jerusalem": probs(event=0.95, figures=0.9, related=0.97),
             },
         )
         outcome = judge_icons(CATALOGUE, "Palm Sunday", run=clef)
@@ -112,6 +125,15 @@ class JudgeTests(SimpleTestCase):
         outcome = judge_icons(CATALOGUE, "Beheading of St. John the Forerunner (Baptist)", run=clef)
         self.assertEqual([m["id"] for m in outcome.matches], [4, 3])
         self.assertEqual([m["auto_assignable"] for m in outcome.matches], [False, False])
+
+    def test_an_event_scene_is_not_assigned_to_a_day_that_names_no_event(self):
+        clef = FakeClef(
+            names_event=0.1,
+            by_title={"Palm Sunday Entry into Jerusalem": probs(event=0.93, figures=0.59, related=0.86)},
+        )
+        outcome = judge_icons(CATALOGUE, "Twenty Fourth day of Great Lent (Median day)", candidate_ids=[1], run=clef)
+        self.assertEqual(outcome.matches[0]["relation"], "exact_subject")
+        self.assertFalse(outcome.matches[0]["auto_assignable"])
 
     def test_unrelated_candidates_are_omitted(self):
         outcome = judge_icons(CATALOGUE, "Feast of the Holy Cross", run=FakeClef())
@@ -186,7 +208,7 @@ class HarnessTests(SimpleTestCase):
     ]
 
     def test_clef_engine_needs_no_llm(self):
-        clef = FakeClef(by_title={"Palm Sunday Entry into Jerusalem": probs(event=0.95)})
+        clef = FakeClef(by_title={"Palm Sunday Entry into Jerusalem": probs(event=0.95, related=0.97)})
         with (
             patch("hub.services.icon_clef_judge.run_clef", clef),
             patch("hub.management.commands.evaluate_icon_matching_cases.OpenAIIconProvider") as provider,
@@ -201,7 +223,7 @@ class HarnessTests(SimpleTestCase):
 
     def test_llm_engine_shortlist_is_judged_by_clef(self):
         records = [{"id": 7, "title": "Saint Narek", "tags": []}, {"id": 8, "title": "Other", "tags": []}]
-        clef = FakeClef(names_event=0.1, by_title={"Saint Narek": probs(figures=0.9)})
+        clef = FakeClef(names_event=0.1, by_title={"Saint Narek": probs(figures=0.95, related=0.96)})
         with patch("hub.services.icon_clef_judge.run_clef", clef):
             report = evaluate_cases_clef(
                 records,
@@ -214,3 +236,18 @@ class HarnessTests(SimpleTestCase):
         self.assertIn("clef_shortlist:provided:1", row["diagnostics"])
         self.assertIn("llm_shortlist_status:complete", row["diagnostics"])
         self.assertEqual((row["verdict"], row["assigned_id"]), ("exact", 7))
+
+
+class CalibrationDataTests(SimpleTestCase):
+    """The reviewed cases ASSIGN_THRESHOLD was set from stay scoreable against their snapshot."""
+
+    def test_reviewed_cases_match_their_catalogue_snapshot(self):
+        data = Path(__file__).resolve().parent / "data"
+        ids = {r["id"] for r in json.loads((data / "icon_catalogue_snapshot_2026-10-16.json").read_text())}
+        cases = json.loads((data / "icon_match_cases_2026_reviewed.json").read_text())
+        # The scorer keys saved rows by feast name.
+        self.assertEqual(len({case["feast"] for case in cases}), len(cases))
+        for case in cases:
+            labelled = set(case["correct"]) | set(case["acceptable"])
+            self.assertLessEqual(labelled | set(case["assignable"]), ids, case["feast"])
+            self.assertLessEqual(set(case["assignable"]), labelled, case["feast"])

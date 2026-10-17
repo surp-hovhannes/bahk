@@ -224,9 +224,97 @@ with `ASSIGN_THRESHOLD` at 0.85:
 
 Use full `clef`, not `clef-flash`, for anything that writes.
 
+### Calibration on the reviewed 2026 feasts
+
+`ASSIGN_THRESHOLD` is now set from the staff review of 2026-10-16 (the decisions
+`apply_icon_review` applied), not from the 12 cases above.
+
+**Inputs.**
+- `hub/tests/data/icon_match_cases_2026_reviewed.json`: 104 feasts.
+  - 38 have a reviewer-chosen icon (`correct`).
+  - 11 have an icon chosen as "only a fallback" (`acceptable`). These count as assignable,
+    because the reviewer applied them.
+  - 8 kept their stored icon.
+  - 47 were marked "no icon fits" (`assignable: []`, so any write there is unsafe).
+- The reviewer picked one icon per feast. Where Clef's pick shows the same scene (another
+  Ascension, another Pentecost, and so on), it was added as assignable on inspection. Each of
+  these 8 additions says so in its `note`, so they can be told apart from the reviewer's labels.
+- `hub/tests/data/icon_catalogue_snapshot_2026-10-16.json`: the live catalogue after the
+  review's 62 title/tag fixes.
+
+**Clef is deterministic.** Two full runs returned identical probabilities on every feast, so a
+threshold can be set to the hundredth without run-to-run noise. The probabilities for every
+judged icon are in `clef-probabilities-reviewed-2026-10-16.jsonl`. Icons Clef put below 0.5 on
+every question are omitted, since no rule here can place them. This lets you re-sweep offline.
+
+**A threshold alone could not be made safe.** The rule as first written, with images, scored
+like this (assigned / correct / unsafe):
+
+| Threshold | 0.85 | 0.90 | 0.92 | 0.93 |
+|---|---|---|---|---|
+| Rule as first written | 16 / 13 / 3 | 13 / 11 / 2 | 9 / 8 / 1 | 6 / 6 / 0 |
+| **Event gate + related cap** | 16 / 15 / 1 | **14 / 14 / 0** | 10 / 10 / 0 | 8 / 8 / 0 |
+
+The wrong writes were mostly one pattern: shown an image, Clef calls the nearest Gospel scene
+a depiction of a day that remembers no event.
+- Entry into Jerusalem scored 0.93 for the Median day of Great Lent, 0.85 for the Sunday of
+  the Advent and 0.82 for the Eve of Great Lent.
+- Clef's own feast question had already said none of those days names an event.
+
+Two changes to `place()`, both from what the questions mean rather than from a fitted constant:
+
+1. **Event gate.** `depicts_event` places an icon only when the feast names an event
+   (`names_event`). Otherwise the icon is judged as a portrait or as related.
+2. **Related cap.** A depiction or a portrait implies `related`, so its strength is
+   `min(rung probability, related)`. The Last Judgment for the Sunday of the Judge scored 0.90
+   as the event but 0.76 as related, and the reviewer chose a different icon.
+
+With both, the highest-scoring wrong top pick is St. Elisha for the Eve of the Fast of the
+Prophet Elijah, at 0.853.
+- 0.86 would add one more feast, the Discovery of the Holy Cross at 0.865, with a 0.01 margin
+  over that name confusion.
+- **`ASSIGN_THRESHOLD` = 0.90** keeps the same 14 assignments as 0.88 and leaves a 0.05 margin.
+
+A missed assignment costs a manual pick; a wrong one is shown in the app.
+
+**Checks beyond the 104.**
+
+| Set | Assigned | Unsafe |
+|---|---|---|
+| 12 cases, 2026-09-13 snapshot (`results-clef-calibrated-12.json`) | 2 | 0 |
+| 73 unreviewed 2026 feasts, live catalogue | 24 | 0 apparent |
+| 104 reviewed feasts, harness end to end (`results-clef-calibrated-reviewed-2026-10-16.json`) | 14 | 0 |
+
+- **12 cases.** Lazarus scores just under 0.90 on the old snapshot. Against the reviewed
+  catalogue, where its icon is titled "Resurrection of Lazarus", it scores 0.94 and is assigned.
+- **73 unreviewed feasts.** These are the ones a matcher agreed with. 13 of the 24 match the
+  stored icon. The other 11 were checked by hand: each is another depiction of the same feast,
+  or the named saint where nothing more specific exists. "Untitled Icon #4" for the Holy
+  Translators is in fact Sts. Sahak and Mesrop, and its title should be fixed.
+- **Production matcher, same 104 feasts.** gpt-4.1-mini, `max_results=1` as in `icon_tasks`,
+  auto-assigned 19. 3–4 of those are wrong after crediting same-scene picks: Patriarch Kevork IV
+  for the Holy Voskian Priests, the Soukiasants for other martyrs, the Armenian Genocide Martyrs
+  for the Holy Cross of Varag, and possibly the Seven Archangels.
+
+**What still limits coverage is upstream of the threshold.** Of the 57 reviewed feasts with an
+assignable icon, Clef assigns 14. Of the rest:
+
+| Where it falls short | Feasts |
+|---|---|
+| The right icon was judged but outranked | 14 |
+| The right icon was not shortlisted, or scored under 0.5 on every question | 9 |
+| The right icon is top but only `related_specific` (one saint of several, which is never written) | 9 |
+| The right icon is top but under the threshold | 11 |
+
+Lowering the threshold reaches only the last group, and only by giving up the margin above.
+
 ## Next steps
 
-- Label more feasts, then set `ASSIGN_THRESHOLD` from them rather than from these 12.
+- Re-run the calibration above after any change to a question, the placement rule or the
+  catalogue's titles, and after the remaining 73 feasts are reviewed.
+- Coverage now depends on ranking and shortlisting, not on the threshold (see the table
+  above). Also decide whether a top `related_specific` icon may be written for a feast
+  naming several saints.
 - Run a newer OpenAI profile through this harness for comparison.
 - Extend the cases: 91 of the 2026 calendar's 177 distinct feasts already carry a stored icon.
   Reviewing those is a gold set and a production data cleanup in one pass. Against production:

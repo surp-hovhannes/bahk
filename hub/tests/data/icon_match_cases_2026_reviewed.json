@@ -1,0 +1,1182 @@
+[
+ {
+  "feast_id": 659,
+  "feast": "Blessing of the Pomegranates",
+  "date": "2026-01-01",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 445,
+  "feast": "Sts. Basil the Great and His Brother St. Gregory of Nyssa, Sylvester the Patriarch of Rome, and Ephrem the Syrian",
+  "date": "2026-01-03",
+  "correct": [
+   35
+  ],
+  "acceptable": [],
+  "assignable": [
+   35
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 99,
+  "feast": "Eve of the Nativity and Theophany of Our Lord Jesus Christ",
+  "date": "2026-01-05",
+  "correct": [
+   34,
+   285
+  ],
+  "acceptable": [],
+  "assignable": [
+   34,
+   285
+  ],
+  "note": "Reviewer kept the stored icon. Also 285, added on inspection (not by the reviewer): Nativity and Baptism of Christ depicts both halves of this feast."
+ },
+ {
+  "feast_id": 346,
+  "feast": "Remembrance of the Dead",
+  "date": "2026-01-07",
+  "correct": [
+   450
+  ],
+  "acceptable": [],
+  "assignable": [
+   450
+  ],
+  "note": "Reviewer kept the stored icon."
+ },
+ {
+  "feast_id": 500,
+  "feast": "Feast of the Naming of Our Lord Jesus Christ",
+  "date": "2026-01-13",
+  "correct": [
+   37
+  ],
+  "acceptable": [],
+  "assignable": [
+   37
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 658,
+  "feast": "The Hermit Sts. Tryphon, Barsauma and Onuphrius",
+  "date": "2026-01-19",
+  "correct": [
+   234
+  ],
+  "acceptable": [],
+  "assignable": [
+   234
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 660,
+  "feast": "Sts. Gordius, Polyeuctus and Grigoris",
+  "date": "2026-01-22",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 502,
+  "feast": "Eve of the Fast of the Catechumens",
+  "date": "2026-01-25",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 450,
+  "feast": "Remembrance of the Prophet Jonah",
+  "date": "2026-01-30",
+  "correct": [
+   482
+  ],
+  "acceptable": [],
+  "assignable": [
+   482
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 147,
+  "feast": "Holy Voskian Priests",
+  "date": "2026-02-05",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 158,
+  "feast": "Eve of Great Lent",
+  "date": "2026-02-15",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 455,
+  "feast": "St. Theodore the Tyron",
+  "date": "2026-02-21",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 165,
+  "feast": "Second Sunday of Great Lent: Sunday of the Expulsion",
+  "date": "2026-02-22",
+  "correct": [
+   242
+  ],
+  "acceptable": [],
+  "assignable": [
+   242
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 507,
+  "feast": "Sts. Cyril of Jerusalem, Cyril the Bishop and Anna",
+  "date": "2026-02-28",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 172,
+  "feast": "Third Sunday of Great Lent: Sunday of the Prodigal Son",
+  "date": "2026-03-01",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 183,
+  "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+  "date": "2026-03-07",
+  "correct": [
+   383
+  ],
+  "acceptable": [],
+  "assignable": [
+   383
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 2,
+  "feast": "Fourth Sunday of Great Lent: Sunday of the Steward",
+  "date": "2026-03-08",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 185,
+  "feast": "Twenty Fourth day of Great Lent (Median day)",
+  "date": "2026-03-11",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 187,
+  "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
+  "date": "2026-03-15",
+  "correct": [
+   2
+  ],
+  "acceptable": [],
+  "assignable": [
+   2
+  ],
+  "note": "Reviewer kept the stored icon."
+ },
+ {
+  "feast_id": 200,
+  "feast": "Sixth Sunday of Great Lent: Sunday of the Advent",
+  "date": "2026-03-22",
+  "correct": [
+   428
+  ],
+  "acceptable": [],
+  "assignable": [
+   428
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 609,
+  "feast": "Remembrance of the Ten Virgins",
+  "date": "2026-03-31",
+  "correct": [
+   465
+  ],
+  "acceptable": [],
+  "assignable": [
+   465
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 613,
+  "feast": "Eve of the Resurrection of Our Lord Jesus Christ",
+  "date": "2026-04-04",
+  "correct": [
+   137,
+   327
+  ],
+  "acceptable": [],
+  "assignable": [
+   137,
+   327
+  ],
+  "note": "Reviewer kept the stored icon. Also 327, added on inspection (not by the reviewer): Another icon of the Resurrection."
+ },
+ {
+  "feast_id": 219,
+  "feast": "Octave of Easter (New Sunday)",
+  "date": "2026-04-12",
+  "correct": [
+   151
+  ],
+  "acceptable": [],
+  "assignable": [
+   151
+  ],
+  "note": "Reviewer kept the stored icon."
+ },
+ {
+  "feast_id": 226,
+  "feast": "Third Sunday of Eastertide: Sunday of the World Church (Green Sunday)",
+  "date": "2026-04-19",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 232,
+  "feast": "Fourth Sunday of Eastertide (Red Sunday)",
+  "date": "2026-04-26",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 520,
+  "feast": "Appearance of the Holy Cross",
+  "date": "2026-05-03",
+  "correct": [
+   639
+  ],
+  "acceptable": [],
+  "assignable": [
+   639
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 469,
+  "feast": "ASCENSION OF OUR LORD JESUS CHRIST",
+  "date": "2026-05-14",
+  "correct": [
+   433,
+   438
+  ],
+  "acceptable": [],
+  "assignable": [
+   433,
+   438
+  ],
+  "note": "Reviewer chose this icon. Also 438, added on inspection (not by the reviewer): Another icon of the Ascension."
+ },
+ {
+  "feast_id": 472,
+  "feast": "PENTECOST (Fiftieth day of Eastertide)",
+  "date": "2026-05-24",
+  "correct": [
+   122,
+   466
+  ],
+  "acceptable": [],
+  "assignable": [
+   122,
+   466
+  ],
+  "note": "Reviewer chose this icon. Also 466, added on inspection (not by the reviewer): Another icon of Pentecost."
+ },
+ {
+  "feast_id": 661,
+  "feast": "Eve of the Fast of the Prophet Elijah",
+  "date": "2026-05-24",
+  "correct": [
+   498
+  ],
+  "acceptable": [],
+  "assignable": [
+   498
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 370,
+  "feast": "Remembrance of the Prophet Elijah",
+  "date": "2026-05-31",
+  "correct": [],
+  "acceptable": [
+   499
+  ],
+  "assignable": [
+   499
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 476,
+  "feast": "Feast of Holy Etchmiadzin",
+  "date": "2026-06-07",
+  "correct": [
+   271,
+   297
+  ],
+  "acceptable": [],
+  "assignable": [
+   271,
+   297
+  ],
+  "note": "Reviewer chose this icon. Also 297, added on inspection (not by the reviewer): Another icon of the Vision of Holy Etchmiadzin."
+ },
+ {
+  "feast_id": 278,
+  "feast": "Sts. Princes Sahak and Joseph and the Martyrs Sergius and Bacchus",
+  "date": "2026-06-11",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 529,
+  "feast": "Eve of the Fast of St. Gregory the Illuminator",
+  "date": "2026-06-14",
+  "correct": [
+   149,
+   172
+  ],
+  "acceptable": [],
+  "assignable": [
+   149,
+   172
+  ],
+  "note": "Reviewer chose this icon. Also 172, added on inspection (not by the reviewer): Another icon of St. Gregory the Illuminator."
+ },
+ {
+  "feast_id": 622,
+  "feast": "Sts. Epiphanius Bishop of Cyprus, Babylas the Patriarch, and His Three Disciples",
+  "date": "2026-06-15",
+  "correct": [
+   627
+  ],
+  "acceptable": [],
+  "assignable": [
+   627
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 623,
+  "feast": "Sts. Constantine the Emperor and His Mother Helen",
+  "date": "2026-06-16",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 624,
+  "feast": "Sts. Theodotus of Galatia, and Thalelaus the Physician, and the Seven Martyred Virgins of Ancyra",
+  "date": "2026-06-18",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 371,
+  "feast": "Feast of the Discovery of St. Gregory's Relics",
+  "date": "2026-06-20",
+  "correct": [
+   291
+  ],
+  "acceptable": [],
+  "assignable": [
+   291
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 289,
+  "feast": "Holy Martyrs Antoninus, Theophilus, Anicetus and Potinus",
+  "date": "2026-06-22",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 290,
+  "feast": "Holy Prophet Daniel and His Companions Shadrach, Meshach and Abednego",
+  "date": "2026-06-23",
+  "correct": [
+   632
+  ],
+  "acceptable": [],
+  "assignable": [
+   632
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 533,
+  "feast": "Feast of the Discovery of St. Mary's Box",
+  "date": "2026-06-28",
+  "correct": [],
+  "acceptable": [
+   272
+  ],
+  "assignable": [
+   272
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 301,
+  "feast": "Twelve Holy Apostles of Christ and St. Paul, the Thirteenth Apostle",
+  "date": "2026-07-04",
+  "correct": [
+   466,
+   424
+  ],
+  "acceptable": [],
+  "assignable": [
+   466,
+   424
+  ],
+  "note": "Reviewer chose this icon. Also 424, added on inspection (not by the reviewer): Another icon of Pentecost, the scene the reviewer chose."
+ },
+ {
+  "feast_id": 375,
+  "feast": "Eve of the Fast of the Transfiguration",
+  "date": "2026-07-05",
+  "correct": [
+   498
+  ],
+  "acceptable": [],
+  "assignable": [
+   498
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 318,
+  "feast": "St. Isaiah the Prophet",
+  "date": "2026-07-16",
+  "correct": [],
+  "acceptable": [
+   632
+  ],
+  "assignable": [
+   632
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 321,
+  "feast": "Sts. Cyprian the Bishop, the Forty-Five Martyrs and the Virgins Justina, Euphemia and Christina",
+  "date": "2026-07-20",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 322,
+  "feast": "Sts. Athenogenes the Bishop and the Ten Disciples and Five Martyrs",
+  "date": "2026-07-21",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 377,
+  "feast": "St. Gregory the Illuminator's Sons and Grandsons: Sts. Aristakes, Vrtanes, Housik, Grigoris and Daniel",
+  "date": "2026-07-25",
+  "correct": [
+   378
+  ],
+  "acceptable": [],
+  "assignable": [
+   378
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 326,
+  "feast": "Holy Maccabees: Eleazar the Priest, Shamuna and Her Seven Sons",
+  "date": "2026-07-27",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 327,
+  "feast": "Holy Twelve Prophets: Hosea, Amos, Micah, Joel, Obadiah, Nahum, Habakkuk, Jonah, Zephaniah, Haggai, Zechariah and Malachi",
+  "date": "2026-07-28",
+  "correct": [
+   632
+  ],
+  "acceptable": [],
+  "assignable": [
+   632
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 662,
+  "feast": "St. Gregory the Theologian",
+  "date": "2026-08-01",
+  "correct": [
+   380
+  ],
+  "acceptable": [],
+  "assignable": [
+   380
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 331,
+  "feast": "St. Eugenia the Virgin, Her Father Philip and Her Mother Claudia, Her Brothers Sergius and Avitus, and the Two Eunuchs",
+  "date": "2026-08-03",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 663,
+  "feast": "Sts. Eugenius, Macarius, Valerius, Candidus and Aquila",
+  "date": "2026-08-03",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 381,
+  "feast": "Eve of the Fast of the Assumption of the Holy Mother of God",
+  "date": "2026-08-09",
+  "correct": [
+   636,
+   105
+  ],
+  "acceptable": [],
+  "assignable": [
+   636,
+   105
+  ],
+  "note": "Reviewer kept the stored icon. Also 105, added on inspection (not by the reviewer): The Assumption, the feast the reviewer's Dormition icon depicts."
+ },
+ {
+  "feast_id": 345,
+  "feast": "ASSUMPTION OF THE HOLY MOTHER OF GOD",
+  "date": "2026-08-16",
+  "correct": [
+   105
+  ],
+  "acceptable": [],
+  "assignable": [
+   105
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 398,
+  "feast": "St. Jeremiah the Prophet",
+  "date": "2026-08-27",
+  "correct": [],
+  "acceptable": [
+   632
+  ],
+  "assignable": [
+   632
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 383,
+  "feast": "Holy Apostles Thomas, James and Simon",
+  "date": "2026-08-29",
+  "correct": [
+   266
+  ],
+  "acceptable": [],
+  "assignable": [
+   266
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 400,
+  "feast": "Sts. Stephen of Oulnia and the Martyrs Goharinus, Zamidus, Tuchicus and Raticus",
+  "date": "2026-08-31",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 401,
+  "feast": "Holy Prophets Ezekiel, Ezra and Zachariah the Father of John the Baptist",
+  "date": "2026-09-01",
+  "correct": [],
+  "acceptable": [
+   632
+  ],
+  "assignable": [
+   632
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 384,
+  "feast": "Sts. John the Forerunner (Baptist) and Job the Righteous",
+  "date": "2026-09-03",
+  "correct": [
+   377
+  ],
+  "acceptable": [],
+  "assignable": [
+   377
+  ],
+  "note": "Reviewer kept the stored icon."
+ },
+ {
+  "feast_id": 403,
+  "feast": "Commemoration of the 318 Fathers of the Holy Council of Nicea (AD 325)",
+  "date": "2026-09-05",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 404,
+  "feast": "Eve of the Fast of the Exaltation of the Holy Cross",
+  "date": "2026-09-06",
+  "correct": [
+   639
+  ],
+  "acceptable": [],
+  "assignable": [
+   639
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 409,
+  "feast": "Feast of the Birth of Holy Virgin Mary from Anna",
+  "date": "2026-09-08",
+  "correct": [],
+  "acceptable": [
+   8
+  ],
+  "assignable": [
+   8
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 411,
+  "feast": "Feast of the Holy Church for the Dedication of the Holy Cross",
+  "date": "2026-09-12",
+  "correct": [],
+  "acceptable": [
+   257
+  ],
+  "assignable": [
+   257
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 353,
+  "feast": "EXALTATION OF THE HOLY CROSS",
+  "date": "2026-09-13",
+  "correct": [
+   639
+  ],
+  "acceptable": [],
+  "assignable": [
+   639
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 554,
+  "feast": "Feast of the Holy Church",
+  "date": "2026-09-15",
+  "correct": [
+   297
+  ],
+  "acceptable": [],
+  "assignable": [
+   297
+  ],
+  "note": "Reviewer kept the stored icon."
+ },
+ {
+  "feast_id": 415,
+  "feast": "Eve of the Fast of the Holy Cross of Varag",
+  "date": "2026-09-20",
+  "correct": [],
+  "acceptable": [
+   639
+  ],
+  "assignable": [
+   639
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 646,
+  "feast": "Sts. Patriarchs Barlaam, Anthimus and Irenaeus",
+  "date": "2026-09-24",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 557,
+  "feast": "Feast of the Holy Cross of Varag",
+  "date": "2026-09-27",
+  "correct": [],
+  "acceptable": [
+   639
+  ],
+  "assignable": [
+   639
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 72,
+  "feast": "The Holy Princes Sahak and Hamazasp",
+  "date": "2026-10-01",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 75,
+  "feast": "Sts. Phocas the Patriarch and Irenaeus of Lyons, Follower of the Apostles",
+  "date": "2026-10-05",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 86,
+  "feast": "Sts. Dionysius the Areopagite and the Apostles Timothy and Titus",
+  "date": "2026-10-15",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 88,
+  "feast": "Holy Evangelists Matthew, Mark, Luke and John",
+  "date": "2026-10-17",
+  "correct": [
+   239
+  ],
+  "acceptable": [],
+  "assignable": [
+   239
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 561,
+  "feast": "Sts. Longinus the Centurion, Joseph the Father of God, Joseph of Arimathea and Lazarus and His Sisters Martha and Mary",
+  "date": "2026-10-19",
+  "correct": [
+   623
+  ],
+  "acceptable": [],
+  "assignable": [
+   623
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 422,
+  "feast": "Sts. Theodoret the Priest of Antioch, Zenon the Soldier, Macarius, Eudoxius and Romulus",
+  "date": "2026-10-20",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 423,
+  "feast": "Sts. Aret and His Companions, the Martyrs Artemius and Christopher and the Women Callinice and Aquilina",
+  "date": "2026-10-22",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 424,
+  "feast": "The Twelve Holy Doctors of Church: Hierotheus of Athens, Dionysius the Areopagite, Sylvester of Rome, Athanasius of Alexandria, Cyril of Jerusalem, Ephraim the Syrian, Basil the Great, Gregory of Nyssa, Gregory the Theologian, Epiphanius of Cyprus, John Chrysostom, and Cyril of Alexandria",
+  "date": "2026-10-24",
+  "correct": [
+   479
+  ],
+  "acceptable": [],
+  "assignable": [
+   479
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 562,
+  "feast": "Discovery of the Holy Cross",
+  "date": "2026-10-25",
+  "correct": [
+   639
+  ],
+  "acceptable": [],
+  "assignable": [
+   639
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 425,
+  "feast": "Sts. Anastasius the Priest, Varus the Soldier, Theodota and Her Sons, and Those Who Were Martyred with Her",
+  "date": "2026-10-26",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 563,
+  "feast": "Sts. Hipparchus and His Companions Who Were Martyred in Samosata, and Sts. Severianus of Sebastia and Babylas and His 84 Disciples",
+  "date": "2026-10-27",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 565,
+  "feast": "Feast of All Saints, the Old and the New, the Known and the Unknown",
+  "date": "2026-10-31",
+  "correct": [],
+  "acceptable": [
+   632
+  ],
+  "assignable": [
+   632
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 390,
+  "feast": "St. Stephen Bishop of Rome and the Holy Priests, Deacons and Many Faithful",
+  "date": "2026-11-02",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 427,
+  "feast": "Sts. Akepsimas the Bishop, Joseph the Priest, Ayethalas the Deacon and Plato the Martyr",
+  "date": "2026-11-03",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 428,
+  "feast": "Sts. Metrophanes, Alexander and Paul the Confessor, Patriarchs of Constantinople, and Notaries Marcian and Martyrius the Martyrs",
+  "date": "2026-11-05",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 391,
+  "feast": "Holy Archangels Gabriel and Michael and All the Heavenly Angels",
+  "date": "2026-11-07",
+  "correct": [
+   647
+  ],
+  "acceptable": [],
+  "assignable": [
+   647
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 11,
+  "feast": "The Holy Apostles Andrew and Philip",
+  "date": "2026-11-14",
+  "correct": [
+   6
+  ],
+  "acceptable": [],
+  "assignable": [
+   6
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 430,
+  "feast": "Eve of the Fast of Advent",
+  "date": "2026-11-15",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 15,
+  "feast": "Sts. Virgins Juliana and Basilla",
+  "date": "2026-11-23",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 21,
+  "feast": "Sts. Clement the Bishop of Rome and Pancratius the Bishop of Taormina",
+  "date": "2026-11-26",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 23,
+  "feast": "Holy Apostles Thaddeus and Bartholomew, First Illuminators of Armenia",
+  "date": "2026-11-28",
+  "correct": [
+   128
+  ],
+  "acceptable": [],
+  "assignable": [
+   128
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 574,
+  "feast": "Sts. Gennaro the Bishop and Mercurius the Warrior",
+  "date": "2026-11-30",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 141,
+  "feast": "Sts. Jacoc and Themistocles",
+  "date": "2026-12-01",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 436,
+  "feast": "The Holy Fathers of Egypt: Paul the Hermit, Paul the Simple, Macarius the Great, Evagrius Ponticus, John of the Well, John the Dwarf, Nilus of Sinai, Arsenios the Great, Sisoes the Great, Daniel of Scetis, Serapion, Macarius of Alexandria, Poimen and Others",
+  "date": "2026-12-03",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 437,
+  "feast": "Sts. Gregory and Nicholas the Wonderworkers, and the Other Nicholas the Bishop and Myron the Bishop",
+  "date": "2026-12-05",
+  "correct": [
+   10
+  ],
+  "acceptable": [],
+  "assignable": [
+   10
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 575,
+  "feast": "Eve of the Fast of St. James the Bishop of Nisibis",
+  "date": "2026-12-06",
+  "correct": [
+   393
+  ],
+  "acceptable": [],
+  "assignable": [
+   393
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 652,
+  "feast": "Sts. Menas, Hermogenes, Eugraphus and the Poor Men John and Alexis",
+  "date": "2026-12-07",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 26,
+  "feast": "Sts. Cornelius the Centurion, Simeon the Relative of Christ, Martyred in Jerusalem, Polycarp the Bishop of Smyrna, and the Martyrs That Perished in the East",
+  "date": "2026-12-08",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 654,
+  "feast": "Feast of the Conception of the Holy Virgin Mary by Anna",
+  "date": "2026-12-09",
+  "correct": [],
+  "acceptable": [
+   358
+  ],
+  "assignable": [
+   358
+  ],
+  "note": "Reviewer chose this as a fallback, not ideal, and applied it."
+ },
+ {
+  "feast_id": 32,
+  "feast": "Sts. Patriarchs Ignatius the Bishop of Antioch, Addai the Bishop of Edessa and Maruthas the Bishop of Marv",
+  "date": "2026-12-14",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 33,
+  "feast": "Sts. Theopemptus the Bishop of Nicomedia and Theonas the Martyr, and the Four Soldiers Bassus, Eusebius, Eutychius and Basilides",
+  "date": "2026-12-15",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 34,
+  "feast": "Holy Virgins Indes and Domna, and Clericus the Priest Along with the 20,000 Martyrs of Nicomedia",
+  "date": "2026-12-17",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 442,
+  "feast": "Sts. Abraham and Khoren, Moneyless Physicians Cosmas and Damian",
+  "date": "2026-12-21",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 38,
+  "feast": "Sts. David the Prophet-King and James the Apostle",
+  "date": "2026-12-24",
+  "correct": [
+   645
+  ],
+  "acceptable": [],
+  "assignable": [
+   645
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 67,
+  "feast": "Sts. Peter and Paul the Apostles",
+  "date": "2026-12-28",
+  "correct": [],
+  "acceptable": [],
+  "assignable": [],
+  "note": "Reviewer: no icon in the catalogue fits."
+ },
+ {
+  "feast_id": 443,
+  "feast": "Sts. James the Apostle and His Brother John the Evangelist",
+  "date": "2026-12-29",
+  "correct": [
+   316
+  ],
+  "acceptable": [],
+  "assignable": [
+   316
+  ],
+  "note": "Reviewer chose this icon."
+ },
+ {
+  "feast_id": 664,
+  "feast": "Eve of the Fast of Nativity",
+  "date": "2026-12-29",
+  "correct": [
+   460
+  ],
+  "acceptable": [],
+  "assignable": [
+   460
+  ],
+  "note": "Reviewer chose this icon."
+ }
+]
