@@ -169,6 +169,28 @@ class ModerationTests(TestCase):
         with self.assertRaises(PermissionDenied):
             handler.save_model(request, Responsibility(user=self.superuser, crisis=True), None, False)
 
+    def test_self_assignment_is_explained_on_the_form_not_a_bare_403(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            "/admin/moderation/responsibility/add/", {"user": self.superuser.pk, "general": "on", "_save": "Save"}
+        )
+        self.assertContains(response, "You can&#x27;t assign moderation responsibilities to your own account.")
+        self.assertFalse(Responsibility.objects.filter(user=self.superuser).exists())
+        # An existing row of one's own can't be changed either.
+        own = Responsibility.objects.create(user=self.superuser, general=True)
+        response = self.client.post(
+            f"/admin/moderation/responsibility/{own.pk}/change/",
+            {"user": self.superuser.pk, "general": "on", "crisis": "on", "_save": "Save"},
+        )
+        self.assertContains(response, "Ask another superuser to add this row for you.")
+        own.refresh_from_db()
+        self.assertFalse(own.crisis)
+        response = self.client.post(
+            "/admin/moderation/responsibility/add/", {"user": self.staff.pk, "general": "on", "_save": "Save"}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Responsibility.objects.get(user=self.staff).general)
+
     def test_email_recipients_active_explicit_and_no_sensitive_body(self):
         _send_moderation_alert_email(self.urgent, "critical_safety_concern")
         self.assertEqual([m.to for m in mail.outbox], [[self.crisis.email]])
