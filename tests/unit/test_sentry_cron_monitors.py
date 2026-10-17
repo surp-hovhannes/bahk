@@ -7,6 +7,7 @@ from bahk.celery import app
 # Import modules that register tasks used by app.conf.beat_schedule.
 import events.tasks  # noqa: F401
 import hub.tasks  # noqa: F401
+import moderation.tasks  # noqa: F401
 import notifications.tasks  # noqa: F401
 import prayers.tasks  # noqa: F401
 

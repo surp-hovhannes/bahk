@@ -382,6 +382,7 @@ Defined in `bahk/celery.py`. Daily tasks include:
 - Map updates (1 AM)
 - Activity feed cleanup (2 AM)
 - Milestone checks (various times)
+- Icon feedback digest to General moderators (8 AM, only when there are new reports)
 - Reading text refresh (Monday 4 AM)
 
 ### Database

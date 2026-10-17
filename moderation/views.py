@@ -23,7 +23,7 @@ from moderation.access import can, crisis_query, is_crisis, visible_prayers
 from moderation.models import Review
 from moderation.context import shell_context
 from moderation.choices import action_label, correct_decisions, published_test_cases
-from moderation.evidence import review_reason, summarize
+from moderation.evidence import approvable_from, awaiting_check, review_reason, summarize
 from moderation.forms import ReviewForm
 from prayers.review import publish_prayer_requests, reject_prayer_requests
 
@@ -97,6 +97,8 @@ def describe(kind, obj):
             status = "Crisis · " + (
                 "Unpublished, needs follow-up" if obj.requires_human_review else "Unpublished, follow-up closed"
             )
+        elif awaiting_check(obj):
+            status = "Awaiting automated check"
         elif obj.requires_human_review or obj.status == "pending_moderation":
             status = "Needs review · " + review_reason(obj)
         else:
@@ -230,6 +232,9 @@ def available_actions(kind, obj, crisis):
     if crisis:
         return ["acknowledge", "misclassification", "escalated"]
     if kind == "prayer" and obj.status == "pending_moderation":
+        if awaiting_check(obj):
+            # Approve waits for the automated check (or its grace period): see awaiting_check_query.
+            return ["reject", "misclassification"]
         return ["approve", "reject", "misclassification"]
     if kind == "prayer" and obj.status == "rejected":
         # A reviewer can overturn an automated or earlier rejection.
@@ -350,6 +355,8 @@ def detail(request, kind, pk):
                 admin_url=admin_url,
                 evidence=evidence,
                 summary=summary,
+                awaiting=kind == "prayer" and awaiting_check(obj),
+                approvable_from=approvable_from(obj) if kind == "prayer" else None,
             ),
             status=400 if form.errors else 200,
         )

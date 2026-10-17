@@ -43,7 +43,10 @@
         {% if summary.engine %}<p class="help">Checked by: {{ summary.engine }}{% if summary.model %} ({{ summary.model }}){% endif %}</p>{% endif %}
       </div>
       <details><summary>Raw moderation result</summary><pre class="fp-review-evidence">{{ evidence }}</pre></details>
-      {% else %}No moderation result{% endif %}
+      {% elif awaiting %}
+      <p><strong>Awaiting automated check.</strong> It hasn't run on this request yet.</p>
+      <p class="help">Approve becomes available once it has run, or at {{ approvable_from|time:"g:i A" }} if it never does. You can reject now.</p>
+      {% else %}No moderation result. The automated check didn't run, so a person needs to decide.{% endif %}
     </div></div>
     {% endif %}
   </fieldset>
@@ -62,7 +65,7 @@
         {{ form.action.errors }}
         <label for="review-action" class="required">Decision:</label>
         {{ form.action }}
-        <p class="help" id="review-action-help">{% if crisis %}Closing removes this item from the review queue. Recording an escalation does not send a message or assign another reviewer.{% elif item.kind == 'icon' %}Make any icon corrections first. “Close report” removes the report from the queue; it does not edit the icon.{% elif overturn %}“Overturn rejection and publish” makes the request public immediately for its full duration and cannot be undone here.{% elif item.kind == 'prayer' %}“Approve and publish” makes the request public immediately and cannot be undone here.{% else %}“Complete review” removes this feedback from the queue. It does not edit or regenerate the context.{% endif %}</p>
+        <p class="help" id="review-action-help">{% if crisis %}Closing removes this item from the review queue. Recording an escalation does not send a message or assign another reviewer.{% elif item.kind == 'icon' %}Make any icon corrections first. “Close report” removes the report from the queue; it does not edit the icon.{% elif overturn %}“Overturn rejection and publish” makes the request public immediately for its full duration and cannot be undone here.{% elif awaiting %}Approve is not offered until the automated check has run (see above). Rejecting is available now.{% elif item.kind == 'prayer' %}“Approve and publish” makes the request public immediately and cannot be undone here.{% else %}“Complete review” removes this feedback from the queue. It does not edit or regenerate the context.{% endif %}</p>
       </div>
       <div class="form-row{% if form.note.errors %} errors{% endif %}">
         {{ form.note.errors }}

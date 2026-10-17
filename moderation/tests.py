@@ -27,8 +27,12 @@ class ModerationTests(TestCase):
         Responsibility.objects.create(user=cls.general, general=True)
         Responsibility.objects.create(user=cls.crisis, crisis=True)
         Responsibility.objects.create(user=cls.inactive, general=True, crisis=True)
+        # Checked and left for a person; a request with no result is still awaiting its check.
         cls.routine = PrayerRequest.objects.create(
-            requester=cls.owner, title="Routine synthetic prayer", description="Synthetic request"
+            requester=cls.owner,
+            title="Routine synthetic prayer",
+            description="Synthetic request",
+            moderation_result={"llm_check": {"suggested_action": "review"}},
         )
         cls.urgent = PrayerRequest.objects.create(
             requester=cls.owner,
@@ -220,12 +224,12 @@ class ModerationTests(TestCase):
         from hub.models import Church
 
         icon = Icon.objects.create(title="Synthetic icon", church=Church.objects.create(name="Icon church"))
-        with patch("moderation.notifications.send_mail") as sender, self.captureOnCommitCallbacks(execute=True):
+        with self.captureOnCommitCallbacks(execute=True):
             feedback = IconFeedback.objects.create(
                 icon=icon, feedback_type="mislabel", description="Synthetic report", icon_title_at_time="Synthetic icon"
             )
-        self.assertEqual(sender.call_count, 1)
-        self.assertNotIn(feedback.description, sender.call_args.args[1])
+        # Reports are anonymous; reviewers hear about them in the daily digest, not one email each.
+        self.assertEqual(mail.outbox, [])
         url = reverse("moderation-detail", args=["icon", feedback.pk])
         self.client.force_login(self.crisis)
         self.assertEqual(self.client.get(url).status_code, 403)
@@ -409,8 +413,7 @@ class ModerationTests(TestCase):
 
         church = Church.objects.create(name="Report preview church")
         icon = Icon.objects.create(title="Icon to correct", church=church)
-        with patch("moderation.notifications.send_mail"):
-            feedback = IconFeedback.objects.create(icon=icon, feedback_type="mislabel", description="Incorrect label")
+        feedback = IconFeedback.objects.create(icon=icon, feedback_type="mislabel", description="Incorrect label")
         url = reverse("moderation-detail", args=["icon", feedback.pk])
         self.client.force_login(self.general)
         response = self.client.get(url)
@@ -481,6 +484,75 @@ class ModerationTests(TestCase):
         self.assertTrue(self.urgent.requires_human_review)
         self.assertEqual(self.routine.status, "approved")
         self.assertFalse(self.urgent.acceptances.exists())
+
+    def admin_action(self, action, *pks):
+        response = self.client.post(
+            "/admin/prayers/prayerrequest/",
+            {"action": action, "_selected_action": list(pks), "index": "0"},
+            follow=True,
+        )
+        return [(m.level_tag, str(m)) for m in response.context["messages"]]
+
+    def test_admin_bulk_actions_explain_a_missing_assignment(self):
+        self.client.force_login(self.superuser)
+        for action, verb in [
+            ("approve_requests", "approved"),
+            ("reject_requests", "rejected"),
+            ("mark_manually_reviewed", "marked as reviewed"),
+        ]:
+            with self.subTest(action=action):
+                [(level, text)] = self.admin_action(action, self.routine.pk)
+                self.assertEqual(level, "error")
+                self.assertIn(
+                    f"You don't have a General moderation assignment, so no prayer requests were {verb}", text
+                )
+                self.assertIn("Moderation › Responsibilities", text)
+        self.routine.refresh_from_db()
+        self.assertEqual(self.routine.status, "pending_moderation")
+        self.assertFalse(self.routine.reviewed)
+
+    def test_admin_bulk_actions_count_rows_outside_a_crisis_only_assignment(self):
+        Responsibility.objects.create(user=self.superuser, crisis=True)
+        self.client.force_login(self.superuser)
+        # Approval needs General; Crisis alone may still reject or mark reviewed, but not routine rows.
+        [(level, text)] = self.admin_action("approve_requests", self.routine.pk)
+        self.assertEqual(level, "error")
+        messages = self.admin_action("mark_manually_reviewed", self.routine.pk, self.urgent.pk)
+        self.assertIn(
+            (
+                "warning",
+                "1 selected prayer request(s) were not marked as reviewed: your moderation assignment doesn't cover them.",
+            ),
+            messages,
+        )
+        self.assertIn(("info", "1 prayer request(s) marked as manually reviewed."), messages)
+        self.routine.refresh_from_db()
+        self.assertFalse(self.routine.reviewed)
+
+    def test_admin_bulk_approval_skips_requests_awaiting_the_automated_check(self):
+        Responsibility.objects.create(user=self.superuser, general=True)
+        fresh = PrayerRequest.objects.create(requester=self.owner, title="Unchecked synthetic", description="Synthetic")
+        self.client.force_login(self.superuser)
+        messages = self.admin_action("approve_requests", self.routine.pk, fresh.pk)
+        self.assertIn(("info", "1 prayer request(s) approved."), messages)
+        self.assertIn("1 prayer request(s) were not approved: they are awaiting the automated check", messages[1][1])
+        fresh.refresh_from_db()
+        self.assertEqual(fresh.status, "pending_moderation")
+
+    def test_admin_change_form_cannot_publish_a_request_awaiting_the_automated_check(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        fresh = PrayerRequest.objects.create(requester=self.owner, title="Unchecked synthetic", description="Synthetic")
+        self.client.force_login(self.superuser)
+        url = f"/admin/prayers/prayerrequest/{fresh.pk}/change/"
+        response = self.client.post(url, self.prayer_admin_payload(fresh, "approved"))
+        self.assertIn("awaiting the automated check", str(response.context["adminform"].form.errors["status"]))
+        fresh.refresh_from_db()
+        self.assertEqual(fresh.status, "pending_moderation")
+        PrayerRequest.objects.filter(pk=fresh.pk).update(created_at=timezone.now() - timedelta(minutes=16))
+        self.assertEqual(self.client.post(url, self.prayer_admin_payload(fresh, "approved")).status_code, 302)
 
     def test_related_admin_forms_reject_forged_crisis_ids_without_capability(self):
         from django.contrib.auth.models import Permission
@@ -672,8 +744,7 @@ class ModerationTests(TestCase):
             feast=feast, text="Downvoted text", short_text="Downvoted", thumbs_down=5, active=False
         )
         icon = Icon.objects.create(title="Synthetic icon", church=church)
-        with patch("moderation.notifications.send_mail"):
-            feedback = IconFeedback.objects.create(icon=icon, feedback_type="mislabel", description="Report")
+        feedback = IconFeedback.objects.create(icon=icon, feedback_type="mislabel", description="Report")
         self.client.force_login(self.general)
         dashboard = reverse("moderation-dashboard")
         response = self.client.get(dashboard + "?type=feast")
@@ -979,3 +1050,147 @@ class ReviewExperienceTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.urgent.refresh_from_db()
         self.assertEqual(self.urgent.status, "rejected")
+
+
+class AutomatedCheckWaitTests(TestCase):
+    """Approve waits for the automated check, which a reviewer's decision would otherwise outrank."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.owner = User.objects.create_user(username="owner", email="owner@example.test")
+        cls.general = User.objects.create_user(username="general", email="general@example.test")
+        Responsibility.objects.create(user=cls.general, general=True)
+
+    def setUp(self):
+        self.fresh = PrayerRequest.objects.create(requester=self.owner, title="Unchecked synthetic", description="S")
+        self.client.force_login(self.general)
+
+    def detail(self):
+        return reverse("moderation-detail", args=["prayer", self.fresh.pk])
+
+    def offered(self, page):
+        return [value for value, _ in page.context["form"].fields["action"].choices if value]
+
+    def age(self, minutes):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        PrayerRequest.objects.filter(pk=self.fresh.pk).update(created_at=timezone.now() - timedelta(minutes=minutes))
+
+    def test_an_unchecked_request_can_be_rejected_but_not_approved(self):
+        self.assertContains(self.client.get(reverse("moderation-dashboard")), "Awaiting automated check")
+        page = self.client.get(self.detail())
+        self.assertContains(page, "Approve becomes available once it has run")
+        self.assertNotIn("approve", self.offered(page))
+        self.assertEqual(self.client.post(self.detail(), {"action": "approve"}).status_code, 403)
+        self.fresh.refresh_from_db()
+        self.assertEqual(self.fresh.status, "pending_moderation")
+        self.client.post(self.detail(), {"action": "reject", "note": "Obvious spam"})
+        self.fresh.refresh_from_db()
+        self.assertEqual(self.fresh.status, "rejected")
+
+    @override_settings(MODERATION_AUTOMATED_CHECK_GRACE_MINUTES=15)
+    def test_approve_returns_once_the_check_has_run_or_the_grace_period_passes(self):
+        from moderation.evidence import awaiting_check
+
+        self.age(16)
+        self.assertContains(
+            self.client.get(reverse("moderation-dashboard")), "Needs review · Automated check didn&#x27;t run"
+        )
+        self.assertIn("approve", self.offered(self.client.get(self.detail())))
+        self.age(1)
+        self.fresh.moderation_result = {"llm_check": {"error": "HTTP 503"}}
+        self.fresh.save(update_fields=["moderation_result"])
+        self.assertFalse(awaiting_check(self.fresh))
+        self.assertIn("approve", self.offered(self.client.get(self.detail())))
+
+    def test_query_and_python_twin_agree(self):
+        from moderation.evidence import awaiting_check, awaiting_check_query
+
+        checked = PrayerRequest.objects.create(
+            requester=self.owner, title="Checked", description="S", moderation_result={"llm_check": {}}
+        )
+        old = PrayerRequest.objects.create(requester=self.owner, title="Old", description="S")
+        PrayerRequest.objects.filter(pk=old.pk).update(created_at=self.fresh.created_at.replace(year=2020))
+        rejected = PrayerRequest.objects.create(
+            requester=self.owner, title="Rejected", description="S", status="rejected"
+        )
+        waiting = set(PrayerRequest.objects.filter(awaiting_check_query()).values_list("pk", flat=True))
+        self.assertEqual(waiting, {self.fresh.pk})
+        for prayer in PrayerRequest.objects.filter(pk__in=[self.fresh.pk, checked.pk, old.pk, rejected.pk]):
+            with self.subTest(prayer=prayer.title):
+                self.assertEqual(awaiting_check(prayer), prayer.pk in waiting)
+
+
+class IconFeedbackDigestTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from hub.models import Church
+        from icons.models import Icon
+
+        User = get_user_model()
+        cls.general = User.objects.create_user(username="general", email="general@example.test")
+        Responsibility.objects.create(user=cls.general, general=True)
+        cls.icon = Icon.objects.create(title="Synthetic icon", church=Church.objects.create(name="Digest church"))
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        from moderation.tasks import ICON_DIGEST_SENT_AT
+
+        cache.delete(ICON_DIGEST_SENT_AT)
+
+    def report(self, description="Private report text", **fields):
+        from icons.models import IconFeedback
+
+        with self.captureOnCommitCallbacks(execute=True):
+            return IconFeedback.objects.create(
+                icon=self.icon, feedback_type="mislabel", description=description, **fields
+            )
+
+    def test_sends_one_link_only_digest_and_only_for_new_reports(self):
+        from moderation.tasks import send_icon_feedback_digest
+
+        self.report()
+        self.report()
+        self.report(is_resolved=True)
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(send_icon_feedback_digest(), {"new": 2, "open": 2})
+        [message] = mail.outbox
+        self.assertEqual(message.to, ["general@example.test"])
+        self.assertEqual(message.subject, "2 new icon reports to review")
+        self.assertIn("2 new icon reports since the last digest; 2 open in total.", message.body)
+        self.assertIn(reverse("moderation-dashboard") + "?type=icon", message.body)
+        self.assertNotIn("Private report text", message.body)
+        # A second run, or a day without new reports, sends nothing.
+        self.assertEqual(send_icon_feedback_digest(), {"new": 0})
+        self.assertEqual(len(mail.outbox), 1)
+        self.report()
+        send_icon_feedback_digest()
+        self.assertEqual(mail.outbox[1].subject, "1 new icon report to review")
+        self.assertIn("1 new icon report since the last digest; 3 open in total.", mail.outbox[1].body)
+
+    def test_without_a_previous_digest_counts_the_last_day(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from icons.models import IconFeedback
+        from moderation.tasks import send_icon_feedback_digest
+
+        stale = self.report()
+        IconFeedback.objects.filter(pk=stale.pk).update(created_at=timezone.now() - timedelta(days=2))
+        self.report()
+        self.assertEqual(send_icon_feedback_digest(), {"new": 1, "open": 2})
+
+    def test_unstaffed_general_falls_back_without_report_text(self):
+        from moderation.tasks import send_icon_feedback_digest
+
+        Responsibility.objects.filter(user=self.general).update(general=False)
+        self.report()
+        with self.assertLogs("moderation.notifications", "ERROR"):
+            send_icon_feedback_digest()
+        self.assertEqual([m.to for m in mail.outbox], [["fastandprayhelp@gmail.com"]])
+        self.assertNotIn("Private report text", mail.outbox[0].body)

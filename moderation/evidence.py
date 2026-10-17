@@ -1,5 +1,11 @@
 """Plain-language summaries of the automated moderation result stored on a prayer request."""
 
+from datetime import timedelta
+
+from django.conf import settings
+from django.db.models import Q
+from django.utils import timezone
+
 from prayers.clef_moderation import (
     APPROVE_MAX_VIOLATION,
     APPROVE_MIN_GENUINE,
@@ -18,6 +24,34 @@ SCORE_LABELS = {
 }
 
 LOW_CONFIDENCE_CONCERN = "unclear whether this is a genuine prayer request"
+
+
+def check_grace():
+    return timedelta(minutes=settings.MODERATION_AUTOMATED_CHECK_GRACE_MINUTES)
+
+
+def approvable_from(prayer):
+    """When a request with no automated result may be approved without one."""
+    return prayer.created_at + check_grace()
+
+
+def awaiting_check_query():
+    """Pending requests whose automated check may still arrive; Approve is held back for them.
+
+    A reviewer's decision outranks the check when it lands (``_lock_if_still_waiting``), so
+    approving before it runs could publish a crisis request nobody screened. A failed check
+    still stores a result, so only a check that never ran waits out the grace period.
+    """
+    return Q(status="pending_moderation", moderation_result__isnull=True, created_at__gt=timezone.now() - check_grace())
+
+
+def awaiting_check(prayer):
+    """Python twin of ``awaiting_check_query``; the two must always agree."""
+    return (
+        prayer.status == "pending_moderation"
+        and prayer.moderation_result is None
+        and timezone.now() < approvable_from(prayer)
+    )
 
 
 def _checks(prayer):
@@ -42,6 +76,8 @@ def _cutoff(name, value):
 def review_reason(prayer):
     """A short reason a request is waiting for a person, for queue status labels."""
     result, check, profanity = _checks(prayer)
+    if prayer.moderation_result is None:
+        return "Awaiting automated check" if awaiting_check(prayer) else "Automated check didn't run"
     if not check or "error" in check:
         return "Automated check failed"
     if profanity.get("passed") is False:
