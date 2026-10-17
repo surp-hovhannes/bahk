@@ -1,0 +1,1286 @@
+{
+  "profile": {
+    "profile_id": "control-v1",
+    "configured_model": "gpt-4.1-mini",
+    "reasoning_effort": null,
+    "prompt_version": "control-v1",
+    "policy_version": "control-v1",
+    "prompt_hash": "7be739f4c5ac6a9cb8162574bc21f1806c41ec72e74ad328fecc475289a6bb2a",
+    "stage_prompt_hashes": {
+      "analyze": "de426c22d3eb1801f32a3f3c813a2d507e84c95e25fd8e8730f2c2fca47427d8",
+      "assess": "01465ccf9e2b1ef03163f9f1c054a3acf7f6135b782fd3d6d4e3619ff40dace8",
+      "verify": "645816d083cb79c83ea438e7b1b0933fbfcfcc24086565082030c3ba56b6fd29"
+    },
+    "policy_hash": "ede46beb912d5a09c56081c138160f1b270e1068426972ea9bca689cd12876ac",
+    "positive_limit": 8,
+    "profile_hash": "3c77e6b2afd6d4433dbe564c50d9469ce303dbf4df11814f0443c04bbc9099d2"
+  },
+  "case_count": 12,
+  "verdicts": {
+    "exact": 4,
+    "acceptable": 0,
+    "wrong": 3,
+    "abstained": 2,
+    "missed": 3,
+    "error": 0
+  },
+  "desirable_count": 6,
+  "by_expectation": {
+    "exact_exists": {
+      "exact": 4
+    },
+    "fallback_only": {
+      "missed": 3,
+      "wrong": 1
+    },
+    "nothing_suitable": {
+      "abstained": 2,
+      "wrong": 2
+    }
+  },
+  "complete_count": 12,
+  "assigned_count": 4,
+  "unsafe_assignment_count": 1,
+  "cases": [
+    {
+      "feast": "Remembrance of the Prophet Elijah",
+      "expectation": "fallback_only",
+      "verdict": "missed",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [],
+      "elapsed_seconds": 2.6
+    },
+    {
+      "feast": "Sts. Atom and His Soldiers",
+      "expectation": "nothing_suitable",
+      "verdict": "abstained",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [],
+      "elapsed_seconds": 2.7
+    },
+    {
+      "feast": "Holy Voskian Priests",
+      "expectation": "nothing_suitable",
+      "verdict": "wrong",
+      "top_id": 76,
+      "returned": 3,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "invalid_assessed_candidate"
+      ],
+      "matches": [
+        {
+          "id": 76,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 75,
+          "reason": "Contains tag 'clergy' and 'group' indicating depiction of clergy group, possibly priests related to the request 'Holy Voskian Priests'.",
+          "evidence": [
+            {
+              "quote": "clergy",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:76:tag:0"
+            },
+            {
+              "quote": "group",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:76:tag:1"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": false,
+          "identity_qualified": false,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "related_specific",
+          "matched_concepts": [
+            "Holy Voskian Priests"
+          ],
+          "evidence_refs": [
+            "icon:76:tag:0",
+            "icon:76:tag:1"
+          ],
+          "rationale_code": "related_specific",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 108,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 25,
+          "reason": "Title 'His Holiness Kevork IV' and tag 'armenian' and 'his-holiness-kevork' imply depiction of a high-ranking Armenian church leader potentially linked to Voskian clergy.",
+          "evidence": [
+            {
+              "quote": "His Holiness Kevork IV",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:108:title"
+            },
+            {
+              "quote": "his-holiness-kevork",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:108:tag:1"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": false,
+          "identity_qualified": false,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "related_specific",
+          "matched_concepts": [
+            "Holy Voskian Priests"
+          ],
+          "evidence_refs": [
+            "icon:108:title",
+            "icon:108:tag:1"
+          ],
+          "rationale_code": "related_specific",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 109,
+          "relation": "related_specific",
+          "confidence": "medium",
+          "relevance": 25,
+          "reason": "Title 'His Holiness Makar I' and tag 'armenian' and 'his-holiness-makar' indicate an Armenian church leader, possibly relevant to holy Voskian priests.",
+          "evidence": [
+            {
+              "quote": "His Holiness Makar I",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:109:title"
+            },
+            {
+              "quote": "his-holiness-makar",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:109:tag:1"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": false,
+          "identity_qualified": false,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "related_specific",
+          "matched_concepts": [
+            "Holy Voskian Priests"
+          ],
+          "evidence_refs": [
+            "icon:109:title",
+            "icon:109:tag:1"
+          ],
+          "rationale_code": "related_specific",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        }
+      ],
+      "elapsed_seconds": 8.7
+    },
+    {
+      "feast": "Remembrance of the Dead",
+      "expectation": "nothing_suitable",
+      "verdict": "abstained",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [],
+      "elapsed_seconds": 2.4
+    },
+    {
+      "feast": "Feast of the Holy Cross",
+      "expectation": "nothing_suitable",
+      "verdict": "wrong",
+      "top_id": 124,
+      "returned": 4,
+      "assigned_id": 124,
+      "unsafe_assignment": true,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [
+        {
+          "id": 124,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 75,
+          "reason": "Title 'Crucifixion' and tag 'crucifixion' indicate depiction of Holy Cross subject relevant to Feast of the Holy Cross.",
+          "evidence": [
+            {
+              "quote": "Crucifixion",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:124:title"
+            },
+            {
+              "quote": "crucifixion",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:124:tag:1"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Holy Cross"
+          ],
+          "evidence_refs": [
+            "icon:124:title",
+            "icon:124:tag:1"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        },
+        {
+          "id": 152,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 75,
+          "reason": "Title 'Crucifixion 1' and tag 'crucifixion' definitively identify Holy Cross subject relevant to the Feast.",
+          "evidence": [
+            {
+              "quote": "Crucifixion 1",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:152:title"
+            },
+            {
+              "quote": "crucifixion",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:152:tag:1"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Holy Cross"
+          ],
+          "evidence_refs": [
+            "icon:152:title",
+            "icon:152:tag:1"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        },
+        {
+          "id": 186,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 75,
+          "reason": "Title 'Crucifixion 2' and tag 'crucifixion' identify Holy Cross subject consistent with request.",
+          "evidence": [
+            {
+              "quote": "Crucifixion 2",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:186:title"
+            },
+            {
+              "quote": "crucifixion",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:186:tag:1"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Holy Cross"
+          ],
+          "evidence_refs": [
+            "icon:186:title",
+            "icon:186:tag:1"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        },
+        {
+          "id": 257,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 75,
+          "reason": "Title 'Crucifixion 4' and tag 'crucifixion' explicitly depict Holy Cross subject relevant to feast.",
+          "evidence": [
+            {
+              "quote": "Crucifixion 4",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:257:title"
+            },
+            {
+              "quote": "crucifixion",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:257:tag:4"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Holy Cross"
+          ],
+          "evidence_refs": [
+            "icon:257:title",
+            "icon:257:tag:4"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        }
+      ],
+      "elapsed_seconds": 9.4
+    },
+    {
+      "feast": "Beheading of St. John the Forerunner (Baptist)",
+      "expectation": "fallback_only",
+      "verdict": "missed",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [],
+      "elapsed_seconds": 2.5
+    },
+    {
+      "feast": "Fifth Sunday of Great Lent: Sunday of the Judge",
+      "expectation": "fallback_only",
+      "verdict": "missed",
+      "top_id": null,
+      "returned": 0,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [],
+      "elapsed_seconds": 2.4
+    },
+    {
+      "feast": "Palm Sunday",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 101,
+      "returned": 5,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [
+        "assignment_floor:exact_event",
+        "invalid_assessed_candidate"
+      ],
+      "matches": [
+        {
+          "id": 101,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 100,
+          "reason": "The title 'Palm Sunday' and tags including 'biblical','feast','Holy Week','Jesus' exactly match the requested event 'Palm Sunday'.",
+          "evidence": [
+            {
+              "quote": "Palm Sunday",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:101:title"
+            },
+            {
+              "quote": "Palm Sunday",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:101:title"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Palm Sunday"
+          ],
+          "evidence_refs": [
+            "icon:101:title",
+            "icon:101:title"
+          ],
+          "rationale_code": "exact_event",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 301,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 90,
+          "reason": "Title 'Palm Sunday Entry into Jerusalem' with tags 'armenian-orthodox','entry-into-jerusalem','palm-sunday' directly depicts the Palm Sunday event, specifically the entry into Jerusalem.",
+          "evidence": [
+            {
+              "quote": "Palm Sunday Entry into Jerusalem",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:301:title"
+            },
+            {
+              "quote": "palm-sunday",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:301:tag:9"
+            },
+            {
+              "quote": "entry-into-jerusalem",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:301:tag:3"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Palm Sunday"
+          ],
+          "evidence_refs": [
+            "icon:301:title",
+            "icon:301:tag:9",
+            "icon:301:tag:3"
+          ],
+          "rationale_code": "exact_event",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 463,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 80,
+          "reason": "Title 'Palm Sunday 2' and tag 'entry-into-jerusalem' depict the Palm Sunday event via the event of entry into Jerusalem.",
+          "evidence": [
+            {
+              "quote": "Palm Sunday 2",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:463:title"
+            },
+            {
+              "quote": "entry-into-jerusalem",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:463:tag:8"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Palm Sunday"
+          ],
+          "evidence_refs": [
+            "icon:463:title",
+            "icon:463:tag:8"
+          ],
+          "rationale_code": "exact_event",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 464,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 80,
+          "reason": "Tags 'palm-sunday' and 'procession' plus title 'Palm Sunday Illuminated Manuscript 1450' depict the requested Palm Sunday event.",
+          "evidence": [
+            {
+              "quote": "Palm Sunday Illuminated Manuscript 1450",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:464:title"
+            },
+            {
+              "quote": "palm-sunday",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:464:tag:11"
+            },
+            {
+              "quote": "procession",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:464:tag:12"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Palm Sunday"
+          ],
+          "evidence_refs": [
+            "icon:464:title",
+            "icon:464:tag:11",
+            "icon:464:tag:12"
+          ],
+          "rationale_code": "exact_event",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 203,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 75,
+          "reason": "Title 'Palm Sunday illuminated manuscript by classmate of St John of Vorodn' and tag 'palm-sunday' establish depiction of the Palm Sunday event.",
+          "evidence": [
+            {
+              "quote": "Palm Sunday illuminated manuscript by classmate of St John of Vorodn",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:203:title"
+            },
+            {
+              "quote": "palm-sunday",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:203:tag:3"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Palm Sunday"
+          ],
+          "evidence_refs": [
+            "icon:203:title",
+            "icon:203:tag:3"
+          ],
+          "rationale_code": "exact_event",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        }
+      ],
+      "elapsed_seconds": 12.9
+    },
+    {
+      "feast": "Holy Forty Martyrs of Sebastia",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 77,
+      "returned": 2,
+      "assigned_id": 77,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [
+        {
+          "id": 77,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 100,
+          "reason": "Title and tags explicitly identify the group '40 Martyrs of Sebastia' matching requested subject 'Holy Forty Martyrs of Sebastia'; tags include 'group','martyr','saints','universal'.",
+          "evidence": [
+            {
+              "quote": "40 Martyrs of Sebastia",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:77:title"
+            },
+            {
+              "quote": "group",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:77:tag:0"
+            },
+            {
+              "quote": "martyr",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:77:tag:1"
+            },
+            {
+              "quote": "saints",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:77:tag:2"
+            },
+            {
+              "quote": "universal",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:77:tag:3"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Holy Forty Martyrs of Sebastia"
+          ],
+          "evidence_refs": [
+            "icon:77:title",
+            "icon:77:tag:0",
+            "icon:77:tag:1",
+            "icon:77:tag:2",
+            "icon:77:tag:3"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        },
+        {
+          "id": 218,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "Title includes 'FortyMartyrsofSebastia' and 'StJohnArmenianChurchicon' indicating exact subject 'Forty Martyrs of Sebastia'; tags include 'group' and 'icon' confirming depiction of the group subject.",
+          "evidence": [
+            {
+              "quote": "FortyMartyrsofSebastiaStJohnArmenianChurchicon",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:218:title"
+            },
+            {
+              "quote": "group",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:218:tag:0"
+            },
+            {
+              "quote": "icon",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:218:tag:1"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Holy Forty Martyrs of Sebastia"
+          ],
+          "evidence_refs": [
+            "icon:218:title",
+            "icon:218:tag:0",
+            "icon:218:tag:1"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        }
+      ],
+      "elapsed_seconds": 7.6
+    },
+    {
+      "feast": "Remembrance of the Raising of Lazarus",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 455,
+      "returned": 1,
+      "assigned_id": 455,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [
+        {
+          "id": 455,
+          "relation": "exact_event",
+          "confidence": "high",
+          "relevance": 100,
+          "reason": "Title and tag explicitly indicate 'lazarus' and 'resurrection-of-lazarus', exactly matching the requested event Raising of Lazarus and subject Lazarus.",
+          "evidence": [
+            {
+              "quote": "IlluminatedManuscript1450(5)",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:455:title"
+            },
+            {
+              "quote": "lazarus",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:455:tag:8"
+            },
+            {
+              "quote": "resurrection-of-lazarus",
+              "role": "event",
+              "subject_indices": [],
+              "ref": "icon:455:tag:12"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Lazarus"
+          ],
+          "evidence_refs": [
+            "icon:455:title",
+            "icon:455:tag:8",
+            "icon:455:tag:12"
+          ],
+          "rationale_code": "exact_event",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        }
+      ],
+      "elapsed_seconds": 5.2
+    },
+    {
+      "feast": "Sts. Hripsime and Her Companions",
+      "expectation": "exact_exists",
+      "verdict": "exact",
+      "top_id": 158,
+      "returned": 3,
+      "assigned_id": 158,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [
+        {
+          "id": 158,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 100,
+          "reason": "Title 'St Hripsime and Companions' and tag 'st-hripsime' explicitly denote the full requested subject 'Sts. Hripsime and Her Companions'; direct identity evidence from title and tags with subject index [0].",
+          "evidence": [
+            {
+              "quote": "St Hripsime and Companions",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:158:title"
+            },
+            {
+              "quote": "st-hripsime",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:158:tag:5"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Sts. Hripsime and Her Companions"
+          ],
+          "evidence_refs": [
+            "icon:158:title",
+            "icon:158:tag:5"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        },
+        {
+          "id": 418,
+          "relation": "exact_subject",
+          "confidence": "high",
+          "relevance": 100,
+          "reason": "Title 'sthripsimeandcompanions' and tags including 'companions','martyrdom','martyrs','sainthood','saints','sthripsime' explicitly state identity matching 'Sts. Hripsime and Her Companions'.",
+          "evidence": [
+            {
+              "quote": "sthripsimeandcompanions",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:418:title"
+            },
+            {
+              "quote": "companions",
+              "role": "topic",
+              "subject_indices": [],
+              "ref": "icon:418:tag:1"
+            },
+            {
+              "quote": "martyrdom",
+              "role": "topic",
+              "subject_indices": [],
+              "ref": "icon:418:tag:5"
+            },
+            {
+              "quote": "martyrs",
+              "role": "topic",
+              "subject_indices": [],
+              "ref": "icon:418:tag:6"
+            },
+            {
+              "quote": "sainthood",
+              "role": "topic",
+              "subject_indices": [],
+              "ref": "icon:418:tag:8"
+            },
+            {
+              "quote": "saints",
+              "role": "topic",
+              "subject_indices": [],
+              "ref": "icon:418:tag:9"
+            },
+            {
+              "quote": "sthripsime",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:418:tag:10"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "direct_exact",
+          "matched_concepts": [
+            "Sts. Hripsime and Her Companions"
+          ],
+          "evidence_refs": [
+            "icon:418:title",
+            "icon:418:tag:1",
+            "icon:418:tag:5",
+            "icon:418:tag:6",
+            "icon:418:tag:8",
+            "icon:418:tag:9",
+            "icon:418:tag:10"
+          ],
+          "rationale_code": "exact_subject",
+          "auto_assignable": true,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": []
+        },
+        {
+          "id": 3,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 80,
+          "reason": "Title 'St. Hripsime and St. Gayane' depicts a group of virgins including St. Hripsime, related to the requested 'Sts. Hripsime and Her Companions' subject; shared element 'St. Hripsime' identity evidence and thematic group evidence from title and tags 'Group','Virgins'.",
+          "evidence": [
+            {
+              "quote": "St. Hripsime and St. Gayane",
+              "role": "identity",
+              "subject_indices": [
+                0
+              ],
+              "ref": "icon:3:title"
+            },
+            {
+              "quote": "Group",
+              "role": "topic",
+              "subject_indices": [],
+              "ref": "icon:3:tag:1"
+            },
+            {
+              "quote": "Virgins",
+              "role": "topic",
+              "subject_indices": [],
+              "ref": "icon:3:tag:2"
+            }
+          ],
+          "covered_subjects": [
+            0
+          ],
+          "full_request_coverage": false,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "related_specific",
+          "matched_concepts": [
+            "Sts. Hripsime and Her Companions"
+          ],
+          "evidence_refs": [
+            "icon:3:title",
+            "icon:3:tag:1",
+            "icon:3:tag:2"
+          ],
+          "rationale_code": "related_specific",
+          "auto_assignable": false,
+          "provenance": "independent_semantic_verification",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        }
+      ],
+      "elapsed_seconds": 10.7
+    },
+    {
+      "feast": "Sts. John the Patriarch of Jerusalem, John of Otzun the Patriarch of Armenia, John of Vorotan and Gregory of Tatev",
+      "expectation": "fallback_only",
+      "verdict": "wrong",
+      "top_id": 200,
+      "returned": 3,
+      "assigned_id": null,
+      "unsafe_assignment": false,
+      "status": "complete",
+      "assessed": 440,
+      "catalogue_count": 440,
+      "diagnostics": [],
+      "matches": [
+        {
+          "id": 200,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "Title includes 'St John of Vorodn' closely matching requested 'John of Vorotan' with qualifiers 'of Vorotan'; tags include 'armenian','illuminated-manuscript','saint','single','st-john-of-vorodn' establishing identity with qualifiers",
+          "evidence": [
+            {
+              "quote": "St John of Vorodn manuscript",
+              "role": "identity",
+              "subject_indices": [
+                2
+              ],
+              "ref": "icon:200:title"
+            },
+            {
+              "quote": "st-john-of-vorodn",
+              "role": "identity",
+              "subject_indices": [
+                2
+              ],
+              "ref": "icon:200:tag:4"
+            }
+          ],
+          "covered_subjects": [
+            2
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "related_specific",
+          "matched_concepts": [
+            "John of Vorotan"
+          ],
+          "evidence_refs": [
+            "icon:200:title",
+            "icon:200:tag:4"
+          ],
+          "rationale_code": "related_specific",
+          "auto_assignable": false,
+          "provenance": "assessment_only",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 311,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 95,
+          "reason": "Title and tags match 'St. John of Odzun' corresponding to 'John of Otzun the Patriarch of Armenia' with qualifiers 'of Otzun' and 'Patriarch of Armenia'",
+          "evidence": [
+            {
+              "quote": "St. John of Odzun",
+              "role": "identity",
+              "subject_indices": [
+                1
+              ],
+              "ref": "icon:311:title"
+            },
+            {
+              "quote": "saint",
+              "role": "identity",
+              "subject_indices": [
+                1
+              ],
+              "ref": "icon:311:tag:5"
+            }
+          ],
+          "covered_subjects": [
+            1
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "related_specific",
+          "matched_concepts": [
+            "John of Otzun the Patriarch of Armenia"
+          ],
+          "evidence_refs": [
+            "icon:311:title",
+            "icon:311:tag:5"
+          ],
+          "rationale_code": "related_specific",
+          "auto_assignable": false,
+          "provenance": "assessment_only",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        },
+        {
+          "id": 331,
+          "relation": "related_specific",
+          "confidence": "high",
+          "relevance": 90,
+          "reason": "Title and tags identify 'St Gregory of Tatev' matching 'Gregory of Tatev' with qualifier 'of Tatev'",
+          "evidence": [
+            {
+              "quote": "St Gregory of Tatev",
+              "role": "identity",
+              "subject_indices": [
+                3
+              ],
+              "ref": "icon:331:title"
+            }
+          ],
+          "covered_subjects": [
+            3
+          ],
+          "full_request_coverage": true,
+          "identity_qualified": true,
+          "event_agrees": true,
+          "generic_portrait": false,
+          "conflict": false,
+          "match_tier": "related_specific",
+          "matched_concepts": [
+            "Gregory of Tatev"
+          ],
+          "evidence_refs": [
+            "icon:331:title"
+          ],
+          "rationale_code": "related_specific",
+          "auto_assignable": false,
+          "provenance": "assessment_only",
+          "unmet_constraints": [
+            "automatic_assignment_requirements_not_met"
+          ]
+        }
+      ],
+      "elapsed_seconds": 9.7
+    }
+  ],
+  "unreviewed_cases": []
+}
