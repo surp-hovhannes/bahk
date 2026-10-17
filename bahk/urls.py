@@ -109,6 +109,7 @@ class TrackingTokenObtainPairView(TokenObtainPairView):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('moderation/', include('moderation.urls')),
     path('health/', HealthCheckView.as_view(), name='health_check'),
     path('hub/', include('hub.urls')),
     path('hub/notifications/', include('notifications.urls')),

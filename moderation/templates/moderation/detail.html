@@ -1,0 +1,104 @@
+{% extends "moderation/base.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="{% static 'admin/js/moderation-review.js' %}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  {% if admin_url %}<ul class="object-tools"><li><a href="{{ admin_url }}">Existing admin tools</a></li></ul>{% endif %}
+  <fieldset class="module aligned">
+    <h2>Review details</h2>
+    <div class="form-row"><label>Status:</label><div class="readonly"><span class="fp-admin-state fp-admin-state--{% if crisis %}critical{% else %}neutral{% endif %}">{{ item.status }}</span></div></div>
+    {% if crisis %}
+    <div class="form-row"><p><strong>Crisis follow-up · designated reviewers only.</strong> Contact the requester and record the follow-up or escalation before closing this review. The prayer stays unpublished.</p></div>
+    <div class="form-row"><label>Requester:</label><div class="readonly">{{ item.obj.requester.get_full_name|default:item.obj.requester.username }} <span class="help">(account #{{ item.obj.requester_id }})</span></div></div>
+    <div class="form-row"><label>Contact email:</label><div class="readonly">{% if item.obj.requester.email %}<a href="mailto:{{ item.obj.requester.email }}">{{ item.obj.requester.email }}</a><p class="help">Opens your email app to compose a message. No message is sent by recording a review.</p>{% else %}No contact email on this account.{% endif %}</div></div>
+    {% if item.obj.is_anonymous %}<div class="form-row"><p class="help">This was submitted anonymously for public display. Requester details are available here to designated crisis reviewers.</p></div>{% endif %}
+    {% endif %}
+    <div class="form-row"><label>Source date:</label><div class="readonly">{{ item.timestamp|default:'Unknown' }}<p class="help">{{ item.source }}</p></div></div>
+    <div class="form-row"><label>Content:</label><div class="readonly fp-review-content">{{ item.text }}</div></div>
+    {% if item.kind == 'prayer' %}
+    <div class="form-row"><label>Automated check:</label><div class="readonly">
+      {% if summary %}
+      <div class="fp-review-summary">
+        {% if summary.reason %}<p><strong>{{ summary.reason }}</strong></p>{% endif %}
+        {% if summary.error %}<p>The automated check did not complete, so a person needs to decide. Error: {{ summary.error }}</p>{% endif %}
+        {% if summary.profanity %}<p>The profanity word list matched this request.</p>{% endif %}
+        {% if summary.concerns %}<p>Concerns: {{ summary.concerns|join:"; " }}</p>{% endif %}
+        {% if summary.scores %}
+        <ul class="fp-review-scores" aria-label="Decision model scores">
+          {% for score in summary.scores %}
+          <li class="{% if score.crossed %}{% if score.good %}fp-review-score--good{% else %}fp-review-score--flag{% endif %}{% endif %}">
+            <span class="fp-review-score__label">{{ score.label }}</span>
+            <span class="fp-review-score__bar" aria-hidden="true"><span style="width: {{ score.percent }}%"></span></span>
+            <span class="fp-review-score__value">{{ score.value|floatformat:2 }}</span>
+            <span class="help">{{ score.cutoff }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if summary.engine %}<p class="help">Checked by: {{ summary.engine }}{% if summary.model %} ({{ summary.model }}){% endif %}</p>{% endif %}
+      </div>
+      <details><summary>Raw moderation result</summary><pre class="fp-review-evidence">{{ evidence }}</pre></details>
+      {% elif awaiting %}
+      <p><strong>Awaiting automated check.</strong> It hasn't run on this request yet.</p>
+      <p class="help">Approve becomes available once it has run, or at {{ approvable_from|time:"g:i A" }} if it never does. You can reject now.</p>
+      {% else %}No moderation result. The automated check didn't run, so a person needs to decide.{% endif %}
+    </div></div>
+    {% endif %}
+  </fieldset>
+  {% if not needs_review %}
+  <details class="module fp-review-later"{% if form.errors %} open{% endif %}>
+    <summary>Record another decision</summary>
+    <p class="help">This item is not waiting in a review queue. You can still record a follow-up{% if overturn %}, overturn the rejection{% endif %} or report a problem.</p>
+  {% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if item.kind == 'prayer' %}<input type="hidden" name="seen_status" value="{{ item.obj.status }}">{% endif %}
+    {% if form.errors %}<p class="errornote" role="alert">Please correct the errors below. Your notes have been kept.</p>{% endif %}
+    <fieldset class="module aligned">
+      <h2>Your decision</h2>
+      <div class="form-row{% if form.action.errors %} errors{% endif %}">
+        {{ form.action.errors }}
+        <label for="review-action" class="required">Decision:</label>
+        {{ form.action }}
+        <p class="help" id="review-action-help">{% if crisis %}Closing removes this item from the review queue. Recording an escalation does not send a message or assign another reviewer.{% elif item.kind == 'icon' %}Make any icon corrections first. “Close report” removes the report from the queue; it does not edit the icon.{% elif overturn %}“Overturn rejection and publish” makes the request public immediately for its full duration and cannot be undone here.{% elif awaiting %}Approve is not offered until the automated check has run (see above). Rejecting is available now.{% elif item.kind == 'prayer' %}“Approve and publish” makes the request public immediately and cannot be undone here.{% else %}“Complete review” removes this feedback from the queue. It does not edit or regenerate the context.{% endif %}</p>
+      </div>
+      <div class="form-row{% if form.note.errors %} errors{% endif %}">
+        {{ form.note.errors }}
+        <label for="review-note" id="review-note-label">Notes:</label>{{ form.note }}<p class="help" id="review-note-help">Required when rejecting, escalating, closing a crisis follow-up or reporting a problem; optional otherwise. Avoid unnecessary personal details.</p>
+      </div>
+      <div id="review-correction" class="form-row{% if form.expected_outcome.errors %} errors{% endif %}">
+        {{ form.expected_outcome.errors }}
+        <label for="review-expected">Correct decision:</label>{{ form.expected_outcome }}<p class="help" id="review-expected-help">For “Report a review problem,” choose what should happen instead. This records your suggestion without changing publication or review status.</p>
+      </div>
+      {% if item.kind == 'prayer' %}
+      <div class="form-row{% if form.regression_reference.errors %} errors{% endif %}">
+        <details {% if form.regression_reference.errors or form.regression_reference.value %}open{% endif %}>
+          <summary>Related test case (optional)</summary>
+          {{ form.regression_reference.errors }}
+          <label for="review-reference">Test case:</label>{{ form.regression_reference }}
+          <p class="help" id="review-reference-help">Select an existing synthetic example that illustrates the problem. Selecting a case does not create or run a test.{% if not form.test_cases %} No test cases are currently available.{% endif %}</p>
+        </details>
+      </div>
+      {% endif %}
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="Save review"></div>
+  </form>
+  {% if not needs_review %}</details>{% endif %}
+  <section class="module">
+    <h2>Review history</h2>
+    {% for review in history %}
+    <div class="form-row">
+      <p><strong>{{ review.created_at }} · {{ review.reviewer|default:'Deleted reviewer' }} · {{ review.decision_label }}</strong></p>
+      <div class="fp-review-content">{{ review.note }}</div>
+      {% if review.expected_outcome %}<p class="help">Correct decision: {{ review.correct_decision_label }}</p>{% endif %}
+      {% if review.regression_reference %}<p class="help">Related test case: {{ review.test_case_label }}</p>{% endif %}
+    </div>
+    {% empty %}<div class="form-row"><p>No reviews recorded yet.</p></div>{% endfor %}
+  </section>
+</div>
+{% endblock %}

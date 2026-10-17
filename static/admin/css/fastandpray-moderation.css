@@ -1,0 +1,149 @@
+/* Structural review content only; colors, type and controls come from Bahk admin. */
+.fp-moderation .results {
+    overflow-x: auto;
+}
+
+.fp-moderation .fp-review-queue {
+    table-layout: fixed;
+}
+
+.fp-moderation .fp-review-queue th:first-child {
+    width: 42%;
+}
+
+.fp-moderation .fp-review-queue th:nth-child(2) {
+    width: 30%;
+}
+
+.fp-moderation .fp-review-queue th:nth-child(3) {
+    width: 28%;
+}
+
+.fp-moderation .fp-review-queue .fp-admin-state {
+    white-space: normal;
+}
+
+.fp-moderation .module .fp-review-queue td {
+    white-space: normal;
+}
+
+.fp-moderation .fp-review-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.fp-moderation .aligned textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.fp-moderation .aligned select {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.fp-moderation .aligned [hidden] {
+    display: none;
+}
+
+.fp-moderation .aligned summary {
+    cursor: pointer;
+}
+
+.fp-moderation .aligned details[open] summary {
+    margin-bottom: 12px;
+}
+
+.fp-moderation .fp-review-evidence {
+    margin: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.fp-moderation .fp-review-group--crisis {
+    box-shadow: 0 0 0 2px var(--error-fg, #ba2121);
+}
+
+.fp-moderation .fp-review-waiting {
+    margin: 4px 0 0;
+    padding: 0;
+}
+
+.fp-moderation .fp-review-summary p {
+    margin: 0 0 8px;
+    padding: 0;
+}
+
+.fp-moderation .fp-review-scores {
+    list-style: none;
+    margin: 4px 0 8px;
+    padding: 0;
+}
+
+.fp-moderation .fp-review-scores li {
+    display: grid;
+    grid-template-columns: minmax(9rem, 12rem) minmax(6rem, 14rem) 3rem;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 4px 0;
+    list-style: none;
+}
+
+.fp-moderation .fp-review-scores .help {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 0;
+}
+
+.fp-moderation .fp-review-score__bar {
+    display: block;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--hairline-color, #e8e8e8);
+    overflow: hidden;
+}
+
+.fp-moderation .fp-review-score__bar span {
+    display: block;
+    height: 100%;
+    background: var(--body-quiet-color, #666);
+}
+
+.fp-moderation .fp-review-score--flag .fp-review-score__bar span {
+    background: var(--error-fg, #ba2121);
+}
+
+.fp-moderation .fp-review-score--good .fp-review-score__bar span {
+    background: #2e7d32;
+}
+
+.fp-moderation .fp-review-score--flag .fp-review-score__value {
+    color: var(--error-fg, #ba2121);
+    font-weight: 600;
+}
+
+.fp-moderation .fp-review-score__value {
+    font-variant-numeric: tabular-nums;
+}
+
+.fp-moderation details.fp-review-later {
+    padding: 8px 12px;
+}
+
+.fp-moderation details.fp-review-later > summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+@media (max-width: 767px) {
+    .fp-moderation .fp-review-scores li {
+        grid-template-columns: 1fr 3rem;
+    }
+
+    .fp-moderation .fp-review-score__bar {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+}

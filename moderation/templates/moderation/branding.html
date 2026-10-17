@@ -1,0 +1,8 @@
+{% load static %}
+<h1 id="site-name">
+  <a class="fp-admin-brand" href="{% url 'moderation-dashboard' %}">
+    <img class="fp-admin-brand__icon" src="{% static 'admin/brand/app-icon.png' %}" alt="" width="36" height="36">
+    <span>{{ site_header }}</span>
+  </a>
+</h1>
+{% if user.is_anonymous %}{% include "admin/color_theme_toggle.html" %}{% endif %}

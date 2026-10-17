@@ -164,6 +164,15 @@ app.conf.beat_schedule = {
             }
         }
     },
+    'send-icon-feedback-digest-daily': {
+        'task': 'moderation.tasks.send_icon_feedback_digest',
+        'schedule': crontab(hour=8, minute=0),  # 8 AM daily
+        'options': {
+            'sentry': {
+                'monitor_slug': 'daily-icon-feedback-digest',
+            }
+        }
+    },
     'send-weekly-prayer-request-notifications': {
         'task': 'notifications.tasks.send_weekly_prayer_request_push_notification_task',
         'schedule': crontab(day_of_week='sunday', hour=18, minute=0),  # Sunday 6:00 PM

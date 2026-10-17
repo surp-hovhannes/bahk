@@ -126,6 +126,7 @@ INSTALLED_APPS = [
     'taggit',
     'adminsortable2',  # Install with: pip install django-admin-sortable2==2.2.1
     'prayers',
+    'moderation',
     'icons',
 ]
 
@@ -469,6 +470,14 @@ FEAST_CONTEXT_REGENERATION_THRESHOLD = config('FEAST_CONTEXT_REGENERATION_THRESH
 # ANTHROPIC SETTINGS
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY')
 
+# CLOUDFLARE WORKERS AI SETTINGS
+CLOUDFLARE_WORKERSAI_ACCOUNT_ID = config('CLOUDFLARE_WORKERSAI_ACCOUNT_ID', default='')
+CLOUDFLARE_WORKERSAI_API_KEY = config('CLOUDFLARE_WORKERSAI_API_KEY', default='')
+# Prayer request moderation engine: "llm" (active LLMPrompt, Claude by default) or
+# "clef" (Cloudflare's Clef decision model, see prayers/clef_moderation.py).
+PRAYER_MODERATION_ENGINE = config('PRAYER_MODERATION_ENGINE', default='llm')
+PRAYER_MODERATION_CLEF_MODEL = config('PRAYER_MODERATION_CLEF_MODEL', default='clef')
+
 # API.BIBLE SETTINGS
 BIBLE_API_KEY = config('BIBLE_API_KEY', default='')
 # Number of days after which a reading's text is considered stale and is queued for the
@@ -581,6 +590,18 @@ FRONTEND_URL = config('FRONTEND_URL', default='https://fastandpray.app')
 APP_URL = config('APP_URL', default='https://web.fastandpray.app')
 BACKEND_URL = 'https://api.fastandpray.app'
 SITE_URL = config('SITE_URL', default=FRONTEND_URL)  # Default to FRONTEND_URL if not specified
+
+# Receives link-only moderation notices when no active responder holds the
+# needed responsibility, so a crisis alert is never silently dropped.
+MODERATION_FALLBACK_EMAILS = config(
+    'MODERATION_FALLBACK_EMAILS', default='fastandprayhelp@gmail.com', cast=Csv()
+)
+
+# Minutes a new prayer request waits for its automated check before a reviewer may
+# approve it anyway. Approving earlier could publish a crisis request unchecked.
+MODERATION_AUTOMATED_CHECK_GRACE_MINUTES = config(
+    'MODERATION_AUTOMATED_CHECK_GRACE_MINUTES', default=15, cast=int
+)
 
 # AWS S3 settings
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)

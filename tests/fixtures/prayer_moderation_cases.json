@@ -1,0 +1,7 @@
+[
+  {"id": "crisis-profanity-title", "title": "Fuck, I need help", "description": "I plan to hurt myself tonight.", "title_profanity": true, "description_profanity": false, "crisis": true},
+  {"id": "crisis-profanity-description", "title": "Help tonight", "description": "Fuck, I plan to hurt myself tonight.", "title_profanity": false, "description_profanity": true, "crisis": true},
+  {"id": "crisis-profanity-both", "title": "Fuck, help", "description": "Fuck, I plan to hurt myself tonight.", "title_profanity": true, "description_profanity": true, "crisis": true},
+  {"id": "profanity-only", "title": "Fuck, a hard day", "description": "Please pray for patience at work.", "title_profanity": true, "description_profanity": false, "crisis": false},
+  {"id": "clean-request", "title": "Patience", "description": "Please pray for patience at work.", "title_profanity": false, "description_profanity": false, "crisis": false}
+]

@@ -365,6 +365,11 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (for AI-generated content). Model IDs, fallbacks and
   lifecycle live in `hub/services/llm_models.py` (see `docs/LLM_MODELS.md`); read Claude replies
   with `anthropic_text`, never `content[0].text`
+- `CLOUDFLARE_WORKERSAI_ACCOUNT_ID`, `CLOUDFLARE_WORKERSAI_API_KEY` (Clef decision model);
+  `PRAYER_MODERATION_ENGINE` (`llm` default, or `clef`) and `PRAYER_MODERATION_CLEF_MODEL`
+  (`clef` default) choose the prayer request moderator. Run
+  `python manage.py compare_clef_moderation` to compare Clef against past decisions (writes nothing, but
+  sends up to `--limit` real requests to Cloudflare and uses quota)
 - `BIBLE_API_KEY` (API.Bible text retrieval); see Key Features #6 for the spend-control
   vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT` (distinct passages, not
   readings), `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`
@@ -377,6 +382,7 @@ Defined in `bahk/celery.py`. Daily tasks include:
 - Map updates (1 AM)
 - Activity feed cleanup (2 AM)
 - Milestone checks (various times)
+- Icon feedback digest to General moderators (8 AM, only when there are new reports)
 - Reading text refresh (Monday 4 AM)
 
 ### Database
