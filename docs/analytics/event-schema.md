@@ -22,7 +22,9 @@ A meaningful return signal is evidence of opening content, not finishing it.
   beginning/ending, devotional availability and milestone notifications.
 
 Unknown/custom codes have no classification and are not meaningful by default.
-These classifications do not alter existing reports in this change.
+Screen-view metrics use `events/event_semantics.py` to count only `client_ui`
+rows with integer schema version >= 2. Other classifications do not by themselves
+change report inclusion. Shared event aggregates also exclude legacy screen views.
 
 ## Sources and payload keys
 
@@ -74,3 +76,27 @@ Client adoption also affects coverage: compare v2 client UI cohorts separately.
 Backfill means read-time classification only: NO writes, NO deletes, NO
 migrations. Legacy rows (including IP/UA and API-inferred views) remain untouched.
 Do not treat an absent schema version or legacy source as a true UI screen view.
+
+## Deploy runbook
+
+After deploy, invalidate cached aggregates in the deployed runtime (the class is
+named `AnalyticsCacheService`):
+
+```sh
+python manage.py shell -c 'from events.analytics_cache import AnalyticsCacheService; AnalyticsCacheService.invalidate_all_analytics()'
+python manage.py warm_analytics_cache
+```
+
+These are deployment instructions only; this change does not run invalidation or
+warming. Verify that the deployed cache backend actually clears shared keys:
+the service's fallback only bumps an in-process version and does not invalidate
+other workers. Shared cached aggregates must be cleared before verifying metrics.
+
+Record the deploy timestamp. Query `Event` for `screen_view` rows at or after that
+timestamp with `data__source__in=['api', 'app_ui']`; expect zero. For a controlled
+successful POST to `/api/events/track/screen-view/`, compare before/after rows for
+the test user and timestamp window: expect exactly one new `client_ui` row with
+integer schema version >= 2 and the submitted stable screen name. GET requests
+must add none. Reports exclude historical rows at read time and expose only an
+aggregate legacy exclusion count. **Do not trend screen_view metrics across the
+client_ui cutoff**; client rollout changes coverage as well as event meaning.

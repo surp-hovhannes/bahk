@@ -15,6 +15,7 @@ from datetime import timedelta, timezone as dt_timezone
 import json
 import csv
 
+from .event_semantics import legacy_screen_views, true_ui_screen_views
 from .participation_analytics import analytics_events
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
 
@@ -1266,9 +1267,8 @@ class EventAdmin(admin.ModelAdmin):
             event_type__category='analytics'
         ).exclude(user__is_staff=True)
 
-        # Count screen views regardless of source (app_ui vs api). Mobile clients often hit /api/*,
-        # which the middleware marks as source="api".
-        screen_view_qs = base_qs.filter(event_type__code=EventType.SCREEN_VIEW)
+        # Count only explicit v2+ client UI visibility, excluding historical GET noise.
+        screen_view_qs = true_ui_screen_views(base_qs)
 
         # Totals
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
@@ -1325,6 +1325,7 @@ class EventAdmin(admin.ModelAdmin):
             'events_by_day': events_by_day,
             'total_app_opens': total_app_opens,
             'total_screen_views': total_screen_views,
+            'legacy_screen_views_excluded': legacy_screen_views(base_qs).count(),
             'active_users': active_users,
             'avg_session_duration': int(avg_session_duration),
             'app_open_hourly': app_open_hourly,
@@ -1379,9 +1380,8 @@ class EventAdmin(admin.ModelAdmin):
 
         # Other metrics
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
-        # Count screen views regardless of source (app_ui vs api). Mobile clients often hit /api/*,
-        # which the middleware marks as source="api".
-        screen_view_qs = base_qs.filter(event_type__code=EventType.SCREEN_VIEW)
+        # Count only explicit v2+ client UI visibility, excluding historical GET noise.
+        screen_view_qs = true_ui_screen_views(base_qs)
 
         total_screen_views = screen_view_qs.count()
         active_users = base_qs.exclude(user__isnull=True).values('user').distinct().count()
@@ -1410,6 +1410,7 @@ class EventAdmin(admin.ModelAdmin):
             'app_open_hourly': app_open_hourly,
             'total_app_opens': total_app_opens,
             'total_screen_views': total_screen_views,
+            'legacy_screen_views_excluded': legacy_screen_views(base_qs).count(),
             'active_users': active_users,
             'avg_session_duration': int(avg_session_duration),
             'top_screens': top_screens,

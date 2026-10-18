@@ -12,16 +12,20 @@ from django.db.models.functions import Coalesce, TruncDate
 
 from hub.models import FastParticipation, Profile
 from .models import Event, EventType
+from .event_semantics import legacy_screen_views
 
 
 def analytics_events():
+    """Metric rows: omit participation no-ops and historical screen noise."""
     # Use a PK subquery so missing JSON keys cannot exclude legacy events via
     # SQL NULL semantics on SQLite/PostgreSQL.
     noops = Event.objects.filter(
         event_type__code__in=[EventType.USER_JOINED_FAST, EventType.USER_LEFT_FAST],
         data__participation_tracked=True, data__participation_changed=False,
     ).values("pk")
-    return Event.objects.exclude(pk__in=noops)
+    return Event.objects.exclude(pk__in=noops).exclude(
+        pk__in=legacy_screen_views(Event.objects.all()).values("pk"),
+    )
 
 
 def legacy_transition_events(code=None):
