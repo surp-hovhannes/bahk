@@ -59,6 +59,25 @@ class EventSemanticsTests(TestCase):
         self.assertFalse(legacy_screen_views(qs.filter(user=self.viewer)).exists())
         self.assertEqual(original, list(qs.order_by('pk').values()))
 
+    def test_analytics_events_preserves_non_screen_events_with_missing_json_keys(self):
+        viewer = get_user_model().objects.create_user(username='analytics-viewer')
+        legacy = [Event.objects.create(
+            event_type=self.screen_type, user=viewer, data=data,
+        ) for data in ({}, {'source': 'api'}, {'source': 'app_ui', 'schema_version': 2})]
+        true_view = Event.objects.create(
+            event_type=self.screen_type, user=viewer,
+            data={'source': 'client_ui', 'schema_version': 2},
+        )
+        other = Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.APP_OPEN), user=viewer,
+            data={},
+        )
+
+        result_ids = set(analytics_events().filter(user=viewer).values_list('pk', flat=True))
+
+        self.assertEqual(result_ids, {true_view.pk, other.pk})
+        self.assertTrue(result_ids.isdisjoint(event.pk for event in legacy))
+
     def test_report_excludes_legacy_from_every_screen_metric(self):
         now = timezone.now()
         outside = Event.objects.create(event_type=self.screen_type, data={})

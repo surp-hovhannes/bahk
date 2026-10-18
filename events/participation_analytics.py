@@ -12,7 +12,7 @@ from django.db.models.functions import Coalesce, TruncDate
 
 from hub.models import FastParticipation, Profile
 from .models import Event, EventType
-from .event_semantics import legacy_screen_views
+from .event_semantics import TRUE_UI_SCREEN_VIEW_Q
 
 
 def analytics_events():
@@ -23,8 +23,10 @@ def analytics_events():
         event_type__code__in=[EventType.USER_JOINED_FAST, EventType.USER_LEFT_FAST],
         data__participation_tracked=True, data__participation_changed=False,
     ).values("pk")
-    return Event.objects.exclude(pk__in=noops).exclude(
-        pk__in=legacy_screen_views(Event.objects.all()).values("pk"),
+    # The event_type FK is non-null: a NULL JSON branch fails the filter only
+    # for screen_view rows; the non-screen branch preserves all other types.
+    return Event.objects.exclude(pk__in=noops).filter(
+        ~Q(event_type__code=EventType.SCREEN_VIEW) | TRUE_UI_SCREEN_VIEW_Q,
     )
 
 
