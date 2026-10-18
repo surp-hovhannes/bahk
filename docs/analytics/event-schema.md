@@ -1,0 +1,76 @@
+# Event schema v2
+
+`events/event_schema.py` defines the contract and read-time classifications.
+Absent `data.schema_version` means v1 (legacy); new `Event.create_event` calls
+stamp v2 by default, preserving an explicitly supplied version. Direct ORM
+writers bypass this convenience method and must be interpreted accordingly.
+This is a JSON data contract, with no database schema change.
+
+## Meaning and classification
+
+Meaningful engagement codes are exactly `checklist_used`, `prayer_set_viewed`,
+`devotional_viewed`, `user_joined_fast`, and `prayer_request_accepted`.
+Viewing is not practice completion; account creation is not activation.
+A meaningful return signal is evidence of opening content, not finishing it.
+
+- Action: checklist use, fast join/leave, login/logout/account creation, content
+  publication and fast administration, prayer request creation/acceptance/completion/thanks.
+  Only actions in the meaningful allowlist count as meaningful engagement.
+- Return-signal: `prayer_set_viewed`, `devotional_viewed`.
+- Exposure-noise: `screen_view`, `app_open`, `session_start`, `session_end`,
+  `prayer_viewed`, `prayer_request_viewed`, `tutorial_video_viewed`, fast
+  beginning/ending, devotional availability and milestone notifications.
+
+Unknown/custom codes have no classification and are not meaningful by default.
+These classifications do not alter existing reports in this change.
+
+## Sources and payload keys
+
+Source vocabulary: `client_ui` (explicit UI emission), `server_inferred`
+(request/session inference), `server_domain` (domain action). Legacy `api` and
+`app_ui` source values are historical only. Existing non-screen producers are
+not retrofitted with a source: missing source remains unknown, not client UI.
+All convenience-method payloads add `schema_version`; existing producers may
+also add `lang` when a request supplies it.
+
+| Type | Data keys (producer-dependent, nullable where unavailable) |
+| --- | --- |
+| screen_view v2 | schema_version, source=`client_ui`, screen, optional previous_screen, session_id, app_version, platform |
+| app_open / session_start | session_id, path, app_version, platform |
+| session_end | session_id, duration_seconds, requests |
+| checklist_used | fast_id, fast_name, action, context |
+| devotional_viewed | devotional_id, fast_id, day |
+| prayer_set_viewed | prayer_set_id, church_id, church_name |
+| prayer_viewed | prayer_id, church_id, fast_id, category, title |
+| prayer_request_viewed | prayer_request_id, status, title |
+| tutorial_video_viewed | video_id, title |
+
+Domain event payloads remain producer-specific (for example fast/participation
+identifiers for joins, prayer request identifiers for acceptance); v2 does not
+introduce new required domain keys or reinterpret them as completion evidence.
+
+## True UI screen views and privacy
+
+Authenticated clients POST `/api/events/track/screen-view/` when a screen becomes
+visible, with `screen` and optionally `previous_screen`. Both must be strings
+matching `^[a-z0-9_]{1,64}$`, excluding digits-only identifiers. Use stable screen
+names, never paths, object IDs or free text. Invalid/missing names return 400;
+valid requests return 200. The scoped per-user throttle is 120/minute.
+
+The endpoint copies only validated names and selected app/platform headers.
+Session ID comes from `analytics:session:<user_id>` in the middleware cache,
+or null if unavailable. It passes no request to `create_event`: IP stays null,
+user agent stays empty, and no request language, path, query string or arbitrary
+body fields are copied into this event. Existing session/app-open metadata
+behavior is unchanged; this privacy guarantee applies to the new screen event.
+
+Authenticated GETs no longer create screen views. `X-Screen`, `?screen=` and
+`X-API-Request` do not cause screen tracking. At the deployment cutoff,
+**screen_view volume drops and must not be trended across the cutoff**.
+Client adoption also affects coverage: compare v2 client UI cohorts separately.
+
+## Historical data policy
+
+Backfill means read-time classification only: NO writes, NO deletes, NO
+migrations. Legacy rows (including IP/UA and API-inferred views) remain untouched.
+Do not treat an absent schema version or legacy source as a true UI screen view.
