@@ -22,7 +22,10 @@ from tests.fixtures.test_data import TestDataFactory
 User = get_user_model()
 
 
-@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
+@override_settings(
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}},
+    SESSION_ENGINE='django.contrib.sessions.backends.db',
+)
 class AdminDashboardTests(TestCase):
     """Test admin dashboard functionality."""
     
