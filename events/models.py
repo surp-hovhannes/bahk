@@ -10,6 +10,8 @@ from modeltrans.fields import TranslationField
 from django.utils import timezone
 from django.db.models import Count
 
+from .event_schema import EVENT_SCHEMA_VERSION
+
 User = get_user_model()
 
 
@@ -389,7 +391,8 @@ class Event(models.Model):
             lang = request.GET.get('lang') or request.POST.get('lang')
 
         # Merge lang into event data if present
-        event_data = data or {}
+        event_data = dict(data) if data is not None else {}
+        event_data.setdefault("schema_version", EVENT_SCHEMA_VERSION)
         if lang:
             event_data['lang'] = lang
 

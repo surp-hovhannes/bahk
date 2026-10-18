@@ -3,6 +3,9 @@ API views for the events app.
 Provides endpoints for retrieving events, analytics, and statistics.
 """
 
+import re
+
+from django.core.cache import cache
 from django.db.models import Count, Q
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
@@ -11,6 +14,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.throttling import ScopedRateThrottle
 from django.utils.translation import activate, get_language_from_request
 
 from .models import Event, EventType, UserActivityFeed
@@ -394,6 +398,47 @@ class FastEventStatsView(APIView):
         
         serializer = FastEventStatsSerializer(stats_data)
         return Response(serializer.data)
+
+
+class ScreenViewThrottle(ScopedRateThrottle):
+    """Per-user screen telemetry budget, independent of global DRF rates."""
+
+    THROTTLE_RATES = {'screen_view': '120/min'}
+
+
+class TrackScreenViewView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScreenViewThrottle]
+    throttle_scope = 'screen_view'
+
+    def post(self, request):
+        if not isinstance(request.data, dict):
+            return Response({'error': 'Expected an object'}, status=status.HTTP_400_BAD_REQUEST)
+        for key in ('screen', 'previous_screen'):
+            if key == 'previous_screen' and key not in request.data:
+                continue
+            value = request.data.get(key)
+            if not isinstance(value, str) or not re.fullmatch(r'[a-z0-9_]{1,64}', value) or value.isdigit():
+                return Response({'error': f'Invalid {key}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        session = cache.get(f'analytics:session:{request.user.id}') or {}
+        data = {
+            'source': 'client_ui',
+            'screen': request.data['screen'],
+            'session_id': session.get('id'),
+            'app_version': request.headers.get('X-App-Version'),
+            'platform': request.headers.get('X-Platform'),
+        }
+        if 'previous_screen' in request.data:
+            data['previous_screen'] = request.data['previous_screen']
+        # Deliberately omit request: screen telemetry must never persist IP/UA.
+        Event.create_event(
+            event_type_code=EventType.SCREEN_VIEW,
+            user=request.user,
+            title=f"Screen view: {data['screen']}",
+            data=data,
+        )
+        return Response({'status': 'ok'})
 
 
 class TrackDevotionalViewedView(APIView):
