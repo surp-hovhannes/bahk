@@ -1,5 +1,5 @@
 """
-Middleware to automatically track app open, session start/end, screen views,
+Middleware to automatically track app open, session start/end,
 and ingest UTM parameters for attribution.
 
 This is lightweight and safe: it gracefully skips tracking if event types are
@@ -20,7 +20,6 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
     - Starts a new session when inactivity exceeds configured threshold
     - Emits app_open and session_start when a session starts
     - Emits session_end for the previous session when a new session starts after inactivity
-    - Emits screen_view for GET requests (uses X-Screen header or request path)
     - Ingests UTM parameters and stores them on the user's profile
     """
 
@@ -115,33 +114,6 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
             cache.set(sess_key, session_data, timeout=inactivity_seconds * 4)
 
         cache.set(last_seen_key, now, timeout=inactivity_seconds * 4)
-
-        # Screen view for GET requests
-        if request.method == 'GET':
-            screen_name = request.META.get('HTTP_X_SCREEN') or request.GET.get('screen')
-            if not screen_name:
-                # Fallback to path for automatic tracking
-                screen_name = request.path
-
-            is_api_request = request.path.startswith('/api/') or self._is_api_request(request)
-            source = 'api' if is_api_request else 'app_ui'
-
-            try:
-                from .models import Event, EventType
-                Event.create_event(
-                    event_type_code=EventType.SCREEN_VIEW,
-                    user=user,
-                    title=f"Screen view: {screen_name}",
-                    data={
-                        'session_id': session_data.get('id') if session_data else None,
-                        'screen': screen_name,
-                        'path': request.path,
-                        'source': source,
-                    },
-                    request=request,
-                )
-            except Exception:
-                pass
 
         return None
 
