@@ -21,6 +21,7 @@ class EventSemanticsTests(TestCase):
         self.legacy_viewer = get_user_model().objects.create_user(username='legacy')
         self.screen_type = EventType.objects.get(code=EventType.SCREEN_VIEW)
         self.legacy = []
+        # Create historical rows directly: the factory stamps schema_version=2.
         for data in (
             {},
             {'source': 'api'},
@@ -33,14 +34,17 @@ class EventSemanticsTests(TestCase):
         ):
             self.legacy.append(Event.objects.create(
                 event_type=self.screen_type, user=self.legacy_viewer,
+                title='Legacy screen view',
                 data={**data, 'screen': '/api/private/?secret=objectionable'},
             ))
         self.true_views = [Event.objects.create(
             event_type=self.screen_type, user=self.viewer,
+            title='UI screen view',
             data={'source': 'client_ui', 'schema_version': version, 'screen': 'home'},
         ) for version in (2, 3)]
         self.other = Event.objects.create(
             event_type=EventType.objects.get(code=EventType.APP_OPEN), user=self.viewer,
+            title='App opened',
             data={'source': 'client_ui', 'schema_version': 2},
         )
 
@@ -62,14 +66,16 @@ class EventSemanticsTests(TestCase):
     def test_analytics_events_preserves_non_screen_events_with_missing_json_keys(self):
         viewer = get_user_model().objects.create_user(username='analytics-viewer')
         legacy = [Event.objects.create(
-            event_type=self.screen_type, user=viewer, data=data,
+            event_type=self.screen_type, user=viewer, title='Legacy screen view', data=data,
         ) for data in ({}, {'source': 'api'}, {'source': 'app_ui', 'schema_version': 2})]
         true_view = Event.objects.create(
             event_type=self.screen_type, user=viewer,
+            title='UI screen view',
             data={'source': 'client_ui', 'schema_version': 2},
         )
         other = Event.objects.create(
             event_type=EventType.objects.get(code=EventType.APP_OPEN), user=viewer,
+            title='App opened',
             data={},
         )
 
@@ -80,7 +86,7 @@ class EventSemanticsTests(TestCase):
 
     def test_report_excludes_legacy_from_every_screen_metric(self):
         now = timezone.now()
-        outside = Event.objects.create(event_type=self.screen_type, data={})
+        outside = Event.objects.create(event_type=self.screen_type, title='Old screen view', data={})
         Event.objects.filter(pk=outside.pk).update(timestamp=now - timedelta(days=10))
         metrics = Command()._compute_other_metrics(now - timedelta(days=1), now + timedelta(days=1))
         screens = metrics['screen_views']
