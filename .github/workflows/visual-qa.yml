@@ -37,6 +37,7 @@ jobs:
           --health-retries 5
     env:
       # Same settings switches as django_ci.yml: CI mode, DEBUG so runserver serves static files.
+      DJANGO_SETTINGS_MODULE: tests.visual_qa_settings
       CI: "true"
       DEBUG: "true"
       REDIS_URL: redis://localhost:6379/1
@@ -49,27 +50,33 @@ jobs:
       ANTHROPIC_API_KEY: visual-qa-dummy
     steps:
       - name: Validate run label
+        id: validate_label
         env:
           RUN_LABEL: ${{ inputs.run_label }}
         run: |
           [[ "$RUN_LABEL" =~ ^[A-Za-z0-9-]{6,64}$ ]] || { echo "invalid run_label"; exit 1; }
 
       - uses: actions/checkout@v4
+        id: checkout
 
       - uses: actions/setup-python@v5
+        id: python
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install Python dependencies
+        id: install_python
         run: pip install -r requirements.txt
 
       - name: Database and deterministic seed data
+        id: database
         run: |
           python manage.py migrate --noinput
           python manage.py seed_visual_qa
 
       - name: One-run admin user
+        id: admin
         run: |
           VQA_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=')"
           echo "::add-mask::$VQA_PASSWORD"
@@ -78,6 +85,7 @@ jobs:
             --username vqa-admin --email vqa-admin@example.test
 
       - name: Start Django
+        id: django
         run: |
           python manage.py runserver 127.0.0.1:8000 > runserver.log 2>&1 &
           for i in $(seq 1 60); do
@@ -87,16 +95,19 @@ jobs:
           cat runserver.log; exit 1
 
       - uses: actions/setup-node@v4
+        id: node
         with:
           node-version: "22"
 
       - name: Install Playwright
+        id: playwright
         working-directory: qa/visual
         run: |
           npm install --no-audit --no-fund --no-save playwright@1.64.1
           npx playwright install --with-deps chromium
 
       - name: Capture admin scenarios
+        id: capture
         working-directory: qa/visual
         env:
           VQA_PLAN: ${{ inputs.plan }}
@@ -106,6 +117,33 @@ jobs:
           VQA_SHA: ${{ github.sha }}
           VQA_OUT: ${{ github.workspace }}/qa-results
         run: node run.mjs
+
+      - name: Record setup failure
+        if: failure()
+        env:
+          FAILED_STEP: ${{ steps.validate_label.outcome == 'failure' && 'Validate run label' || steps.checkout.outcome == 'failure' && 'Checkout' || steps.python.outcome == 'failure' && 'Set up Python' || steps.install_python.outcome == 'failure' && 'Install Python dependencies' || steps.database.outcome == 'failure' && 'Database and deterministic seed data' || steps.admin.outcome == 'failure' && 'One-run admin user' || steps.django.outcome == 'failure' && 'Start Django' || steps.node.outcome == 'failure' && 'Set up Node' || steps.playwright.outcome == 'failure' && 'Install Playwright' || steps.capture.outcome == 'failure' && 'Capture admin scenarios' || 'Unknown setup step' }}
+        run: |
+          if [ ! -f qa-results/manifest.json ]; then
+            mkdir -p qa-results
+            python3 - <<'PYTHON'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc).isoformat()
+          manifest = {
+              "schema": 1,
+              "startedAt": now,
+              "finishedAt": now,
+              "target": None,
+              "results": [],
+              "setupError": "Workflow step failed: " + os.environ["FAILED_STEP"],
+              "summary": {"total": 0, "ok": 0, "failed": 0, "setupError": True},
+          }
+          Path("qa-results/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PYTHON
+          fi
 
       - name: Upload evidence
         if: always()
