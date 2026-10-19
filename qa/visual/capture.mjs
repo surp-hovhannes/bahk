@@ -159,11 +159,18 @@ export async function capture({ plan, baseUrl, outDir, loginSpec = null, creds =
         page.on('pageerror', (e) => { if (consoleErrors.length < 20) consoleErrors.push(`pageerror: ${String(e.message).slice(0, 300)}`); });
         page.on('requestfailed', (r) => { if (!isTelemetry(r.url()) && failedRequests.length < 20) failedRequests.push({ url: safeUrl(r.url()), failure: r.failure()?.errorText ?? 'failed' }); });
         page.on('response', (r) => { if (r.status() >= 400 && failedRequests.length < 20) failedRequests.push({ url: safeUrl(r.url()), status: r.status() }); });
+        // Track document responses throughout the scenario, including click/goto
+        // steps and redirects. Subresources and child frames must not replace it.
+        let finalNavigationStatus = null;
+        page.on('response', (response) => {
+          if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()) {
+            finalNavigationStatus = response.status();
+          }
+        });
         const blockedBefore = blockedTelemetry;
         const entry = { scenario: s.name, viewport: vp.name, url: safeUrl(`${baseUrl}${s.path}`), startedAt: nowIso() };
         try {
-          const response = await page.goto(`${baseUrl}${s.path}`, { waitUntil: 'load', timeout: NAV_TIMEOUT });
-          entry.httpStatus = response?.status() ?? null;
+          await page.goto(`${baseUrl}${s.path}`, { waitUntil: 'load', timeout: NAV_TIMEOUT });
           await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
           for (const st of s.steps) await runStep(page, baseUrl, st);
           if (s.waitFor) await page.locator(s.waitFor).first().waitFor({ state: 'visible', timeout: STEP_TIMEOUT });
@@ -182,6 +189,7 @@ export async function capture({ plan, baseUrl, outDir, loginSpec = null, creds =
             if (fraction < BLANK_FRACTION || Date.now() >= until) break;
             await page.waitForTimeout(2000);
           }
+          entry.httpStatus = finalNavigationStatus;
           entry.finalUrl = safeUrl(page.url());
           entry.screenshot = path.relative(outDir, file);
           entry.sha256 = sha256File(file);
