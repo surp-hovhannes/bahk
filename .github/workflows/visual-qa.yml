@@ -101,7 +101,7 @@ jobs:
         env:
           VQA_PLAN: ${{ inputs.plan }}
           VQA_BASE_URL: http://127.0.0.1:8000
-          VQA_USER: vqa-admin
+          VQA_USER: vqa-admin@example.test
           VQA_LOGIN_KIND: django-admin
           VQA_SHA: ${{ github.sha }}
           VQA_OUT: ${{ github.workspace }}/qa-results

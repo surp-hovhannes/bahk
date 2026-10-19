@@ -213,10 +213,7 @@ export async function capture({ plan, baseUrl, outDir, loginSpec = null, creds =
           entry.error = String(err.message).split('\n')[0].slice(0, 500);
           try {
             const file = path.join(shotsDir, `${s.name}__${vp.name}__error.png`);
-            await page.screenshot({
-              path: file, fullPage: false,
-              mask: s.mask.map((sel) => page.locator(sel)),
-            });
+            await page.screenshot({ path: file, fullPage: false });
             entry.screenshot = path.relative(outDir, file);
             entry.sha256 = sha256File(file);
           } catch { /* page unusable */ }

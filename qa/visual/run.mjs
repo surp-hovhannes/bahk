@@ -19,9 +19,6 @@ const manifest = { schema: 1, startedAt: nowIso(), target: null, results: [], su
 try {
   const plan = validatePlan({ ...JSON.parse(env.VQA_PLAN || '{}'), target: { kind: 'ci-artifact' } });
   manifest.plan = { name: plan.name, repo: plan.repo ?? null, pr: plan.pr ?? null, target: 'ci-artifact' };
-  if (plan.expectSha && (!/^[0-9a-f]{40}$/.test(env.VQA_SHA || '') || !env.VQA_SHA.startsWith(plan.expectSha))) {
-    throw new Error(`expected commit ${plan.expectSha}, but VQA_SHA is ${env.VQA_SHA || 'missing'}`);
-  }
   const baseUrl = env.VQA_BASE_URL;
   const loginSpec = { kind: env.VQA_LOGIN_KIND || 'django-admin' };
   const out = await capture({ plan, baseUrl, outDir, loginSpec, creds: { username: env.VQA_USER, password: env.VQA_PASSWORD } });

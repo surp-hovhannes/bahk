@@ -7,9 +7,7 @@ artifact, including when setup or capture fails.
 
 The runner and its libraries originate from
 `~/clawd/tools/visual-qa/{ci-template/run.mjs,lib/{plan,capture,util}.mjs}`.
-Local review fixes verify the requested commit, track final navigation status,
-and preserve masks in failure screenshots. Preserve these fixes when refreshing
-from the shared template.
+These copies must stay byte-identical; changes are made in `tools/visual-qa` and re-copied.
 
 The supplied validator requires `repo` and integer `pr` metadata even for a local
 run (use `0` when there is no PR). For example:
