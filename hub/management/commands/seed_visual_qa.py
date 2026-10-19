@@ -28,7 +28,7 @@ from learning_resources.models import Video
 ANCHOR = datetime(2026, 10, 19, 12, tzinfo=timezone.utc)
 
 
-def upsert(model, *, key, **values):
+def upsert(model, /, *, key, **values):
     """Natural-key upsert without save hooks, signals, engines or file storage.
 
     bulk_create and QuerySet.update deliberately replace get/update_or_create:
