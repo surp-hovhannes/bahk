@@ -208,3 +208,6 @@ hub/data/bible_hy/validation_report.json
 
 # Claude Code cloud session setup log
 .venv-setup.log
+
+# Visual QA evidence
+qa-results/
