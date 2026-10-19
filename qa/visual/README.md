@@ -5,9 +5,11 @@ digits or dashes, and a JSON `plan`. It uses a disposable SQLite database and a
 one-run admin; it requires no repository secrets. Evidence is uploaded as an
 artifact, including when setup or capture fails.
 
-The runner and its three libraries are exact copies of
+The runner and its libraries originate from
 `~/clawd/tools/visual-qa/{ci-template/run.mjs,lib/{plan,capture,util}.mjs}`.
-Make runner changes upstream and copy them here again.
+Local review fixes verify the requested commit, track final navigation status,
+and preserve masks in failure screenshots. Preserve these fixes when refreshing
+from the shared template.
 
 The supplied validator requires `repo` and integer `pr` metadata even for a local
 run (use `0` when there is no PR). For example:
