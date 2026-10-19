@@ -1,25 +1,28 @@
 """Read-time analytics semantics; these classifications never rewrite stored rows."""
 
+from .models import EventType
+
 EVENT_SCHEMA_VERSION = 2
 
 MEANINGFUL_EVENT_CODES = frozenset({
-    'checklist_used', 'prayer_set_viewed', 'devotional_viewed',
-    'user_joined_fast', 'prayer_request_accepted',
+    EventType.CHECKLIST_USED, EventType.PRAYER_SET_VIEWED, EventType.DEVOTIONAL_VIEWED,
+    EventType.USER_JOINED_FAST, EventType.PRAYER_REQUEST_ACCEPTED,
 })
 
 ACTION_EVENT_CODES = frozenset({
-    'checklist_used', 'user_joined_fast', 'user_left_fast',
-    'user_logged_in', 'user_logged_out', 'user_account_created',
-    'fast_created', 'fast_updated', 'article_published', 'recipe_published',
-    'video_published', 'prayer_request_created', 'prayer_request_accepted',
-    'prayer_request_completed', 'prayer_request_thanks_sent',
+    EventType.CHECKLIST_USED, EventType.USER_JOINED_FAST, EventType.USER_LEFT_FAST,
+    EventType.USER_LOGGED_IN, EventType.USER_LOGGED_OUT, EventType.USER_ACCOUNT_CREATED,
+    EventType.FAST_CREATED, EventType.FAST_UPDATED, EventType.ARTICLE_PUBLISHED,
+    EventType.RECIPE_PUBLISHED, EventType.VIDEO_PUBLISHED, EventType.PRAYER_REQUEST_CREATED,
+    EventType.PRAYER_REQUEST_ACCEPTED, EventType.PRAYER_REQUEST_COMPLETED,
+    EventType.PRAYER_REQUEST_THANKS_SENT,
 })
-RETURN_SIGNAL_EVENT_CODES = frozenset({'prayer_set_viewed', 'devotional_viewed'})
+RETURN_SIGNAL_EVENT_CODES = frozenset({EventType.PRAYER_SET_VIEWED, EventType.DEVOTIONAL_VIEWED})
 EXPOSURE_NOISE_EVENT_CODES = frozenset({
-    'screen_view', 'app_open', 'session_start', 'session_end',
-    'prayer_viewed', 'prayer_request_viewed', 'tutorial_video_viewed',
-    'fast_beginning', 'fast_ending', 'devotional_available',
-    'fast_participant_milestone', 'user_milestone_reached',
+    EventType.SCREEN_VIEW, EventType.APP_OPEN, EventType.SESSION_START, EventType.SESSION_END,
+    EventType.PRAYER_VIEWED, EventType.PRAYER_REQUEST_VIEWED, EventType.TUTORIAL_VIDEO_VIEWED,
+    EventType.FAST_BEGINNING, EventType.FAST_ENDING, EventType.DEVOTIONAL_AVAILABLE,
+    EventType.FAST_PARTICIPANT_MILESTONE, EventType.USER_MILESTONE_REACHED,
 })
 
 EVENT_CODE_CLASSIFICATION = {

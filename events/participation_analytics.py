@@ -12,22 +12,22 @@ from django.db.models.functions import Coalesce, TruncDate
 
 from hub.models import FastParticipation, Profile
 from .models import Event, EventType
-from .event_semantics import TRUE_UI_SCREEN_VIEW_Q
+from .event_semantics import exclude_legacy_screen_views
 
 
-def analytics_events():
-    """Metric rows: omit participation no-ops and historical screen noise."""
+def _without_participation_noops():
     # Use a PK subquery so missing JSON keys cannot exclude legacy events via
     # SQL NULL semantics on SQLite/PostgreSQL.
     noops = Event.objects.filter(
         event_type__code__in=[EventType.USER_JOINED_FAST, EventType.USER_LEFT_FAST],
         data__participation_tracked=True, data__participation_changed=False,
     ).values("pk")
-    # The event_type FK is non-null: a NULL JSON branch fails the filter only
-    # for screen_view rows; the non-screen branch preserves all other types.
-    return Event.objects.exclude(pk__in=noops).filter(
-        ~Q(event_type__code=EventType.SCREEN_VIEW) | TRUE_UI_SCREEN_VIEW_Q,
-    )
+    return Event.objects.exclude(pk__in=noops)
+
+
+def analytics_events():
+    """Metric rows: omit participation no-ops and historical screen noise."""
+    return exclude_legacy_screen_views(_without_participation_noops())
 
 
 def legacy_transition_events(code=None):
@@ -40,7 +40,8 @@ def legacy_transition_events(code=None):
     linked = Event.objects.filter(data__has_key="participation_id").exclude(
         data__participation_id=None,
     ).values("pk")
-    qs = analytics_events().exclude(pk__in=linked).filter(
+    # Join/leave rows only, so the screen-view filter could never apply here.
+    qs = _without_participation_noops().exclude(pk__in=linked).filter(
         content_type__app_label="hub", content_type__model="fast",
         event_type__code__in=[EventType.USER_JOINED_FAST, EventType.USER_LEFT_FAST],
     ).annotate(_audited_pair=Exists(audited_pair), _has_profile=Exists(profile)).filter(

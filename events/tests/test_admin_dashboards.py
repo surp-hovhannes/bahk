@@ -252,7 +252,6 @@ class AdminDashboardTests(TestCase):
         # Verify analytics data is present
         self.assertGreaterEqual(context['total_app_opens'], 1)
         self.assertEqual(context['total_screen_views'], 1)
-        self.assertEqual(context['legacy_screen_views_excluded'], 1)
         self.assertEqual(context['top_screens'], [{'data__screen': 'fasts_list', 'count': 1}])
     
     def test_app_analytics_dashboard_data_endpoint(self):
@@ -276,9 +275,27 @@ class AdminDashboardTests(TestCase):
         # Verify analytics data is present
         self.assertGreaterEqual(data['total_app_opens'], 1)
         self.assertEqual(data['total_screen_views'], 1)
-        self.assertEqual(data['legacy_screen_views_excluded'], 1)
         self.assertEqual(data['top_screens'], [{'data__screen': 'fasts_list', 'count': 1}])
     
+    def test_app_analytics_active_users_ignore_legacy_screen_views(self):
+        """Active users share the screen metrics' population: legacy rows count nowhere."""
+        data_url = reverse('admin:events_app_analytics_data')
+        page_url = reverse('admin:events_app_analytics')
+        baseline = self.client.get(data_url, {'days': '30'}).json()['active_users']
+        legacy_only = User.objects.create_user(username='legacy_only', email='legacy_only@example.com')
+        Event.objects.create(
+            event_type=EventType.objects.get(code=EventType.SCREEN_VIEW), user=legacy_only,
+            title='Legacy screen view', data={'screen': '/api/fasts/', 'source': 'api'},
+        )
+        self.assertEqual(self.client.get(data_url, {'days': '30'}).json()['active_users'], baseline)
+        self.assertEqual(self.client.get(page_url, {'days': '30'}).context['active_users'], baseline)
+
+        Event.create_event(
+            event_type_code=EventType.SCREEN_VIEW, user=legacy_only, title='UI screen view',
+            data={'screen': 'home', 'source': 'client_ui'},
+        )
+        self.assertEqual(self.client.get(data_url, {'days': '30'}).json()['active_users'], baseline + 1)
+
     def test_dashboard_staff_event_exclusion(self):
         """Test that both dashboards properly exclude staff events."""
         # User Engagement Dashboard should exclude staff events

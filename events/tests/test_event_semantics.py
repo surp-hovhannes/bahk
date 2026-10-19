@@ -2,23 +2,26 @@
 
 from datetime import timedelta
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.utils import timezone
 
 from events.analytics_optimizer import AnalyticsQueryOptimizer
+from events.event_schema import (
+    ACTION_EVENT_CODES, EVENT_CODE_CLASSIFICATION, EXPOSURE_NOISE_EVENT_CODES,
+    MEANINGFUL_EVENT_CODES, RETURN_SIGNAL_EVENT_CODES,
+)
 from events.event_semantics import legacy_screen_views, true_ui_screen_views
 from events.management.commands.engagement_report import Command
 from events.models import Event, EventType
 from events.participation_analytics import analytics_events
+from tests.base import BaseTestCase
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
-class EventSemanticsTests(TestCase):
+class EventSemanticsTests(BaseTestCase):
     def setUp(self):
-        EventType.get_or_create_default_types()
-        self.viewer = get_user_model().objects.create_user(username='viewer')
-        self.legacy_viewer = get_user_model().objects.create_user(username='legacy')
+        self.viewer = self.create_user(username='viewer')
+        self.legacy_viewer = self.create_user(username='legacy')
         self.screen_type = EventType.objects.get(code=EventType.SCREEN_VIEW)
         self.legacy = []
         # Create historical rows directly: the factory stamps schema_version=2.
@@ -64,7 +67,7 @@ class EventSemanticsTests(TestCase):
         self.assertEqual(original, list(qs.order_by('pk').values()))
 
     def test_analytics_events_preserves_non_screen_events_with_missing_json_keys(self):
-        viewer = get_user_model().objects.create_user(username='analytics-viewer')
+        viewer = self.create_user(username='analytics-viewer')
         legacy = [Event.objects.create(
             event_type=self.screen_type, user=viewer, title='Legacy screen view', data=data,
         ) for data in ({}, {'source': 'api'}, {'source': 'app_ui', 'schema_version': 2})]
@@ -103,8 +106,20 @@ class EventSemanticsTests(TestCase):
         self.assertEqual(set(analytics_events().values_list('pk', flat=True)), {
             self.other.pk, *(event.pk for event in self.true_views),
         })
-        start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        # Anchor on the rows' own timestamps; two days cover setUp crossing midnight.
+        start = min(e.timestamp for e in self.true_views).replace(hour=0, minute=0, second=0, microsecond=0)
         result = AnalyticsQueryOptimizer.get_daily_event_aggregates(
-            start, 1, filters={'only_event_types': [EventType.SCREEN_VIEW]},
+            start, 2, filters={'only_event_types': [EventType.SCREEN_VIEW]},
         )
         self.assertEqual(sum(result['events_by_day'].values()), 2)
+
+
+class EventSchemaClassificationTests(BaseTestCase):
+    def test_every_core_event_type_has_exactly_one_classification(self):
+        core_codes = {code for code, _ in EventType.CORE_EVENT_TYPES}
+        self.assertEqual(set(EVENT_CODE_CLASSIFICATION), core_codes)
+        groups = (ACTION_EVENT_CODES, RETURN_SIGNAL_EVENT_CODES, EXPOSURE_NOISE_EVENT_CODES)
+        self.assertEqual(sum(len(g) for g in groups), len(core_codes))
+
+    def test_meaningful_codes_are_actions_or_return_signals(self):
+        self.assertLessEqual(MEANINGFUL_EVENT_CODES, ACTION_EVENT_CODES | RETURN_SIGNAL_EVENT_CODES)

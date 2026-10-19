@@ -14,6 +14,11 @@ from django.conf import settings
 from hub.utils import get_user_profile_safe
 
 
+def session_cache_key(user_id):
+    """Cache key for a user's current analytics session (shared with views)."""
+    return f"analytics:session:{user_id}"
+
+
 class AnalyticsTrackingMiddleware(MiddlewareMixin):
     """
     Tracks per-request analytics for authenticated users:
@@ -41,7 +46,7 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
         timeout_minutes = getattr(settings, 'ANALYTICS_SESSION_TIMEOUT_MINUTES', 30)
         inactivity_seconds = timeout_minutes * 60
 
-        sess_key = f"analytics:session:{user.id}"
+        sess_key = session_cache_key(user.id)
         last_seen_key = f"analytics:last_seen:{user.id}"
 
         session_data = cache.get(sess_key)
@@ -154,14 +159,6 @@ class AnalyticsTrackingMiddleware(MiddlewareMixin):
                 pass
 
         return None
-
-    def _is_api_request(self, request):
-        """Detect if a request should be treated as an API call for analytics purposes."""
-        api_header = request.META.get('HTTP_X_API_REQUEST')
-        if api_header is None:
-            return False
-
-        return str(api_header).lower() in ['1', 'true', 'yes', 'on']
 
     def _ingest_utm_params(self, request, user):
         params = getattr(request, 'query_params', None) or getattr(request, 'GET', {})

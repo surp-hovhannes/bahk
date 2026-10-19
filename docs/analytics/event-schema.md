@@ -33,7 +33,8 @@ Source vocabulary: `client_ui` (explicit UI emission), `server_inferred`
 `app_ui` source values are historical only. Existing non-screen producers are
 not retrofitted with a source: missing source remains unknown, not client UI.
 All convenience-method payloads add `schema_version`; existing producers may
-also add `lang` when a request supplies it.
+also add `lang` when a request supplies it. Activity feed items copy event data
+without `schema_version`, so it never reaches the user-facing feed API.
 
 | Type | Data keys (producer-dependent, nullable where unavailable) |
 | --- | --- |
@@ -55,15 +56,19 @@ introduce new required domain keys or reinterpret them as completion evidence.
 
 Authenticated clients POST `/api/events/track/screen-view/` when a screen becomes
 visible, with `screen` and optionally `previous_screen`. Both must be strings
-matching `^[a-z0-9_]{1,64}$`, excluding digits-only identifiers. Use stable screen
-names, never paths, object IDs or free text. Invalid/missing names return 400;
-valid requests return 200. The scoped per-user throttle is 120/minute.
+matching `^[a-z0-9_]{1,64}$`, excluding digits-only identifiers; an omitted, null
+or empty `previous_screen` means none. Use stable screen names, never paths,
+object IDs or free text. Invalid/missing names return 400; valid requests return
+200 (`status: skipped` if the `screen_view` type is missing or inactive). The
+scoped per-user throttle defaults to 120/minute (`SCREEN_VIEW_THROTTLE_RATE`).
 
-The endpoint copies only validated names and selected app/platform headers.
-Session ID comes from `analytics:session:<user_id>` in the middleware cache,
-or null if unavailable. It passes no request to `create_event`: IP stays null,
-user agent stays empty, and no request language, path, query string or arbitrary
-body fields are copied into this event. Existing session/app-open metadata
+The endpoint copies only validated names and validated app/platform headers:
+`X-App-Version` must match `^[0-9A-Za-z.+-]{1,32}$` and `X-Platform` `^[a-z]{1,16}$`,
+otherwise the field is stored as null. Session ID comes from the middleware
+session cache (`events.middleware.session_cache_key`), or null if unavailable.
+It passes no request to `create_event`: IP stays null, user agent stays empty,
+and no request language, path, query string or arbitrary body fields are copied
+into this event. Existing session/app-open metadata
 behavior is unchanged; this privacy guarantee applies to the new screen event.
 
 Authenticated GETs no longer create screen views. `X-Screen`, `?screen=` and
@@ -79,24 +84,20 @@ Do not treat an absent schema version or legacy source as a true UI screen view.
 
 ## Deploy runbook
 
-After deploy, invalidate cached aggregates in the deployed runtime (the class is
-named `AnalyticsCacheService`):
-
-```sh
-python manage.py shell -c 'from events.analytics_cache import AnalyticsCacheService; AnalyticsCacheService.invalidate_all_analytics()'
-python manage.py warm_analytics_cache
-```
-
-These are deployment instructions only; this change does not run invalidation or
-warming. Verify that the deployed cache backend actually clears shared keys:
-the service's fallback only bumps an in-process version and does not invalidate
-other workers. Shared cached aggregates must be cleared before verifying metrics.
+No manual cache invalidation is needed. This change bumps
+`AnalyticsCacheService.CACHE_VERSION`, so every worker ignores aggregates cached
+before the deploy. Do **not** run `AnalyticsCacheService.invalidate_all_analytics()`:
+its `analytics:*` pattern also deletes the middleware's `analytics:session:*` and
+`analytics:last_seen:*` keys, which restarts every active user's session (spurious
+`app_open`/`session_start`, no `session_end`). `python manage.py warm_analytics_cache`
+is safe to run afterwards if you want warm caches.
 
 Record the deploy timestamp. Query `Event` for `screen_view` rows at or after that
 timestamp with `data__source__in=['api', 'app_ui']`; expect zero. For a controlled
 successful POST to `/api/events/track/screen-view/`, compare before/after rows for
 the test user and timestamp window: expect exactly one new `client_ui` row with
 integer schema version >= 2 and the submitted stable screen name. GET requests
-must add none. Reports exclude historical rows at read time and expose only an
-aggregate legacy exclusion count. **Do not trend screen_view metrics across the
-client_ui cutoff**; client rollout changes coverage as well as event meaning.
+must add none. Reports and dashboards exclude historical rows at read time; the
+engagement report exposes only an aggregate legacy exclusion count. **Do not
+trend screen_view metrics across the client_ui cutoff**; client rollout changes
+coverage as well as event meaning.

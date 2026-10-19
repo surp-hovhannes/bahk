@@ -323,7 +323,11 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
-    'PAGE_SIZE': 10
+    'PAGE_SIZE': 10,
+    # Scoped rates only; no throttle class is enabled globally.
+    'DEFAULT_THROTTLE_RATES': {
+        'screen_view': config('SCREEN_VIEW_THROTTLE_RATE', default='120/min'),
+    },
 }
 
 # Analytics settings

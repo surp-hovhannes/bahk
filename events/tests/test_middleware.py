@@ -4,7 +4,7 @@ Tests for AnalyticsTrackingMiddleware.
 This module tests the analytics tracking middleware that handles:
 - Session management and tracking
 - App open/session start/end events
-- Screen view tracking
+- No screen views inferred from GET requests
 - UTM parameter ingestion
 - Attribution tracking
 """
@@ -117,32 +117,24 @@ class AnalyticsTrackingMiddlewareTest(TestCase):
         self.assertEqual(session_start_event.title, 'Session started')
         self.assertEqual(session_start_event.data['session_id'], app_open_event.data['session_id'])
     
-    def test_screen_view_tracking_on_get_requests(self):
-        """GET requests never imply a UI screen view, regardless of hints."""
-        request = self.factory.get('/api/profile/', **{})
-        request.user = self.user
-        self.middleware.process_request(request)
-        self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.APP_OPEN).count(), 1)
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.SESSION_START).count(), 1)
-
-    def test_custom_screen_name_via_header(self):
-        """GET requests never imply a UI screen view, regardless of hints."""
-        request = self.factory.get('/api/fasts/', **{'HTTP_X_SCREEN': 'fasts_list'})
-        request.user = self.user
-        self.middleware.process_request(request)
-        self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.APP_OPEN).count(), 1)
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.SESSION_START).count(), 1)
-
-    def test_custom_screen_name_via_query_param(self):
-        """GET requests never imply a UI screen view, regardless of hints."""
-        request = self.factory.get('/api/profile/?screen=profile_edit', **{})
-        request.user = self.user
-        self.middleware.process_request(request)
-        self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.APP_OPEN).count(), 1)
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.SESSION_START).count(), 1)
+    def test_get_requests_never_create_screen_views(self):
+        """GET requests never imply a UI screen view, regardless of screen or API hints."""
+        for path, extra in (
+            ('/api/profile/', {}),
+            ('/api/fasts/', {'HTTP_X_SCREEN': 'fasts_list'}),
+            ('/api/profile/?screen=profile_edit', {}),
+            ('/home/', {}),
+            ('/webhooks/', {'HTTP_X_API_REQUEST': 'true'}),
+        ):
+            with self.subTest(path=path, extra=extra):
+                cache.clear()
+                Event.objects.all().delete()
+                request = self.factory.get(path, **extra)
+                request.user = self.user
+                self.middleware.process_request(request)
+                self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
+                self.assertEqual(Event.objects.filter(event_type__code=EventType.APP_OPEN).count(), 1)
+                self.assertEqual(Event.objects.filter(event_type__code=EventType.SESSION_START).count(), 1)
 
     def test_post_requests_do_not_create_screen_views(self):
         """Test that POST requests do not create SCREEN_VIEW events."""
@@ -163,24 +155,6 @@ class AnalyticsTrackingMiddlewareTest(TestCase):
         )
         
         self.assertEqual(screen_view_events.count(), 0)
-
-    def test_non_api_request_tagged_as_app_ui(self):
-        """GET requests never imply a UI screen view, regardless of hints."""
-        request = self.factory.get('/home/', **{})
-        request.user = self.user
-        self.middleware.process_request(request)
-        self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.APP_OPEN).count(), 1)
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.SESSION_START).count(), 1)
-
-    def test_api_header_marks_source(self):
-        """GET requests never imply a UI screen view, regardless of hints."""
-        request = self.factory.get('/webhooks/', **{'HTTP_X_API_REQUEST': 'true'})
-        request.user = self.user
-        self.middleware.process_request(request)
-        self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.APP_OPEN).count(), 1)
-        self.assertEqual(Event.objects.filter(event_type__code=EventType.SESSION_START).count(), 1)
 
     def test_session_continuation_within_timeout(self):
         """Test that requests within session timeout continue existing session."""

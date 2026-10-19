@@ -14,9 +14,11 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.settings import api_settings
 from rest_framework.throttling import ScopedRateThrottle
 from django.utils.translation import activate, get_language_from_request
 
+from .middleware import session_cache_key
 from .models import Event, EventType, UserActivityFeed
 from .participation_analytics import analytics_events, transition_counts
 from .serializers import (
@@ -401,9 +403,20 @@ class FastEventStatsView(APIView):
 
 
 class ScreenViewThrottle(ScopedRateThrottle):
-    """Per-user screen telemetry budget, independent of global DRF rates."""
+    """Per-user screen telemetry budget; DEFAULT_THROTTLE_RATES['screen_view'] overrides it."""
 
-    THROTTLE_RATES = {'screen_view': '120/min'}
+    def get_rate(self):
+        return api_settings.DEFAULT_THROTTLE_RATES.get(self.scope, '120/min')
+
+
+def _valid_screen_name(value):
+    return isinstance(value, str) and bool(re.fullmatch(r'[a-z0-9_]{1,64}', value)) and not value.isdigit()
+
+
+def _header_or_none(request, name, pattern):
+    """Header value if it fully matches pattern; anything else is not stored."""
+    value = request.headers.get(name)
+    return value if value is not None and re.fullmatch(pattern, value) else None
 
 
 class TrackScreenViewView(APIView):
@@ -414,30 +427,36 @@ class TrackScreenViewView(APIView):
     def post(self, request):
         if not isinstance(request.data, dict):
             return Response({'error': 'Expected an object'}, status=status.HTTP_400_BAD_REQUEST)
-        for key in ('screen', 'previous_screen'):
-            if key == 'previous_screen' and key not in request.data:
-                continue
-            value = request.data.get(key)
-            if not isinstance(value, str) or not re.fullmatch(r'[a-z0-9_]{1,64}', value) or value.isdigit():
-                return Response({'error': f'Invalid {key}'}, status=status.HTTP_400_BAD_REQUEST)
+        if not _valid_screen_name(request.data.get('screen')):
+            return Response({'error': 'Invalid screen'}, status=status.HTTP_400_BAD_REQUEST)
+        # The first screen of a session has no predecessor; null and "" mean absent.
+        previous_screen = request.data.get('previous_screen')
+        if previous_screen in (None, ''):
+            previous_screen = None
+        elif not _valid_screen_name(previous_screen):
+            return Response({'error': 'Invalid previous_screen'}, status=status.HTTP_400_BAD_REQUEST)
 
-        session = cache.get(f'analytics:session:{request.user.id}') or {}
+        session = cache.get(session_cache_key(request.user.id)) or {}
         data = {
             'source': 'client_ui',
             'screen': request.data['screen'],
             'session_id': session.get('id'),
-            'app_version': request.headers.get('X-App-Version'),
-            'platform': request.headers.get('X-Platform'),
+            'app_version': _header_or_none(request, 'X-App-Version', r'[0-9A-Za-z.+-]{1,32}'),
+            'platform': _header_or_none(request, 'X-Platform', r'[a-z]{1,16}'),
         }
-        if 'previous_screen' in request.data:
-            data['previous_screen'] = request.data['previous_screen']
+        if previous_screen is not None:
+            data['previous_screen'] = previous_screen
         # Deliberately omit request: screen telemetry must never persist IP/UA.
-        Event.create_event(
-            event_type_code=EventType.SCREEN_VIEW,
-            user=request.user,
-            title=f"Screen view: {data['screen']}",
-            data=data,
-        )
+        try:
+            Event.create_event(
+                event_type_code=EventType.SCREEN_VIEW,
+                user=request.user,
+                title=f"Screen view: {data['screen']}",
+                data=data,
+            )
+        except ValueError:
+            # screen_view type missing or deactivated: telemetry is off, not an error.
+            return Response({'status': 'skipped'})
         return Response({'status': 'ok'})
 
 
