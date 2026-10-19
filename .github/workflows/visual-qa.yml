@@ -42,6 +42,11 @@ jobs:
       REDIS_URL: redis://localhost:6379/1
       ALLOWED_HOSTS: 127.0.0.1,localhost
       PYTHONUNBUFFERED: "1"
+      # Required at settings import; visual QA never uses these services.
+      MAILGUN_DOMAIN: visual-qa.example.test
+      MAILGUN_API_KEY: visual-qa-dummy
+      OPENAI_API_KEY: visual-qa-dummy
+      ANTHROPIC_API_KEY: visual-qa-dummy
     steps:
       - name: Validate run label
         env:
