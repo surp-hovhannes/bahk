@@ -15,8 +15,12 @@ class Command(BaseCommand):
         parser.add_argument('--as-of', required=True, type=date.fromisoformat)
         parser.add_argument('--format', choices=['json', 'md'], default='json')
         parser.add_argument('--min-cell', type=int, default=10)
+        parser.add_argument('--unsafe-min-cell', action='store_true',
+                            help='Allow thresholds below 10 for synthetic testing only.')
 
     def handle(self, *args, **options):
+        if options['min_cell'] < 10 and not options['unsafe_min_cell']:
+            raise CommandError('--min-cell must be at least 10 unless --unsafe-min-cell is passed')
         try:
             as_of = options['as_of']
             if isinstance(as_of, str):

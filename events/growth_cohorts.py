@@ -61,6 +61,37 @@ def _metric(n, d, immature, minimum):
     return result
 
 
+def _suppress_numerator(metric):
+    metric.update(numerator='suppressed', percent=None, wilson_95=None)
+
+
+def _suppress_nested(metrics, minimum):
+    # Snapshot visibility so suppression order cannot change which pairs qualify.
+    pairs = [('activation_24h', 'activation_72h'), ('activation_72h', 'activation_7d'),
+             ('activation_24h', 'activation_7d'), ('d1', 'return_days_1_7'),
+             ('d7', 'return_days_1_7')]
+    hidden = set()
+    for smaller, larger in pairs:
+        a, b = metrics[smaller], metrics[larger]
+        if (isinstance(a['numerator'], int) and isinstance(b['numerator'], int)
+                and isinstance(a['mature_denominator'], int)
+                and a['mature_denominator'] == b['mature_denominator']
+                and 0 < b['numerator'] - a['numerator'] < minimum):
+            hidden.add(larger)
+    for name in hidden:
+        _suppress_numerator(metrics[name])
+
+
+def _suppress_distribution(first_actions):
+    # A released total minus all visible categories must not reveal a hidden cell.
+    if any(not isinstance(metric['numerator'], int) for metric in first_actions.values()):
+        visible = [(metric['numerator'], code) for code, metric in first_actions.items()
+                   if isinstance(metric['numerator'], int)]
+        if visible:
+            _, code = min(visible)
+            _suppress_numerator(first_actions[code])
+
+
 def build_report(as_of, min_cell=10):
     """as_of is an exclusive UTC midnight; signup weeks are Monday-based UTC.
 
@@ -152,6 +183,7 @@ def build_report(as_of, min_cell=10):
         metrics = {name: _metric(counts[name + '_n'], counts[name + '_d'],
                                 population - counts[name + '_d'], min_cell)
                    for name in (*ACTIVATION, *RETENTION)}
+        _suppress_nested(metrics, min_cell)
         first_actions = {
             code: _metric(counts['first_' + code], counts['activation_7d_n'],
                           population - counts['activation_7d_d'], min_cell)
@@ -164,6 +196,7 @@ def build_report(as_of, min_cell=10):
                     if isinstance(metric[key], int):
                         metric[key] = 'suppressed'
                 metric.update(percent=None, wilson_95=None)
+        _suppress_distribution(first_actions)
         cohorts.append({'week_start': week, 'population': _cell(population, min_cell),
                         'timezone_fallback': _metric(counts['fallback'], population, None, min_cell),
                         'metrics': metrics, 'first_action_within_7d': first_actions})

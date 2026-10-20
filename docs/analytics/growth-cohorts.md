@@ -5,7 +5,8 @@ Run `python manage.py growth_cohorts --as-of 2026-05-01 --format json --min-cell
 only reads data; it emits no identifiers, per-user rows, emails, or CSVs.
 
 The as-of date means **exclusive midnight UTC at the start of that date**.
-Weekly signup cohorts start Monday in UTC. All eligible historical weeks are
+Weekly signup cohorts start Monday in UTC, while retention days use each user’s
+profile timezone. All eligible historical weeks are
 included, including partial/immature weeks. Population excludes staff, then
 superusers, then configured IDs, then configured email domains. Exclusion counts
 are sequential/disjoint and cover all signups before as-of, not event authors.
@@ -51,14 +52,26 @@ when the immature count is below threshold (including zero), since population
 is reported separately. Percentages and intervals are also null in that case.
 First-action counts and derived statistics are also withheld when their shared
 activation numerator is hidden, preventing reconstruction through that distribution.
+When any first-action category numerator is hidden or below threshold, the smallest
+remaining visible category is additionally suppressed (ties sort by event code).
+Thus a visible activation total, including 45 with categories 20/20/5, cannot
+recover the hidden category by subtraction. Its percentage and interval are null.
+
+For nested windows with equal visible mature denominators, a nonzero difference
+below threshold between visible numerators suppresses the larger numerator and
+its percentage/interval. Comparisons cover all activation window pairs and D1/D7
+each against days 1–7. Visibility is evaluated before this pass, deterministically;
+zero differences remain visible. This is a minimal mitigation, not a general
+privacy guarantee across overlapping reports, windows, or repeated runs.
+
 The population-wide timezone fallback diagnostic has no maturity window and omits
 `immature`; its `mature_denominator` is the entire eligible cohort. Its share and
 interval are reported when both fallback and non-fallback counts meet the threshold,
 with the same small-cell and complementary-count suppression as other metrics.
 Suppression also covers population, exclusions, fallback,
 and first-action cells. These are descriptive cross-sectional results: small n
-and selection effects prevent causal interpretation. Threshold 1 is useful only
-for synthetic tests; production reports should retain the default privacy floor.
+and selection effects prevent causal interpretation. The command rejects thresholds
+below 10 unless `--unsafe-min-cell` is explicitly passed for synthetic testing; `build_report` accepts any positive threshold.
 
 Freshness is the maximum stored Event.timestamp strictly before as-of (all event
 codes, including noise); it is not evidence that ingestion is complete. Adding
@@ -69,5 +82,6 @@ Screen views must not be trended across the client_ui schema cutoff.
 Query count grows with distinct stored timezones, not users, events, or weeks.
 The database performs first-action subqueries, existence checks, local-date
 conversion and weekly counts; Python merges aggregate timezone buckets only.
-Large histories can still require substantial database work; this command is an
-offline reporting tool. No tables, indexes, models or migrations are changed.
+The performance profile is unmeasured: roughly 60–70 correlated subqueries per
+user row per timezone bucket can require substantial database work on large
+histories; this command is an offline reporting tool. No tables, indexes, models or migrations are changed.

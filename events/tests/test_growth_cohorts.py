@@ -3,19 +3,22 @@ from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from events.growth_cohorts import _metric, build_report
+from events.growth_cohorts import _metric, _suppress_distribution, _suppress_nested, build_report
 from events.models import Event, EventType
 from hub.models import FastParticipation, Profile
+from tests.fixtures.test_data import TestDataFactory
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
 class GrowthCohortTests(TestCase):
     def setUp(self):
         EventType.get_or_create_default_types()
+        self.target = TestDataFactory.create_fast()
         self.joined = datetime(2026, 3, 8, 9, 30, tzinfo=timezone.utc)
         self.user = self.make_user('cohort', self.joined)
         self.profile, _ = Profile.objects.get_or_create(user=self.user)
@@ -27,6 +30,8 @@ class GrowthCohortTests(TestCase):
         return user
 
     def event(self, code, at, **kwargs):
+        if EventType._requires_target_for_code(code):
+            kwargs.setdefault('target', self.target)
         event = Event.create_event(code, user=self.user, title='Synthetic cohort action', **kwargs)
         Event.objects.filter(pk=event.pk).update(timestamp=at)
         return event
@@ -74,7 +79,6 @@ class GrowthCohortTests(TestCase):
             self.assertEqual(self.report()['cohorts'][0]['timezone_fallback']['numerator'], 'suppressed')
 
     def test_authoritative_join_without_event_and_duplicate_legacy(self):
-        from tests.fixtures.test_data import TestDataFactory
         fast = TestDataFactory.create_fast()
         FastParticipation.objects.create(profile=self.profile, fast=fast, joined_at=self.joined + timedelta(hours=1))
         self.event(EventType.USER_JOINED_FAST, self.joined + timedelta(hours=2), target=fast)
@@ -177,3 +181,44 @@ class GrowthCohortTests(TestCase):
         for name in ['d7', 'd30', 'return_days_1_7', 'return_days_8_30']:
             self.assertEqual(self.metric(report, name)['numerator'], 'suppressed')
         self.assertEqual(self.metric(report, 'd1')['numerator'], '<1')
+
+    def test_first_action_distribution_complementary_suppression(self):
+        actions = {code: _metric(n, 45, 10, 10)
+                   for code, n in [('a', 20), ('b', 20), ('c', 5)]}
+        _suppress_distribution(actions)
+        self.assertEqual(actions['c']['numerator'], '<10')
+        self.assertEqual(actions['a']['numerator'], 'suppressed')
+        self.assertIsNone(actions['a']['percent'])
+        self.assertIsNone(actions['a']['wilson_95'])
+        self.assertEqual(actions['b']['numerator'], 20)
+        self.assertEqual(actions['b']['mature_denominator'], 45)
+
+    def test_nested_window_complementary_suppression(self):
+        metrics = {name: _metric(n, 80, 10, 10) for name, n in [
+            ('activation_24h', 20), ('activation_72h', 25), ('activation_7d', 40),
+            ('d1', 20), ('d7', 25), ('return_days_1_7', 30)]}
+        _suppress_nested(metrics, 10)
+        for name in ['activation_72h', 'return_days_1_7']:
+            self.assertEqual(metrics[name]['numerator'], 'suppressed')
+            self.assertIsNone(metrics[name]['percent'])
+            self.assertIsNone(metrics[name]['wilson_95'])
+        self.assertEqual(metrics['activation_24h']['numerator'], 20)
+        self.assertEqual(metrics['activation_7d']['numerator'], 40)
+        # Different mature populations do not define a subtractable nested band.
+        metrics['activation_72h'] = _metric(25, 70, 20, 10)
+        _suppress_nested(metrics, 10)
+        self.assertEqual(metrics['activation_72h']['numerator'], 25)
+        metrics['activation_72h'] = _metric(20, 80, 10, 10)
+        _suppress_nested(metrics, 10)
+        self.assertEqual(metrics['activation_72h']['numerator'], 20)
+
+    def test_command_min_cell_floor(self):
+        for minimum in [0, 1, 9]:
+            with self.subTest(minimum=minimum):
+                with self.assertRaisesMessage(CommandError, '--min-cell must be at least 10'):
+                    call_command('growth_cohorts', as_of='2026-05-01',
+                                 min_cell=minimum, stdout=StringIO())
+        output = StringIO()
+        call_command('growth_cohorts', as_of='2026-05-01', min_cell=1,
+                     unsafe_min_cell=True, stdout=output)
+        self.assertIn('"min_cell": 1', output.getvalue())
