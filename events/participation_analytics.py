@@ -30,10 +30,15 @@ def analytics_events():
     return exclude_legacy_screen_views(_without_participation_noops())
 
 
-def legacy_transition_events(code=None):
+def legacy_transition_events(code=None, *, dated_joins_only=False):
+    """dated_joins_only lets an audit row supersede legacy Events only when its
+    joined_at is known. The backfill leaves it NULL after repeated legacy joins,
+    so for dating a pair's first join those Events are the only evidence."""
     audited_pair = FastParticipation.objects.filter(
         profile__user_id=OuterRef("user_id"),
     ).filter(Q(fast_id=OuterRef("object_id")) | Q(fast_original_id=OuterRef("object_id")))
+    if dated_joins_only:
+        audited_pair = audited_pair.filter(joined_at__isnull=False)
     profile = Profile.objects.filter(user_id=OuterRef("user_id"))
     # Linked modern events cannot become legacy evidence after their audit row
     # was removed (for example by deleting and later recreating a profile).

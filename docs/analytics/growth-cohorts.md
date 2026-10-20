@@ -13,14 +13,16 @@ are sequential/disjoint and cover all signups before as-of, not event authors.
 
 Optional Django settings `ANALYTICS_EXCLUDED_USER_IDS` and
 `ANALYTICS_EXCLUDED_EMAIL_DOMAINS` accept lists or comma-separated strings. If a
-setting is absent its same-named environment variable is read; both default to
-empty. IDs must be integers; domain matching is case insensitive and exact after
+setting is absent, python-decouple reads the same-named environment variable or
+`.env` entry; both default to empty. IDs must be integers; domain matching is case insensitive and exact after
 `@` (not subdomains). Configure privately; never commit production values.
 
 Meaningful actions use `MEANINGFUL_EVENT_CODES` and `analytics_events()`.
 Fast joins use dated `FastParticipation.joined_at` authoritatively per surviving
 profile/fast pair, including preserved deleted-fast snapshots. Legacy join Events
-are fallback only through `legacy_transition_events()`. No-ops, unknown audit
+are fallback only through `legacy_transition_events()`, for pairs with no dated
+audit join: the backfill leaves `joined_at` NULL after repeated legacy joins, and
+those Events are then the pair's only dated join evidence. No-ops, unknown audit
 timestamps, and orphaned linked Events are not dated evidence. Correlated
 subqueries select the first qualifying action at/after signup; audit joins win
 same-timestamp ties, then Event codes sort lexically. Duplicate joins cannot
@@ -37,7 +39,9 @@ calendar days after signup. Separate any-return measures cover days 1–7 and
 8–30. A return denominator matures only when the entire final local day has
 closed before as-of; DST does not turn calendar days into elapsed 24h periods.
 Profile timezone is used, with America/Los_Angeles fallback for UTC defaults,
-missing profiles, empty or invalid zones. The report includes fallback counts
+missing profiles, empty or invalid zones. Zone names match case-insensitively,
+as pytz validated them on the profile; tzdata folder names such as `America`
+are invalid. The report includes fallback counts
 and share per cohort, subject to suppression. Current timezone and current
 exclusion flags are used, so historical reruns may change after profile edits.
 
@@ -50,17 +54,26 @@ for counts at or above the threshold: the numerator is hidden when denominator
 minus numerator is below threshold; both numerator and denominator are hidden
 when the immature count is below threshold (including zero), since population
 is reported separately. Percentages and intervals are also null in that case.
+Conversely, the immature count is hidden when the mature denominator is below
+threshold, since population minus immature would otherwise recover it.
 First-action counts and derived statistics are also withheld when their shared
 activation numerator is hidden, preventing reconstruction through that distribution.
+First-action `immature` mirrors the activation_7d cell, which counts the same users.
 When any first-action category numerator is hidden or below threshold, the smallest
-remaining visible category is additionally suppressed (ties sort by event code).
-Thus a visible activation total, including 45 with categories 20/20/5, cannot
-recover the hidden category by subtraction. Its percentage and interval are null.
+remaining visible categories are additionally suppressed (ties sort by event code)
+until the hidden sum exceeds threshold × the hidden cells labelled `suppressed` by
+at least the threshold: that label already reveals a count of at least the
+threshold, so only the excess conceals anything. Categories 20/20/5 under a total
+of 45 hide one 20; 30/10/0 under 40 hide both 30 and 10, because hiding 10 alone
+would pin it at exactly 10 and every `<10` cell at 0. Suppressed categories'
+percentages and intervals are null. If the visible categories run out first, the
+remaining bound is accepted.
 
 For nested windows with equal visible mature denominators, a nonzero difference
 below threshold between visible numerators suppresses the larger numerator and
-its percentage/interval. Comparisons cover all activation window pairs and D1/D7
-each against days 1–7. Visibility is evaluated before this pass, deterministically;
+its percentage/interval. Pairs are derived from the window definitions: every
+activation pair, and every retention window inside another (D1 and D7 within
+days 1–7, D30 within days 8–30). Visibility is evaluated before this pass, deterministically;
 zero differences remain visible. This is a minimal mitigation, not a general
 privacy guarantee across overlapping reports, windows, or repeated runs.
 
@@ -74,7 +87,8 @@ and selection effects prevent causal interpretation. The command rejects thresho
 below 10 unless `--unsafe-min-cell` is explicitly passed for synthetic testing; `build_report` accepts any positive threshold.
 
 Freshness is the maximum stored Event.timestamp strictly before as-of (all event
-codes, including noise); it is not evidence that ingestion is complete. Adding
+codes, including noise), truncated to the hour so no single row's exact time is
+published; it is not evidence that ingestion is complete. Adding
 noise cannot change cohort metrics, though a newer noise row can advance this
 explicit freshness metadata. Audit-only activity can exist without an Event.
 Screen views must not be trended across the client_ui schema cutoff.

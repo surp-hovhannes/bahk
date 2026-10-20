@@ -1,24 +1,25 @@
+import os
 from datetime import date, datetime, timedelta, timezone
 from io import StringIO
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
-from events.growth_cohorts import _metric, _suppress_distribution, _suppress_nested, build_report
+from events.growth_cohorts import _configured, _metric, _suppress_distribution, _suppress_nested, build_report
 from events.models import Event, EventType
 from hub.models import FastParticipation, Profile
-from tests.fixtures.test_data import TestDataFactory
+from tests.base import BaseTestCase
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
-class GrowthCohortTests(TestCase):
+class GrowthCohortTests(BaseTestCase):
     def setUp(self):
-        EventType.get_or_create_default_types()
-        self.target = TestDataFactory.create_fast()
+        self.target = self.create_fast()
         self.joined = datetime(2026, 3, 8, 9, 30, tzinfo=timezone.utc)
         self.user = self.make_user('cohort', self.joined)
         self.profile, _ = Profile.objects.get_or_create(user=self.user)
@@ -49,6 +50,8 @@ class GrowthCohortTests(TestCase):
         self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 'suppressed')
         self.assertEqual(self.metric(report, 'd1')['numerator'], 'suppressed')
         self.assertEqual(self.metric(report, 'd7')['numerator'], '<1')
+        # Freshness is published to the hour, never one row's exact timestamp.
+        self.assertEqual(report['data_freshness'], '2026-03-09T07:00:00+00:00')
 
     def test_activation_and_closed_day_maturity_boundaries(self):
         joined = datetime(2026, 3, 8, tzinfo=timezone.utc)
@@ -58,11 +61,14 @@ class GrowthCohortTests(TestCase):
         report = self.report(date(2026, 3, 10))
         self.assertEqual(self.metric(report, 'activation_24h')['mature_denominator'], 'suppressed')
         self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 'suppressed')
-        self.assertEqual(self.metric(report, 'activation_72h')['immature'], 1)
-        self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'activation_24h')['immature'], 1)
+        # Immature users leave no mature denominator; the immature cell is then
+        # hidden too, since population minus it would recover the denominator.
+        self.assertEqual(self.metric(report, 'activation_72h')['mature_denominator'], '<1')
+        self.assertEqual(self.metric(report, 'activation_72h')['immature'], 'suppressed')
+        self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'activation_24h')['mature_denominator'], '<1')
         # Signup is March 7 locally; March 8 has closed by March 10 UTC.
         self.assertEqual(self.metric(report, 'd1')['mature_denominator'], 'suppressed')
-        self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'd1')['immature'], 1)
+        self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'd1')['mature_denominator'], '<1')
 
     @override_settings(ANALYTICS_EXCLUDED_USER_IDS=[], ANALYTICS_EXCLUDED_EMAIL_DOMAINS=['example.invalid'])
     def test_exclusions_and_fallback(self):
@@ -74,12 +80,48 @@ class GrowthCohortTests(TestCase):
             report = self.report()
         self.assertEqual(set(report['exclusions_sequential'].values()), {1})
         self.assertEqual(report['cohorts'][0]['population'], 1)
-        for tz in ['UTC', 'Invalid/Zone']:
-            Profile.objects.filter(pk=self.profile.pk).update(timezone=tz)
-            self.assertEqual(self.report()['cohorts'][0]['timezone_fallback']['numerator'], 'suppressed')
+        # tzdata folder names raise IsADirectoryError from ZoneInfo.
+        for tz in ['UTC', 'Invalid/Zone', 'America', 'Etc']:
+            with self.subTest(tz=tz):
+                Profile.objects.filter(pk=self.profile.pk).update(timezone=tz)
+                self.assertEqual(self.report()['cohorts'][0]['timezone_fallback']['numerator'], 'suppressed')
+
+    def test_timezone_matches_case_insensitively_like_pytz(self):
+        # Signup at midnight UTC is March 8 in Tokyo but March 7 in Los Angeles;
+        # 08:00 UTC on March 9 is local day 1 only in Tokyo.
+        joined = datetime(2026, 3, 8, tzinfo=timezone.utc)
+        get_user_model().objects.filter(pk=self.user.pk).update(date_joined=joined)
+        self.event(EventType.DEVOTIONAL_VIEWED, datetime(2026, 3, 9, 8, tzinfo=timezone.utc))
+        Profile.objects.filter(pk=self.profile.pk).update(timezone='asia/tokyo')
+        report = self.report()
+        self.assertEqual(report['cohorts'][0]['timezone_fallback']['numerator'], '<1')
+        self.assertEqual(self.metric(report, 'd1')['numerator'], 'suppressed')
+
+    @override_settings()
+    def test_exclusion_lists_read_through_decouple(self):
+        from django.conf import settings
+        for name in ('ANALYTICS_EXCLUDED_USER_IDS', 'ANALYTICS_EXCLUDED_EMAIL_DOMAINS'):
+            if hasattr(settings, name):
+                delattr(settings, name)
+        with mock.patch.dict(os.environ, {'ANALYTICS_EXCLUDED_EMAIL_DOMAINS': ' a.invalid, b.invalid '}):
+            self.assertEqual(_configured('ANALYTICS_EXCLUDED_EMAIL_DOMAINS'), ['a.invalid', 'b.invalid'])
+        with mock.patch('events.growth_cohorts.config', return_value='7,8') as config:
+            self.assertEqual(_configured('ANALYTICS_EXCLUDED_USER_IDS'), ['7', '8'])
+        config.assert_called_once_with('ANALYTICS_EXCLUDED_USER_IDS', default='')
+
+    def test_legacy_join_dates_pair_with_undated_audit_row(self):
+        # The backfill leaves joined_at NULL after repeated legacy joins; the
+        # Event is then the pair's only dated join and must still activate.
+        fast = self.create_fast()
+        FastParticipation.objects.create(profile=self.profile, fast=fast, joined_at=None)
+        self.event(EventType.USER_JOINED_FAST, self.joined + timedelta(hours=1), target=fast)
+        report = self.report()
+        self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 'suppressed')
+        self.assertEqual(report['cohorts'][0]['first_action_within_7d'][EventType.USER_JOINED_FAST]['numerator'],
+                         'suppressed')
 
     def test_authoritative_join_without_event_and_duplicate_legacy(self):
-        fast = TestDataFactory.create_fast()
+        fast = self.create_fast()
         FastParticipation.objects.create(profile=self.profile, fast=fast, joined_at=self.joined + timedelta(hours=1))
         self.event(EventType.USER_JOINED_FAST, self.joined + timedelta(hours=2), target=fast)
         self.event(EventType.USER_JOINED_FAST, self.joined, target=fast,
@@ -156,6 +198,12 @@ class GrowthCohortTests(TestCase):
                 self.assertIsNone(metric['percent'])
                 self.assertIsNone(metric['wilson_95'])
         self.assertEqual(_metric(10, 20, 10, 10)['percent'], 50)
+        # Population 25 is released, so a visible immature 22 would give the
+        # hidden denominator away as exactly 3.
+        metric = _metric(2, 3, 22, 10)
+        self.assertEqual(metric['mature_denominator'], '<10')
+        self.assertEqual(metric['immature'], 'suppressed')
+        self.assertEqual(metric['numerator'], '<10')
 
     def test_query_count_does_not_grow_with_population_or_weeks(self):
         with CaptureQueriesContext(connection) as baseline:
@@ -183,22 +231,30 @@ class GrowthCohortTests(TestCase):
         self.assertEqual(self.metric(report, 'd1')['numerator'], '<1')
 
     def test_first_action_distribution_complementary_suppression(self):
-        actions = {code: _metric(n, 45, 10, 10)
-                   for code, n in [('a', 20), ('b', 20), ('c', 5)]}
-        _suppress_distribution(actions)
+        counts = {'a': 20, 'b': 20, 'c': 5}
+        actions = {code: _metric(n, 45, 10, 10) for code, n in counts.items()}
+        _suppress_distribution(actions, counts, 10)
         self.assertEqual(actions['c']['numerator'], '<10')
         self.assertEqual(actions['a']['numerator'], 'suppressed')
         self.assertIsNone(actions['a']['percent'])
         self.assertIsNone(actions['a']['wilson_95'])
         self.assertEqual(actions['b']['numerator'], 20)
         self.assertEqual(actions['b']['mature_denominator'], 45)
+        # Hiding only the 10 would pin it at 10 and every '<10' cell at 0,
+        # because 'suppressed' already says it is at least the threshold.
+        counts = {'devotional': 30, 'prayer_set': 10, 'other': 0}
+        actions = {code: _metric(n, 40, 10, 10) for code, n in counts.items()}
+        _suppress_distribution(actions, counts, 10)
+        for code in ('devotional', 'prayer_set'):
+            self.assertEqual(actions[code]['numerator'], 'suppressed')
 
     def test_nested_window_complementary_suppression(self):
         metrics = {name: _metric(n, 80, 10, 10) for name, n in [
             ('activation_24h', 20), ('activation_72h', 25), ('activation_7d', 40),
-            ('d1', 20), ('d7', 25), ('return_days_1_7', 30)]}
+            ('d1', 20), ('d7', 25), ('return_days_1_7', 30),
+            ('d30', 20), ('return_days_8_30', 25)]}
         _suppress_nested(metrics, 10)
-        for name in ['activation_72h', 'return_days_1_7']:
+        for name in ['activation_72h', 'return_days_1_7', 'return_days_8_30']:
             self.assertEqual(metrics[name]['numerator'], 'suppressed')
             self.assertIsNone(metrics[name]['percent'])
             self.assertIsNone(metrics[name]['wilson_95'])

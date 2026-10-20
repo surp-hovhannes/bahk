@@ -1,11 +1,11 @@
 """Read-only weekly growth cohorts. Only aggregate cells leave this module."""
 
 import math
-import os
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, available_timezones
 
+from decouple import Csv, config
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Case, Count, DateField, Exists, F, Max, OuterRef, Q, Subquery, Value, When
@@ -20,6 +20,10 @@ FALLBACK = 'America/Los_Angeles'
 ACTIVATION = {'activation_24h': 1, 'activation_72h': 3, 'activation_7d': 7}
 RETENTION = {'d1': (1, 1), 'd7': (7, 7), 'd30': (30, 30),
              'return_days_1_7': (1, 7), 'return_days_8_30': (8, 30)}
+# Every (smaller, larger) window pair whose band difference could be subtracted.
+NESTED = ([(a, b) for a in ACTIVATION for b in ACTIVATION if ACTIVATION[a] < ACTIVATION[b]]
+          + [(a, b) for a, (start, stop) in RETENTION.items() for b, (lo, hi) in RETENTION.items()
+             if a != b and lo <= start and stop <= hi])
 CAVEATS = [
     'Cross-sectional observational cohorts; small n does not establish causality.',
     'Retention is exact-day, not cumulative; any-return windows are separately labelled.',
@@ -29,8 +33,13 @@ CAVEATS = [
 
 
 def _configured(name):
-    value = getattr(settings, name, os.environ.get(name, ''))
-    return [str(v).strip() for v in (value.split(',') if isinstance(value, str) else value or []) if str(v).strip()]
+    """Settings win; otherwise python-decouple reads the environment, then .env."""
+    value = getattr(settings, name, None)
+    if value is None:
+        value = config(name, default='')
+    if isinstance(value, str):
+        value = Csv()(value)
+    return [str(v).strip() for v in value if str(v).strip()]
 
 
 def _cell(count, minimum):
@@ -50,6 +59,9 @@ def _metric(n, d, immature, minimum):
         for key in ('numerator', 'mature_denominator'):
             if isinstance(result[key], int):
                 result[key] = 'suppressed'
+    elif immature is not None and d < minimum:
+        # The converse: population minus immature would recover the denominator.
+        result['immature'] = 'suppressed'
     elif d - n < minimum and isinstance(result['numerator'], int):
         result['numerator'] = 'suppressed'
     if d and min(n, d, d - n) >= minimum and (immature is None or immature >= minimum):
@@ -67,11 +79,8 @@ def _suppress_numerator(metric):
 
 def _suppress_nested(metrics, minimum):
     # Snapshot visibility so suppression order cannot change which pairs qualify.
-    pairs = [('activation_24h', 'activation_72h'), ('activation_72h', 'activation_7d'),
-             ('activation_24h', 'activation_7d'), ('d1', 'return_days_1_7'),
-             ('d7', 'return_days_1_7')]
     hidden = set()
-    for smaller, larger in pairs:
+    for smaller, larger in NESTED:
         a, b = metrics[smaller], metrics[larger]
         if (isinstance(a['numerator'], int) and isinstance(b['numerator'], int)
                 and isinstance(a['mature_denominator'], int)
@@ -82,14 +91,24 @@ def _suppress_nested(metrics, minimum):
         _suppress_numerator(metrics[name])
 
 
-def _suppress_distribution(first_actions):
-    # A released total minus all visible categories must not reveal a hidden cell.
-    if any(not isinstance(metric['numerator'], int) for metric in first_actions.values()):
-        visible = [(metric['numerator'], code) for code, metric in first_actions.items()
-                   if isinstance(metric['numerator'], int)]
-        if visible:
-            _, code = min(visible)
-            _suppress_numerator(first_actions[code])
+def _suppress_distribution(first_actions, counts, minimum):
+    """A released total minus the visible categories gives the hidden sum.
+
+    Every 'suppressed' cell is known to be at least the threshold, so only the
+    slack above that is uncertain. Hide the smallest visible categories (ties by
+    code) until the slack is a full threshold: otherwise '<k' cells and the
+    hidden categories are pinned to a narrow range, or exactly when it is 0.
+    """
+    hidden = [code for code, metric in first_actions.items() if not isinstance(metric['numerator'], int)]
+    if not hidden:
+        return
+    slack = sum(counts[code] - (minimum if first_actions[code]['numerator'] == 'suppressed' else 0)
+                for code in hidden)
+    for count, code in sorted((counts[code], code) for code in first_actions if code not in hidden):
+        _suppress_numerator(first_actions[code])
+        slack += count - minimum
+        if slack >= minimum:
+            break
 
 
 def build_report(as_of, min_cell=10):
@@ -117,20 +136,21 @@ def build_report(as_of, min_cell=10):
         excluded[name] = _cell(users.filter(rule).count(), min_cell)
         users = users.exclude(rule)
 
-    events = analytics_events().filter(event_type__code__in=MEANINGFUL_EVENT_CODES).exclude(
-        event_type__code=EventType.USER_JOINED_FAST)
-    legacy = legacy_transition_events(EventType.USER_JOINED_FAST)
-    events = analytics_events().filter(Q(pk__in=events.values('pk')) | Q(pk__in=legacy.values('pk')))
+    legacy = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True)
+    events = analytics_events().filter(
+        Q(event_type__code__in=MEANINGFUL_EVENT_CODES - {EventType.USER_JOINED_FAST})
+        | Q(pk__in=legacy.values('pk')))
     events = events.filter(user_id=OuterRef('pk'), timestamp__gte=OuterRef('date_joined'), timestamp__lt=end)
     periods = FastParticipation.objects.filter(profile__user_id=OuterRef('pk'),
                                                joined_at__gte=OuterRef('date_joined'), joined_at__lt=end)
     grouped = defaultdict(lambda: defaultdict(int))
+    # Profiles are validated with pytz, which ignores case; ZoneInfo does not, and
+    # a tzdata folder name such as 'America' raises IsADirectoryError.
+    zones = {name.lower(): name for name in available_timezones()}
     for stored_tz in users.order_by().values_list('profile__timezone', flat=True).distinct():
-        fallback = stored_tz in (None, '', 'UTC')
-        try:
-            tz = ZoneInfo(FALLBACK if fallback else stored_tz)
-        except (ZoneInfoNotFoundError, ValueError):
-            tz, fallback = ZoneInfo(FALLBACK), True
+        key = zones.get(stored_tz.lower()) if stored_tz else None
+        fallback = key in (None, 'UTC')
+        tz = ZoneInfo(FALLBACK if fallback else key)
         bucket = users.filter(profile__timezone=stored_tz) if stored_tz is not None else users.filter(profile__timezone__isnull=True)
         bucket = bucket.annotate(
             signup_day=TruncDate('date_joined', tzinfo=tz),
@@ -188,6 +208,10 @@ def build_report(as_of, min_cell=10):
             code: _metric(counts['first_' + code], counts['activation_7d_n'],
                           population - counts['activation_7d_d'], min_cell)
             for code in sorted(MEANINGFUL_EVENT_CODES)}
+        # Same immature users as activation_7d; mirror its cell, which was
+        # suppressed against that metric's mature denominator.
+        for metric in first_actions.values():
+            metric['immature'] = metrics['activation_7d']['immature']
         # This distribution repeats the activation numerator as its denominator.
         # Its component counts must not reconstruct a hidden activation count.
         if not isinstance(metrics['activation_7d']['numerator'], int):
@@ -196,11 +220,13 @@ def build_report(as_of, min_cell=10):
                     if isinstance(metric[key], int):
                         metric[key] = 'suppressed'
                 metric.update(percent=None, wilson_95=None)
-        _suppress_distribution(first_actions)
+        _suppress_distribution(first_actions, {code: counts['first_' + code] for code in first_actions}, min_cell)
         cohorts.append({'week_start': week, 'population': _cell(population, min_cell),
                         'timezone_fallback': _metric(counts['fallback'], population, None, min_cell),
                         'metrics': metrics, 'first_action_within_7d': first_actions})
     freshness = Event.objects.filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
+    # One row's exact timestamp could identify its author; the hour is enough.
+    freshness = freshness and freshness.replace(minute=0, second=0, microsecond=0)
     return {'as_of': end.isoformat(), 'activation_data_through': cutoff.isoformat(),
             'data_freshness': freshness.isoformat() if freshness else None,
             'min_cell': min_cell, 'cohort_timezone': 'UTC', 'exclusions_sequential': excluded,
