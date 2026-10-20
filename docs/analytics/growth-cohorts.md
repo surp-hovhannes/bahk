@@ -10,6 +10,7 @@ profile timezone. All eligible historical weeks are
 included, including partial/immature weeks. Population excludes staff, then
 superusers, then configured IDs, then configured email domains. Exclusion counts
 are sequential/disjoint and cover all signups before as-of, not event authors.
+Each run uses the initially read population as its snapshot and ignores action rows for users who become eligible later.
 
 Optional Django settings `ANALYTICS_EXCLUDED_USER_IDS` and
 `ANALYTICS_EXCLUDED_EMAIL_DOMAINS` accept lists or comma-separated strings. If a

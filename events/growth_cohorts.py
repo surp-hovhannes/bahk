@@ -155,7 +155,10 @@ def build_report(as_of, min_cell=10):
                            'first': None, 'days': set()}
 
     def record(uid, at, code, *, participation=False):
-        row = population[uid]
+        row = population.get(uid)
+        # Keep the initial population snapshot; ignore users who become eligible later.
+        if row is None:
+            return
         if not row['joined'] <= at < row['end']:
             return
         # Equal timestamp/code Events differ only by pk; their compact rows

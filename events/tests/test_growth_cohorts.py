@@ -43,6 +43,23 @@ class GrowthCohortTests(BaseTestCase):
     def metric(self, report, name):
         return report['cohorts'][0]['metrics'][name]
 
+    def test_stream_user_outside_population_snapshot_is_ignored(self):
+        at = self.joined + timedelta(hours=1)
+        code = EventType.DEVOTIONAL_VIEWED
+        self.event(code, at)
+        outsider = self.make_user('lateeligible', self.joined, is_staff=True)
+        before = self.report()
+        # Only the action stream includes this user, simulating eligibility
+        # changing after the initial population query without a timing race.
+        with mock.patch('events.growth_cohorts.analytics_events') as events:
+            stream = events.return_value.filter.return_value.order_by.return_value.values_list.return_value
+            stream.iterator.return_value = iter([
+                (self.user.pk, at, code),
+                (outsider.pk, at, code),
+            ])
+            self.assertEqual(self.report(), before)
+        stream.iterator.assert_called_once()
+
     def test_dst_exact_local_day_and_elapsed_activation(self):
         # March 8 is 23h in LA; March 9 00:15 is only 21h45 after signup.
         self.event(EventType.PRAYER_SET_VIEWED, datetime(2026, 3, 9, 7, 15, tzinfo=timezone.utc))
