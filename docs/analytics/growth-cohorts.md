@@ -23,8 +23,8 @@ profile/fast pair, including preserved deleted-fast snapshots. Legacy join Event
 are fallback only through `legacy_transition_events()`, for pairs with no dated
 audit join: the backfill leaves `joined_at` NULL after repeated legacy joins, and
 those Events are then the pair's only dated join evidence. No-ops, unknown audit
-timestamps, and orphaned linked Events are not dated evidence. Correlated
-subqueries select the first qualifying action at/after signup; audit joins win
+timestamps, and orphaned linked Events are not dated evidence. Python
+selects the first qualifying action at/after signup; audit joins win
 same-timestamp ties, then Event codes sort lexically. Duplicate joins cannot
 multiply a user's numerator. Account creation, screen views, app opens and
 sessions never activate or establish retention.
@@ -94,14 +94,17 @@ explicit freshness metadata. Audit-only activity can exist without an Event.
 Screen views must not be trended across the client_ui schema cutoff.
 
 Query count is constant across users, events, weeks and stored timezones: at
-most eight queries (four sequential exclusion counts, one eligible population,
-one meaningful-event stream, one participation stream, and freshness). Empty
-populations skip the two action streams. Eligible IDs use an uncorrelated SQL
+most nine queries (four sequential exclusion counts, one eligible population,
+one meaningful-event stream, one legacy-join stream, one participation stream,
+and freshness). Empty populations skip the three action streams. Eligible IDs use an uncorrelated SQL
 subquery rather than a growing parameter list. Legacy join authority retains the
 existing event-level predicates; there are no per-user metric subqueries.
 
 Python computes first actions, local days, maturity and weekly counts. Streams
 use `.iterator(chunk_size=5000)`; no complete event history is materialized.
+On PostgreSQL, `.iterator()` uses server-side cursors, which fail behind
+PgBouncer transaction pooling unless `DISABLE_SERVER_SIDE_CURSORS=True` is set
+on the connection. Operators should run the command on a direct connection.
 Work is linear in eligible users plus scanned meaningful events and joins;
 memory is bounded by eligible users and their distinct first-31-day local days
 (at most 31 per user), rather than all event rows. Exact per-user windows are

@@ -24,14 +24,14 @@ before suppression; production output remains aggregate-only.
 | noise_invariance_property | Existing +7d action is later than all added exposure/session noise; meaningful metrics and freshness therefore remain identical. |
 | suppression_command_and_wilson | Population 1 hides below k=10; 20/40 with 10 immature gives 50% and an enclosing Wilson interval. Both command formats expose metadata without usernames. |
 | complementary_count_suppression | Complements 0 or 1 hide numerator; immature 0..9 hides numerator and denominator; denominator 3 with population 25 hides immature too. |
-| query_count_does_not_grow_with_population_or_weeks | Existing fixture adds 12 users across weeks without adding SQL statements; the new bound is at most eight. |
-| query_count_is_fixed_across_events_users_weeks_and_timezones | Adding 12 users across weeks, two timezones and 36 meaningful events adds no SQL statements; at most eight including sequential exclusions and freshness. |
+| query_count_does_not_grow_with_population_or_weeks | Existing fixture adds 12 users across weeks without adding SQL statements; the new bound is at most nine. |
+| query_count_is_fixed_across_events_users_weeks_and_timezones | Adding 12 users across weeks, two timezones and 36 meaningful events adds no SQL statements; at most nine including sequential exclusions and freshness. |
 | multiple_timezones_keep_independent_local_days | Same UTC signup/action pair spans March 7 to 9 in LA (D2), March 8 to 9 in Tokyo (D1); raw D1 aggregate is (1 hit, 2 mature, 0 immature). |
 | fall_dst_day30_tail_and_31_day_edge | October 31 00:00 PDT to November 30 23:30 PST is 31d30m yet local D30; December 1 00:00 PST is D31 and excluded. |
 | events_across_elapsed_31_day_edge | Spring signup's +30d action is local D30; +31d/+32d cannot add retention hits, and no action activates within 7d. |
 | participation_wins_event_tie_and_earlier_event_wins | Period at the event's +1h timestamp supplies the join code; delaying it one second leaves devotional first. Spies verify the otherwise suppressed distribution counts. |
 | event_ties_use_code_before_primary_key | Reverse insertion order gives the larger code the smaller pk; equal timestamps still choose the smaller code. Equal code/time rows have identical aggregate effects regardless of pk. |
-| iterator_chunk_boundary_preserves_report_and_query_count | Six users, five events and five distinct-profile periods cross size-2 fetch boundaries; complete reports and SQL statement counts match default-size iteration. |
+| iterator_chunk_boundary_preserves_report_and_query_count | Six users, five events and five distinct-profile periods cross size-2 fetch boundaries; complete reports and SQL statement counts match default-size iteration, with at most nine queries. Each period uses a distinct profile/fast pair; devotional Events supply a title and required Fast target. |
 | pre_signup_and_account_creation_do_not_activate | Event one second before signup fails lower bound; account-created is outside meaningful codes. |
 | exact_day_and_any_return_endpoints | +7d and +30d fall on local D7/D30 despite spring shift, hit inclusive return endpoints, and do not hit D1. |
 | first_action_distribution_complementary_suppression | Counts 20/20/5 hide the 5 and smallest tied visible category; 30/10/0 requires hiding both positive categories to avoid pinning hidden counts. |
@@ -42,5 +42,7 @@ The public builder, command, suppression helpers, event-selection helpers and
 sequential exclusion order retain their existing definitions. The elapsed-31-day
 bound is extended only where necessary to preserve the old local D30 endpoint.
 Production latency and query plans still require measurement on representative
-data. Lens review is required by the task's Lane 3 designation; no Lens tool or
-instructions were available in this workspace/session when these notes were made.
+data. Lens reviewed PR #586 round 1 with a CLEAN verdict and recommended
+streaming meaningful non-join Events and legacy join Events separately to avoid
+an IN-subquery inside OR. That recommendation is implemented; the disjoint
+code sets preserve selection and Python tie handling.

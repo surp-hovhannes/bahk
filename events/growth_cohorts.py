@@ -174,14 +174,19 @@ def build_report(as_of, min_cell=10):
         # An uncorrelated population subquery avoids an unbounded SQL parameter
         # list and keeps query count independent of population size.
         eligible_ids = users.order_by().values('pk')
-        legacy = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True)
         events = analytics_events().filter(
-            Q(event_type__code__in=MEANINGFUL_EVENT_CODES - {EventType.USER_JOINED_FAST})
-            | Q(pk__in=legacy.values('pk')),
+            event_type__code__in=MEANINGFUL_EVENT_CODES - {EventType.USER_JOINED_FAST},
             user_id__in=eligible_ids, timestamp__gte=earliest, timestamp__lt=latest)
         for uid, at, code in events.order_by().values_list(
                 'user_id', 'timestamp', 'event_type__code').iterator(chunk_size=ITERATOR_CHUNK_SIZE):
             record(uid, at, code)
+        # Keep legacy joins separate: an IN subquery inside OR prevents a
+        # PostgreSQL semi-join and can produce a costly hashed SubPlan.
+        legacy = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True).filter(
+            user_id__in=eligible_ids, timestamp__gte=earliest, timestamp__lt=latest)
+        for uid, at in legacy.order_by().values_list(
+                'user_id', 'timestamp').iterator(chunk_size=ITERATOR_CHUNK_SIZE):
+            record(uid, at, EventType.USER_JOINED_FAST, participation=False)
         periods = FastParticipation.objects.filter(
             profile__user_id__in=eligible_ids, joined_at__gte=earliest, joined_at__lt=latest)
         for uid, at in periods.order_by().values_list(

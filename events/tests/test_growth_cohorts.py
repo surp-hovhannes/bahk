@@ -215,8 +215,8 @@ class GrowthCohortTests(BaseTestCase):
         with CaptureQueriesContext(connection) as expanded:
             self.report()
         self.assertEqual(len(baseline), len(expanded))
-        # Four exclusion counts + population + two streams + freshness.
-        self.assertLessEqual(len(expanded), 8)
+        # Four exclusion counts + population + three streams + freshness.
+        self.assertLessEqual(len(expanded), 9)
 
     def test_query_count_is_fixed_across_events_users_weeks_and_timezones(self):
         with CaptureQueriesContext(connection) as baseline:
@@ -233,7 +233,7 @@ class GrowthCohortTests(BaseTestCase):
         with CaptureQueriesContext(connection) as expanded:
             self.report()
         self.assertEqual(len(baseline), len(expanded))
-        self.assertLessEqual(len(expanded), 8)
+        self.assertLessEqual(len(expanded), 9)
 
     def test_multiple_timezones_keep_independent_local_days(self):
         joined = datetime(2026, 3, 8, tzinfo=timezone.utc)
@@ -306,7 +306,7 @@ class GrowthCohortTests(BaseTestCase):
                 chunked = self.report()
         self.assertEqual(chunked, normal)
         self.assertEqual(len(normal_queries), len(chunked_queries))
-        self.assertLessEqual(len(chunked_queries), 8)
+        self.assertLessEqual(len(chunked_queries), 9)
 
     def test_pre_signup_and_account_creation_do_not_activate(self):
         self.event(EventType.DEVOTIONAL_VIEWED, self.joined - timedelta(seconds=1))
