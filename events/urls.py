@@ -29,6 +29,7 @@ urlpatterns = [
     path('activity-feed/mark-read/', views.MarkActivityReadView.as_view(), name='mark-activity-read'),
     path('activity-feed/generate/', views.GenerateActivityFeedView.as_view(), name='generate-activity-feed'),
     
+    path('track/notification/', views.TrackNotificationView.as_view(), name='track-notification'),
     path('track/screen-view/', views.TrackScreenViewView.as_view(), name='track-screen-view'),
 
     # Engagement tracking endpoints

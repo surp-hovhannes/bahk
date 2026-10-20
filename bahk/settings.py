@@ -326,11 +326,14 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
     # Scoped rates only; no throttle class is enabled globally.
     'DEFAULT_THROTTLE_RATES': {
+        'notification_telemetry': config('NOTIFICATION_TELEMETRY_THROTTLE_RATE', default='60/min'),
         'screen_view': config('SCREEN_VIEW_THROTTLE_RATE', default='120/min'),
     },
 }
 
 # Analytics settings
+NOTIFICATION_TELEMETRY_ENABLED = config('NOTIFICATION_TELEMETRY_ENABLED', default=False, cast=bool)
+
 ANALYTICS_SESSION_TIMEOUT_MINUTES = int(config('ANALYTICS_SESSION_TIMEOUT_MINUTES', default=30))
 
 SIMPLE_JWT = {

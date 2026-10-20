@@ -214,3 +214,43 @@ batch limits, missing/pending receipts and retry behavior. These are verificatio
 requirements, not confirmed APIs for the unknown deployed version. Normalize
 error codes without raw messages; distinguish ticket acceptance from a provider
 receipt and both from an open. No sender behavior changes in PR1.
+
+
+### Client notification ingestion API (PR4)
+
+`POST /api/events/track/notification/` requires authentication and has its own
+per-user `notification_telemetry` throttle (default 60/min, configured by
+`NOTIFICATION_TELEMETRY_THROTTLE_RATE`). The JSON body must be an object:
+
+- `event: prompt`: `stage` is `shown`, `selected`, or `os_result`; `trigger` is
+  `first_prayer`, `first_fast_join`, `settings`, or `other`. `shown` has no choice
+  (absent/null accepted and omitted); `selected` requires `enable` or `not_now`;
+  `os_result` requires `granted`, `denied`, or `undetermined`.
+- `event: opened`: `notif_id` must fully match `[A-Za-z0-9_-]{16}`;
+  `entry` is `tap` or `cold_start`; `app_state` is `cold` or `warm`.
+- `event: destination`: the same `notif_id` validation; `destination` comes
+  from `NOTIFICATION_DESTINATIONS`; `result` is `opened`, `unresolved`, or `rejected`.
+
+Unknown fields are ignored. Invalid body fields return 400. Each accepted row
+has `source=client_ui`, the cached analytics `session_id` when available, and
+validated headers: `X-App-Version` matching `[0-9A-Za-z.+-]{1,32}` and
+`X-Platform` in `ios`, `android`, `web`. Missing/invalid headers become null.
+No request, IP, user agent, client kind, token, message, navigation key or body
+blob is copied into these events. Titles are constants.
+
+Open/destination matching searches only the authenticated user's
+`notification_send` rows within the last 14 days with the same `notif_id`.
+`matched` records whether a row exists; open `kind` is copied from the newest
+matching send and checked against `NOTIFICATION_KINDS`, otherwise `unclassified`.
+Unmatched events are retained. Matching indicates association, not causation.
+The endpoint does not deduplicate: clients deduplicate and reports take the
+first open per `notif_id`. Missing/inactive types and telemetry storage/cache
+failures return 200 `{"status":"skipped"}`; successful writes return
+200 `{"status":"ok"}`. Authentication and throttling still apply when disabled.
+
+Deploy runbook addition: leave shared `NOTIFICATION_TELEMETRY_ENABLED=False`
+(the decouple default) while deploying the server and registering/checking types
+with the commands above. Enable explicitly only when ready to collect telemetry;
+when off, the endpoint returns `skipped` and writes no lifecycle row. This flag
+name is shared with the sender telemetry lane. No migration, deletion, retention
+enforcement or token-disabling change is introduced. OTA/RN publishing remains held.
