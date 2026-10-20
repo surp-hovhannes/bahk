@@ -13,6 +13,7 @@ from django.db.models.functions import Coalesce, TruncDate
 from hub.models import FastParticipation, Profile
 from .models import Event, EventType
 from .event_semantics import exclude_legacy_screen_views
+from .event_schema import NOTIFICATION_LIFECYCLE_EVENT_CODES
 
 
 def _without_participation_noops():
@@ -26,8 +27,10 @@ def _without_participation_noops():
 
 
 def analytics_events():
-    """Metric rows: omit participation no-ops and historical screen noise."""
-    return exclude_legacy_screen_views(_without_participation_noops())
+    """Metric rows: omit participation no-ops, screen noise and notification telemetry."""
+    return exclude_legacy_screen_views(_without_participation_noops()).exclude(
+        event_type__code__in=NOTIFICATION_LIFECYCLE_EVENT_CODES,
+    )
 
 
 def legacy_transition_events(code=None, *, dated_joins_only=False):

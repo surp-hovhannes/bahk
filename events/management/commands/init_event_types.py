@@ -3,7 +3,7 @@ Management command to initialize default event types.
 This should be run after migrations to set up the default event types.
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from events.models import EventType
 
 
@@ -11,6 +11,7 @@ class Command(BaseCommand):
     help = 'Initialize default event types for the events app'
 
     def add_arguments(self, parser):
+        parser.add_argument('--check', action='store_true', help='Check core registration without writes')
         parser.add_argument(
             '--force',
             action='store_true',
@@ -18,6 +19,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if options['check']:
+            problems = EventType.missing_core_types()
+            for status, codes in problems.items():
+                if codes:
+                    self.stdout.write(f"{status.capitalize()} core event types: {', '.join(codes)}")
+            if any(problems.values()):
+                raise CommandError('Core event type registration check failed.')
+            self.stdout.write(self.style.SUCCESS('OK: all core event types are registered and active.'))
+            return
+
         self.stdout.write('Initializing event types...')
         
         created_types = EventType.get_or_create_default_types()

@@ -101,3 +101,116 @@ must add none. Reports and dashboards exclude historical rows at read time; the
 engagement report exposes only an aggregate legacy exclusion count. **Do not
 trend screen_view metrics across the client_ui cutoff**; client rollout changes
 coverage as well as event meaning.
+
+## Notification lifecycle (v2 vocabulary; PR1)
+
+This vocabulary supports surp-hovhannes/bahk_react_native#460. PR1 registers
+codes and documents contracts only; it adds no send or endpoint behavior.
+All five codes below are exposure-noise, never actions or meaningful engagement.
+They have category `notification`, require no target, and new registrations have
+`track_in_analytics=False`. Existing registrations are never overwritten.
+
+Use “sent to push provider”, “accepted by provider”, “provider receipt” and
+“opened”. Provider acceptance is never device delivery; delivery is not measured.
+A provider receipt is provider evidence only. Do not add token auto-disabling.
+
+The following per-type keys supplement the common `schema_version=2` envelope;
+`events/event_schema.py` exposes them as `NOTIFICATION_PAYLOAD_KEYS`. These are
+contracts for later producers, not runtime validation in PR1.
+
+| Type | Payload keys | Meaning |
+| --- | --- | --- |
+| notification_prompt | stage, choice, trigger | Permission prompt lifecycle |
+| notification_send | notif_id, kind, destination, platform, outcome, error_code, ticket_id | Attempt sent to push provider and its outcome |
+| notification_receipt | notif_id, ticket_id, receipt_status, error_code, lag_seconds | Provider receipt and elapsed lag |
+| notification_opened | notif_id, entry, app_state, matched, kind | Notification opened |
+| notification_destination | notif_id, destination, result, matched | Destination resolution |
+
+Only bounded vocabulary, opaque correlation/provider identifiers, booleans and
+numeric lag belong here. Later producers must validate these; unknown or
+unavailable values must not become raw exception text. No free text, push token,
+message/body, arbitrary message/data blobs, prayer content, IP address or user
+agent may be recorded. Do not pass a request to `Event.create_event` for this
+telemetry. Remaining field vocabularies/nullability must be verified in PR2/PR3
+before emission; these key contracts alone do not authorize arbitrary values.
+
+`NOTIFICATION_KINDS` is the allowlist: `upcoming_fast`, `ongoing_fast`,
+`daily_fast`, `culmination_feast`, `weekly_prayer_requests`,
+`prayer_request_completed`, `prayer_thanks`, `fast_milestone`, `post_fast`,
+`nudge_nonjoin`, `nudge_inactive`, `nudge_activity_feed`,
+`nudge_prayer_acceptance`, `admin_manual`, `test`, `unclassified`.
+
+`NOTIFICATION_DESTINATIONS` is the allowlist: `fast`, `devotional`, `prayer_set`,
+`prayer_request`, `prayer_requests`, `learn`, `none`, `other`.
+`NOTIFICATION_OUTCOMES` allows `provider_accepted`, `provider_rejected`,
+`send_error`. `NOTIFICATION_REPORTING_GROUPS` maps each kind to itself except
+`prayer_thanks` and `prayer_request_completed`, which both map to
+`prayer_request_notifications` (D7). Any notification report must apply k=10
+small-cell suppression, including derived cells that could reveal a small count.
+
+### Correlation and attribution
+
+Generate a random `secrets.token_urlsafe(12)` correlation ID for each message ×
+device token; store it as `notif_id`. Carry it and the allowlisted kind in push
+data as flat `fp_nid` and `fp_kind` keys. These are never navigation keys and must
+not change navigation behavior. Never derive the ID from a token or user identity.
+
+Attribute meaningful activity only within 30 minutes after an open, in the same
+app session where available. This is association, not causation. Always report
+coverage (including missing correlation/session information); do not trend across
+rollout because adoption changes coverage. No attribution computation is added
+in PR1. Intended lifecycle retention is **400 days, NOT enforced**: no deletion
+mechanism exists for these records. This is a policy intention, not a guarantee.
+
+### Registration and dashboard isolation
+
+At deploy run, in order:
+
+```bash
+python manage.py init_event_types
+python manage.py init_event_types --check
+```
+
+`--check` is read-only, checks every core code, prints missing and inactive
+codes, and exits 1 for either problem; otherwise it prints an OK line and exits
+0. Initialization only creates missing rows; inactive existing rows require
+operator review. A missed registration step only disables this telemetry;
+future producers must skip missing/inactive types without interrupting sending
+or navigation. PR1 does not implement those producers.
+
+No database migration or migration tooling is needed: `EventType.code` is a
+plain CharField without choices, `notification` already exists in category
+choices, and no model field definitions change. Registration creates data through
+the existing command, not a schema migration.
+
+Audit: `analytics_events()` explicitly excludes the five lifecycle codes using
+a plain negated `event_type__code__in` predicate, independent of the analytics
+flag and without an additional subquery. This protects shared aggregates in
+`events/views.py`, `events/admin.py`, `events/analytics_optimizer.py`,
+`events/management/commands/engagement_report.py` and `events/growth_cohorts.py`.
+Existing participation-noop and legacy-screen filtering remains in place.
+The admin charts that directly filter category `analytics` cannot include these
+`notification` rows. `events/signals.py` routes user events through
+`UserActivityFeed.create_from_event` (directly or via a task); its fixed code map
+contains none of these five codes, so it returns None. System-event fan-out is
+also limited to existing fast/devotional codes. No lifecycle feed rows result.
+
+### Expo SDK verification for PR2/PR3
+
+`requirements.txt` lists `exponent_server_sdk` without a pin. There is no Python
+lock file in the repository. `.devcontainer/Dockerfile` and
+`.github/workflows/django_ci.yml` install requirements without resolving a
+recorded version; `.cursor/Dockerfile` does not identify an SDK version either.
+No checked-in CI installation log establishes the deployed version. The actual
+deployed version is therefore **unknown**; PR1 leaves the dependency unchanged
+and installs nothing.
+
+The current sender calls `PushClient.publish(PushMessage(...))` and discards its
+return value. PR2/PR3 must inspect the actual installed SDK and verify the
+`PushTicket` status/id surface (including missing IDs, provider rejections and
+exception behavior), plus `PushClient.check_receipts_multiple` or the installed
+version's equivalent: input ticket IDs, returned receipt status/error details,
+batch limits, missing/pending receipts and retry behavior. These are verification
+requirements, not confirmed APIs for the unknown deployed version. Normalize
+error codes without raw messages; distinguish ticket acceptance from a provider
+receipt and both from an open. No sender behavior changes in PR1.
