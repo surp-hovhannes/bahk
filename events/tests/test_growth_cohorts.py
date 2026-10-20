@@ -41,8 +41,8 @@ class GrowthCohortTests(TestCase):
         # March 8 is 23h in LA; March 9 00:15 is only 21h45 after signup.
         self.event(EventType.PRAYER_SET_VIEWED, datetime(2026, 3, 9, 7, 15, tzinfo=timezone.utc))
         report = self.report()
-        self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 1)
-        self.assertEqual(self.metric(report, 'd1')['numerator'], 1)
+        self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 'suppressed')
+        self.assertEqual(self.metric(report, 'd1')['numerator'], 'suppressed')
         self.assertEqual(self.metric(report, 'd7')['numerator'], '<1')
 
     def test_activation_and_closed_day_maturity_boundaries(self):
@@ -51,12 +51,12 @@ class GrowthCohortTests(TestCase):
         self.event(EventType.DEVOTIONAL_VIEWED, joined + timedelta(hours=24))
         # March 10 midnight minus 24h lag closes the 24h window exactly.
         report = self.report(date(2026, 3, 10))
-        self.assertEqual(self.metric(report, 'activation_24h')['mature_denominator'], 1)
-        self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 1)
+        self.assertEqual(self.metric(report, 'activation_24h')['mature_denominator'], 'suppressed')
+        self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 'suppressed')
         self.assertEqual(self.metric(report, 'activation_72h')['immature'], 1)
         self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'activation_24h')['immature'], 1)
         # Signup is March 7 locally; March 8 has closed by March 10 UTC.
-        self.assertEqual(self.metric(report, 'd1')['mature_denominator'], 1)
+        self.assertEqual(self.metric(report, 'd1')['mature_denominator'], 'suppressed')
         self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'd1')['immature'], 1)
 
     @override_settings(ANALYTICS_EXCLUDED_USER_IDS=[], ANALYTICS_EXCLUDED_EMAIL_DOMAINS=['example.invalid'])
@@ -71,7 +71,7 @@ class GrowthCohortTests(TestCase):
         self.assertEqual(report['cohorts'][0]['population'], 1)
         for tz in ['UTC', 'Invalid/Zone']:
             Profile.objects.filter(pk=self.profile.pk).update(timezone=tz)
-            self.assertEqual(self.report()['cohorts'][0]['timezone_fallback']['numerator'], 1)
+            self.assertEqual(self.report()['cohorts'][0]['timezone_fallback']['numerator'], 'suppressed')
 
     def test_authoritative_join_without_event_and_duplicate_legacy(self):
         from tests.fixtures.test_data import TestDataFactory
@@ -81,8 +81,8 @@ class GrowthCohortTests(TestCase):
         self.event(EventType.USER_JOINED_FAST, self.joined, target=fast,
                    data={'participation_tracked': True, 'participation_changed': False})
         report = self.report()
-        self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 1)
-        self.assertEqual(report['cohorts'][0]['first_action_within_7d'][EventType.USER_JOINED_FAST]['numerator'], 1)
+        self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 'suppressed')
+        self.assertEqual(report['cohorts'][0]['first_action_within_7d'][EventType.USER_JOINED_FAST]['numerator'], 'suppressed')
         # Audit authority overrides the earlier duplicate/no-op Event timestamp.
         FastParticipation.objects.filter(profile=self.profile).update(joined_at=self.joined + timedelta(days=2))
         self.assertEqual(self.metric(self.report(), 'activation_24h')['numerator'], '<1')
@@ -100,7 +100,7 @@ class GrowthCohortTests(TestCase):
         report = self.report(minimum=10)
         self.assertEqual(report['cohorts'][0]['population'], '<10')
         self.assertIsNone(self.metric(report, 'activation_24h')['percent'])
-        metric = _metric(20, 40, 0, 10)
+        metric = _metric(20, 40, 10, 10)
         self.assertEqual(metric['percent'], 50)
         self.assertLess(metric['wilson_95'][0], 50)
         self.assertGreater(metric['wilson_95'][1], 50)
@@ -109,6 +109,24 @@ class GrowthCohortTests(TestCase):
             call_command('growth_cohorts', as_of='2026-05-01', format=fmt, stdout=output)
             self.assertIn('data_freshness', output.getvalue())
             self.assertNotIn('username', output.getvalue())
+
+    def test_complementary_count_suppression(self):
+        for n, d, immature in [(19, 20, 10), (20, 20, 10)]:
+            with self.subTest(n=n, d=d):
+                metric = _metric(n, d, immature, 10)
+                self.assertEqual(metric['numerator'], 'suppressed')
+                self.assertEqual(metric['mature_denominator'], d)
+                self.assertIsNone(metric['percent'])
+                self.assertIsNone(metric['wilson_95'])
+        for immature in (0, 1, 9):
+            with self.subTest(immature=immature):
+                metric = _metric(10, 20, immature, 10)
+                self.assertEqual(metric['numerator'], 'suppressed')
+                self.assertEqual(metric['mature_denominator'], 'suppressed')
+                self.assertEqual(metric['immature'], '<10')
+                self.assertIsNone(metric['percent'])
+                self.assertIsNone(metric['wilson_95'])
+        self.assertEqual(_metric(10, 20, 10, 10)['percent'], 50)
 
     def test_query_count_does_not_grow_with_population_or_weeks(self):
         with CaptureQueriesContext(connection) as baseline:
@@ -132,5 +150,5 @@ class GrowthCohortTests(TestCase):
         self.event(EventType.PRAYER_SET_VIEWED, self.joined + timedelta(days=30))
         report = self.report()
         for name in ['d7', 'd30', 'return_days_1_7', 'return_days_8_30']:
-            self.assertEqual(self.metric(report, name)['numerator'], 1)
+            self.assertEqual(self.metric(report, name)['numerator'], 'suppressed')
         self.assertEqual(self.metric(report, 'd1')['numerator'], '<1')

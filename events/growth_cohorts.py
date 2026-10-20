@@ -40,8 +40,16 @@ def _cell(count, minimum):
 def _metric(n, d, immature, minimum):
     result = {'numerator': _cell(n, minimum), 'mature_denominator': _cell(d, minimum),
               'immature': _cell(immature, minimum), 'percent': None, 'wilson_95': None}
-    # Also protect the complementary cell against subtraction disclosure.
-    if d and min(n, d, d - n) >= minimum:
+    # Population is released separately. Hide both counts when subtracting
+    # the denominator would recover the suppressed immature cell; hiding only
+    # the denominator can still leak it when the numerator equals it.
+    if immature < minimum:
+        for key in ('numerator', 'mature_denominator'):
+            if isinstance(result[key], int):
+                result[key] = 'suppressed'
+    elif d - n < minimum and isinstance(result['numerator'], int):
+        result['numerator'] = 'suppressed'
+    if d and min(n, d, d - n, immature) >= minimum:
         p, z = n / d, 1.959963984540054
         center = (p + z * z / (2 * d)) / (1 + z * z / d)
         radius = z * math.sqrt(p * (1 - p) / d + z * z / (4 * d * d)) / (1 + z * z / d)
@@ -141,12 +149,21 @@ def build_report(as_of, min_cell=10):
         metrics = {name: _metric(counts[name + '_n'], counts[name + '_d'],
                                 population - counts[name + '_d'], min_cell)
                    for name in (*ACTIVATION, *RETENTION)}
+        first_actions = {
+            code: _metric(counts['first_' + code], counts['activation_7d_n'],
+                          population - counts['activation_7d_d'], min_cell)
+            for code in sorted(MEANINGFUL_EVENT_CODES)}
+        # This distribution repeats the activation numerator as its denominator.
+        # Its component counts must not reconstruct a hidden activation count.
+        if not isinstance(metrics['activation_7d']['numerator'], int):
+            for metric in first_actions.values():
+                for key in ('numerator', 'mature_denominator'):
+                    if isinstance(metric[key], int):
+                        metric[key] = 'suppressed'
+                metric.update(percent=None, wilson_95=None)
         cohorts.append({'week_start': week, 'population': _cell(population, min_cell),
                         'timezone_fallback': _metric(counts['fallback'], population, 0, min_cell),
-                        'metrics': metrics, 'first_action_within_7d': {
-                            code: _metric(counts['first_' + code], counts['activation_7d_n'],
-                                          population - counts['activation_7d_d'], min_cell)
-                            for code in sorted(MEANINGFUL_EVENT_CODES)}})
+                        'metrics': metrics, 'first_action_within_7d': first_actions})
     freshness = Event.objects.filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
     return {'as_of': end.isoformat(), 'activation_data_through': cutoff.isoformat(),
             'data_freshness': freshness.isoformat() if freshness else None,

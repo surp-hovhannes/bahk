@@ -44,7 +44,14 @@ Every metric has a numerator, mature denominator, excluded immature count,
 percentage, and 95% Wilson interval. Counts below `--min-cell` appear as `<10`
 (with the chosen threshold substituted). Percentages and intervals are null when
 the numerator, denominator, or complementary cell is below threshold, or the
-denominator is empty. Suppression also covers population, exclusions, fallback,
+denominator is empty. Secondary suppression uses the literal `"suppressed"`
+for counts at or above the threshold: the numerator is hidden when denominator
+minus numerator is below threshold; both numerator and denominator are hidden
+when the immature count is below threshold (including zero), since population
+is reported separately. Percentages and intervals are also null in that case.
+First-action counts and derived statistics are also withheld when their shared
+activation numerator is hidden, preventing reconstruction through that distribution.
+Suppression also covers population, exclusions, fallback,
 and first-action cells. These are descriptive cross-sectional results: small n
 and selection effects prevent causal interpretation. Threshold 1 is useful only
 for synthetic tests; production reports should retain the default privacy floor.
