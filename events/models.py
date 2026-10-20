@@ -388,8 +388,12 @@ class Event(models.Model):
             user_agent = request.META.get('HTTP_USER_AGENT', '')
             lang = request.GET.get('lang') or request.POST.get('lang')
 
+        # event_schema builds its code sets from EventType, so import it lazily.
+        from .event_schema import EVENT_SCHEMA_VERSION
+
         # Merge lang into event data if present
-        event_data = data or {}
+        event_data = dict(data) if data is not None else {}
+        event_data.setdefault("schema_version", EVENT_SCHEMA_VERSION)
         if lang:
             event_data['lang'] = lang
 
@@ -718,7 +722,8 @@ class UserActivityFeed(models.Model):
             target=event.target,
             title=personalized_title,
             description=event.description,
-            data=event.data
+            # schema_version is internal analytics metadata, not feed content.
+            data={k: v for k, v in (event.data or {}).items() if k != 'schema_version'},
         )
         
         return feed_item

@@ -15,6 +15,7 @@ from datetime import timedelta, timezone as dt_timezone
 import json
 import csv
 
+from .event_semantics import exclude_legacy_screen_views
 from .participation_analytics import analytics_events
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
 
@@ -1260,14 +1261,13 @@ class EventAdmin(admin.ModelAdmin):
             'include_categories': ['analytics']
         }
 
-        base_qs = Event.objects.select_related('event_type', 'user').filter(
+        # Legacy GET-inferred screen views are excluded from every metric on the page.
+        base_qs = exclude_legacy_screen_views(Event.objects.select_related('event_type', 'user').filter(
             timestamp__gte=start_of_window,
             timestamp__lt=end_of_today,
             event_type__category='analytics'
-        ).exclude(user__is_staff=True)
+        ).exclude(user__is_staff=True))
 
-        # Count screen views regardless of source (app_ui vs api). Mobile clients often hit /api/*,
-        # which the middleware marks as source="api".
         screen_view_qs = base_qs.filter(event_type__code=EventType.SCREEN_VIEW)
 
         # Totals
@@ -1353,11 +1353,12 @@ class EventAdmin(admin.ModelAdmin):
         except (ValueError, TypeError) as e:
             return JsonResponse({'error': f'Invalid parameters: {str(e)}'}, status=400)
 
-        base_qs = Event.objects.select_related('event_type', 'user').filter(
+        # Legacy GET-inferred screen views are excluded from every metric on the page.
+        base_qs = exclude_legacy_screen_views(Event.objects.select_related('event_type', 'user').filter(
             timestamp__gte=start_of_window,
             timestamp__lt=end_of_today,
             event_type__category='analytics'
-        ).exclude(user__is_staff=True)
+        ).exclude(user__is_staff=True))
 
         # Events over time
         from .analytics_optimizer import AnalyticsQueryOptimizer
@@ -1379,8 +1380,6 @@ class EventAdmin(admin.ModelAdmin):
 
         # Other metrics
         total_app_opens = base_qs.filter(event_type__code=EventType.APP_OPEN).count()
-        # Count screen views regardless of source (app_ui vs api). Mobile clients often hit /api/*,
-        # which the middleware marks as source="api".
         screen_view_qs = base_qs.filter(event_type__code=EventType.SCREEN_VIEW)
 
         total_screen_views = screen_view_qs.count()

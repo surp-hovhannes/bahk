@@ -485,6 +485,7 @@ class AnalyticsPerformanceTest(TestCase):
                 event_type=EventType.objects.get(code=EventType.SCREEN_VIEW),
                 user=self.user,
                 title=f'Screen view {i}',
+                data={'source': 'client_ui', 'schema_version': 2, 'screen': 'home'},
                 timestamp=base_time + timedelta(minutes=i)
             ))
         

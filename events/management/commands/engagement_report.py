@@ -15,7 +15,8 @@ from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from events.models import EventType, UserActivityFeed
+from events.models import Event, EventType, UserActivityFeed
+from events.event_semantics import legacy_screen_views, true_ui_screen_views
 from events.participation_analytics import analytics_events, legacy_transition_events, transition_counts
 from hub.models import Fast
 
@@ -610,7 +611,10 @@ class Command(BaseCommand):
         ]
 
         # Screen View Analytics
-        screen_view_events = events_in_range.filter(event_type__code=EventType.SCREEN_VIEW)
+        screen_view_events = true_ui_screen_views(events_in_range)
+        legacy_excluded = legacy_screen_views(Event.objects.filter(
+            timestamp__gte=start_dt, timestamp__lte=end_dt,
+        )).count()
         total_screen_views = screen_view_events.count()
         unique_screen_viewers = screen_view_events.values('user_id').distinct().count()
         
@@ -753,6 +757,8 @@ class Command(BaseCommand):
             "top_fasts_by_joins": top_fasts,
             "screen_views": {
                 "total": total_screen_views,
+                "legacy_excluded": legacy_excluded,
+                "note": "Legacy API-GET screen_views excluded; true UI views only exist from the client_ui cutoff.",
                 "unique_users": unique_screen_viewers,
                 "avg_per_user": round(avg_screens_per_user, 2),
                 "top_screens": top_screens,

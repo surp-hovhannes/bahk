@@ -114,7 +114,7 @@ class AnalyticsIntegrationTest(APITestCase):
         access_token = login_response.data['access']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
         
-        # Step 2: User makes first API request (creates session + screen view)
+        # Step 2: User makes first API request (creates session only)
         # Simulate this by calling middleware directly with proper headers
         request = self.factory.get('/api/fasts/', HTTP_X_SCREEN='fasts_list')
         request.user = self.user
@@ -135,7 +135,7 @@ class AnalyticsIntegrationTest(APITestCase):
         checklist_response = self.client.post(checklist_url, checklist_data, format='json')
         self.assertEqual(checklist_response.status_code, status.HTTP_200_OK)
         
-        # Step 5: User makes another screen view
+        # Step 5: User makes another API request
         request2 = self.factory.get('/api/profile/', HTTP_X_SCREEN='profile_view')
         request2.user = self.user
         
@@ -148,12 +148,10 @@ class AnalyticsIntegrationTest(APITestCase):
         # 1. USER_LOGGED_IN (from JWT login)
         # 2. APP_OPEN (from first middleware request)
         # 3. SESSION_START (from first middleware request)
-        # 4. SCREEN_VIEW (from first middleware request - fasts_list)
-        # 5. DEVOTIONAL_VIEWED (from API call)
-        # 6. CHECKLIST_USED (from API call)
-        # 7. SCREEN_VIEW (from second middleware request - profile_view)
+        # 4. DEVOTIONAL_VIEWED (from API call)
+        # 5. CHECKLIST_USED (from API call)
         
-        self.assertEqual(total_events_created, 7)
+        self.assertEqual(total_events_created, 5)
         
         # Verify specific events exist
         login_event = Event.objects.filter(
@@ -178,9 +176,7 @@ class AnalyticsIntegrationTest(APITestCase):
             event_type__code=EventType.SCREEN_VIEW,
             user=self.user
         ).order_by('timestamp')
-        self.assertEqual(screen_view_events.count(), 2)
-        self.assertEqual(screen_view_events[0].data['screen'], 'fasts_list')
-        self.assertEqual(screen_view_events[1].data['screen'], 'profile_view')
+        self.assertEqual(screen_view_events.count(), 0)
         
         devotional_event = Event.objects.filter(
             event_type__code=EventType.DEVOTIONAL_VIEWED,
@@ -197,8 +193,6 @@ class AnalyticsIntegrationTest(APITestCase):
         # Verify session consistency
         session_id = session_start_event.data['session_id']
         self.assertEqual(app_open_event.data['session_id'], session_id)
-        self.assertEqual(screen_view_events[0].data['session_id'], session_id)
-        self.assertEqual(screen_view_events[1].data['session_id'], session_id)
     
     def test_attribution_tracking_end_to_end(self):
         """Test UTM attribution from request to fast join event."""
@@ -273,9 +267,9 @@ class AnalyticsIntegrationTest(APITestCase):
         self.middleware.process_request(request2)
         
         # Step 4: Verify session end and new session events
-        # Should create: SESSION_END, APP_OPEN, SESSION_START, SCREEN_VIEW
+        # Should create: SESSION_END, APP_OPEN, SESSION_START
         new_events_count = Event.objects.count() - initial_event_count
-        self.assertEqual(new_events_count, 4)
+        self.assertEqual(new_events_count, 3)
         
         # Verify session end event
         session_end_event = Event.objects.filter(
@@ -329,7 +323,7 @@ class AnalyticsIntegrationTest(APITestCase):
         
         # Both users should have separate sessions
         total_events = Event.objects.count() - initial_event_count
-        self.assertEqual(total_events, 6)  # 3 events per user (APP_OPEN, SESSION_START, SCREEN_VIEW)
+        self.assertEqual(total_events, 4)  # APP_OPEN and SESSION_START per user
         
         # Verify separate session IDs
         user1_session = Event.objects.filter(
@@ -344,20 +338,8 @@ class AnalyticsIntegrationTest(APITestCase):
         
         self.assertNotEqual(user1_session.data['session_id'], user2_session.data['session_id'])
         
-        # Verify screen views are correctly attributed
-        user1_screen_view = Event.objects.filter(
-            event_type__code=EventType.SCREEN_VIEW,
-            user=self.user
-        ).first()
-        
-        user2_screen_view = Event.objects.filter(
-            event_type__code=EventType.SCREEN_VIEW,
-            user=user2
-        ).first()
-        
-        self.assertEqual(user1_screen_view.data['screen'], 'fasts_list')
-        self.assertEqual(user2_screen_view.data['screen'], 'profile_view')
-    
+        self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
+
     def test_analytics_data_consistency_across_requests(self):
         """Test that analytics data remains consistent across multiple requests."""
         # Set UTM parameters and app metadata
@@ -453,23 +435,11 @@ class AnalyticsIntegrationTest(APITestCase):
         for request in session_requests:
             self.middleware.process_request(request)
         
-        # Should create: APP_OPEN, SESSION_START, and 10 SCREEN_VIEWs
+        # Repeated GETs create only the initial session events.
         total_events = Event.objects.count() - initial_event_count
-        self.assertEqual(total_events, 12)
-        
-        # All screen views should be in same session
-        screen_views = Event.objects.filter(
-            event_type__code=EventType.SCREEN_VIEW,
-            user=self.user
-        ).order_by('timestamp')
-        
-        self.assertEqual(screen_views.count(), 10)
-        
-        # Verify session consistency
-        session_id = screen_views.first().data['session_id']
-        for screen_view in screen_views:
-            self.assertEqual(screen_view.data['session_id'], session_id)
-        
+        self.assertEqual(total_events, 2)
+        self.assertFalse(Event.objects.filter(event_type__code=EventType.SCREEN_VIEW).exists())
+
         # Verify request counter in cache
         sess_key = f"analytics:session:{self.user.id}"
         session_data = cache.get(sess_key)
