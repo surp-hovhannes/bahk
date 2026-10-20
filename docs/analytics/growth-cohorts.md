@@ -93,9 +93,21 @@ noise cannot change cohort metrics, though a newer noise row can advance this
 explicit freshness metadata. Audit-only activity can exist without an Event.
 Screen views must not be trended across the client_ui schema cutoff.
 
-Query count grows with distinct stored timezones, not users, events, or weeks.
-The database performs first-action subqueries, existence checks, local-date
-conversion and weekly counts; Python merges aggregate timezone buckets only.
-The performance profile is unmeasured: roughly 60–70 correlated subqueries per
-user row per timezone bucket can require substantial database work on large
-histories; this command is an offline reporting tool. No tables, indexes, models or migrations are changed.
+Query count is constant across users, events, weeks and stored timezones: at
+most eight queries (four sequential exclusion counts, one eligible population,
+one meaningful-event stream, one participation stream, and freshness). Empty
+populations skip the two action streams. Eligible IDs use an uncorrelated SQL
+subquery rather than a growing parameter list. Legacy join authority retains the
+existing event-level predicates; there are no per-user metric subqueries.
+
+Python computes first actions, local days, maturity and weekly counts. Streams
+use `.iterator(chunk_size=5000)`; no complete event history is materialized.
+Work is linear in eligible users plus scanned meaningful events and joins;
+memory is bounded by eligible users and their distinct first-31-day local days
+(at most 31 per user), rather than all event rows. Exact per-user windows are
+filtered in Python after a global timestamp bound. The local-day-30 tail across
+a fall DST transition is retained even when it extends past 31 elapsed days.
+The database may scan older users' later actions inside the global bounds, but
+these are discarded immediately. Production latency still needs measurement;
+query count alone does not guarantee a runtime. No tables, indexes, models or
+migrations are changed.
