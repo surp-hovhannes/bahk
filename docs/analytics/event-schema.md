@@ -102,10 +102,10 @@ engagement report exposes only an aggregate legacy exclusion count. **Do not
 trend screen_view metrics across the client_ui cutoff**; client rollout changes
 coverage as well as event meaning.
 
-## Notification lifecycle (v2 vocabulary; PR1)
+## Notification lifecycle (v2 vocabulary)
 
 This vocabulary supports surp-hovhannes/bahk_react_native#460. PR1 registers
-codes and documents contracts only; it adds no send or endpoint behavior.
+codes and documents contracts; PR2 adds flag-gated server send telemetry.
 All five codes below are exposure-noise, never actions or meaningful engagement.
 They have category `notification`, require no target, and new registrations have
 `track_in_analytics=False`. Existing registrations are never overwritten.
@@ -176,7 +176,7 @@ codes, and exits 1 for either problem; otherwise it prints an OK line and exits
 0. Initialization only creates missing rows; inactive existing rows require
 operator review. A missed registration step only disables this telemetry;
 future producers must skip missing/inactive types without interrupting sending
-or navigation. PR1 does not implement those producers.
+or navigation. PR2 implements the send producer only.
 
 No database migration or migration tooling is needed: `EventType.code` is a
 plain CharField without choices, `notification` already exists in category
@@ -214,3 +214,75 @@ batch limits, missing/pending receipts and retry behavior. These are verificatio
 requirements, not confirmed APIs for the unknown deployed version. Normalize
 error codes without raw messages; distinguish ticket acceptance from a provider
 receipt and both from an open. No sender behavior changes in PR1.
+
+
+### Server send telemetry (PR2)
+
+Deploy with `NOTIFICATION_TELEMETRY_ENABLED=False` (the default). Run
+`python manage.py init_event_types`, then `python manage.py init_event_types --check`
+first; resolve missing/inactive types before enabling
+`NOTIFICATION_TELEMETRY_ENABLED=True`. Disable the setting to stop both writes and
+correlation augmentation. No migration, receipt polling, deletion, retries, token
+policy changes, client endpoint, or RN/OTA publication is included.
+
+Each attempted per-token publish records `notification_send` with constant title
+`Notification send`, empty description, recipient user (nullable), and
+`source=server_domain`. `create_event` stamps schema version 2. No request is
+passed. Missing/inactive types and write errors are caught within a savepoint;
+only a short warning with a hashed token identifier is logged. Events contain
+no token, DeviceToken primary key, message, original data, content, resource IDs,
+IP address, or user agent. Platform is `ios`, `android`, `web`, or `unknown`.
+
+`kind` is independent of notification preference filtering. Unknown kinds become
+`unclassified`. Scheduled fast reminders map to `upcoming_fast`, `ongoing_fast`,
+`daily_fast`, `culmination_feast`; weekly prayer summaries to
+`weekly_prayer_requests`; completion to `prayer_request_completed`; thanks to
+`prayer_thanks`; participant milestones to `fast_milestone`; nonjoin, inactive,
+activity-feed, and prayer-acceptance nudges to their corresponding `nudge_*`
+kinds; manual admin sends to `admin_manual`; admin/API test sends to `test`.
+There is currently no push caller for `post_fast` (encouragement is email only).
+
+Destination comes only from the outgoing payload: exact `learn` and
+`prayer-requests` screens; `fast`, `devotional`, `prayer-set`, `prayer-request`
+screens with an optional numeric resource segment; otherwise `other`. Without a
+screen, presence of devotional/prayer-set/prayer-request/fast ID keys identifies
+the family in that precedence order. Empty data yields `none`. No IDs are copied.
+The `activity` screen maps to `other`.
+
+Each token gets a fresh `secrets.token_urlsafe(12)` ID and its own shallow copy
+of outgoing data with flat `fp_nid` / `fp_kind` keys. A conservative JSON envelope
+size check prevents augmentation above 4096 bytes: such sends retain their
+original payload and still record an attempt, but cannot correlate a client open.
+Existing oversize payloads are left to the provider as before. This is a coverage
+limitation; the flag does not guarantee every event has client correlation.
+
+A ticket with status `ok` means `provider_accepted`; status `error` means
+`provider_rejected`. Error codes are limited to `DeviceNotRegistered`,
+`MessageTooBig`, `MessageRateExceeded`, `MismatchSenderId`, `InvalidCredentials`,
+`DeveloperError`, else `other`. Ticket IDs are optional, at most 128 ASCII
+alphanumeric/underscore/hyphen characters; unexpected IDs are omitted. Exceptions
+with a ticket attached are classified from that ticket; other exceptions and
+unknown/missing ticket shapes use `send_error` (outcome could not be established).
+Raw exception text never enters an event or sender log.
+
+Legacy `sent` remains the count of non-raising publishes to the push provider,
+not delivery. It may include a returned error ticket: telemetry distinguishes
+those rejections without changing existing result dictionaries. Only the existing
+`DeviceNotRegisteredError` exception branch deactivates a token; returned error
+tickets do not add deactivation. No receipt-based disabling is added.
+
+SDK verification: local `python3` has no installed `exponent_server_sdk`, and
+requirements are unpinned; deployed API compatibility remains unverified. The
+[upstream SDK source](https://github.com/expo-community/expo-server-sdk-python/blob/master/exponent_server_sdk/__init__.py)
+was inspected on 2026-10-20: `publish()` returns a `PushTicket` with `status`,
+`details`, and `id`; `validate_response()` separately raises ticket errors carrying
+`push_response`. The producer reads these attributes (also accepts dict-shaped
+tickets), without calling validation. Tests construct real SDK tickets when CI
+installs its requirements. These upstream observations do not identify the
+deployed version. Receipt APIs remain outside PR2.
+
+Writes deliberately use `create_event` rather than bulk inserts, preserving
+validation and schema stamping. Each attempt adds an insert, type lookup, model
+validation and analytics-cache invalidation; bulk-send latency is unmeasured.
+Keep the flag off until CI and deployment-version checks pass, and assess batch
+latency during rollout.

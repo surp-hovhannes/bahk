@@ -422,6 +422,7 @@ def track_fast_participant_milestone(fast, participant_count, milestone_type="pa
                         message=message,
                         data={'screen': f'fast/{fast.id}'},
                         user_ids=user_ids,
+                        kind='fast_milestone',
                     )
                     logger.info(
                         f"Sent milestone push for {fast.name} ({milestone_hit} participants) "

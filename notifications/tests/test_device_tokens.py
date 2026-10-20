@@ -203,6 +203,7 @@ class TestPushNotificationTests(APITestCase):
         mock_send_push.delay.assert_called_once_with(
             message='Test notification',
             user_ids=[self.user.id],
+            kind='test',
         )
 
     @patch('notifications.views.send_push_notification_task')
@@ -219,6 +220,7 @@ class TestPushNotificationTests(APITestCase):
         mock_send_push.delay.assert_called_once_with(
             message='Test notification',
             user_ids=[self.user.id],
+            kind='test',
         )
 
     @patch('notifications.views.send_push_notification_task')
@@ -231,6 +233,7 @@ class TestPushNotificationTests(APITestCase):
         mock_send_push.delay.assert_called_once_with(
             message='Test notification',
             user_ids=[self.user.id],
+            kind='test',
         )
 
     @patch('notifications.views.send_push_notification_task')
@@ -318,4 +321,5 @@ class DeviceTokenAdminPushTests(TestCase):
             data=None,
             users=None,
             device_token_ids=[self.selected_token.id],
+            kind='unclassified',
         )

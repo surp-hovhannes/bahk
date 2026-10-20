@@ -684,6 +684,7 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
                 'prayer_request_id': prayer_request.id,
             },
             user_ids=recipient_ids,
+            kind='prayer_thanks',
         )
 
         return Response({

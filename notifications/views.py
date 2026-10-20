@@ -1,11 +1,11 @@
 import logging
-import hashlib
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
 from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from .utils import _device_token_log_id
 from .models import DeviceToken
 from .serializers import DeviceTokenSerializer
 from .tasks import send_push_notification_task
@@ -14,11 +14,6 @@ from django.core.exceptions import ValidationError
 logger = logging.getLogger(__name__)
 
 # Create your views here.
-
-def _device_token_log_id(token_value):
-    """Stable token identifier for logs without exposing the push token."""
-    return hashlib.sha256(token_value.encode('utf-8')).hexdigest()[:12]
-
 
 class DeviceTokenCreateView(generics.CreateAPIView):
     queryset = DeviceToken.objects.all()
@@ -108,6 +103,7 @@ class TestPushNotificationView(APIView):
         send_push_notification_task.delay(
             message="Test notification",
             user_ids=[request.user.id],
+            kind='test',
         )
         return Response({"message": "Test notification sent"}, status=status.HTTP_200_OK)
 
