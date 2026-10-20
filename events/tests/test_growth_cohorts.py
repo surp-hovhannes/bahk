@@ -87,6 +87,31 @@ class GrowthCohortTests(TestCase):
         FastParticipation.objects.filter(profile=self.profile).update(joined_at=self.joined + timedelta(days=2))
         self.assertEqual(self.metric(self.report(), 'activation_24h')['numerator'], '<1')
 
+    def test_fallback_share_has_no_maturity_window(self):
+        # setUp supplies one explicit LA profile; add 10 in each group.
+        for index in range(20):
+            user = self.make_user(f'fallback{index}', self.joined)
+            profile, _ = Profile.objects.get_or_create(user=user)
+            Profile.objects.filter(pk=profile.pk).update(
+                timezone='UTC' if index < 10 else 'America/Los_Angeles')
+        diagnostic = self.report(minimum=10)['cohorts'][0]['timezone_fallback']
+        self.assertEqual(diagnostic['numerator'], 10)
+        self.assertEqual(diagnostic['mature_denominator'], 21)
+        self.assertNotIn('immature', diagnostic)
+        self.assertEqual(diagnostic['percent'], 47.62)
+        self.assertLess(diagnostic['wilson_95'][0], diagnostic['percent'])
+        self.assertGreater(diagnostic['wilson_95'][1], diagnostic['percent'])
+
+    def test_fallback_share_suppresses_small_cells(self):
+        for n, expected in [(0, '<10'), (9, '<10'), (12, 'suppressed'), (21, 'suppressed')]:
+            with self.subTest(fallback=n):
+                diagnostic = _metric(n, 21, None, 10)
+                self.assertEqual(diagnostic['numerator'], expected)
+                self.assertEqual(diagnostic['mature_denominator'], 21)
+                self.assertNotIn('immature', diagnostic)
+                self.assertIsNone(diagnostic['percent'])
+                self.assertIsNone(diagnostic['wilson_95'])
+
     def test_noise_invariance_property(self):
         self.event(EventType.PRAYER_SET_VIEWED, self.joined + timedelta(days=7))
         before = self.report()

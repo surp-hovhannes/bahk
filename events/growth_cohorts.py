@@ -38,18 +38,21 @@ def _cell(count, minimum):
 
 
 def _metric(n, d, immature, minimum):
+    """Use immature=None for population diagnostics without a maturity window."""
     result = {'numerator': _cell(n, minimum), 'mature_denominator': _cell(d, minimum),
-              'immature': _cell(immature, minimum), 'percent': None, 'wilson_95': None}
+              'percent': None, 'wilson_95': None}
+    if immature is not None:
+        result['immature'] = _cell(immature, minimum)
     # Population is released separately. Hide both counts when subtracting
     # the denominator would recover the suppressed immature cell; hiding only
     # the denominator can still leak it when the numerator equals it.
-    if immature < minimum:
+    if immature is not None and immature < minimum:
         for key in ('numerator', 'mature_denominator'):
             if isinstance(result[key], int):
                 result[key] = 'suppressed'
     elif d - n < minimum and isinstance(result['numerator'], int):
         result['numerator'] = 'suppressed'
-    if d and min(n, d, d - n, immature) >= minimum:
+    if d and min(n, d, d - n) >= minimum and (immature is None or immature >= minimum):
         p, z = n / d, 1.959963984540054
         center = (p + z * z / (2 * d)) / (1 + z * z / d)
         radius = z * math.sqrt(p * (1 - p) / d + z * z / (4 * d * d)) / (1 + z * z / d)
@@ -162,7 +165,7 @@ def build_report(as_of, min_cell=10):
                         metric[key] = 'suppressed'
                 metric.update(percent=None, wilson_95=None)
         cohorts.append({'week_start': week, 'population': _cell(population, min_cell),
-                        'timezone_fallback': _metric(counts['fallback'], population, 0, min_cell),
+                        'timezone_fallback': _metric(counts['fallback'], population, None, min_cell),
                         'metrics': metrics, 'first_action_within_7d': first_actions})
     freshness = Event.objects.filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
     return {'as_of': end.isoformat(), 'activation_data_through': cutoff.isoformat(),

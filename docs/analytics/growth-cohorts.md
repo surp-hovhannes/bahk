@@ -40,7 +40,7 @@ missing profiles, empty or invalid zones. The report includes fallback counts
 and share per cohort, subject to suppression. Current timezone and current
 exclusion flags are used, so historical reruns may change after profile edits.
 
-Every metric has a numerator, mature denominator, excluded immature count,
+Windowed metrics have a numerator, mature denominator, excluded immature count,
 percentage, and 95% Wilson interval. Counts below `--min-cell` appear as `<10`
 (with the chosen threshold substituted). Percentages and intervals are null when
 the numerator, denominator, or complementary cell is below threshold, or the
@@ -51,6 +51,10 @@ when the immature count is below threshold (including zero), since population
 is reported separately. Percentages and intervals are also null in that case.
 First-action counts and derived statistics are also withheld when their shared
 activation numerator is hidden, preventing reconstruction through that distribution.
+The population-wide timezone fallback diagnostic has no maturity window and omits
+`immature`; its `mature_denominator` is the entire eligible cohort. Its share and
+interval are reported when both fallback and non-fallback counts meet the threshold,
+with the same small-cell and complementary-count suppression as other metrics.
 Suppression also covers population, exclusions, fallback,
 and first-action cells. These are descriptive cross-sectional results: small n
 and selection effects prevent causal interpretation. Threshold 1 is useful only
