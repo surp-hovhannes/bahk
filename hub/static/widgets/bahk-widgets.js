@@ -29,7 +29,7 @@
       throttled: "Խնդրում ենք մի փոքր սպասել և կրկին փորձել։",
       notFound: "Օրացույցը հասանելի չէ։",
       http: (status) => `Ծառայությունը հասանելի չէ (HTTP ${status})։`,
-      fastDay: "Պահքի օր", feastDay: "Տոնի օր", currentFast: "Ընթացիկ պահք", feast: "Տոն",
+      fastDay: "Պահոց օր", feastDay: "Տոնական օր", currentFast: "Ընթացիկ պահք", feast: "Տոն",
       nothing: "Այս օրվա համար գրառում չկա։", also: "Նաև հիշատակվում են՝ ",
       feastsUnavailable: "Տոների մասին տեղեկությունը ժամանակավորապես հասանելի չէ։",
       readMore: "Կարդալ ավելին Fast & Pray-ում",

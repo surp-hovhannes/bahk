@@ -57,7 +57,7 @@ test("language=hy translates the widget text, not just the API content", async (
   await expect(page.locator("bahk-fast-or-feast h2")).toHaveText("Պահք կամ տոն");
   await expect(page.locator("bahk-daily-readings h2")).toHaveText("Օրվա ընթերցվածքներ");
   await expect(page.locator("bahk-fast-or-feast section")).toHaveAttribute("lang", "hy");
-  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText("Պահքի օր");
+  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText("Պահոց օր");
   await expect(page.locator("bahk-fast-or-feast .cta")).toHaveText("Կարդալ ավելին Fast & Pray-ում");
   await expect(page.locator("bahk-fast-or-feast time")).toHaveText("1 մարտի, 2026 թ.");
 });
