@@ -130,31 +130,40 @@ def _record_action(snapshot, uid, at, code, *, participation=False):
         row['days'].add(day)
 
 
-def build_report(as_of, min_cell=10, granularity='week'):
+def build_report(as_of, min_cell=10, granularity='week', signups_before=None):
     """as_of is an exclusive UTC midnight; signup weeks/months use UTC.
 
+    signups_before restricts population and sequential exclusions at UTC midnight;
+    maturity remains evaluated at as_of.
     Stream compact action rows in a fixed number of queries, then aggregate
     per-user local days in Python. No user-level data leaves this function.
     Open a snapshot transaction only outside an existing atomic block; nested
     callers supply their own transaction isolation and snapshot semantics.
     """
     if connection.in_atomic_block:
-        return _build_report(as_of, min_cell, granularity)
+        return _build_report(as_of, min_cell, granularity, signups_before)
     with transaction.atomic():
         if connection.vendor == 'postgresql':
             with connection.cursor() as cursor:
                 cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
-        return _build_report(as_of, min_cell, granularity)
+        return _build_report(as_of, min_cell, granularity, signups_before)
 
 
-def _build_report(as_of, min_cell, granularity='week'):
+def _build_report(as_of, min_cell, granularity='week', signups_before=None):
     if granularity not in ('week', 'month', 'all'):
         raise ValueError('granularity must be week, month, or all')
     if min_cell < 1:
         raise ValueError('min_cell must be positive')
     end = datetime.combine(as_of, time.min, tzinfo=timezone.utc)
+    signup_end = None
+    if signups_before is not None:
+        signup_end = datetime.combine(signups_before, time.min, tzinfo=timezone.utc)
+        if signup_end > end:
+            raise ValueError('signups_before must be <= as_of')
     cutoff = end - timedelta(days=1)
     users = get_user_model().objects.filter(date_joined__lt=end)
+    if signup_end is not None:
+        users = users.filter(date_joined__lt=signup_end)
     excluded = {}
     rules = [('staff', Q(is_staff=True)), ('superuser', Q(is_superuser=True))]
     ids = _configured('ANALYTICS_EXCLUDED_USER_IDS')
@@ -269,7 +278,8 @@ def _build_report(as_of, min_cell, granularity='week'):
     freshness = analytics_events().filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
     # One row's exact timestamp could identify its author; the hour is enough.
     freshness = freshness and freshness.replace(minute=0, second=0, microsecond=0)
-    return {'as_of': end.isoformat(), 'activation_data_through': cutoff.isoformat(),
+    return {'as_of': end.isoformat(), 'signups_before': signup_end.isoformat() if signup_end else None,
+            'activation_data_through': cutoff.isoformat(),
             'data_freshness': freshness.isoformat() if freshness else None,
             'min_cell': min_cell, 'granularity': granularity, 'cohort_timezone': 'UTC', 'exclusions_sequential': excluded,
             'caveats': CAVEATS, 'cohorts': cohorts}

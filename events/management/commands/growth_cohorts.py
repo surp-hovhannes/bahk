@@ -10,10 +10,16 @@ from events.growth_cohorts import build_report
 
 class Command(BaseCommand):
     help = ('Read-only week/month/all signup cohorts with mature denominators and small-cell suppression. '
-            'Comparing granularities or as-of dates can reveal small cells; review before publishing together.')
+            'Comparing signups-before cutoffs, as-of dates, or granularities for the same data can narrow '
+            'small cells through differencing; review before publishing together.')
 
     def add_arguments(self, parser):
         parser.add_argument('--as-of', required=True, type=date.fromisoformat)
+        parser.add_argument('--signups-before', type=date.fromisoformat,
+                            help='Restrict signups and exclusions to before this UTC date (exclusive; must be <= --as-of). '
+                                 'For mature PRD figures use --as-of <today> --granularity all '
+                                 '--signups-before <as_of minus 31 days>; results describe only older signups. '
+                                 'Maturity still uses --as-of; other suppression rules still apply.')
         parser.add_argument('--format', choices=['json', 'md'], default='json')
         parser.add_argument('--granularity', choices=['week', 'month', 'all'], default='week',
                             help='UTC signup weeks (default), calendar months, or all eligible signups.')
@@ -28,7 +34,10 @@ class Command(BaseCommand):
             as_of = options['as_of']
             if isinstance(as_of, str):
                 as_of = date.fromisoformat(as_of)
-            report = build_report(as_of, options['min_cell'], options['granularity'])
+            signups_before = options['signups_before']
+            if isinstance(signups_before, str):
+                signups_before = date.fromisoformat(signups_before)
+            report = build_report(as_of, options['min_cell'], options['granularity'], signups_before)
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
         content = json.dumps(report, indent=2)

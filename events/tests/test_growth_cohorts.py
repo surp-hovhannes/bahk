@@ -80,6 +80,82 @@ class GrowthCohortTests(BaseTestCase):
                 self.assertEqual(cohort['first_action_within_7d'][EventType.CHECKLIST_USED]['numerator'],
                                  'suppressed')
 
+    def test_signups_before_matures_all_windows_without_weakening_suppression(self):
+        get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
+        as_of = date(2026, 5, 1)
+        signup_cutoff = as_of - timedelta(days=31)
+        self.synthetic_group('older', self.joined, 40)
+        self.make_user('recent', datetime(2026, 4, 30, 23, tzinfo=timezone.utc))
+        for minimum in (1, 10):
+            with self.subTest(minimum=minimum):
+                unrestricted = build_report(as_of, minimum, 'all')
+                restricted = build_report(as_of, minimum, 'all', signup_cutoff)
+                self.assertIsNone(unrestricted['signups_before'])
+                self.assertEqual(restricted['signups_before'], '2026-03-31T00:00:00+00:00')
+                cohort = restricted['cohorts'][0]
+                self.assertEqual(cohort['population'], 40)
+                for name, metric in cohort['metrics'].items():
+                    self.assertEqual(metric['immature'], 0)
+                    self.assertEqual(metric['numerator'], 20)
+                    self.assertEqual(metric['mature_denominator'], 40)
+                    self.assertEqual(metric['percent'], 50)
+                    other = unrestricted['cohorts'][0]['metrics'][name]
+                    if minimum == 10:
+                        self.assertIsNone(other['percent'])
+                        self.assertEqual(other['numerator'], 'suppressed')
+                        self.assertEqual(other['mature_denominator'], 'suppressed')
+                    else:
+                        # At k=1 a single immature signup is not a small cell.
+                        self.assertEqual(other['percent'], 50)
+                for metric in cohort['first_action_within_7d'].values():
+                    self.assertEqual(metric['immature'], 0)
+                # Existing distribution suppression still hides a sole nonempty category.
+                self.assertEqual(cohort['first_action_within_7d'][EventType.CHECKLIST_USED]['numerator'],
+                                 'suppressed')
+
+    @override_settings(ANALYTICS_EXCLUDED_EMAIL_DOMAINS=['example.invalid'])
+    def test_signups_before_bounds_population_and_sequential_exclusions(self):
+        cutoff = date(2026, 3, 31)
+        boundary = datetime(2026, 3, 31, tzinfo=timezone.utc)
+        self.event(EventType.CHECKLIST_USED, self.joined + timedelta(hours=1))
+        for prefix, joined in (('old', boundary - timedelta(microseconds=1)),
+                               ('equal', boundary), ('later', boundary + timedelta(days=1))):
+            self.make_user(prefix + 'staff', joined, is_staff=True, is_superuser=True)
+            self.make_user(prefix + 'super', joined, is_superuser=True)
+            self.make_user(prefix + 'domain', joined, email=prefix + '@example.invalid')
+        old_id = self.make_user('oldid', self.joined)
+        new_id = self.make_user('newid', boundary)
+        before = build_report(date(2026, 5, 1), 1, 'all', cutoff)
+        with override_settings(ANALYTICS_EXCLUDED_USER_IDS=[old_id.pk, new_id.pk]):
+            restricted = build_report(date(2026, 5, 1), 1, 'all', cutoff)
+            self.assertEqual(set(restricted['exclusions_sequential'].values()), {1})
+            self.assertEqual(restricted['cohorts'][0]['population'], 1)
+            # Later signup actions cannot affect any cohort count or diagnostic.
+            self.synthetic_group('late-actions', boundary, 20)
+            self.assertEqual(build_report(date(2026, 5, 1), 1, 'all', cutoff)['cohorts'],
+                             restricted['cohorts'])
+        self.assertEqual(before['cohorts'][0]['population'], 2)
+        self.assertEqual(build_report(date(2026, 5, 1), 1),
+                         build_report(date(2026, 5, 1), 1, signups_before=None))
+
+    def test_signups_before_command_and_validation(self):
+        output = StringIO()
+        call_command('growth_cohorts', '--as-of', '2026-05-01', stdout=output)
+        self.assertIsNone(json.loads(output.getvalue())['signups_before'])
+        with self.assertRaisesMessage(CommandError, 'invalid fromisoformat value'):
+            call_command('growth_cohorts', '--as-of', '2026-05-01', '--signups-before', 'invalid')
+        for cutoff in ('2026-03-31', '2026-05-01'):
+            output = StringIO()
+            call_command('growth_cohorts', '--as-of', '2026-05-01',
+                         '--signups-before', cutoff, stdout=output)
+            self.assertEqual(json.loads(output.getvalue())['signups_before'], cutoff + 'T00:00:00+00:00')
+        self.assertEqual(build_report(date(2026, 5, 1), 1)['cohorts'],
+                         build_report(date(2026, 5, 1), 1, signups_before=date(2026, 5, 1))['cohorts'])
+        with self.assertRaisesMessage(ValueError, 'signups_before must be <= as_of'):
+            build_report(date(2026, 5, 1), signups_before=date(2026, 5, 2))
+        with self.assertRaisesMessage(CommandError, 'signups_before must be <= as_of'):
+            call_command('growth_cohorts', '--as-of', '2026-05-01', '--signups-before', '2026-05-02')
+
     def test_granularity_aggregates_same_unsuppressed_metrics(self):
         get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
         for index, day in enumerate((date(2026, 1, 12), date(2026, 1, 19),

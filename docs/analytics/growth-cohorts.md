@@ -12,7 +12,18 @@ before as-of into one cohort labelled `cohort: all_signups`. The header records
 `granularity`. Each run is self-consistent: it applies the same metric definitions,
 maturity rules, exclusions and suppression to its chosen groups.
 
-Comparing different granularities or as-of dates for the same data can narrow
+Use `--as-of <today> --granularity all --signups-before <as_of minus 31 days>`
+for the PRD figures (replace the placeholders with ISO dates). For example,
+`python manage.py growth_cohorts --as-of 2026-05-01 --granularity all --signups-before 2026-03-31`.
+The optional cutoff includes only users with `date_joined` strictly before UTC
+midnight at the start of that date, in addition to the as-of bound. It must be
+at or before as-of. The header records `signups_before` as ISO UTC midnight, or
+null by default. Results then describe **only older signups**. Maturity is still
+evaluated at as-of: this 31-day cutoff makes every metric fully mature
+(`immature = 0`), removing small-immature suppression; all other small-cell,
+complementary, nested-window and first-action distribution rules still apply.
+
+Comparing different `--signups-before` cutoffs, granularities or as-of dates for the same data can narrow
 small cells through **differencing**. Operators must not publish week-level and
 month/all-level tables side by side without review. This is a minimal mitigation,
 not a general privacy guarantee.
@@ -21,7 +32,10 @@ Weekly signup cohorts start Monday in UTC, while retention days use each user’
 profile timezone. All eligible historical weeks are
 included, including partial/immature weeks. Population excludes staff, then
 superusers, then configured IDs, then configured email domains. Exclusion counts
-are sequential/disjoint and cover all signups before as-of, not event authors.
+are sequential/disjoint and cover signups within both date bounds, not event authors.
+The signup cutoff is applied before every exclusion, so exclusions and cohort
+counts describe the same restricted population. Freshness remains the global
+analytics timestamp before as-of.
 Each run uses the initially read population as its snapshot and ignores action rows for users who become eligible later.
 
 Optional Django settings `ANALYTICS_EXCLUDED_USER_IDS` and
