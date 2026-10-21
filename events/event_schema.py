@@ -4,11 +4,21 @@ from .models import EventType
 
 EVENT_SCHEMA_VERSION = 2
 
-NOTIFICATION_LIFECYCLE_EVENT_CODES = frozenset({
-    EventType.NOTIFICATION_PROMPT, EventType.NOTIFICATION_SEND,
-    EventType.NOTIFICATION_RECEIPT, EventType.NOTIFICATION_OPENED,
-    EventType.NOTIFICATION_DESTINATION,
-})
+NOTIFICATION_LIFECYCLE_EVENT_CODES = frozenset(EventType.NOTIFICATION_LIFECYCLE_CODES)
+
+# Screen family -> full tail regex (after splitting screen at its first slash).
+# External payloads with a top-level url key use the 'url' destination directly.
+ROUTE_FAMILIES = {
+    'activity': r'',
+    'devotional': r'[0-9]+',
+    'fast': r'[0-9]+',
+    'learn': r'(?:video|article|recipe)/[0-9]+',
+    'prayer': r'[0-9]+',
+    'prayer-request': r'[0-9]+',
+    'prayer-requests': r'',
+    'prayer-set': r'[0-9]+',
+}
+
 
 # v2 per-type payload keys, in addition to the common schema_version envelope.
 # Contracts only: producers must validate bounded vocabulary/identifiers, never
@@ -31,18 +41,18 @@ NOTIFICATION_PAYLOAD_KEYS = {
 NOTIFICATION_KINDS = frozenset({
     'upcoming_fast', 'ongoing_fast', 'daily_fast', 'culmination_feast',
     'weekly_prayer_requests', 'prayer_request_completed', 'prayer_thanks',
-    'fast_milestone', 'post_fast', 'nudge_nonjoin', 'nudge_inactive',
+    'fast_milestone', 'nudge_nonjoin', 'nudge_inactive',
     'nudge_activity_feed', 'nudge_prayer_acceptance', 'admin_manual', 'test', 'unclassified',
 })
 NOTIFICATION_DESTINATIONS = frozenset({
     'fast', 'devotional', 'prayer_set', 'prayer_request', 'prayer_requests',
-    'learn', 'none', 'other',
+    'learn', 'activity', 'prayer', 'url', 'none', 'other',
 })
 NOTIFICATION_OUTCOMES = frozenset({'provider_accepted', 'provider_rejected', 'send_error'})
 NOTIFICATION_REPORTING_GROUPS = {
     kind: ('prayer_request_notifications' if kind in {'prayer_thanks', 'prayer_request_completed'}
            else kind)
-    for kind in NOTIFICATION_KINDS
+    for kind in sorted(NOTIFICATION_KINDS)
 }
 
 
@@ -68,7 +78,9 @@ EXPOSURE_NOISE_EVENT_CODES = NOTIFICATION_LIFECYCLE_EVENT_CODES | frozenset({
 })
 
 EVENT_CODE_CLASSIFICATION = {
-    **dict.fromkeys(ACTION_EVENT_CODES, 'action'),
-    **dict.fromkeys(RETURN_SIGNAL_EVENT_CODES, 'return-signal'),
-    **dict.fromkeys(EXPOSURE_NOISE_EVENT_CODES, 'exposure-noise'),
+    **dict.fromkeys(sorted(ACTION_EVENT_CODES), 'action'),
+    **dict.fromkeys(sorted(RETURN_SIGNAL_EVENT_CODES), 'return-signal'),
+    **dict.fromkeys(sorted(EXPOSURE_NOISE_EVENT_CODES), 'exposure-noise'),
 }
+
+# track_in_analytics is informational; lifecycle exclusion uses the code list.

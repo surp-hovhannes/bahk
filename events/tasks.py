@@ -2,6 +2,8 @@
 Celery tasks for activity feed operations.
 """
 
+from events.event_semantics import user_visible_events
+
 from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -143,7 +145,7 @@ def batch_create_activity_feed_items_task(event_ids, user_id=None):
         )
 
         created_count = 0
-        for event in events:
+        for event in user_visible_events(events):
             try:
                 user = None
                 if user_id:
@@ -205,7 +207,7 @@ def populate_user_activity_feed_task(user_id, days_back=30):
         ).select_related('event_type', 'content_type')
 
         created_count = 0
-        for event in events:
+        for event in user_visible_events(events):
             # Check if feed item already exists
             existing_feed_item = UserActivityFeed.objects.filter(
                 user=user,

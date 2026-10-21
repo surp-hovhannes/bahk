@@ -12,15 +12,16 @@ from django.db.models.functions import Coalesce, TruncDate
 
 from hub.models import FastParticipation, Profile
 from .models import Event, EventType
-from .event_semantics import exclude_legacy_screen_views
-from .event_schema import NOTIFICATION_LIFECYCLE_EVENT_CODES
+from .event_semantics import exclude_legacy_screen_views, user_visible_events
 
 
 def _without_participation_noops():
     # Use a PK subquery so missing JSON keys cannot exclude legacy events via
     # SQL NULL semantics on SQLite/PostgreSQL.
     noops = Event.objects.filter(
-        event_type__code__in=[EventType.USER_JOINED_FAST, EventType.USER_LEFT_FAST],
+        event_type_id__in=EventType.objects.filter(
+            code__in=[EventType.USER_JOINED_FAST, EventType.USER_LEFT_FAST],
+        ).values('pk'),
         data__participation_tracked=True, data__participation_changed=False,
     ).values("pk")
     return Event.objects.exclude(pk__in=noops)
@@ -28,9 +29,7 @@ def _without_participation_noops():
 
 def analytics_events():
     """Metric rows: omit participation no-ops, screen noise and notification telemetry."""
-    return exclude_legacy_screen_views(_without_participation_noops()).exclude(
-        event_type__code__in=NOTIFICATION_LIFECYCLE_EVENT_CODES,
-    )
+    return user_visible_events(exclude_legacy_screen_views(_without_participation_noops()))
 
 
 def legacy_transition_events(code=None, *, dated_joins_only=False):

@@ -32,6 +32,18 @@ class EventType(models.Model):
     NOTIFICATION_OPENED = 'notification_opened'
     NOTIFICATION_DESTINATION = 'notification_destination'
 
+    NOTIFICATION_LIFECYCLE_CODES = (
+        NOTIFICATION_PROMPT, NOTIFICATION_SEND, NOTIFICATION_RECEIPT,
+        NOTIFICATION_OPENED, NOTIFICATION_DESTINATION,
+    )
+    NOTIFICATION_LIFECYCLE_TITLES = {
+        NOTIFICATION_PROMPT: 'Notification prompt',
+        NOTIFICATION_SEND: 'Notification send',
+        NOTIFICATION_RECEIPT: 'Notification receipt',
+        NOTIFICATION_OPENED: 'Notification opened',
+        NOTIFICATION_DESTINATION: 'Notification destination',
+    }
+
     # Engagement events for retention calculations
     DEVOTIONAL_VIEWED = 'devotional_viewed'
     CHECKLIST_USED = 'checklist_used'
@@ -136,6 +148,7 @@ class EventType(models.Model):
         default=True, 
         help_text="Whether this event type is currently active"
     )
+    # Informational for lifecycle types: exclusion is by the stable code list.
     track_in_analytics = models.BooleanField(
         default=True,
         help_text="Whether to include this event type in analytics dashboards"
@@ -160,8 +173,6 @@ class EventType(models.Model):
     @classmethod
     def get_or_create_default_types(cls):
         """Create default event types if they don't exist."""
-        from .event_schema import NOTIFICATION_LIFECYCLE_EVENT_CODES
-
         created_types = []
         for code, name in cls.CORE_EVENT_TYPES:
             event_type, created = cls.objects.get_or_create(
@@ -170,7 +181,7 @@ class EventType(models.Model):
                     'name': name,
                     'category': cls._get_category_for_code(code),
                     'requires_target': cls._requires_target_for_code(code),
-                    'track_in_analytics': (False if code in NOTIFICATION_LIFECYCLE_EVENT_CODES
+                    'track_in_analytics': (False if code in cls.NOTIFICATION_LIFECYCLE_CODES
                                            else cls._meta.get_field('track_in_analytics').get_default()),
                 }
             )
@@ -180,21 +191,27 @@ class EventType(models.Model):
     
     @classmethod
     def missing_core_types(cls):
-        """Return missing and inactive core codes without writing any rows."""
-        registered = dict(cls.objects.filter(
-            code__in=[code for code, _ in cls.CORE_EVENT_TYPES],
-        ).values_list('code', 'is_active'))
+        """Read-only registration health; inactive codes are operator off switches."""
+        rows = {row.code: row for row in cls.objects.filter(
+            code__in=sorted(code for code, _ in cls.CORE_EVENT_TYPES),
+        )}
         return {
-            'missing': sorted(code for code, _ in cls.CORE_EVENT_TYPES if code not in registered),
-            'inactive': sorted(code for code, active in registered.items() if not active),
+            'missing': sorted(code for code, _ in cls.CORE_EVENT_TYPES if code not in rows),
+            'inactive': sorted(code for code, row in rows.items() if not row.is_active),
+            'invalid': sorted(
+                f'{code} ({field})'
+                for code, row in rows.items() if code in cls.NOTIFICATION_LIFECYCLE_CODES
+                for field, expected in (
+                    ('category', 'notification'), ('requires_target', False),
+                    ('track_in_analytics', False),
+                ) if getattr(row, field) != expected
+            ),
         }
 
     @classmethod
     def _get_category_for_code(cls, code):
         """Get appropriate category for event type code."""
-        from .event_schema import NOTIFICATION_LIFECYCLE_EVENT_CODES
-
-        if code in NOTIFICATION_LIFECYCLE_EVENT_CODES:
+        if code in cls.NOTIFICATION_LIFECYCLE_CODES:
             return 'notification'
         if code in [cls.USER_JOINED_FAST, cls.USER_LEFT_FAST, cls.USER_LOGGED_IN, cls.USER_LOGGED_OUT, cls.PRAYER_REQUEST_CREATED, cls.PRAYER_REQUEST_ACCEPTED]:
             return 'user_action'
@@ -353,9 +370,19 @@ class Event(models.Model):
     
     def save(self, *args, **kwargs):
         """Override save to perform validation and cache invalidation."""
+        lifecycle = self.event_type.code in EventType.NOTIFICATION_LIFECYCLE_CODES
+        if lifecycle:
+            self.title = EventType.NOTIFICATION_LIFECYCLE_TITLES[self.event_type.code]
+            self.ip_address = None
+            self.user_agent = ''
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'title', 'ip_address', 'user_agent'}
         self.full_clean()
         super().save(*args, **kwargs)
         
+        if lifecycle:
+            return
+
         # Invalidate analytics caches when new events are created
         try:
             from .analytics_cache import AnalyticsCacheService
@@ -414,7 +441,7 @@ class Event(models.Model):
         ip_address = None
         user_agent = ""
         lang = None
-        if request:
+        if request and event_type_code not in EventType.NOTIFICATION_LIFECYCLE_CODES:
             ip_address = cls._get_client_ip(request)
             user_agent = request.META.get('HTTP_USER_AGENT', '')
             lang = request.GET.get('lang') or request.POST.get('lang')
@@ -445,6 +472,8 @@ class Event(models.Model):
     @classmethod
     def _generate_title(cls, event_type, user, target):
         """Generate a default title for the event."""
+        if event_type.code in EventType.NOTIFICATION_LIFECYCLE_TITLES:
+            return EventType.NOTIFICATION_LIFECYCLE_TITLES[event_type.code]
         user_str = str(user) if user else "System"
         
         if event_type.code == EventType.USER_JOINED_FAST:
