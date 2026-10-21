@@ -36,6 +36,43 @@ test("renders both documented resources and shares a single anonymous request", 
   await expect(page.locator("bahk-fast-or-feast [role=status]")).toHaveAttribute("aria-live", "polite");
 });
 
+test("each reading links to its card on the Fast & Pray readings page", async ({ page }) => {
+  await respond(page, (data) => {
+    data.readings[2].id = "3";  // Not an integer ID: rendered without a link.
+    return data;
+  });
+  await mount(page);
+  const links = page.locator("bahk-daily-readings li a");
+  await expect(links).toHaveCount(2);
+  await expect(links.first()).toHaveAttribute("href", "https://fastandpray.app/readings/2026-03-01#reading-1");
+  await expect(links.nth(1)).toHaveAttribute("href", "https://fastandpray.app/readings/2026-03-01#reading-2");
+  await expect(links.first()).toHaveAttribute("target", "_blank");
+  await expect(page.locator("bahk-daily-readings li")).toHaveText(["Matthew 5:1–12", "John 3:16", "Genesis 1:31–2:3"]);
+  await expect(page.locator("bahk-daily-readings")).not.toContainText("lectionary");
+});
+
+test("language=hy translates the widget text, not just the API content", async ({ page }) => {
+  await respond(page, (data) => ({ ...data, fast: { ...data.fast, name: "Մեծ պահք" } }));
+  await mount(page, 'church-id="1" date="2026-03-01" time-zone="UTC" language="hy"');
+  await expect(page.locator("bahk-fast-or-feast h2")).toHaveText("Պահք կամ տոն");
+  await expect(page.locator("bahk-daily-readings h2")).toHaveText("Օրվա ընթերցվածքներ");
+  await expect(page.locator("bahk-fast-or-feast section")).toHaveAttribute("lang", "hy");
+  await expect(page.locator("bahk-fast-or-feast .tag")).toHaveText("Պահքի օր");
+  await expect(page.locator("bahk-fast-or-feast .cta")).toHaveText("Կարդալ ավելին Fast & Pray-ում");
+  await expect(page.locator("bahk-fast-or-feast time")).toHaveText("1 մարտի, 2026 թ.");
+});
+
+test("language=hy errors are Armenian; an invalid language falls back to English", async ({ page }) => {
+  await page.route(calendar, (route) => route.fulfill({ status: 500, json: { code: "error", message: "x", details: {} } }));
+  await mount(page, 'church-id="1" date="2026-03-01" time-zone="UTC" language="hy"', ["bahk-fast-or-feast"]);
+  await expect(page.locator("bahk-fast-or-feast [role=status]")).toHaveText("Չհաջողվեց բեռնել։");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("Ծառայությունը հասանելի չէ (HTTP 500)։");
+  await expect(page.locator("bahk-fast-or-feast button")).toHaveText("Կրկին փորձել");
+  await page.locator("bahk-fast-or-feast").evaluate((element) => element.setAttribute("language", "fr"));
+  await expect(page.locator("bahk-fast-or-feast [role=status]")).toHaveText("Unable to load this widget.");
+  await expect(page.locator("bahk-fast-or-feast")).toContainText("language must be en or hy.");
+});
+
 test("has a loading state while the API is pending", async ({ page }) => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });

@@ -47,7 +47,7 @@ Both elements support the same attributes; changes reload the element.
 | `api-host` | `https://api.fastandpray.app` | HTTP(S) origin only, without a path, credentials, query, or fragment. HTTP is intended for local testing. |
 | `date` | Today | Strict, valid `YYYY-MM-DD`. An explicit date stays fixed, including across midnight. |
 | `time-zone` | Browser's IANA timezone, then `UTC` | Determines today's date. Set a parish timezone for consistent guidance across visitors. Invalid names show an error. |
-| `language` | `en` | API content language: `en` or `hy`. Widget labels remain English; API text is marked with its requested language. The API may fall back to canonical text. |
+| `language` | `en` | `en` or `hy`. Sets both the API content language and the widget's own text (headings, labels, dates, status and error messages). API text is marked with its requested language, and the API may fall back to canonical text. Configuration errors stay in English because they are addressed to the site's developer. |
 
 An omitted `date` is checked locally every minute. At the next check after
 midnight in the selected timezone, the widget requests the new day. Browser
@@ -125,8 +125,10 @@ authorization headers. Nothing calls the legacy `/api/` product routes.
 - Daily readings display `readings[].book`, `start_chapter`, `start_verse`,
   `end_chapter`, and `end_verse`, preserving API order. Single verses,
   same-chapter ranges, and cross-chapter ranges have distinct formatting.
-- V1 provides **citations only**, without Scripture text, passage links, or
-  AI context. These widgets do not need an API.Bible key or retrieve Bible
+  Each citation links to `https://fastandpray.app/readings/{date}#reading-{id}`
+  in a new tab. That page opens the matching reading card, with its NKJV text
+  and context. The page is in English whatever the widget's `language`.
+- V1 provides **citations only**, without Scripture text or AI context. These widgets do not need an API.Bible key or retrieve Bible
   text. The fasting schema provides descriptions, not structured dietary
   rules; widgets do not infer food restrictions.
 - Missing stored data shows “… recorded for this date.” An empty response

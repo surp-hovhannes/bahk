@@ -3,6 +3,40 @@
   "use strict";
 
   const DEFAULT_HOST = "https://api.fastandpray.app";
+  const READINGS_PAGE = "https://fastandpray.app/readings/";
+  // Widget text for language="en" / "hy". API content arrives already localized.
+  // Configuration errors stay in English: they are addressed to the site's developer.
+  const STRINGS = {
+    en: {
+      fastOrFeast: "Fast or Feast", dailyReadings: "Daily readings",
+      loading: "Loading…", failed: "Unable to load this widget.", retry: "Try again",
+      wait: (time) => `Please wait until ${time} to retry.`,
+      network: "Could not reach the public API. Check your connection, API host, and the API's CORS settings.",
+      throttled: "The API has asked us to wait before trying again.",
+      notFound: "The public calendar is unavailable. Check the church ID and whether public v1 resources are enabled.",
+      http: (status) => `The public API is unavailable (HTTP ${status}).`,
+      fastDay: "Fast day", feastDay: "Feast day", currentFast: "Current fast", feast: "Feast",
+      nothing: "Nothing is recorded for this date.", also: "Also commemorated: ",
+      feastsUnavailable: "Feast information is temporarily unavailable.",
+      readMore: "Read more in Fast & Pray",
+      noReadings: "No readings are recorded for this date.", unknownBook: "Unknown book",
+    },
+    hy: {
+      fastOrFeast: "Պահք կամ տոն", dailyReadings: "Օրվա ընթերցվածքներ",
+      loading: "Բեռնվում է…", failed: "Չհաջողվեց բեռնել։", retry: "Կրկին փորձել",
+      wait: (time) => `Կրկին փորձեք ժամը ${time}-ից հետո։`,
+      network: "Չհաջողվեց կապ հաստատել։ Ստուգեք ինտերնետ կապը և կրկին փորձեք։",
+      throttled: "Խնդրում ենք մի փոքր սպասել և կրկին փորձել։",
+      notFound: "Օրացույցը հասանելի չէ։",
+      http: (status) => `Ծառայությունը հասանելի չէ (HTTP ${status})։`,
+      fastDay: "Պահքի օր", feastDay: "Տոնի օր", currentFast: "Ընթացիկ պահք", feast: "Տոն",
+      nothing: "Այս օրվա համար գրառում չկա։", also: "Նաև հիշատակվում են՝ ",
+      feastsUnavailable: "Տոների մասին տեղեկությունը ժամանակավորապես հասանելի չէ։",
+      readMore: "Կարդալ ավելին Fast & Pray-ում",
+      noReadings: "Այս օրվա համար ընթերցվածքներ գրանցված չեն։", unknownBook: "Անհայտ գիրք",
+      unexpected: "Ստացվել է անսպասելի պատասխան։",
+    },
+  };
   const pending = new Map();
   const cooldowns = new Map();
   // Fast & Pray grapevine mark, traced from the app icon (bahk_landing public/app-icon-1024.png).
@@ -96,9 +130,15 @@
     ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--_border); }
     li { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .375rem;
       padding: .625rem 0; border-bottom: 1px solid var(--_border); }
-    li > span:first-child { font-weight: 600; }
+    li > a { display: flex; flex: 1; flex-wrap: wrap; align-items: baseline; column-gap: .375rem;
+      color: inherit; font-weight: inherit; text-decoration: none; }
+    li > a::after { content: "›"; content: "›" / ""; margin-inline-start: auto; padding-inline-start: .5rem;
+      color: var(--_muted); font-weight: 600; }
+    li > a:hover > span:first-child { color: var(--_accent); text-decoration: underline;
+      text-decoration-thickness: 1px; text-underline-offset: .2em; }
+    li > a:hover::after { color: var(--_accent); }
+    li > span:first-child, li > a > span:first-child { font-weight: 600; }
     li .ref { color: var(--_fg-muted); font-variant-numeric: tabular-nums; }
-    ul + .meta { margin-top: .75rem; font-size: .8125rem; }
     a { color: var(--_accent); font-weight: 600; text-decoration-thickness: 1px;
       text-underline-offset: .2em; }
     a:hover { color: var(--_accent-hover); }
@@ -153,6 +193,17 @@
     return svg;
   }
 
+  // Genitive month names: not every browser ships Armenian locale data for Intl.
+  const HY_MONTHS = ["հունվարի", "փետրվարի", "մարտի", "ապրիլի", "մայիսի", "հունիսի", "հուլիսի",
+    "օգոստոսի", "սեպտեմբերի", "հոկտեմբերի", "նոյեմբերի", "դեկտեմբերի"];
+
+  function longDate(date, language) {
+    const [year, month, day] = date.split("-").map(Number);
+    if (language === "hy") return `${day} ${HY_MONTHS[month - 1]}, ${year} թ.`;
+    return new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" })
+      .format(new Date(date + "T12:00:00Z"));
+  }
+
   function validDate(value) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
     const parsed = new Date(value + "T00:00:00Z");
@@ -201,16 +252,15 @@
     }
   }
 
-  function unavailable(message, retryAt) {
-    const error = new Error(message);
-    error.retryAt = retryAt;
-    return error;
+  // Coded errors are shown in the widget's language; the English message is the fallback.
+  function failure(code, message, extra) {
+    return Object.assign(new Error(message), { code }, extra);
   }
 
   async function calendar(options) {
     const { url } = options;
     const retryAt = cooldowns.get(url.origin) || 0;
-    if (retryAt > Date.now()) throw unavailable("The API has asked us to wait before trying again.", retryAt);
+    if (retryAt > Date.now()) throw failure("throttled", STRINGS.en.throttled, { retryAt });
     const key = url.href;
     if (pending.has(key)) return pending.get(key);
     const request = (async () => {
@@ -237,10 +287,8 @@
             waitUntil += Math.floor(Math.random() * 1000) + 1;
             cooldowns.set(url.origin, waitUntil);
           }
-          const message = response.status === 404
-            ? "The public calendar is unavailable. Check the church ID and whether public v1 resources are enabled."
-            : `The public API is unavailable (HTTP ${response.status}).`;
-          throw unavailable(message, waitUntil);
+          if (response.status === 404) throw failure("notFound", STRINGS.en.notFound, { retryAt: waitUntil });
+          throw failure("http", STRINGS.en.http(response.status), { retryAt: waitUntil, status: response.status });
         }
         return await response.json();
       } finally {
@@ -258,7 +306,7 @@
   function checkEnvelope(data, options) {
     if (!data || data.date !== options.date || !data.church ||
         String(data.church.id) !== options.church || typeof data.church.name !== "string") {
-      throw new Error("The API returned an unexpected calendar response.");
+      throw failure("unexpected", "The API returned an unexpected calendar response.");
     }
   }
 
@@ -291,23 +339,31 @@
       if (this.isConnected) this.refresh();
     }
 
+    // Falls back to English so an invalid language attribute still gets a readable error.
+    get uiLanguage() {
+      return STRINGS[this.getAttribute("language")] ? this.getAttribute("language") : "en";
+    }
+
+    t(key, ...args) {
+      const value = STRINGS[this.uiLanguage][key] ?? STRINGS.en[key];
+      return typeof value === "function" ? value(...args) : value;
+    }
+
     frame(options) {
       const style = node("style", styles);
       const section = node("section");
-      section.lang = "en";
+      section.lang = this.uiLanguage;
       section.setAttribute("aria-label", this.heading);
       section.append(node("h2", this.heading));
       const byline = node("div", undefined, "byline");
-      this.status = node("p", "Loading…");
+      this.status = node("p", this.t("loading"));
       this.status.setAttribute("role", "status");
       this.status.setAttribute("aria-live", "polite");
       this.status.setAttribute("aria-atomic", "true");
       byline.append(this.status);
       if (options) {
         const meta = node("p", undefined, "meta");
-        const time = node("time", new Intl.DateTimeFormat("en", {
-          dateStyle: "long", timeZone: "UTC",
-        }).format(new Date(options.date + "T12:00:00Z")));
+        const time = node("time", longDate(options.date, this.uiLanguage));
         time.dateTime = options.date;
         meta.append(time, document.createTextNode(` · ${options.timeZone}`));
         byline.append(meta);
@@ -346,17 +402,19 @@
         if (!this.options) this.frame();
         this.content.replaceChildren();
         this.content.setAttribute("aria-busy", "false");
-        this.status.textContent = "Unable to load this widget.";
-        const message = error instanceof TypeError || error.name === "AbortError"
-          ? "Could not reach the public API. Check your connection, API host, and the API's CORS settings."
-          : error.message;
+        this.status.textContent = this.t("failed");
+        let message = error.message;
+        if (error instanceof TypeError || error.name === "AbortError") message = this.t("network");
+        else if (error.code === "http") message = this.t("http", error.status);
+        else if (error.code && this.uiLanguage !== "en") message = this.t(error.code);
         this.content.append(node("p", message));
-        const button = node("button", "Try again");
+        const button = node("button", this.t("retry"));
         button.type = "button";
         button.addEventListener("click", () => this.refresh());
         if (error.retryAt > Date.now()) {
           button.disabled = true;
-          this.content.append(node("p", `Please wait until ${new Date(error.retryAt).toLocaleTimeString()} to retry.`, "meta"));
+          const time = new Date(error.retryAt).toLocaleTimeString(this.uiLanguage);
+          this.content.append(node("p", this.t("wait", time), "meta"));
           this.retryTimer = setTimeout(() => { button.disabled = false; },
             Math.min(error.retryAt - Date.now(), 2147483647));
         }
@@ -384,18 +442,18 @@
   }
 
   class FastOrFeast extends CalendarWidget {
-    get heading() { return "Fast or Feast"; }
+    get heading() { return this.t("fastOrFeast"); }
 
     render(data, options) {
       const { fast, feasts } = data;
       if (fast !== null && !nullableStrings(fast, ["name", "description", "learn_more_url", "share_url",
           "image_url", "thumbnail_url"])) {
-        throw new Error("The API returned an unexpected fast.");
+        throw failure("unexpected", "The API returned an unexpected fast.");
       }
       if (!Array.isArray(feasts) || !feasts.every((feast) =>
           nullableStrings(feast, ["name", "description", "share_url"]) &&
           (!feast.icon || nullableStrings(feast.icon, ["image_url", "thumbnail_url"])))) {
-        throw new Error("The API returned unexpected feasts.");
+        throw failure("unexpected", "The API returned unexpected feasts.");
       }
       const feastsUnavailable = Array.isArray(data.partial_failures) &&
         data.partial_failures.some((failure) => failure && failure.component === "feasts");
@@ -406,7 +464,7 @@
       let others = feasts;
       if (fast) {
         this.content.append(this.card({
-          kind: "fast", label: "Fast day", title: fast.name || "Current fast",
+          kind: "fast", label: this.t("fastDay"), title: fast.name || this.t("currentFast"),
           titled: Boolean(fast.name), description: fast.description,
           href: publicLink(fast.share_url) || publicLink(fast.learn_more_url),
           image: publicImage(fast.thumbnail_url) || publicImage(fast.image_url),
@@ -415,18 +473,18 @@
         const [feast] = feasts;
         others = feasts.slice(1);
         this.content.append(this.card({
-          kind: "feast", label: "Feast day", title: feast.name || "Feast",
+          kind: "feast", label: this.t("feastDay"), title: feast.name || this.t("feast"),
           titled: Boolean(feast.name), description: feast.description,
           href: publicLink(feast.share_url),
           image: feast.icon && (publicImage(feast.icon.thumbnail_url) || publicImage(feast.icon.image_url)),
         }, options));
       } else if (!feastsUnavailable) {
-        this.content.append(node("p", "Nothing is recorded for this date.", "empty"));
+        this.content.append(node("p", this.t("nothing"), "empty"));
       }
 
       const names = others.map((feast) => feast.name).filter(Boolean);
       if (names.length) {
-        const also = node("p", "Also commemorated: ", "also");
+        const also = node("p", this.t("also"), "also");
         names.forEach((name, index) => {
           if (index) also.append(document.createTextNode(", "));
           const span = node("span", name);
@@ -436,7 +494,7 @@
         this.content.append(also);
       }
       if (feastsUnavailable) {
-        this.content.append(node("p", "Feast information is temporarily unavailable.", "meta"));
+        this.content.append(node("p", this.t("feastsUnavailable"), "meta"));
       }
     }
 
@@ -474,25 +532,25 @@
         summary.lang = options.language;
         body.append(summary);
       }
-      if (href) body.append(node("span", "Read more in Fast & Pray", "cta"));
+      if (href) body.append(node("span", this.t("readMore"), "cta"));
       card.append(body);
       return card;
     }
   }
 
   class DailyReadings extends CalendarWidget {
-    get heading() { return "Daily readings"; }
+    get heading() { return this.t("dailyReadings"); }
 
     render(data, options) {
       if (!Array.isArray(data.readings) || !data.readings.every((reading) => reading &&
           (reading.book === null || typeof reading.book === "string") &&
           ["start_chapter", "start_verse", "end_chapter", "end_verse"].every((key) =>
             Number.isInteger(reading[key]) && reading[key] > 0))) {
-        throw new Error("The API returned unexpected daily readings.");
+        throw failure("unexpected", "The API returned unexpected daily readings.");
       }
       this.status.textContent = "";
       if (data.readings.length === 0) {
-        this.content.append(node("p", "No readings are recorded for this date.", "empty"));
+        this.content.append(node("p", this.t("noReadings"), "empty"));
         return;
       }
       const list = node("ul");
@@ -501,14 +559,24 @@
         const start = `${sc}:${sv}`;
         const end = sc === ec ? (sv === ev ? "" : `–${ev}`) : `–${ec}:${ev}`;
         const item = node("li");
-        const book = node("span", reading.book || "Unknown book");
+        const book = node("span", reading.book || this.t("unknownBook"));
         if (reading.book) book.lang = options.language;
         // The leading space keeps the item's text content readable as "Book 1:2".
-        item.append(book, node("span", ` ${start}${end}`, "ref"));
+        const citation = [book, node("span", ` ${start}${end}`, "ref")];
+        if (Number.isSafeInteger(reading.id) && reading.id > 0) {
+          // The readings page opens the card whose anchor matches the Reading ID.
+          const link = node("a");
+          link.href = `${READINGS_PAGE}${options.date}#reading-${reading.id}`;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.append(...citation);
+          item.append(link);
+        } else {
+          item.append(...citation);
+        }
         list.append(item);
       }
       this.content.append(list);
-      this.content.append(node("p", "Scripture references from the daily lectionary.", "meta"));
     }
   }
 
