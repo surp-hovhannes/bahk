@@ -1,6 +1,5 @@
-from notifications.utils import telemetry_task_kwargs
 from celery import shared_task
-from notifications.utils import send_push_notification
+from notifications.utils import send_push_notification, telemetry_task_kwargs
 from hub.models import Fast, Devotional, FastParticipation
 from hub.models import Profile
 from hub.models import Day

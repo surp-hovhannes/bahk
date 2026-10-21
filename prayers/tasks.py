@@ -1,5 +1,4 @@
 """Celery tasks for the prayers app."""
-from notifications.utils import telemetry_task_kwargs
 
 import logging
 import time
@@ -20,6 +19,7 @@ from hub.services.llm_requests import anthropic_message, anthropic_text
 from hub.services.icon_match_router import match_icons
 from hub.services.icon_taxonomy_matching import assignment_current
 from icons.models import Icon
+from notifications.utils import telemetry_task_kwargs
 from prayers.clef_moderation import clef_moderation_result
 from prayers.models import Prayer, PrayerRequest, PrayerRequestPrayerLog
 

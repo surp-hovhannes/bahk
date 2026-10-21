@@ -169,14 +169,14 @@ def send_push_notification(
                 logger.error("Invalid data format provided")
                 data = {}
 
-        from events.event_schema import EVENT_SCHEMA_VERSION, NOTIFICATION_KINDS
-        from events.models import Event, EventType
-
-        if kind == 'unclassified' and notification_type in NOTIFICATION_KINDS:
-            kind = notification_type
-        kind = kind if isinstance(kind, str) and kind in NOTIFICATION_KINDS else 'unclassified'
         event_type = None
         if getattr(settings, 'NOTIFICATION_TELEMETRY_ENABLED', False):
+            from events.event_schema import EVENT_SCHEMA_VERSION, NOTIFICATION_KINDS
+            from events.models import Event, EventType
+
+            if kind == 'unclassified' and notification_type in NOTIFICATION_KINDS:
+                kind = notification_type
+            kind = kind if isinstance(kind, str) and kind in NOTIFICATION_KINDS else 'unclassified'
             try:
                 # Roll back lookup failures before continuing a caller's transaction.
                 with transaction.atomic():

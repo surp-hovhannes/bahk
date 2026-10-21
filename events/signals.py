@@ -2,13 +2,15 @@
 Django signals for automatically tracking user events.
 These signals listen for specific model changes and create corresponding event records.
 """
-from notifications.utils import telemetry_task_kwargs
 
 import logging
 from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.db.models.signals import post_save, m2m_changed, pre_save
 from django.dispatch import receiver
 from hub.utils import get_user_profile_safe
+from notifications.utils import telemetry_task_kwargs
+
+
 @receiver(pre_save, sender='hub.Fast')
 def cache_fast_original_values(sender, instance, **kwargs):
     """
@@ -553,7 +555,8 @@ def create_activity_feed_item(sender, instance, created, **kwargs):
     Create activity feed items when events are created.
     Supports both synchronous and asynchronous creation.
     """
-    if instance.event_type.code in EventType.NOTIFICATION_LIFECYCLE_CODES:
+    code = instance.event_type.code if instance.event_type_id else None
+    if code in EventType.NOTIFICATION_LIFECYCLE_CODES:
         return
 
     if created and instance.user:
@@ -574,7 +577,6 @@ def create_activity_feed_item(sender, instance, created, **kwargs):
     # Fan-out select system events to relevant users (participants of the fast)
     if created and not instance.user:
         try:
-            code = instance.event_type.code
             # Only propagate certain system events
             if code in (EventType.FAST_BEGINNING, EventType.DEVOTIONAL_AVAILABLE):
                 # Ensure the event targets a Fast

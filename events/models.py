@@ -358,7 +358,7 @@ class Event(models.Model):
         super().clean()
         
         # Validate that required target is provided
-        if self.event_type and self.event_type.requires_target:
+        if self.event_type_id and self.event_type.requires_target:
             if not self.target:
                 raise ValidationError(
                     f"Event type '{self.event_type.code}' requires a target object."
@@ -370,9 +370,10 @@ class Event(models.Model):
     
     def save(self, *args, **kwargs):
         """Override save to perform validation and cache invalidation."""
-        lifecycle = self.event_type.code in EventType.NOTIFICATION_LIFECYCLE_CODES
+        code = self.event_type.code if self.event_type_id else None
+        lifecycle = code in EventType.NOTIFICATION_LIFECYCLE_CODES
         if lifecycle:
-            self.title = EventType.NOTIFICATION_LIFECYCLE_TITLES[self.event_type.code]
+            self.title = EventType.NOTIFICATION_LIFECYCLE_TITLES[code]
             self.ip_address = None
             self.user_agent = ''
             if kwargs.get('update_fields') is not None:

@@ -1,11 +1,10 @@
-from notifications.utils import telemetry_task_kwargs
 from django.contrib import admin
 from django.contrib import messages
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.shortcuts import redirect
 from .models import DeviceToken, PromoEmail, PromoEmailImage, PostFastEncouragementEmail
-from .utils import send_push_notification
+from .utils import send_push_notification, telemetry_task_kwargs
 from .tasks import send_promo_email_task, send_push_notification_to_users_task
 from django.contrib.admin import SimpleListFilter
 from hub.models import Fast
