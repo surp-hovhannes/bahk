@@ -1,3 +1,4 @@
+from notifications.utils import telemetry_task_kwargs
 import logging
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
@@ -103,7 +104,7 @@ class TestPushNotificationView(APIView):
         send_push_notification_task.delay(
             message="Test notification",
             user_ids=[request.user.id],
-            kind='test',
+            **telemetry_task_kwargs('test'),
         )
         return Response({"message": "Test notification sent"}, status=status.HTTP_200_OK)
 

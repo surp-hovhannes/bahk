@@ -1,3 +1,4 @@
+from notifications.utils import telemetry_task_kwargs
 from celery import shared_task
 from notifications.utils import send_push_notification
 from hub.models import Fast, Devotional, FastParticipation
@@ -151,7 +152,7 @@ def send_push_notification_task(message, data=None, user_ids=None, notification_
 
     users = list(User.objects.filter(id__in=user_ids, is_active=True))
     if not users:
-        logger.warning("send_push_notification_task: no active users found for ids: %s", user_ids)
+        logger.warning("send_push_notification_task: no active users found among %d targets", len(user_ids))
         return
 
     result = send_push_notification(
@@ -522,7 +523,7 @@ def send_upcoming_fast_push_notification_task():
         if len(users_to_notify) > 0:
             send_push_notification_task.delay(
                 message, data, list(users_to_notify.values_list('id', flat=True)),
-                'upcoming_fast', kind='upcoming_fast',
+                'upcoming_fast',
             )
             logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for upcoming fasts')
         else:
@@ -570,7 +571,7 @@ def send_ongoing_fast_push_notification_task():
         if len(users_to_notify) > 0:
             send_push_notification_task.delay(
                 message, data, list(users_to_notify.values_list('id', flat=True)),
-                'ongoing_fast', kind='ongoing_fast',
+                'ongoing_fast',
             )
             logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for ongoing fasts')
         else:
@@ -609,7 +610,7 @@ def send_daily_fast_push_notification_task():
     if len(users_to_notify) > 0:
         send_push_notification_task.delay(
             message, data, list(users_to_notify.values_list('id', flat=True)),
-            'daily_fast', kind='daily_fast',
+            'daily_fast',
         )
         logger.info(f'Push Notification: Fast reminder sent to {len(users_to_notify)} users for daily fasts')
     else:
@@ -668,7 +669,7 @@ def send_culmination_feast_push_notification_task():
         # Send the push notification
         send_push_notification_task.delay(
             message, data, list(users_to_notify.values_list('id', flat=True)),
-            'culmination_feast', kind='culmination_feast',
+            'culmination_feast',
         )
         logger.info(
             f'Push Notification: Culmination feast notification sent to {len(users_to_notify)} users '
@@ -764,7 +765,6 @@ def send_weekly_prayer_request_push_notification_task():
             data,
             [u.id for u in users_to_notify],
             'weekly_prayer_requests',
-            kind='weekly_prayer_requests',
         )
 
     logger.info(
@@ -822,7 +822,7 @@ def send_fast_nonjoin_nudge_task():
             message=message,
             data={'screen': f'fast/{fast.id}'},
             user_ids=user_ids,
-            kind='nudge_nonjoin',
+            **telemetry_task_kwargs('nudge_nonjoin'),
         )
         logger.info(
             f'Push Notification: Non-joiner nudge for {fast.name} (day {current_day}) '
@@ -882,7 +882,7 @@ def send_inactive_fast_member_nudge_task():
             message=INACTIVE_FAST_MEMBER_MESSAGE.replace('{fast_name}', str(fast.name), 1),
             data={'screen': f'fast/{fast.id}'},
             user_ids=eligible_ids,
-            kind='nudge_inactive',
+            **telemetry_task_kwargs('nudge_inactive'),
         )
         cache.set_many({cache_keys[uid]: True for uid in eligible_ids}, timeout=_REENGAGEMENT_TTL)
         total_sent += len(eligible_ids)
@@ -935,7 +935,7 @@ def send_activity_feed_nudge_task():
             message=ACTIVITY_FEED_NUDGE_MESSAGE.format(count=user.unread_count),
             data={'screen': 'activity'},
             user_ids=[user.id],
-            kind='nudge_activity_feed',
+            **telemetry_task_kwargs('nudge_activity_feed'),
         )
         cache.set(cache_key, True, timeout=_REENGAGEMENT_TTL)
         total_sent += 1
@@ -1012,7 +1012,7 @@ def send_prayer_acceptance_nudge_task():
             message=message,
             data=data,
             user_ids=[user_id],
-            kind='nudge_prayer_acceptance',
+            **telemetry_task_kwargs('nudge_prayer_acceptance'),
         )
         cache.set(cache_key, True, timeout=_PRAYER_NUDGE_TTL)
         total_sent += 1

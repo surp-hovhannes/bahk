@@ -121,7 +121,7 @@ contracts for later producers, not runtime validation in PR1.
 | Type | Payload keys | Meaning |
 | --- | --- | --- |
 | notification_prompt | stage, choice, trigger | Permission prompt lifecycle |
-| notification_send | notif_id, kind, destination, platform, outcome, error_code, ticket_id | Attempt sent to push provider and its outcome |
+| notification_send | notif_id, kind, destination, platform, outcome, error_code, ticket_id, correlatable | Attempt sent to push provider and its outcome |
 | notification_receipt | notif_id, ticket_id, receipt_status, error_code, lag_seconds | Provider receipt and elapsed lag |
 | notification_opened | notif_id, entry, app_state, matched, kind | Notification opened |
 | notification_destination | notif_id, destination, result, matched | Destination resolution |
@@ -234,9 +234,14 @@ policy changes, client endpoint, or RN/OTA publication is included.
 
 Each attempted per-token publish records `notification_send` with constant title
 `Notification send`, empty description, recipient user (nullable), and
-`source=server_domain`. `create_event` stamps schema version 2. No request is
-passed. Missing/inactive types and write errors are caught within a savepoint;
-only a short warning with a hashed token identifier is logged. Events contain
+`source=server_domain`. The sender resolves the active EventType once per call,
+collects rows in token-attempt order, and bulk inserts after the loop (batches of
+500) inside an atomic savepoint. Because bulk inserts bypass save/full_clean/signals,
+the writer explicitly supplies the constant title, empty description, user_id,
+null IP, empty user agent and schema version 2; timestamp uses its model default.
+No User rows are loaded by the token query. No request is passed. Missing/inactive
+types, lookup failures and write errors produce constant warnings and cannot alter
+send counts or returns. Events contain
 no token, DeviceToken primary key, message, original data, content, resource IDs,
 IP address, or user agent. Platform is `ios`, `android`, `web`, or `unknown`.
 
@@ -249,19 +254,21 @@ activity-feed, and prayer-acceptance nudges to their corresponding `nudge_*`
 kinds; manual admin sends to `admin_manual`; admin/API test sends to `test`.
 There is currently no push caller for `post_fast` (encouragement is email only).
 
-Destination comes only from the outgoing payload: exact `learn` and
-`prayer-requests` screens; `fast`, `devotional`, `prayer-set`, `prayer-request`
-screens with an optional numeric resource segment; otherwise `other`. Without a
-screen, presence of devotional/prayer-set/prayer-request/fast ID keys identifies
-the family in that precedence order. Empty data yields `none`. No IDs are copied.
-The `activity` screen maps to `other`.
+Destination uses the shared `ROUTE_FAMILIES` contract above: split at the first
+slash and fullmatch the tail. A top-level `url` maps to `url`; legacy ID keys
+identify only their family. Empty data yields `none`, unknown routes `other`.
+No IDs are copied.
 
 Each token gets a fresh `secrets.token_urlsafe(12)` ID and its own shallow copy
 of outgoing data with flat `fp_nid` / `fp_kind` keys. A conservative JSON envelope
-size check prevents augmentation above 4096 bytes: such sends retain their
+size check of body/data reserves 512 bytes of headroom for provider-side keys
+(4096 - 512 bytes): such sends retain their
 original payload and still record an attempt, but cannot correlate a client open.
 Existing oversize payloads are left to the provider as before. This is a coverage
 limitation; the flag does not guarantee every event has client correlation.
+`correlatable` is true only when augmentation succeeds; oversized envelopes or
+preparation failures after ID allocation still record outcomes with false.
+PR7 reports must exclude false rows from open-rate denominators.
 
 A ticket with status `ok` means `provider_accepted`; status `error` means
 `provider_rejected`. Error codes are limited to `DeviceNotRegistered`,
@@ -288,8 +295,17 @@ tickets), without calling validation. Tests construct real SDK tickets when CI
 installs its requirements. These upstream observations do not identify the
 deployed version. Receipt APIs remain outside PR2.
 
-Writes deliberately use `create_event` rather than bulk inserts, preserving
-validation and schema stamping. Each attempt adds an insert, type lookup, model
-validation and analytics-cache invalidation; bulk-send latency is unmeasured.
-Keep the flag off until CI and deployment-version checks pass, and assess batch
-latency during rollout.
+During rolling deploys, producers omit the new task `kind` keyword while the
+flag is off: older Celery workers reject unknown keywords and would lose pushes.
+All task producers with explicit kinds use `telemetry_task_kwargs`; the five
+scheduled senders derive the default kind from their existing notification_type.
+Keep the flag off throughout worker replacement. This PR does not enable it.
+
+Dead-device tickets are currently counted as sent and tokens are not
+auto-deactivated (pre-existing; separate decision). The legacy
+DeviceNotRegisteredError exception branch remains unchanged in behavior;
+publish() in SDK 2.2.0 returns error tickets without raising that exception.
+Result invalid_tokens contains hashed identifiers, and errors contains exception
+class names, never raw tokens or exception text. Callers only count invalid tokens
+or join error labels. Pinning the SDK still needs a confirmed deployed version;
+no dependency pin is added here.

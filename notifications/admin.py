@@ -1,3 +1,4 @@
+from notifications.utils import telemetry_task_kwargs
 from django.contrib import admin
 from django.contrib import messages
 from django.template.response import TemplateResponse
@@ -186,7 +187,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                         message=message,
                         data=data,
                         device_token_ids=token_ids,
-                        kind='admin_manual',
+                        **telemetry_task_kwargs('admin_manual'),
                     )
                     messages.success(
                         request,

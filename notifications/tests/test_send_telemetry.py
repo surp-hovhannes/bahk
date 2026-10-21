@@ -13,7 +13,7 @@ from events.event_schema import EVENT_SCHEMA_VERSION, NOTIFICATION_DESTINATIONS,
 from events.models import Event, EventType
 from notifications.models import DeviceToken
 from notifications.tasks import send_push_notification_task, send_push_notification_to_users_task
-from notifications.utils import notification_destination, send_push_notification
+from notifications.utils import _device_token_log_id, notification_destination, send_push_notification
 from tests.base import BaseTestCase
 
 
@@ -70,13 +70,14 @@ class SendTelemetryTests(BaseTestCase):
         self.assertEqual(payload['fp_nid'], row.data['notif_id'])
         self.assertRegex(payload['fp_nid'], r'^[A-Za-z0-9_-]{16}$')
         self.assertEqual(payload['fp_kind'], 'prayer_thanks')
+        self.assertTrue(row.data['correlatable'])
         self.assert_private(row)
 
     def test_success_warning_and_telemetry_logs_are_private(self):
         with self.assertLogs('notifications.utils', level='INFO') as logs:
             self.send()
             self.publish.side_effect = DeviceNotRegisteredError(self.ticket('error', 'DeviceNotRegistered'))
-            with patch.object(Event, 'create_event', side_effect=ValueError(self.device.token)):
+            with patch.object(Event.objects, 'bulk_create', side_effect=ValueError(self.device.token)):
                 self.send()
         for secret in (self.device.token, self.message, 'private-data-marker'):
             self.assertNotIn(secret, '\n'.join(logs.output))
@@ -100,6 +101,7 @@ class SendTelemetryTests(BaseTestCase):
         with self.assertLogs('notifications.utils', level='INFO') as logs:
             result = self.send()
         self.assertEqual((result['sent'], result['failed']), (0, 1))
+        self.assertEqual(result['errors'], ['RuntimeError'])
         row = self.rows().get()
         self.assertEqual(row.data['outcome'], 'send_error')
         self.assertNotIn('ticket_id', row.data)
@@ -107,11 +109,11 @@ class SendTelemetryTests(BaseTestCase):
         for secret in (self.device.token, self.message, 'private-data-marker'):
             self.assertNotIn(secret, '\n'.join(logs.output))
 
-    def test_device_not_registered_exception_preserves_deactivation(self):
+    def test_legacy_device_not_registered_exception_branch(self):
         self.publish.side_effect = DeviceNotRegisteredError(self.ticket('error', 'DeviceNotRegistered'))
         result = self.send()
         self.assertEqual((result['sent'], result['failed']), (0, 1))
-        self.assertEqual(result['invalid_tokens'], [self.device.token])
+        self.assertEqual(result['invalid_tokens'], [_device_token_log_id(self.device.token)])
         self.device.refresh_from_db()
         self.assertFalse(self.device.is_active)
         row = self.rows().get()
@@ -143,13 +145,13 @@ class SendTelemetryTests(BaseTestCase):
             for failed in (False, True):
                 with self.subTest(error=type(error).__name__, failed=failed):
                     self.publish.side_effect = RuntimeError('send failed') if failed else None
-                    with patch.object(Event, 'create_event', side_effect=error):
+                    with patch.object(Event.objects, 'bulk_create', side_effect=error):
                         result = self.send()
                     self.assertEqual((result['sent'], result['failed']), (0, 1) if failed else (1, 0))
                     self.assertFalse(self.rows().exists())
 
     def test_database_error_isolated_by_savepoint(self):
-        with patch.object(Event.objects, 'create', side_effect=IntegrityError('write failed')):
+        with patch.object(Event.objects, 'bulk_create', side_effect=IntegrityError('write failed')):
             self.assertEqual(self.send()['sent'], 1)
         self.assertTrue(DeviceToken.objects.filter(pk=self.device.pk).exists())
         self.assertFalse(self.rows().exists())
@@ -183,6 +185,7 @@ class SendTelemetryTests(BaseTestCase):
         self.assertEqual(row.data['kind'], 'unclassified')
         self.assertEqual(row.data['platform'], 'unknown')
         self.assertNotIn('private-kind', json.dumps(row.data))
+        self.assertFalse(row.data['correlatable'])
 
     def test_destination_only_returns_families(self):
         examples = [
@@ -190,12 +193,20 @@ class SendTelemetryTests(BaseTestCase):
             ({'screen': 'devotional/12345'}, 'devotional'),
             ({'screen': 'prayer-set/12345'}, 'prayer_set'),
             ({'screen': 'prayer-request/12345'}, 'prayer_request'),
-            ({'screen': 'prayer-requests'}, 'prayer_requests'), ({'screen': 'learn'}, 'learn'),
+            ({'screen': 'prayer-requests'}, 'prayer_requests'), ({'screen': 'learn'}, 'other'),
             ({'fast_id': 12345}, 'fast'), ({'devotional_id': 12345}, 'devotional'),
             ({'prayer_set_id': 12345}, 'prayer_set'), ({'prayer_request_id': 12345}, 'prayer_request'),
-            ({'screen': 'activity'}, 'other'), ({'screen': 'fast/secret'}, 'other'),
+            ({'screen': 'activity'}, 'activity'), ({'screen': 'fast/secret'}, 'other'),
             ({'screen': 'fast/12345/private'}, 'other'), ({'screen': {}}, 'other'),
         ]
+        examples += [({'screen': route}, family) for route, family in [
+            ('fast/48', 'fast'), ('devotional/123', 'devotional'), ('prayer/77', 'prayer'),
+            ('prayer-request/123', 'prayer_request'), ('prayer-requests', 'prayer_requests'),
+            ('learn/video/902', 'learn'), ('learn/article/305', 'learn'),
+            ('learn/recipe/120', 'learn'), ('prayer-set/44', 'prayer_set'), ('activity', 'activity'),
+        ]]
+        examples += [({'url': 'https://example.com/announcement'}, 'url'),
+                     ({'screen': 'fast/48', 'params': {'source': 'push', 'ref': 'notification'}}, 'fast')]
         for data, expected in examples:
             with self.subTest(data=data):
                 self.assertEqual(notification_destination(data), expected)
@@ -219,24 +230,65 @@ class SendTelemetryTests(BaseTestCase):
     def test_all_production_callers_pass_allowlisted_kind(self):
         root = Path(__file__).resolve().parents[2]
         names = {'send_push_notification', 'send_push_notification_task', 'send_push_notification_to_users_task'}
-        count = 0
-        for package in ['notifications', 'events', 'prayers']:
-            for path in (root / package).glob('*.py'):
+        calls = []
+        packages = [path for path in root.iterdir() if path.is_dir() and (path / 'apps.py').exists()]
+        for package in packages:
+            for path in package.rglob('*.py'):
+                if any(part in {'tests', 'migrations', 'venv', '.venv'} for part in path.parts) or path.name.startswith('test'):
+                    continue
                 for node in ast.walk(ast.parse(path.read_text())):
                     if not isinstance(node, ast.Call):
                         continue
                     func = node.func
-                    if isinstance(func, ast.Attribute) and func.attr == 'delay':
+                    if isinstance(func, ast.Attribute) and func.attr in {'delay', 'apply_async'}:
                         func = func.value
                     if not isinstance(func, ast.Name) or func.id not in names:
                         continue
-                    count += 1
-                    kinds = [kw.value for kw in node.keywords if kw.arg == 'kind']
-                    self.assertEqual(len(kinds), 1, f'{path}:{node.lineno}')
-                    kind = kinds[0]
-                    if isinstance(kind, ast.Name):
-                        self.assertEqual((path.name, func.id, kind.id), ('tasks.py', 'send_push_notification', 'kind'))
-                    else:
-                        self.assertIsInstance(kind, ast.Constant)
-                        self.assertIn(kind.value, NOTIFICATION_KINDS)
-        self.assertEqual(count, 18)
+                    calls.append((path, node))
+        self.assertTrue(calls)
+        validated = []
+        for path, node in calls:
+            kinds = [kw.value for kw in node.keywords if kw.arg == 'kind']
+            for kw in node.keywords:
+                if kw.arg is None and isinstance(kw.value, ast.Call):
+                    self.assertEqual(ast.unparse(kw.value.func), 'telemetry_task_kwargs')
+                    kinds.extend(kw.value.args)
+            if not kinds:
+                kinds = [kw.value for kw in node.keywords if kw.arg == 'notification_type']
+                if not kinds and len(node.args) >= 4:
+                    kinds = [node.args[3]]
+            self.assertEqual(len(kinds), 1, f'{path}:{node.lineno}')
+            kind = kinds[0]
+            if isinstance(kind, ast.Name):
+                self.assertEqual((path.name, ast.unparse(node.func), kind.id), ('tasks.py', 'send_push_notification', 'kind'))
+            else:
+                self.assertIsInstance(kind, ast.Constant)
+                self.assertIn(kind.value, NOTIFICATION_KINDS)
+            validated.append(node)
+        self.assertEqual(len(validated), len(calls))
+
+    def test_preparation_failure_keeps_uncorrelatable_outcome(self):
+        dumps = json.dumps
+
+        def envelope_failure(value, *args, **kwargs):
+            if isinstance(value, dict) and 'body' in value:
+                raise ValueError('private')
+            return dumps(value, *args, **kwargs)
+
+        with patch('notifications.utils.json.dumps', side_effect=envelope_failure):
+            self.assertEqual(self.send()['sent'], 1)
+        self.assertFalse(self.rows().get().data['correlatable'])
+        self.assertEqual(self.publish.call_args.args[0].data, self.data)
+
+    def test_one_type_lookup_and_bulk_write_for_multiple_tokens(self):
+        DeviceToken.objects.create(user=self.user, token='ExponentPushToken[second]', device_type='android')
+        with patch.object(EventType.objects, 'filter', wraps=EventType.objects.filter) as lookup:
+            with patch.object(Event.objects, 'bulk_create', wraps=Event.objects.bulk_create) as write:
+                self.assertEqual(self.send()['sent'], 2)
+        lookup.assert_called_once_with(code=EventType.NOTIFICATION_SEND, is_active=True)
+        write.assert_called_once()
+        self.assertEqual(len(write.call_args.args[0]), 2)
+
+    def test_notification_type_supplies_default_kind(self):
+        send_push_notification(self.message, self.data, users=[self.user], notification_type='culmination_feast')
+        self.assertEqual(self.rows().get().data['kind'], 'culmination_feast')

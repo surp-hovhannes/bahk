@@ -1,4 +1,4 @@
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
@@ -167,6 +167,7 @@ class DeviceTokenTests(APITestCase):
         for call in mock_logger.info.call_args_list:
             self.assertNotIn(self.valid_token_data['token'], str(call))
 
+@override_settings(NOTIFICATION_TELEMETRY_ENABLED=False)
 class TestPushNotificationTests(APITestCase):
     def setUp(self):
         # Create a test user using TestDataFactory
@@ -203,7 +204,15 @@ class TestPushNotificationTests(APITestCase):
         mock_send_push.delay.assert_called_once_with(
             message='Test notification',
             user_ids=[self.user.id],
-            kind='test',
+        )
+
+    @override_settings(NOTIFICATION_TELEMETRY_ENABLED=True)
+    @patch('notifications.views.send_push_notification_task')
+    def test_push_notification_telemetry_enabled(self, mock_send_push):
+        response = self.client.post(reverse('notifications:test-push-notification'), {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_send_push.delay.assert_called_once_with(
+            message='Test notification', user_ids=[self.user.id], kind='test',
         )
 
     @patch('notifications.views.send_push_notification_task')
@@ -220,7 +229,6 @@ class TestPushNotificationTests(APITestCase):
         mock_send_push.delay.assert_called_once_with(
             message='Test notification',
             user_ids=[self.user.id],
-            kind='test',
         )
 
     @patch('notifications.views.send_push_notification_task')
@@ -233,7 +241,6 @@ class TestPushNotificationTests(APITestCase):
         mock_send_push.delay.assert_called_once_with(
             message='Test notification',
             user_ids=[self.user.id],
-            kind='test',
         )
 
     @patch('notifications.views.send_push_notification_task')

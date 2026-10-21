@@ -44,15 +44,15 @@ def notification_destination(data):
     if screen is not None:
         if not isinstance(screen, str):
             return 'other'
-        if screen in {'prayer-requests', 'learn'}:
-            return {'prayer-requests': 'prayer_requests', 'learn': 'learn'}[screen]
-        for route, family in (
-            ('fast', 'fast'), ('devotional', 'devotional'),
-            ('prayer-set', 'prayer_set'), ('prayer-request', 'prayer_request'),
-        ):
-            if screen == route or re.fullmatch(route + r'/[0-9]+', screen):
-                return family
+        from events.event_schema import ROUTE_FAMILIES
+
+        family, _, tail = screen.partition('/')
+        pattern = ROUTE_FAMILIES.get(family)
+        if pattern is not None and re.fullmatch(pattern, tail):
+            return family.replace('-', '_')
         return 'other'
+    if 'url' in data:
+        return 'url'
     for key, family in (
         ('devotional_id', 'devotional'), ('prayer_set_id', 'prayer_set'),
         ('prayer_request_id', 'prayer_request'), ('fast_id', 'fast'),
@@ -62,69 +62,49 @@ def notification_destination(data):
     return 'other'
 
 
-def _prepare_telemetry(data, message, kind, device):
-    payload = data or {}
-    if not getattr(settings, 'NOTIFICATION_TELEMETRY_ENABLED', False):
-        return payload, None
+def telemetry_task_kwargs(kind):
+    """Old workers cannot accept kind during a flag-off rolling deploy."""
+    return {'kind': kind} if getattr(settings, 'NOTIFICATION_TELEMETRY_ENABLED', False) else {}
+
+
+def _ticket_field(ticket, name):
+    return ticket.get(name) if isinstance(ticket, dict) else getattr(ticket, name, None)
+
+
+def _prepare_telemetry(data, message, kind, destination, device):
+    telemetry = {
+        'source': 'server_domain', 'notif_id': secrets.token_urlsafe(12),
+        'kind': kind, 'destination': destination,
+        'platform': device.device_type if device.device_type in {'ios', 'android', 'web'} else 'unknown',
+        'outcome': 'send_error', 'correlatable': False,
+    }
     try:
-        from events.event_schema import NOTIFICATION_KINDS
-
-        kind = kind if isinstance(kind, str) and kind in NOTIFICATION_KINDS else 'unclassified'
-        telemetry = {
-            'source': 'server_domain', 'notif_id': secrets.token_urlsafe(12),
-            'kind': kind, 'destination': notification_destination(payload),
-            'platform': device.device_type if device.device_type in {'ios', 'android', 'web'} else 'unknown',
-            'outcome': 'send_error',
-        }
-        payload = dict(payload)
-        augmented = dict(payload, fp_nid=telemetry['notif_id'], fp_kind=kind)
-        # Conservative UTF-8 JSON envelope size, including Expo's normal defaults.
-        # Near the 4096-byte limit preserve the original send rather than cause a
-        # new MessageTooBig failure. Such attempts have no client correlation.
-        envelope = dict(
-            to=device.token, body=message, data=augmented,
-            sound='default', priority='high', _displayInForeground=True,
-        )
-        if len(json.dumps(envelope).encode('utf-8')) <= 4096:
-            payload = augmented
-        return payload, telemetry
+        augmented = dict(data or {}, fp_nid=telemetry['notif_id'], fp_kind=kind)
+        # Leave headroom for provider-side keys.
+        if len(json.dumps({'body': message, 'data': augmented}).encode('utf-8')) <= 4096 - 512:
+            telemetry['correlatable'] = True
+            return augmented, telemetry
     except Exception:
-        logger.warning('Push telemetry preparation skipped: %s', _device_token_log_id(device.token))
-        return payload, None
+        logger.warning('Push telemetry preparation skipped')
+    return data, telemetry
 
 
-def _record_send(device, telemetry, ticket, error):
-    if telemetry is None:
-        return
-    try:
-        from events.models import Event, EventType
-
-        if ticket is None and error is not None:
-            ticket = getattr(error, 'push_response', None)
-        # SDK versions are unpinned. Read only explicit status/id/details fields;
-        # never validate_response(), which would change legacy token/count behavior.
-        if ticket is not None:
-            status = ticket.get('status') if isinstance(ticket, dict) else getattr(ticket, 'status', None)
-            if status == 'ok':
-                telemetry['outcome'] = 'provider_accepted'
-            elif status == 'error':
-                telemetry['outcome'] = 'provider_rejected'
-                details = ticket.get('details') if isinstance(ticket, dict) else getattr(ticket, 'details', None)
-                code = details.get('error') if isinstance(details, dict) else None
-                telemetry['error_code'] = code if isinstance(code, str) and code in EXPO_ERROR_CODES else 'other'
-            ticket_id = ticket.get('id') if isinstance(ticket, dict) else getattr(ticket, 'id', None)
-            # Expo's opaque IDs use this bounded alphabet. Ignore unexpected shapes.
-            if isinstance(ticket_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', ticket_id):
-                telemetry['ticket_id'] = ticket_id
-        # A savepoint keeps a failed insert from poisoning a caller's transaction.
-        with transaction.atomic():
-            Event.create_event(
-                event_type_code=EventType.NOTIFICATION_SEND, user=device.user,
-                title='Notification send', description='', data=telemetry,
-            )
-    except Exception:
-        # No exception text: SDK/DB errors may contain private payloads or tokens.
-        logger.warning('Push telemetry skipped: %s', _device_token_log_id(device.token))
+def _record_send(telemetry, ticket, error):
+    if ticket is None and error is not None:
+        ticket = getattr(error, 'push_response', None)
+    # Never validate_response(): that would change legacy token/count behavior.
+    if ticket is not None:
+        status = _ticket_field(ticket, 'status')
+        if status == 'ok':
+            telemetry['outcome'] = 'provider_accepted'
+        elif status == 'error':
+            telemetry['outcome'] = 'provider_rejected'
+            details = _ticket_field(ticket, 'details')
+            code = details.get('error') if isinstance(details, dict) else None
+            telemetry.setdefault('error_code', code if isinstance(code, str) and code in EXPO_ERROR_CODES else 'other')
+        ticket_id = _ticket_field(ticket, 'id')
+        if isinstance(ticket_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', ticket_id):
+            telemetry['ticket_id'] = ticket_id
 
 
 def send_push_notification(
@@ -171,7 +151,7 @@ def send_push_notification(
             filter_field = NOTIFICATION_TYPE_FILTERS[notification_type]
             tokens_queryset = tokens_queryset.filter(**{f'user__profile__{filter_field}': True})
 
-        tokens = list(tokens_queryset.select_related('user'))
+        tokens = list(tokens_queryset.only('id', 'token', 'device_type', 'user_id'))
 
         if not tokens:
             logger.warning("No device tokens available for push notification")
@@ -189,10 +169,32 @@ def send_push_notification(
                 logger.error("Invalid data format provided")
                 data = {}
 
+        from events.event_schema import EVENT_SCHEMA_VERSION, NOTIFICATION_KINDS
+        from events.models import Event, EventType
+
+        if kind == 'unclassified' and notification_type in NOTIFICATION_KINDS:
+            kind = notification_type
+        kind = kind if isinstance(kind, str) and kind in NOTIFICATION_KINDS else 'unclassified'
+        event_type = None
+        if getattr(settings, 'NOTIFICATION_TELEMETRY_ENABLED', False):
+            try:
+                event_type = EventType.objects.filter(code=EventType.NOTIFICATION_SEND, is_active=True).first()
+                if event_type is None:
+                    logger.warning('Push telemetry type unavailable')
+            except Exception:
+                logger.warning('Push telemetry type unavailable')
+        destination = notification_destination(data) if event_type else None
+        telemetry_rows = []
+
         # Send notifications
         for device in tokens:
             token = device.token
-            payload, telemetry = _prepare_telemetry(data, message, kind, device)
+            payload, telemetry = data, None
+            if event_type is not None:
+                try:
+                    payload, telemetry = _prepare_telemetry(data, message, kind, destination, device)
+                except Exception:
+                    logger.warning('Push telemetry preparation skipped')
             ticket = None
             error = None
             try:
@@ -221,20 +223,37 @@ def send_push_notification(
                     telemetry.update(outcome="provider_rejected", error_code="DeviceNotRegistered")
                 DeviceToken.objects.filter(token=token).update(is_active=False)
                 result['failed'] += 1
-                result['invalid_tokens'].append(token)
+                result['invalid_tokens'].append(_device_token_log_id(token))
                 
             except Exception as e:
                 error = e
-                logger.error("Push send failed: %s", _device_token_log_id(token))
+                logger.error('Push send failed: %s (%s)', _device_token_log_id(token), type(e).__name__)
                 result['failed'] += 1
-                result['errors'].append(str(e))
+                result['errors'].append(type(e).__name__)
             finally:
-                _record_send(device, telemetry, ticket, error)
+                if telemetry is not None:
+                    try:
+                        _record_send(telemetry, ticket, error)
+                        telemetry_rows.append(Event(
+                            event_type=event_type, user_id=device.user_id,
+                            title=EventType.NOTIFICATION_LIFECYCLE_TITLES[EventType.NOTIFICATION_SEND],
+                            description='', ip_address=None, user_agent='',
+                            data={**telemetry, 'schema_version': EVENT_SCHEMA_VERSION},
+                        ))
+                    except Exception:
+                        logger.warning('Push telemetry outcome skipped')
+
+        if telemetry_rows:
+            try:
+                with transaction.atomic():
+                    Event.objects.bulk_create(telemetry_rows, batch_size=500)
+            except Exception:
+                logger.warning('Push telemetry write skipped')
 
         result['success'] = result['sent'] > 0
         return result
 
     except Exception as exc:
-        logger.error("Unexpected push send failure")
-        result['errors'].append(str(exc))
+        logger.error('Unexpected push send failure: %s', type(exc).__name__)
+        result['errors'].append(type(exc).__name__)
         return result 
