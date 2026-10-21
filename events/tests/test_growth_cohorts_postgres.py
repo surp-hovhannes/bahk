@@ -39,6 +39,7 @@ class GrowthCohortPostgresTests(TransactionTestCase):
         no_return = {**activated, 'numerator': '<1'}
         self.assertEqual(report, {
             'as_of': '2026-05-01T00:00:00+00:00',
+            'signups_before': None,
             'activation_data_through': '2026-04-30T00:00:00+00:00',
             'data_freshness': '2026-03-08T10:00:00+00:00',
             'min_cell': 1, 'granularity': 'week', 'cohort_timezone': 'UTC',
