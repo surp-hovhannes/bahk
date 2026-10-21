@@ -138,6 +138,26 @@ class GrowthCohortTests(BaseTestCase):
         self.assertEqual(build_report(date(2026, 5, 1), 1),
                          build_report(date(2026, 5, 1), 1, signups_before=None))
 
+    def test_signups_before_warning_is_only_on_stderr(self):
+        for granularity in ('week', 'month', 'all'):
+            for cutoff in (None, '2026-03-31'):
+                with self.subTest(granularity=granularity, cutoff=cutoff):
+                    output, errors = StringIO(), StringIO()
+                    call_command('growth_cohorts', as_of='2026-05-01',
+                                 granularity=granularity, signups_before=cutoff,
+                                 stdout=output, stderr=errors)
+                    expected = build_report(date(2026, 5, 1), 10, granularity,
+                                            date.fromisoformat(cutoff) if cutoff else None)
+                    self.assertEqual(json.loads(output.getvalue()), expected)
+                    self.assertEqual(output.getvalue(), json.dumps(expected, indent=2) + '\n')
+                    self.assertNotIn('Warning', output.getvalue())
+                    if cutoff:
+                        self.assertIn('Warning: results from different --signups-before / --as-of / '
+                                      '--granularity values', errors.getvalue())
+                        self.assertIn('single-day signup cohorts (k=10)', errors.getvalue())
+                    else:
+                        self.assertEqual(errors.getvalue(), '')
+
     def test_signups_before_command_and_validation(self):
         output = StringIO()
         call_command('growth_cohorts', '--as-of', '2026-05-01', stdout=output)

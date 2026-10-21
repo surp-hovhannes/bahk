@@ -40,6 +40,12 @@ class Command(BaseCommand):
             report = build_report(as_of, options['min_cell'], options['granularity'], signups_before)
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
+        if signups_before is not None:
+            self.stderr.write(
+                'Warning: results from different --signups-before / --as-of / --granularity values '
+                'for the same data must not be published side by side; stepping the cutoff day by day '
+                'can expose single-day signup cohorts (k=10).'
+            )
         content = json.dumps(report, indent=2)
         if options['format'] == 'md':
             content = '# Growth cohorts\n\nAggregate report (exact-day, not cumulative).\n\n```json\n' + content + '\n```'

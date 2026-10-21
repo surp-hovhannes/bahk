@@ -22,6 +22,9 @@ null by default. Results then describe **only older signups**. Maturity is still
 evaluated at as-of: this 31-day cutoff makes every metric fully mature
 (`immature = 0`), removing small-immature suppression; all other small-cell,
 complementary, nested-window and first-action distribution rules still apply.
+Stepping this mature cutoff day by day yields single-day signup cohorts that are
+fully mature, so these outputs must not be published together without review;
+k=10 does not protect against differencing across runs.
 
 Comparing different `--signups-before` cutoffs, granularities or as-of dates for the same data can narrow
 small cells through **differencing**. Operators must not publish week-level and
