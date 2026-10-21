@@ -5,8 +5,10 @@ Provides endpoints for retrieving events, analytics, and statistics.
 
 from .event_semantics import user_visible_events
 
+import logging
 import re
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Q
 from django.core.exceptions import ObjectDoesNotExist
@@ -14,12 +16,14 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.settings import api_settings
 from rest_framework.throttling import ScopedRateThrottle
 from django.utils.translation import activate, get_language_from_request
 
+from .event_schema import validate_notification_telemetry
 from .middleware import session_cache_key
 from .models import Event, EventType, UserActivityFeed
 from .participation_analytics import analytics_events, transition_counts
@@ -28,6 +32,10 @@ from .serializers import (
     EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer,
     UserActivityFeedSerializer
 )
+from .services.notification_telemetry import record_notification_telemetry
+
+
+logger = logging.getLogger(__name__)
 
 
 def _user_can_access_church_resource(user, church_id):
@@ -404,11 +412,16 @@ class FastEventStatsView(APIView):
         return Response(serializer.data)
 
 
-class ScreenViewThrottle(ScopedRateThrottle):
-    """Per-user screen telemetry budget; DEFAULT_THROTTLE_RATES['screen_view'] overrides it."""
+class SettingsScopedRateThrottle(ScopedRateThrottle):
+    """Read scoped overrides dynamically, with shared settings defaults."""
 
     def get_rate(self):
-        return api_settings.DEFAULT_THROTTLE_RATES.get(self.scope, '120/min')
+        return api_settings.DEFAULT_THROTTLE_RATES.get(
+            self.scope, settings.CLIENT_TELEMETRY_THROTTLE_DEFAULTS[self.scope])
+
+
+class ScreenViewThrottle(SettingsScopedRateThrottle):
+    pass
 
 
 def _valid_screen_name(value):
@@ -438,13 +451,10 @@ class TrackScreenViewView(APIView):
         elif not _valid_screen_name(previous_screen):
             return Response({'error': 'Invalid previous_screen'}, status=status.HTTP_400_BAD_REQUEST)
 
-        session = cache.get(session_cache_key(request.user.id)) or {}
         data = {
             'source': 'client_ui',
             'screen': request.data['screen'],
-            'session_id': session.get('id'),
-            'app_version': _header_or_none(request, 'X-App-Version', r'[0-9A-Za-z.+-]{1,32}'),
-            'platform': _header_or_none(request, 'X-Platform', r'[a-z]{1,16}'),
+            **_client_ui_envelope(request),
         }
         if previous_screen is not None:
             data['previous_screen'] = previous_screen
@@ -460,6 +470,43 @@ class TrackScreenViewView(APIView):
             # screen_view type missing or deactivated: telemetry is off, not an error.
             return Response({'status': 'skipped'})
         return Response({'status': 'ok'})
+
+
+class NotificationTelemetryThrottle(SettingsScopedRateThrottle):
+    pass
+
+
+def _client_ui_envelope(request):
+    session = cache.get(session_cache_key(request.user.id)) or {}
+    return {
+        'session_id': session.get('id'),
+        'app_version': _header_or_none(request, 'X-App-Version', r'[0-9A-Za-z.+-]{1,32}'),
+        'platform': _header_or_none(request, 'X-Platform', r'[a-z]{1,16}'),
+    }
+
+
+class TrackNotificationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [JSONParser]
+    throttle_classes = [NotificationTelemetryThrottle]
+    throttle_scope = 'notification_telemetry'
+
+    def post(self, request):
+        if not settings.NOTIFICATION_TELEMETRY_ENABLED:
+            return Response({'status': 'skipped'})
+        try:
+            code, data = validate_notification_telemetry(request.data)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = record_notification_telemetry(
+                request.user, code, data, lambda: _client_ui_envelope(request))
+        except ValueError:
+            return Response({'status': 'skipped'})
+        except Exception:
+            logger.exception('Notification telemetry write failed')
+            return Response({'status': 'skipped'})
+        return Response({'status': result})
 
 
 class TrackDevotionalViewedView(APIView):

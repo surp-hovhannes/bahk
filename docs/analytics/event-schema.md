@@ -311,3 +311,70 @@ Result invalid_tokens contains hashed identifiers, and errors contains exception
 class names, never raw tokens or exception text. Callers only count invalid tokens
 or join error labels. Pinning the SDK still needs a confirmed deployed version;
 no dependency pin is added here.
+
+### Client notification ingestion API (PR4)
+
+`POST /api/events/track/notification/` requires authentication and has its own
+per-user `notification_telemetry` throttle (default 30/min, configured by
+`NOTIFICATION_TELEMETRY_THROTTLE_RATE`). The JSON body must be an object:
+
+- `event: prompt`: `stage` is `shown`, `selected`, or `os_result`; `trigger` is
+  `first_prayer`, `first_fast_join`, `settings`, or `other`. `shown` has no choice
+  (absent/null accepted and omitted); `selected` requires `enable` or `not_now`;
+  `os_result` requires `granted`, `denied`, or `undetermined`.
+- `event: opened`: `notif_id` must fully match `[A-Za-z0-9_-]{16}`;
+  `entry` is `tap` or `cold_start`; `app_state` is `cold` or `warm`.
+- `event: destination`: the same `notif_id` validation; `destination` comes
+  from `NOTIFICATION_DESTINATIONS`; `result` is `opened`, `unresolved`, or `rejected`.
+
+Unknown fields are ignored. Invalid body fields return 400. Each accepted row
+has `source=client_ui`, the cached analytics `session_id` when available, and
+validated headers: `X-App-Version` matching `[0-9A-Za-z.+-]{1,32}` and
+`X-Platform` matching `[a-z]{1,16}` (the same envelope as screen views). Missing/invalid headers become null.
+No request, IP, user agent, client kind, token, message, navigation key or body
+blob is copied into these events. Titles are constants.
+
+Open/destination matching searches only the authenticated user's
+`notification_send` rows within the last 14 days with the same `notif_id`.
+`matched` records whether a row exists; open `kind` is copied from the newest
+matching send and checked against `NOTIFICATION_KINDS`, otherwise `unclassified`.
+Unmatched events are retained. Matching indicates association, not causation.
+`matched` and `kind` are ingest-time hints, independent of response status.
+PR7 reports must join opened/destination rows to `notification_send` on `notif_id`
+at report time, and expose a same-user flag; out-of-order ingestion can leave
+hints incomplete. Ingest matching remains restricted to the authenticated user.
+
+An optional `occurred_at` must be an ISO-8601 timestamp with seconds and timezone
+(`Z` or numeric offset), at most 24 hours old or 5 minutes ahead. Invalid values
+return 400; valid values are normalized to UTC ISO in data. Reports use
+`occurred_at` when present, otherwise the server timestamp. Session ID is filled
+only when time is absent or no more than 30 minutes old. `cold_start` with `warm`,
+and destination `none` with result `opened`, return 400. Only JSON is supported;
+form and multipart bodies return 415 when ingestion is enabled.
+
+Opened/destination events deduplicate per user, event type and `notif_id` against
+rows ingested within 14 days (using the existing user/timestamp index to bound
+the search). Duplicates return 200 `{"status":"duplicate"}` without a write.
+This is best-effort under simultaneous requests, not a database uniqueness
+constraint. Reports still take the first open per `notif_id`. Prompt attempts
+are capped at 10 per user/stage/trigger per UTC ingestion day using a cache
+counter with a 2-day timeout; over-cap returns 200 `{"status":"capped"}`.
+The cap fails open on cache errors and counts attempts even if a later write
+fails. It is a volume control, not a billing or security boundary.
+
+Missing/inactive types skip before matching or view cache reads. Matching and
+creation are atomic: a post-insert failure rolls the lifecycle row back.
+Missing/inactive types and failures inside the view return
+200 `{"status":"skipped"}`; unexpected failures log a constant message with
+exception information, without logging the request payload. Successful writes
+return 200 `{"status":"ok"}`. Throttle and AnalyticsTrackingMiddleware cache
+failures happen before the view and can surface as 5xx; clients should drop
+5xx responses and must not retry hot. Authentication and throttling still apply
+when disabled.
+
+Deploy runbook addition: leave shared `NOTIFICATION_TELEMETRY_ENABLED=False`
+(the decouple default) while deploying the server and registering/checking types
+with the commands above. Enabling collection is outside this PR;
+when off, the endpoint returns `skipped` and writes no lifecycle row. This flag
+name is shared with the sender telemetry lane. No migration, deletion, retention
+enforcement or token-disabling change is introduced. OTA/RN publishing remains held.
