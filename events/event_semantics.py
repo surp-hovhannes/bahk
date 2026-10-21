@@ -34,3 +34,10 @@ def exclude_legacy_screen_views(qs):
     """
     screen_type = EventType.objects.filter(code=EventType.SCREEN_VIEW).values("pk")
     return qs.filter(~Q(event_type__in=screen_type) | TRUE_UI_DATA_Q)
+
+
+def user_visible_events(qs):
+    """Exclude private lifecycle telemetry without joining the event type table."""
+    return qs.exclude(event_type_id__in=EventType.objects.filter(
+        code__in=sorted(EventType.NOTIFICATION_LIFECYCLE_CODES),
+    ).values('pk'))

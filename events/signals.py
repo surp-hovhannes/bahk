@@ -551,6 +551,9 @@ def create_activity_feed_item(sender, instance, created, **kwargs):
     Create activity feed items when events are created.
     Supports both synchronous and asynchronous creation.
     """
+    if instance.event_type.code in EventType.NOTIFICATION_LIFECYCLE_CODES:
+        return
+
     if created and instance.user:
         from .models import UserActivityFeed
         from django.conf import settings

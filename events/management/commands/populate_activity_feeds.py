@@ -2,6 +2,8 @@
 Management command to populate user activity feeds with historical data.
 """
 
+from events.event_semantics import user_visible_events
+
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -78,7 +80,7 @@ class Command(BaseCommand):
             user_created = 0
             user_skipped = 0
 
-            for event in events:
+            for event in user_visible_events(events):
                 # Check if feed item already exists
                 existing_feed_item = UserActivityFeed.objects.filter(
                     user=user,
