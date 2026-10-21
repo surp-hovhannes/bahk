@@ -18,6 +18,7 @@ FAST = {
     "image_url": None,
     "thumbnail_url": None,
     "learn_more_url": None,
+    "share_url": "https://web.fastandpray.app/share/fast/7",
 }
 READING = {
     "id": 42,
@@ -28,7 +29,12 @@ READING = {
     "end_chapter": 3,
     "end_verse": 21,
 }
-FEAST = {"name": "Exaltation of the Holy Cross", "icon": ICON}
+FEAST = {
+    "name": "Exaltation of the Holy Cross",
+    "icon": ICON,
+    "description": "Commemorates the recovery of the Holy Cross. It is one of the five tabernacle feasts.",
+    "share_url": "https://web.fastandpray.app/share/feast/2026-09-13?id=31",
+}
 ROOT = {"service": "fast-and-pray", "version": "v1", "base_path": "/api/v1/", "status": "pre-release"}
 CALENDAR = {
     "date": "2026-09-13",

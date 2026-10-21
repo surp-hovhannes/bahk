@@ -123,10 +123,14 @@
   },
   "scripts": {
     "test": "node scripts/npm-test.js",
+    "test:widgets": "playwright test --config tests/widgets/playwright.config.cjs",
     "build-css": "sass hub/static/scss/custom.scss hub/static/css/custom.css",
     "watch-css": "sass --watch hub/static/scss/custom.scss:hub/static/css/custom.css"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
 }

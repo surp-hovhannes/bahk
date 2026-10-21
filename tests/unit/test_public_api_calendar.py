@@ -18,6 +18,16 @@ from hub.services import feast_service
 from icons.models import Icon
 
 
+def plain(feast, on="2026-03-01"):
+    """Expected payload for a feast with no icon and no generated context."""
+    return {
+        "name": feast.name,
+        "icon": None,
+        "description": None,
+        "share_url": f"https://web.fastandpray.app/share/feast/{on}?id={feast.pk}",
+    }
+
+
 class PendingFeastDataUnavailable(RuntimeError):
     """Stand-in for the explicit exception exported by the pending feast service."""
 
@@ -112,12 +122,21 @@ class PublicCalendarTests(TestCase):
                         "image_url": None,
                         "thumbnail_url": None,
                         "learn_more_url": None,
+                        "share_url": f"https://web.fastandpray.app/share/fast/{fast.pk}",
                     },
-                    "feasts": [{"name": feast_name, "icon": None}],
+                    "feasts": [
+                        {
+                            "name": feast_name,
+                            "icon": None,
+                            "description": None,
+                            "share_url": f"https://web.fastandpray.app/share/feast/2026-03-01?id={feast.pk}",
+                        }
+                    ],
                     "partial_failures": [],
                 },
             )
-            self.assertEqual(len(queries), 4)
+            # Church, fast, readings, feasts, and one batched active-context query.
+            self.assertEqual(len(queries), 5)
             self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in queries))
 
     def test_two_churches_same_date_and_malformed_fast_membership(self):
@@ -160,15 +179,15 @@ class PublicCalendarTests(TestCase):
             (None, []),
             ([], []),
             ({"name_en": "Missing"}, []),
-            ({"name_en": "First"}, [{"name": first.name, "icon": None}]),
+            ({"name_en": "First"}, [plain(first)]),
             (
                 [{"name_en": "Second"}, {"name_en": "First"}, {"name_en": "Second"}],
                 [
                     {
-                        "name": second.name,
+                        **plain(second),
                         "icon": {"id": icon.pk, "title": icon.title, "image_url": None, "thumbnail_url": None},
                     },
-                    {"name": first.name, "icon": None},
+                    plain(first),
                 ],
             ),
         ):
@@ -178,7 +197,7 @@ class PublicCalendarTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["feasts"], expected)
             self.assertEqual(response.json()["partial_failures"], [])
-            self.assertLessEqual(len(queries), 4)
+            self.assertLessEqual(len(queries), 5)
             self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in queries))
 
     def test_pending_observance_ids_reuse_the_feast_route_lookup(self):
@@ -192,7 +211,7 @@ class PublicCalendarTests(TestCase):
         ):
             stored.return_value.select_related.return_value.order_by.return_value = [feast]
             data = self.get().json()
-        self.assertEqual(data["feasts"], [{"name": "Stored name", "icon": None}])
+        self.assertEqual(data["feasts"], [plain(feast)])
         stored.assert_called_once_with(church=self.church, observance_id__in=["stable-id"])
 
     def test_legacy_only_results_after_observance_field_exists(self):
@@ -248,7 +267,7 @@ class PublicCalendarTests(TestCase):
             with self.subTest(route=route), CaptureQueriesContext(connection) as queries:
                 response = self.client.get(route, self.params)
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json()["feasts"], [{"name": feast.name, "icon": None}])
+                self.assertEqual(response.json()["feasts"], [plain(feast)])
             self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in queries))
         feast.refresh_from_db()
         self.assertEqual(feast.icon_id, icon.pk)
