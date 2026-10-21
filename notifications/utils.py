@@ -178,7 +178,9 @@ def send_push_notification(
         event_type = None
         if getattr(settings, 'NOTIFICATION_TELEMETRY_ENABLED', False):
             try:
-                event_type = EventType.objects.filter(code=EventType.NOTIFICATION_SEND, is_active=True).first()
+                # Roll back lookup failures before continuing a caller's transaction.
+                with transaction.atomic():
+                    event_type = EventType.objects.filter(code=EventType.NOTIFICATION_SEND, is_active=True).first()
                 if event_type is None:
                     logger.warning('Push telemetry type unavailable')
             except Exception:

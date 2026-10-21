@@ -241,7 +241,9 @@ the writer explicitly supplies the constant title, empty description, user_id,
 null IP, empty user agent and schema version 2; timestamp uses its model default.
 No User rows are loaded by the token query. No request is passed. Missing/inactive
 types, lookup failures and write errors produce constant warnings and cannot alter
-send counts or returns. Events contain
+send counts or returns. The type lookup also runs inside an atomic savepoint,
+with errors caught after rollback so a database failure cannot poison an enclosing
+PostgreSQL transaction or subsequent token timestamp updates. Events contain
 no token, DeviceToken primary key, message, original data, content, resource IDs,
 IP address, or user agent. Platform is `ios`, `android`, `web`, or `unknown`.
 

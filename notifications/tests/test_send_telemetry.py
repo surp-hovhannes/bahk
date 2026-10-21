@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.db import IntegrityError
+from django.db import IntegrityError, connection, transaction
 from django.test import override_settings
 from exponent_server_sdk import DeviceNotRegisteredError, PushTicket
 
@@ -288,6 +288,28 @@ class SendTelemetryTests(BaseTestCase):
         lookup.assert_called_once_with(code=EventType.NOTIFICATION_SEND, is_active=True)
         write.assert_called_once()
         self.assertEqual(len(write.call_args.args[0]), 2)
+
+    def test_type_lookup_database_error_preserves_caller_transaction(self):
+        def failed_lookup():
+            # A real SQL error aborts PostgreSQL transactions until rollback.
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT bahk_telemetry_missing_column FROM events_eventtype')
+
+        DeviceToken.objects.filter(pk=self.device.pk).update(last_used=None)
+        with transaction.atomic():
+            with patch.object(EventType.objects, 'filter') as lookup:
+                lookup.return_value.first.side_effect = failed_lookup
+                with self.assertLogs('notifications.utils', level='WARNING') as logs:
+                    result = self.send()
+            self.assertEqual((result['sent'], result['failed'], result['success']), (1, 0, True))
+            self.assertEqual(result['errors'], [])
+            self.device.refresh_from_db()
+            self.assertIsNotNone(self.device.last_used)
+            self.assertFalse(self.rows().exists())
+            self.assertEqual(self.publish.call_args.args[0].data, self.data)
+            self.assertFalse(connection.needs_rollback)
+        self.assertEqual(logs.output, ['WARNING:notifications.utils:Push telemetry type unavailable'])
+        self.publish.assert_called_once()
 
     def test_notification_type_supplies_default_kind(self):
         send_push_notification(self.message, self.data, users=[self.user], notification_type='culmination_feast')
