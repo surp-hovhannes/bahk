@@ -1,4 +1,5 @@
 """Celery tasks for the prayers app."""
+from notifications.utils import telemetry_task_kwargs
 
 import logging
 import time
@@ -558,6 +559,7 @@ def check_expired_prayer_requests_task():
                     message=PRAYER_REQUEST_COMPLETED_MESSAGE.replace("{title}", str(prayer_request.title), 1),
                     data={"screen": f"prayer-request/{prayer_request.id}"},
                     user_ids=[prayer_request.requester_id],
+                    **telemetry_task_kwargs('prayer_request_completed'),
                 )
         except Exception:
             logger.exception(f"Failed to process expired prayer request {prayer_request.id}")
