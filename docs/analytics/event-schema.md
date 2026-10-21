@@ -209,8 +209,10 @@ lock file in the repository. `.devcontainer/Dockerfile` and
 `.github/workflows/django_ci.yml` install requirements without resolving a
 recorded version; `.cursor/Dockerfile` does not identify an SDK version either.
 No checked-in CI installation log establishes the deployed version. The actual
-deployed version is therefore **unknown**; PR1 leaves the dependency unchanged
-and installs nothing.
+deployed version is therefore **unknown** and has not been confirmed from the app
+environment. The local validation venv has SDK 2.2.0; this does not establish the
+deployed version. Once the deployed version is confirmed, pin that exact version
+in `requirements.txt`. This cleanup leaves requirements unchanged.
 
 The current sender calls `PushClient.publish(PushMessage(...))` and discards its
 return value. PR2/PR3 must inspect the actual installed SDK and verify the
@@ -287,8 +289,9 @@ those rejections without changing existing result dictionaries. Only the existin
 `DeviceNotRegisteredError` exception branch deactivates a token; returned error
 tickets do not add deactivation. No receipt-based disabling is added.
 
-SDK verification: local `python3` has no installed `exponent_server_sdk`, and
-requirements are unpinned; deployed API compatibility remains unverified. The
+SDK verification: the local validation venv has `exponent_server_sdk` 2.2.0,
+while requirements are unpinned and the deployed app version has not been
+confirmed; deployed API compatibility remains unverified. The
 [upstream SDK source](https://github.com/expo-community/expo-server-sdk-python/blob/master/exponent_server_sdk/__init__.py)
 was inspected on 2026-10-20: `publish()` returns a `PushTicket` with `status`,
 `details`, and `id`; `validate_response()` separately raises ticket errors carrying

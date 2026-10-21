@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from rest_framework.test import APIClient
 
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import override_settings
@@ -26,6 +27,16 @@ from tests.base import BaseTestCase
     USE_ASYNC_ACTIVITY_FEED=False,
 )
 class NotificationLifecycleTests(BaseTestCase):
+    def test_missing_event_type_reports_validation_error(self):
+        with self.assertRaises(ValidationError) as error:
+            Event(title='Missing type').save()
+        self.assertIn('event_type', error.exception.message_dict)
+
+    def test_activity_feed_signal_without_event_type(self):
+        from events.signals import create_activity_feed_item
+
+        create_activity_feed_item(Event, Event(title='Missing type'), created=False)
+
     def test_registration_defaults_and_existing_rows_are_preserved(self):
         EventType.objects.filter(code__in=sorted(NOTIFICATION_LIFECYCLE_EVENT_CODES)).delete()
         created = EventType.get_or_create_default_types()

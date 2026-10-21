@@ -1,5 +1,6 @@
 """Provider-boundary tests: no network, client sessions, or navigation persistence."""
 import ast
+import builtins
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -128,6 +129,26 @@ class SendTelemetryTests(BaseTestCase):
         self.assertEqual(self.publish.call_args.args[0].data, self.data)
         self.assertFalse({'fp_nid', 'fp_kind'} & self.publish.call_args.args[0].data.keys())
 
+    @override_settings(NOTIFICATION_TELEMETRY_ENABLED=False)
+    def test_flag_off_does_not_import_events_or_prepare_telemetry(self):
+        original_import = builtins.__import__
+
+        def without_events(name, *args, **kwargs):
+            if name == 'events' or name.startswith('events.'):
+                raise AssertionError(f'Flag-off send imported {name}')
+            return original_import(name, *args, **kwargs)
+
+        with patch('builtins.__import__', side_effect=without_events), patch(
+            'notifications.utils._prepare_telemetry', side_effect=AssertionError('Telemetry prepared'),
+        ), patch('notifications.utils.notification_destination', side_effect=AssertionError('Destination computed')):
+            result = send_push_notification(
+                self.message, self.data, users=[self.user], notification_type='culmination_feast',
+            )
+        self.assertEqual(result['sent'], 1)
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(self.publish.call_args.args[0].data, self.data)
+        self.assertFalse(self.rows().exists())
+
     def test_recipients_get_distinct_copies_and_ids(self):
         DeviceToken.objects.create(user=self.user, token='ExponentPushToken[second-private]', device_type='android')
         original = self.data.copy()
@@ -227,24 +248,44 @@ class SendTelemetryTests(BaseTestCase):
             self.assertEqual(send.call_args.kwargs['kind'], 'admin_manual')
             self.assertEqual(send.call_args.kwargs['device_token_ids'], [101])
 
+    def production_notification_calls(self, source, path):
+        names = {'send_push_notification', 'send_push_notification_task', 'send_push_notification_to_users_task'}
+        calls = []
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            queued = isinstance(func, ast.Attribute) and func.attr in {'delay', 'apply_async'}
+            if queued:
+                func = func.value
+            if not isinstance(func, ast.Name) or func.id not in names:
+                continue
+            if queued and func.id != 'send_push_notification':
+                self.assertFalse(
+                    any(kw.arg == 'kind' for kw in node.keywords),
+                    f'{path}:{node.lineno}: queued kinds must use telemetry_task_kwargs',
+                )
+            calls.append((path, node))
+        return calls
+
+    def test_audit_rejects_raw_kind_on_queued_tasks(self):
+        for task in ('send_push_notification_task', 'send_push_notification_to_users_task'):
+            for method in ('delay', 'apply_async'):
+                with self.subTest(task=task, method=method):
+                    with self.assertRaisesRegex(AssertionError, 'queued kinds must use telemetry_task_kwargs'):
+                        self.production_notification_calls(
+                            f"{task}.{method}('message', kind='admin_manual')", Path('synthetic.py'),
+                        )
+
     def test_all_production_callers_pass_allowlisted_kind(self):
         root = Path(__file__).resolve().parents[2]
-        names = {'send_push_notification', 'send_push_notification_task', 'send_push_notification_to_users_task'}
         calls = []
         packages = [path for path in root.iterdir() if path.is_dir() and (path / 'apps.py').exists()]
         for package in packages:
             for path in package.rglob('*.py'):
                 if any(part in {'tests', 'migrations', 'venv', '.venv'} for part in path.parts) or path.name.startswith('test'):
                     continue
-                for node in ast.walk(ast.parse(path.read_text())):
-                    if not isinstance(node, ast.Call):
-                        continue
-                    func = node.func
-                    if isinstance(func, ast.Attribute) and func.attr in {'delay', 'apply_async'}:
-                        func = func.value
-                    if not isinstance(func, ast.Name) or func.id not in names:
-                        continue
-                    calls.append((path, node))
+                calls.extend(self.production_notification_calls(path.read_text(), path))
         self.assertTrue(calls)
         validated = []
         for path, node in calls:

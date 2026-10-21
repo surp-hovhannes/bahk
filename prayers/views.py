@@ -1,5 +1,4 @@
 """Views for prayers app."""
-from notifications.utils import telemetry_task_kwargs
 from django.db.models import Q
 from django.db import transaction
 from django.utils.translation import activate, get_language_from_request
@@ -7,6 +6,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny
 
 from notifications.tasks import send_push_notification_to_users_task
+from notifications.utils import telemetry_task_kwargs
 from prayers.models import Prayer, PrayerSet
 from prayers.serializers import (
     PrayerSerializer,
