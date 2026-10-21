@@ -102,10 +102,10 @@ engagement report exposes only an aggregate legacy exclusion count. **Do not
 trend screen_view metrics across the client_ui cutoff**; client rollout changes
 coverage as well as event meaning.
 
-## Notification lifecycle (v2 vocabulary; PR1)
+## Notification lifecycle (v2 vocabulary)
 
 This vocabulary supports surp-hovhannes/bahk_react_native#460. PR1 registers
-codes and documents contracts only; it adds no send or endpoint behavior.
+codes and documents contracts; PR2 adds flag-gated server send telemetry.
 All five codes below are exposure-noise, never actions or meaningful engagement.
 They have category `notification`, require no target, and new registrations have
 `track_in_analytics=False`. Existing registrations are never overwritten.
@@ -121,7 +121,7 @@ contracts for later producers, not runtime validation in PR1.
 | Type | Payload keys | Meaning |
 | --- | --- | --- |
 | notification_prompt | stage, choice, trigger | Permission prompt lifecycle |
-| notification_send | notif_id, kind, destination, platform, outcome, error_code, ticket_id | Attempt sent to push provider and its outcome |
+| notification_send | notif_id, kind, destination, platform, outcome, error_code, ticket_id, correlatable | Attempt sent to push provider and its outcome |
 | notification_receipt | notif_id, ticket_id, receipt_status, error_code, lag_seconds | Provider receipt and elapsed lag |
 | notification_opened | notif_id, entry, app_state, matched, kind | Notification opened |
 | notification_destination | notif_id, destination, result, matched | Destination resolution |
@@ -185,6 +185,7 @@ the three lifecycle attributes on the five lifecycle rows only; it never changes
 is_active or existing non-lifecycle rows. `--check --force` is rejected.
 A missed registration step disables this telemetry; future producers must skip
 missing/inactive types without interrupting sending or navigation.
+The send producer (PR2) writes `notification_send` rows only while `NOTIFICATION_TELEMETRY_ENABLED` is on.
 
 No database migration or migration tooling is needed: `EventType.code` is a
 plain CharField without choices, `notification` already exists in category
@@ -221,6 +222,95 @@ requirements, not confirmed APIs for the unknown deployed version. Normalize
 error codes without raw messages; distinguish ticket acceptance from a provider
 receipt and both from an open. No sender behavior changes in PR1.
 
+
+### Server send telemetry (PR2)
+
+Deploy with `NOTIFICATION_TELEMETRY_ENABLED=False` (the default). Run
+`python manage.py init_event_types`, then `python manage.py init_event_types --check`
+first; resolve missing/inactive types before enabling
+`NOTIFICATION_TELEMETRY_ENABLED=True`. Disable the setting to stop both writes and
+correlation augmentation. No migration, receipt polling, deletion, retries, token
+policy changes, client endpoint, or RN/OTA publication is included.
+
+Each attempted per-token publish records `notification_send` with constant title
+`Notification send`, empty description, recipient user (nullable), and
+`source=server_domain`. The sender resolves the active EventType once per call,
+collects rows in token-attempt order, and bulk inserts after the loop (batches of
+500) inside an atomic savepoint. Because bulk inserts bypass save/full_clean/signals,
+the writer explicitly supplies the constant title, empty description, user_id,
+null IP, empty user agent and schema version 2; timestamp uses its model default.
+No User rows are loaded by the token query. No request is passed. Missing/inactive
+types, lookup failures and write errors produce constant warnings and cannot alter
+send counts or returns. The type lookup also runs inside an atomic savepoint,
+with errors caught after rollback so a database failure cannot poison an enclosing
+PostgreSQL transaction or subsequent token timestamp updates. Events contain
+no token, DeviceToken primary key, message, original data, content, resource IDs,
+IP address, or user agent. Platform is `ios`, `android`, `web`, or `unknown`.
+
+`kind` is independent of notification preference filtering. Unknown kinds become
+`unclassified`. Scheduled fast reminders map to `upcoming_fast`, `ongoing_fast`,
+`daily_fast`, `culmination_feast`; weekly prayer summaries to
+`weekly_prayer_requests`; completion to `prayer_request_completed`; thanks to
+`prayer_thanks`; participant milestones to `fast_milestone`; nonjoin, inactive,
+activity-feed, and prayer-acceptance nudges to their corresponding `nudge_*`
+kinds; manual admin sends to `admin_manual`; admin/API test sends to `test`.
+There is currently no push caller for `post_fast` (encouragement is email only).
+
+Destination uses the shared `ROUTE_FAMILIES` contract above: split at the first
+slash and fullmatch the tail. A top-level `url` maps to `url`; legacy ID keys
+identify only their family. Empty data yields `none`, unknown routes `other`.
+No IDs are copied.
+
+Each token gets a fresh `secrets.token_urlsafe(12)` ID and its own shallow copy
+of outgoing data with flat `fp_nid` / `fp_kind` keys. A conservative JSON envelope
+size check of body/data reserves 512 bytes of headroom for provider-side keys
+(4096 - 512 bytes): such sends retain their
+original payload and still record an attempt, but cannot correlate a client open.
+Existing oversize payloads are left to the provider as before. This is a coverage
+limitation; the flag does not guarantee every event has client correlation.
+`correlatable` is true only when augmentation succeeds; oversized envelopes or
+preparation failures after ID allocation still record outcomes with false.
+PR7 reports must exclude false rows from open-rate denominators.
+
+A ticket with status `ok` means `provider_accepted`; status `error` means
+`provider_rejected`. Error codes are limited to `DeviceNotRegistered`,
+`MessageTooBig`, `MessageRateExceeded`, `MismatchSenderId`, `InvalidCredentials`,
+`DeveloperError`, else `other`. Ticket IDs are optional, at most 128 ASCII
+alphanumeric/underscore/hyphen characters; unexpected IDs are omitted. Exceptions
+with a ticket attached are classified from that ticket; other exceptions and
+unknown/missing ticket shapes use `send_error` (outcome could not be established).
+Raw exception text never enters an event or sender log.
+
+Legacy `sent` remains the count of non-raising publishes to the push provider,
+not delivery. It may include a returned error ticket: telemetry distinguishes
+those rejections without changing existing result dictionaries. Only the existing
+`DeviceNotRegisteredError` exception branch deactivates a token; returned error
+tickets do not add deactivation. No receipt-based disabling is added.
+
+SDK verification: local `python3` has no installed `exponent_server_sdk`, and
+requirements are unpinned; deployed API compatibility remains unverified. The
+[upstream SDK source](https://github.com/expo-community/expo-server-sdk-python/blob/master/exponent_server_sdk/__init__.py)
+was inspected on 2026-10-20: `publish()` returns a `PushTicket` with `status`,
+`details`, and `id`; `validate_response()` separately raises ticket errors carrying
+`push_response`. The producer reads these attributes (also accepts dict-shaped
+tickets), without calling validation. Tests construct real SDK tickets when CI
+installs its requirements. These upstream observations do not identify the
+deployed version. Receipt APIs remain outside PR2.
+
+During rolling deploys, producers omit the new task `kind` keyword while the
+flag is off: older Celery workers reject unknown keywords and would lose pushes.
+All task producers with explicit kinds use `telemetry_task_kwargs`; the five
+scheduled senders derive the default kind from their existing notification_type.
+Keep the flag off throughout worker replacement. This PR does not enable it.
+
+Dead-device tickets are currently counted as sent and tokens are not
+auto-deactivated (pre-existing; separate decision). The legacy
+DeviceNotRegisteredError exception branch remains unchanged in behavior;
+publish() in SDK 2.2.0 returns error tickets without raising that exception.
+Result invalid_tokens contains hashed identifiers, and errors contains exception
+class names, never raw tokens or exception text. Callers only count invalid tokens
+or join error labels. Pinning the SDK still needs a confirmed deployed version;
+no dependency pin is added here.
 
 ### Client notification ingestion API (PR4)
 

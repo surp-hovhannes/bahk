@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fast &amp; Pray · Widget demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Fast & Pray design tokens (bahk_landing src/styles/global.css). */
+    body { margin: 0; background: #faf7f8; color: #3b0714;
+      font: 1rem/1.6 Figtree, ui-sans-serif, system-ui, sans-serif; }
+    main { max-width: 68rem; margin: auto; padding: 2rem 1rem; }
+    .eyebrow { margin: 0; color: #80273e; font-size: .75rem; font-weight: 700; letter-spacing: .08em; }
+    h1 { margin: .25rem 0; font-size: clamp(1.875rem, 5vw, 2.25rem); line-height: 1.2; }
+    a { color: #80273e; font-weight: 600; text-underline-offset: .2em; }
+    form { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 2rem 0; }
+    label { display: grid; gap: .25rem; color: #5b2030; font-size: .875rem; font-weight: 600; }
+    input, button { font: inherit; min-height: 44px; border-radius: .375rem; padding: .5rem .75rem; }
+    input { max-width: 100%; border: 1px solid #d1d5db; background: #fff; color: #3b0714; font-weight: 400; }
+    input:focus-visible, button:focus-visible { outline: 2px solid #80273e; outline-offset: 2px; }
+    button { border: 0; border-radius: 9999px; background: #80273e; color: #fff; font-weight: 600;
+      cursor: pointer; padding-inline: 1.375rem; }
+    button:hover { background: #661d30; }
+    .widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); gap: 1.5rem; align-items: start; }
+    #notice { border-left: 3px solid #b5244a; padding-left: 1rem; color: #5b2030; }
+  </style>
+  <script defer src="../../hub/static/widgets/bahk-widgets.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">FAST &amp; PRAY · EMBEDS</p>
+    <h1>A daily invitation to fast and read</h1>
+    <p>Two small widgets for a parish website, personal page, or community resource.</p>
+    <p id="notice">This demo requests the live public API. Public v1 resources must be enabled and
+      the API must allow this page's origin through CORS. Church ID 1 is an example;
+      verify your church's ID in the <a href="https://api.fastandpray.app/api/v1/churches/">public church list</a>.
+      See the <a href="../embeddable-widgets.md">integration guide</a> for self-hosting and local testing.</p>
+    <form id="settings">
+      <label>Church ID <input name="church" type="number" min="1" step="1" value="1" required></label>
+      <label>Date (blank for today) <input name="date" type="date"></label>
+      <label>Time zone <input name="zone" placeholder="Browser's local time zone"></label>
+      <button type="submit">Update widgets</button>
+    </form>
+    <div class="widgets">
+      <bahk-fast-or-feast church-id="1"><a href="https://fastandpray.app">Fast or Feast at Fast &amp; Pray</a></bahk-fast-or-feast>
+      <bahk-daily-readings church-id="1"><a href="https://fastandpray.app">Daily readings at Fast &amp; Pray</a></bahk-daily-readings>
+    </div>
+    <noscript><p>Enable JavaScript to load daily guidance and readings.</p></noscript>
+  </main>
+  <script>
+    document.querySelector("#settings").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const values = new FormData(event.target);
+      for (const widget of document.querySelectorAll("bahk-fast-or-feast, bahk-daily-readings")) {
+        // Batch changes while disconnected to avoid intermediate requests.
+        const replacement = widget.cloneNode(true);
+        replacement.setAttribute("church-id", values.get("church"));
+        for (const [attribute, value] of [["date", values.get("date")], ["time-zone", values.get("zone")]]) {
+          if (value) replacement.setAttribute(attribute, value);
+          else replacement.removeAttribute(attribute);
+        }
+        widget.replaceWith(replacement);
+      }
+    });
+  </script>
+</body>
+</html>

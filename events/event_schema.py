@@ -32,7 +32,7 @@ ROUTE_FAMILIES = {
 NOTIFICATION_PAYLOAD_KEYS = {
     EventType.NOTIFICATION_PROMPT: frozenset({'stage', 'choice', 'trigger'}),
     EventType.NOTIFICATION_SEND: frozenset({
-        'notif_id', 'kind', 'destination', 'platform', 'outcome', 'error_code', 'ticket_id',
+        'notif_id', 'kind', 'destination', 'platform', 'outcome', 'error_code', 'ticket_id', 'correlatable',
     }),
     EventType.NOTIFICATION_RECEIPT: frozenset({
         'notif_id', 'ticket_id', 'receipt_status', 'error_code', 'lag_seconds',

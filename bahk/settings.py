@@ -340,9 +340,11 @@ REST_FRAMEWORK = {
 }
 
 # Analytics settings
-NOTIFICATION_TELEMETRY_ENABLED = config('NOTIFICATION_TELEMETRY_ENABLED', default=False, cast=bool)
-
 ANALYTICS_SESSION_TIMEOUT_MINUTES = int(config('ANALYTICS_SESSION_TIMEOUT_MINUTES', default=30))
+
+# Enable only after init_event_types and init_event_types --check succeed.
+NOTIFICATION_TELEMETRY_ENABLED = config("NOTIFICATION_TELEMETRY_ENABLED", default=False, cast=bool)
+
 
 SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': datetime.timedelta(

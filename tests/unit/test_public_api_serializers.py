@@ -35,10 +35,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import translation
 from PIL import Image
 
+from bahk.public_api.v1.resource_views import with_public_context
 from bahk.public_api.v1.serializers import (
     ChurchPublicSerializer,
     FastPublicSerializer,
@@ -48,7 +49,7 @@ from bahk.public_api.v1.serializers import (
     _cached_thumbnail_url,
     _image_url,
 )
-from hub.models import Church, Day, Fast, Feast, Reading
+from hub.models import Church, Day, Fast, Feast, FeastContext, Reading
 from icons.models import Icon
 
 
@@ -308,7 +309,7 @@ class FeastPublicSerializerContractTests(TestCase):
 
         data = FeastPublicSerializer(feast).data
 
-        self.assertEqual(set(data.keys()), {"name", "icon"})
+        self.assertEqual(set(data.keys()), {"name", "icon", "description", "share_url"})
         self.assertEqual(data["name"], "Easter")
         self.assertIsNone(data["icon"])
 
@@ -381,20 +382,48 @@ class FeastPublicSerializerContractTests(TestCase):
         for index in range(3):
             Feast.objects.create(church=self.church, name=f"Feast {index}", icon=icon)
 
-        feasts = list(Feast.objects.select_related("icon").order_by("id"))
+        feasts = with_public_context(list(Feast.objects.select_related("icon").order_by("id")))
 
         with self.assertNumQueries(0):
             data = [FeastPublicSerializer(feast).data for feast in feasts]
 
         self.assertEqual(len(data), 3)
         for payload in data:
-            self.assertEqual(set(payload.keys()), {"name", "icon"})
+            self.assertEqual(set(payload.keys()), {"name", "icon", "description", "share_url"})
             self.assertEqual(payload["icon"]["id"], icon.id)
             self.assertEqual(payload["icon"]["title"], "Shared")
             self.assertEqual(
                 payload["icon"]["thumbnail_url"],
                 "https://cdn.example.com/shared-thumb.jpg",
             )
+
+    def test_description_is_the_localized_active_short_text(self):
+        feast = Feast.objects.create(church=self.church, name="Vardanants")
+        FeastContext.objects.create(feast=feast, text="Old long", short_text="Old short", active=False)
+        FeastContext.objects.create(
+            feast=feast, text="Long", short_text="Short summary.", i18n={"short_text_hy": "Կարճ"}, active=True
+        )
+        [feast] = with_public_context([feast])
+
+        with self.assertNumQueries(0):
+            self.assertEqual(FeastPublicSerializer(feast).data["description"], "Short summary.")
+            self.assertEqual(FeastPublicSerializer(feast, context={"lang": "hy"}).data["description"], "Կարճ")
+
+    def test_description_is_null_without_context_or_prefetch(self):
+        feast = Feast.objects.create(church=self.church, name="Unwritten")
+        self.assertIsNone(FeastPublicSerializer(with_public_context([feast])[0]).data["description"])
+        FeastContext.objects.create(feast=feast, text="Long", short_text="Short.", active=True)
+        unprefetched = Feast.objects.get(pk=feast.pk)
+        with self.assertNumQueries(0):
+            self.assertIsNone(FeastPublicSerializer(unprefetched).data["description"])
+
+    @override_settings(APP_URL="https://web.example.test/")
+    def test_share_url_needs_the_requested_date(self):
+        feast = Feast.objects.create(church=self.church, name="Dated")
+
+        self.assertIsNone(FeastPublicSerializer(feast).data["share_url"])
+        data = FeastPublicSerializer(feast, context={"date": datetime.date(2026, 9, 13)}).data
+        self.assertEqual(data["share_url"], f"https://web.example.test/share/feast/2026-09-13?id={feast.pk}")
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +482,7 @@ class FastPublicSerializerContractTests(TestCase):
                 "image_url",
                 "thumbnail_url",
                 "learn_more_url",
+                "share_url",
             },
         )
 
@@ -560,6 +590,12 @@ class FastPublicSerializerContractTests(TestCase):
         fast = self._make_fast(url="https://learn.example.org/x")
         data = FastPublicSerializer(fast).data
         self.assertEqual(data["learn_more_url"], "https://learn.example.org/x")
+
+    @override_settings(APP_URL="https://web.example.test")
+    def test_share_url_points_at_the_web_app_share_page(self):
+        fast = self._make_fast()
+        data = FastPublicSerializer(fast).data
+        self.assertEqual(data["share_url"], f"https://web.example.test/share/fast/{fast.pk}")
 
     def test_learn_more_url_is_null_when_unset(self):
         fast = self._make_fast(url=None)
