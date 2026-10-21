@@ -3,6 +3,8 @@ API views for the events app.
 Provides endpoints for retrieving events, analytics, and statistics.
 """
 
+from .event_semantics import user_visible_events
+
 import re
 
 from django.conf import settings
@@ -54,7 +56,7 @@ class EventListView(generics.ListAPIView):
         # Activate language for _i18n fields
         lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
         activate(lang)
-        queryset = Event.objects.select_related(
+        queryset = user_visible_events(Event.objects.all()).select_related(
             'event_type', 'user', 'content_type'
         ).order_by('-timestamp')
         
@@ -134,7 +136,7 @@ class EventDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Event.objects.select_related('event_type', 'user', 'content_type')
+        queryset = user_visible_events(Event.objects.all()).select_related('event_type', 'user', 'content_type')
         if not self.request.user.is_staff:
             queryset = queryset.filter(user=self.request.user)
         return queryset
@@ -155,7 +157,7 @@ class MyEventsView(generics.ListAPIView):
     def get_queryset(self):
         lang = self.request.query_params.get('lang') or get_language_from_request(self.request) or 'en'
         activate(lang)
-        return Event.objects.filter(
+        return user_visible_events(Event.objects.all()).filter(
             user=self.request.user
         ).select_related(
             'event_type', 'content_type'

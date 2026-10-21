@@ -136,12 +136,16 @@ before emission; these key contracts alone do not authorize arbitrary values.
 
 `NOTIFICATION_KINDS` is the allowlist: `upcoming_fast`, `ongoing_fast`,
 `daily_fast`, `culmination_feast`, `weekly_prayer_requests`,
-`prayer_request_completed`, `prayer_thanks`, `fast_milestone`, `post_fast`,
+`prayer_request_completed`, `prayer_thanks`, `fast_milestone`,
 `nudge_nonjoin`, `nudge_inactive`, `nudge_activity_feed`,
 `nudge_prayer_acceptance`, `admin_manual`, `test`, `unclassified`.
 
 `NOTIFICATION_DESTINATIONS` is the allowlist: `fast`, `devotional`, `prayer_set`,
-`prayer_request`, `prayer_requests`, `learn`, `none`, `other`.
+`prayer_request`, `prayer_requests`, `learn`, `activity`, `prayer`, `url`, `none`, `other`.
+`ROUTE_FAMILIES` maps screen families to full tail regexes: numeric IDs for
+fast/devotional/prayer/prayer-request/prayer-set, typed IDs for learn, and empty
+tails for activity/prayer-requests. Hyphens normalize to underscores in destination
+labels; a top-level `url` key maps directly to `url`. Unknown routes use `other`.
 `NOTIFICATION_OUTCOMES` allows `provider_accepted`, `provider_rejected`,
 `send_error`. `NOTIFICATION_REPORTING_GROUPS` maps each kind to itself except
 `prayer_thanks` and `prayer_request_completed`, which both map to
@@ -171,29 +175,31 @@ python manage.py init_event_types
 python manage.py init_event_types --check
 ```
 
-`--check` is read-only, checks every core code, prints missing and inactive
-codes, and exits 1 for either problem; otherwise it prints an OK line and exits
-0. Initialization only creates missing rows; inactive existing rows require
-operator review. A missed registration step only disables this telemetry;
-future producers must skip missing/inactive types without interrupting sending
-or navigation. PR1 does not implement those producers.
+`--check` is read-only and checks every core code. Missing codes and incorrect
+lifecycle attributes (category must be `notification`, requires_target and
+track_in_analytics must both be false) exit 1, with each mismatch reported.
+Inactive codes are informational and exit 0 if there are no other problems:
+deactivation is the operator's telemetry off switch. Default initialization only
+creates missing rows. Run `python manage.py init_event_types --force` to repair
+the three lifecycle attributes on the five lifecycle rows only; it never changes
+is_active or existing non-lifecycle rows. `--check --force` is rejected.
+A missed registration step disables this telemetry; future producers must skip
+missing/inactive types without interrupting sending or navigation.
 
 No database migration or migration tooling is needed: `EventType.code` is a
 plain CharField without choices, `notification` already exists in category
 choices, and no model field definitions change. Registration creates data through
 the existing command, not a schema migration.
 
-Audit: `analytics_events()` explicitly excludes the five lifecycle codes using
-a plain negated `event_type__code__in` predicate, independent of the analytics
-flag and without an additional subquery. This protects shared aggregates in
-`events/views.py`, `events/admin.py`, `events/analytics_optimizer.py`,
-`events/management/commands/engagement_report.py` and `events/growth_cohorts.py`.
-Existing participation-noop and legacy-screen filtering remains in place.
-The admin charts that directly filter category `analytics` cannot include these
-`notification` rows. `events/signals.py` routes user events through
-`UserActivityFeed.create_from_event` (directly or via a task); its fixed code map
-contains none of these five codes, so it returns None. System-event fan-out is
-also limited to existing fast/devotional codes. No lifecycle feed rows result.
+Audit: `analytics_events()` excludes lifecycle type IDs using an uncorrelated
+subquery on the small event-type table, independent of category or the
+informational track_in_analytics flag, without joining that table. Existing
+participation-noop and legacy-screen filtering remains in place. Lifecycle saves
+skip analytics invalidation and activity-feed dispatch, including async dispatch.
+User-visible event querysets and feed backfills share the same exclusion, before
+per-event feed existence checks. The feed model's fixed code map also rejects them.
+Lifecycle titles are constant in code, even when callers supply free text;
+request IP and user-agent metadata are never stored for these events.
 
 ### Expo SDK verification for PR2/PR3
 
