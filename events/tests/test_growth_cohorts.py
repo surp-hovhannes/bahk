@@ -10,7 +10,9 @@ from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
-from events.growth_cohorts import _configured, _metric, _suppress_distribution, _suppress_nested, build_report
+from events.growth_cohorts import (
+    _configured, _metric, _record_action, _suppress_distribution, _suppress_nested, build_report,
+)
 from events.models import Event, EventType
 from hub.models import FastParticipation, Profile
 from tests.base import BaseTestCase
@@ -51,14 +53,78 @@ class GrowthCohortTests(BaseTestCase):
         before = self.report()
         # Only the action stream includes this user, simulating eligibility
         # changing after the initial population query without a timing race.
-        with mock.patch('events.growth_cohorts.analytics_events') as events:
-            stream = events.return_value.filter.return_value.order_by.return_value.values_list.return_value
+        from events.participation_analytics import analytics_events
+        source = mock.Mock()
+        with mock.patch('events.growth_cohorts.analytics_events',
+                        side_effect=[source, analytics_events()]) as events:
+            stream = source.filter.return_value.filter.return_value.order_by.return_value.values_list.return_value
             stream.iterator.return_value = iter([
                 (self.user.pk, at, code),
                 (outsider.pk, at, code),
             ])
             self.assertEqual(self.report(), before)
         stream.iterator.assert_called_once()
+        self.assertEqual(events.call_count, 2)
+
+    def test_population_snapshot_survives_staff_flip(self):
+        from events.participation_analytics import analytics_events
+        self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(hours=1))
+        before = self.report()
+
+        def flip_staff():
+            get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
+            return analytics_events()
+
+        with mock.patch('events.growth_cohorts.analytics_events', side_effect=flip_staff):
+            self.assertEqual(self.report(), before)
+        self.assertTrue(get_user_model().objects.get(pk=self.user.pk).is_staff)
+
+    def test_sql_window_does_not_fetch_late_events(self):
+        late = self.joined + timedelta(days=40)
+        self.event(EventType.DEVOTIONAL_VIEWED, late)
+        self.event(EventType.USER_JOINED_FAST, late)
+        FastParticipation.objects.create(profile=self.profile, fast=self.create_fast(), joined_at=late)
+        with mock.patch('events.growth_cohorts._record_action', wraps=_record_action) as record:
+            report = self.report()
+        record.assert_not_called()
+        self.assertEqual(self.metric(report, 'd30')['numerator'], '<1')
+
+    def test_sql_fall_dst_safety_bound_keeps_31d23h_candidate(self):
+        joined = datetime(2026, 10, 31, 7, tzinfo=timezone.utc)
+        get_user_model().objects.filter(pk=self.user.pk).update(date_joined=joined)
+        at = joined + timedelta(days=31, hours=23)
+        self.event(EventType.DEVOTIONAL_VIEWED, at)
+        with mock.patch('events.growth_cohorts._record_action', wraps=_record_action) as record:
+            report = self.report(date(2026, 12, 3))
+        record.assert_called_once_with(mock.ANY, self.user.pk, at, EventType.DEVOTIONAL_VIEWED)
+        # Fetched by the safe SQL bound, rejected by the exact local day-30 bound.
+        self.assertEqual(self.metric(report, 'd30')['numerator'], '<1')
+
+    def test_reverse_action_order_keeps_participation_tie(self):
+        from zoneinfo import ZoneInfo
+        at = self.joined + timedelta(hours=1)
+        actions = [(at, EventType.DEVOTIONAL_VIEWED, False),
+                   (at, EventType.USER_JOINED_FAST, True),
+                   (at, EventType.PRAYER_SET_VIEWED, False)]
+        results = []
+        for ordered in (actions, list(reversed(actions))):
+            snapshot = {self.user.pk: {'joined': self.joined, 'end': self.joined + timedelta(days=31),
+                                      'tz': ZoneInfo('America/Los_Angeles'),
+                                      'signup_day': self.joined.astimezone(ZoneInfo('America/Los_Angeles')).date(),
+                                      'first': None, 'days': set()}}
+            for timestamp, code, participation in ordered:
+                _record_action(snapshot, self.user.pk, timestamp, code, participation=participation)
+            results.append(snapshot)
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0][self.user.pk]['first'], (at, 0, EventType.USER_JOINED_FAST))
+
+    def test_noops_and_legacy_screens_do_not_advance_freshness(self):
+        self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(hours=1))
+        before = self.report()
+        self.event(EventType.USER_JOINED_FAST, self.joined + timedelta(days=2),
+                   data={'participation_tracked': True, 'participation_changed': False})
+        self.event(EventType.SCREEN_VIEW, self.joined + timedelta(days=3))
+        self.assertEqual(self.report(), before)
 
     def test_dst_exact_local_day_and_elapsed_activation(self):
         # March 8 is 23h in LA; March 9 00:15 is only 21h45 after signup.
@@ -233,7 +299,7 @@ class GrowthCohortTests(BaseTestCase):
             self.report()
         self.assertEqual(len(baseline), len(expanded))
         # Four exclusion counts + population + three streams + freshness.
-        self.assertLessEqual(len(expanded), 9)
+        self.assertLessEqual(sum(q['sql'].lstrip().upper().startswith('SELECT') for q in expanded), 9)
 
     def test_query_count_is_fixed_across_events_users_weeks_and_timezones(self):
         with CaptureQueriesContext(connection) as baseline:
@@ -250,7 +316,7 @@ class GrowthCohortTests(BaseTestCase):
         with CaptureQueriesContext(connection) as expanded:
             self.report()
         self.assertEqual(len(baseline), len(expanded))
-        self.assertLessEqual(len(expanded), 9)
+        self.assertLessEqual(sum(q['sql'].lstrip().upper().startswith('SELECT') for q in expanded), 9)
 
     def test_multiple_timezones_keep_independent_local_days(self):
         joined = datetime(2026, 3, 8, tzinfo=timezone.utc)
@@ -263,9 +329,12 @@ class GrowthCohortTests(BaseTestCase):
         event = self.event(EventType.DEVOTIONAL_VIEWED, at)
         Event.objects.filter(pk=event.pk).update(user=other)
         # Tokyo: March 8 -> March 9 (D1). LA: March 7 -> March 9 (D2).
-        with mock.patch('events.growth_cohorts._metric', wraps=_metric) as metric:
-            self.report()
-        self.assertEqual(metric.call_args_list[3].args[:3], (1, 2, 0))
+        # Same UTC signup week, but this LA user's D1 has not closed yet.
+        self.make_user('immature', datetime(2026, 3, 8, 23, tzinfo=timezone.utc))
+        d1 = self.metric(self.report(date(2026, 3, 10)), 'd1')
+        self.assertEqual(d1['numerator'], 1)
+        self.assertEqual(d1['mature_denominator'], 2)
+        self.assertEqual(d1['immature'], 1)
 
     def test_fall_dst_day30_tail_and_31_day_edge(self):
         joined = datetime(2026, 10, 31, 7, tzinfo=timezone.utc)  # LA midnight
@@ -323,7 +392,7 @@ class GrowthCohortTests(BaseTestCase):
                 chunked = self.report()
         self.assertEqual(chunked, normal)
         self.assertEqual(len(normal_queries), len(chunked_queries))
-        self.assertLessEqual(len(chunked_queries), 9)
+        self.assertLessEqual(sum(q['sql'].lstrip().upper().startswith('SELECT') for q in chunked_queries), 9)
 
     def test_pre_signup_and_account_creation_do_not_activate(self):
         self.event(EventType.DEVOTIONAL_VIEWED, self.joined - timedelta(seconds=1))

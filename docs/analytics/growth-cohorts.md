@@ -87,31 +87,36 @@ and first-action cells. These are descriptive cross-sectional results: small n
 and selection effects prevent causal interpretation. The command rejects thresholds
 below 10 unless `--unsafe-min-cell` is explicitly passed for synthetic testing; `build_report` accepts any positive threshold.
 
-Freshness is the maximum stored Event.timestamp strictly before as-of (all event
-codes, including noise), truncated to the hour so no single row's exact time is
-published; it is not evidence that ingestion is complete. Adding
-noise cannot change cohort metrics, though a newer noise row can advance this
-explicit freshness metadata. Audit-only activity can exist without an Event.
-Screen views must not be trended across the client_ui schema cutoff.
+Freshness is the maximum `analytics_events()` timestamp strictly before as-of,
+truncated to the hour. Participation no-ops and legacy screen views cannot
+advance it; notification lifecycle rows are also excluded once the shared
+analytics filter supports them. It is not evidence that ingestion is complete.
+Audit-only activity can exist without an Event. Screen views must not be trended
+across the client_ui schema cutoff.
 
 Query count is constant across users, events, weeks and stored timezones: at
-most nine queries (four sequential exclusion counts, one eligible population,
-one meaningful-event stream, one legacy-join stream, one participation stream,
-and freshness). Empty populations skip the three action streams. Eligible IDs use an uncorrelated SQL
-subquery rather than a growing parameter list. Legacy join authority retains the
-existing event-level predicates; there are no per-user metric subqueries.
+most nine data queries (four sequential exclusion counts, one population,
+three action streams, and freshness), plus transaction control. Empty populations
+skip the action streams. Eligibility is decided once from the population and
+applied to stream rows in Python, without a live eligibility subquery.
 
-Python computes first actions, local days, maturity and weekly counts. Streams
-use `.iterator(chunk_size=5000)`; no complete event history is materialized.
-On PostgreSQL, `.iterator()` uses server-side cursors, which fail behind
-PgBouncer transaction pooling unless `DISABLE_SERVER_SIDE_CURSORS=True` is set
-on the connection. Operators should run the command on a direct connection.
-Work is linear in eligible users plus scanned meaningful events and joins;
-memory is bounded by eligible users and their distinct first-31-day local days
-(at most 31 per user), rather than all event rows. Exact per-user windows are
-filtered in Python after a global timestamp bound. The local-day-30 tail across
-a fall DST transition is retained even when it extends past 31 elapsed days.
-The database may scan older users' later actions inside the global bounds, but
-these are discarded immediately. Production latency still needs measurement;
-query count alone does not guarantee a runtime. No tables, indexes, models or
-migrations are changed.
+The entire report runs in one atomic transaction. PostgreSQL uses a read-only
+REPEATABLE READ snapshot for population, exclusions, streams and freshness.
+Streams use `.iterator(chunk_size=5000)` inside that transaction, so PostgreSQL
+server-side cursors do not require WITH HOLD. Python memory is bounded by the
+population and at most 31 distinct local days per user, rather than event history.
+Each stream has per-user SQL bounds from signup through exclusive signup + 32
+elapsed days, also bounded by as-of. Python applies the exact local-calendar
+window through the midnight ending day 30, retaining the fall-DST tail.
+Django duration arithmetic translates these bounds for SQLite and PostgreSQL.
+No tables, indexes, models or migrations are changed.
+
+### Operator notes
+
+Use a direct PostgreSQL connection for the first post-deploy production run.
+Capture EXPLAIN ANALYZE for both the meaningful-event and legacy-join queries:
+the latter retains NOT IN over linked events and correlated EXISTS predicates.
+Per-user bounds shrink candidates, but fixed query count does not establish
+production latency. PgBouncer transaction pooling still requires attention to
+server-side cursors; use a direct connection or configure
+`DISABLE_SERVER_SIDE_CURSORS=True` as appropriate for the deployment.
