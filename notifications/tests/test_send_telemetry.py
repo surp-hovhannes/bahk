@@ -14,7 +14,7 @@ from events.event_schema import EVENT_SCHEMA_VERSION, NOTIFICATION_DESTINATIONS,
 from events.models import Event, EventType
 from notifications.models import DeviceToken
 from notifications.tasks import send_push_notification_task, send_push_notification_to_users_task
-from notifications.utils import _device_token_log_id, notification_destination, send_push_notification
+from notifications.utils import EXPO_ERROR_CODES, _device_token_log_id, notification_destination, send_push_notification
 from tests.base import BaseTestCase
 
 
@@ -83,8 +83,9 @@ class SendTelemetryTests(BaseTestCase):
         for secret in (self.device.token, self.message, 'private-data-marker'):
             self.assertNotIn(secret, '\n'.join(logs.output))
 
-    def test_rejected_ticket_keeps_legacy_count_and_token(self):
-        for code, expected in [('DeviceNotRegistered', 'DeviceNotRegistered'), ('private-error', 'other')]:
+    def test_other_rejected_tickets_keep_legacy_count_and_token(self):
+        for code in sorted(EXPO_ERROR_CODES - {'DeviceNotRegistered'}) + ['private-error']:
+            expected = code if code in EXPO_ERROR_CODES else 'other'
             with self.subTest(code=code):
                 self.rows().delete()
                 self.publish.return_value = self.ticket('error', code)
@@ -96,6 +97,56 @@ class SendTelemetryTests(BaseTestCase):
                 self.assert_private(row)
                 self.device.refresh_from_db()
                 self.assertTrue(self.device.is_active)
+
+    def test_returned_dead_device_ticket_deactivates_token(self):
+        for enabled in (True, False):
+            for dictionary in (False, True):
+                with self.subTest(telemetry=enabled, dictionary=dictionary), override_settings(
+                    NOTIFICATION_TELEMETRY_ENABLED=enabled,
+                ):
+                    self.rows().delete()
+                    DeviceToken.objects.filter(pk=self.device.pk).update(is_active=True)
+                    self.publish.return_value = (
+                        {'status': 'error', 'details': {'error': 'DeviceNotRegistered'}}
+                        if dictionary else self.ticket('error', 'DeviceNotRegistered')
+                    )
+                    with self.assertLogs('notifications.utils', level='WARNING') as logs:
+                        result = self.send()
+                    self.assertEqual((result['sent'], result['failed'], result['success']), (0, 1, False))
+                    token_id = _device_token_log_id(self.device.token)
+                    self.assertEqual(result['invalid_tokens'], [token_id])
+                    self.assertEqual(result['errors'], [])
+                    self.assertIn(f'Device not registered: {token_id}', '\n'.join(logs.output))
+                    self.assertNotIn(self.device.token, '\n'.join(logs.output))
+                    self.device.refresh_from_db()
+                    self.assertFalse(self.device.is_active)
+                    if enabled:
+                        row = self.rows().get()
+                        self.assertEqual(row.data['outcome'], 'provider_rejected')
+                        self.assertEqual(row.data['error_code'], 'DeviceNotRegistered')
+                        self.assert_private(row)
+                    else:
+                        self.assertFalse(self.rows().exists())
+                    self.publish.reset_mock()
+                    self.send()
+                    self.publish.assert_not_called()
+
+    def test_mixed_batch_deactivates_only_dead_token(self):
+        healthy = DeviceToken.objects.create(
+            user=self.user, token='ExponentPushToken[healthy]', device_type='android',
+        )
+        self.publish.side_effect = lambda message: (
+            self.ticket('error', 'DeviceNotRegistered')
+            if message.to == self.device.token else self.ticket()
+        )
+        result = self.send()
+        self.assertEqual((result['sent'], result['failed'], result['success']), (1, 1, True))
+        self.assertEqual(result['invalid_tokens'], [_device_token_log_id(self.device.token)])
+        self.device.refresh_from_db()
+        healthy.refresh_from_db()
+        self.assertFalse(self.device.is_active)
+        self.assertTrue(healthy.is_active)
+        self.assertEqual(self.rows().count(), 2)
 
     def test_send_exception_and_logs_are_private(self):
         self.publish.side_effect = RuntimeError(f'{self.device.token} {self.message} private-data-marker')
