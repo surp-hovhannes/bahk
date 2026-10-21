@@ -76,3 +76,25 @@ workers. Test factories are not asked to create duplicate lifecycle types.
 
 Remaining limits: runtime CI has not run locally; deployed SDK version is unknown;
 retention enforcement, receipts and report denominators remain future work.
+
+The caller audit was additionally executed as an isolated static check (passed),
+without importing Django or running a runtime suite. Exact command:
+
+```bash
+python3 - <<'PY'
+import ast
+from pathlib import Path
+import unittest
+schema = ast.parse(Path('events/event_schema.py').read_text())
+kinds = next(ast.literal_eval(n.value.args[0]) for n in schema.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'NOTIFICATION_KINDS' for t in n.targets))
+path = Path('notifications/tests/test_send_telemetry.py').resolve()
+tree = ast.parse(path.read_text())
+method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'test_all_production_callers_pass_allowlisted_kind')
+namespace = {'ast': ast, 'Path': Path, '__file__': str(path), 'NOTIFICATION_KINDS': kinds}
+exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), namespace)
+namespace[method.name](unittest.TestCase())
+print('Static production caller audit passed')
+PY
+```
+
+`git status --short` after the implementation commit: clean.
