@@ -1,5 +1,10 @@
 """Read-time analytics semantics; these classifications never rewrite stored rows."""
 
+import re
+from datetime import datetime, timedelta, timezone as datetime_timezone
+
+from django.utils import timezone
+
 from .models import EventType
 
 EVENT_SCHEMA_VERSION = 2
@@ -21,6 +26,7 @@ ROUTE_FAMILIES = {
 
 
 # v2 per-type payload keys, in addition to the common schema_version envelope.
+# Client ingestion also accepts optional occurred_at and adds session/app/platform.
 # Contracts only: producers must validate bounded vocabulary/identifiers, never
 # free text, push tokens, message/data blobs, prayer content, IP or user agent.
 NOTIFICATION_PAYLOAD_KEYS = {
@@ -84,3 +90,70 @@ EVENT_CODE_CLASSIFICATION = {
 }
 
 # track_in_analytics is informational; lifecycle exclusion uses the code list.
+
+
+NOTIFICATION_PROMPT_CHOICES = {
+    'shown': (None,), 'selected': ('enable', 'not_now'),
+    'os_result': ('granted', 'denied', 'undetermined'),
+}
+NOTIFICATION_PROMPT_TRIGGERS = frozenset({'first_prayer', 'first_fast_join', 'settings', 'other'})
+NOTIFICATION_OPEN_ENTRIES = frozenset({'tap', 'cold_start'})
+NOTIFICATION_APP_STATES = frozenset({'cold', 'warm'})
+NOTIFICATION_DESTINATION_RESULTS = frozenset({'opened', 'unresolved', 'rejected'})
+
+
+def validate_notification_telemetry(body):
+    """Return allowlisted data only; ValueError describes a bounded validation error."""
+    if not isinstance(body, dict):
+        raise ValueError('Expected an object')
+
+    def allowed(key, values):
+        return isinstance(body.get(key), str) and body[key] in values
+
+    data = {'source': 'client_ui'}
+    event = body.get('event')
+    if event == 'prompt':
+        if (not allowed('stage', NOTIFICATION_PROMPT_CHOICES)
+                or body.get('choice') not in NOTIFICATION_PROMPT_CHOICES[body['stage']]
+                or not allowed('trigger', NOTIFICATION_PROMPT_TRIGGERS)):
+            raise ValueError('Invalid prompt')
+        data.update(stage=body['stage'], trigger=body['trigger'])
+        if body['stage'] != 'shown':
+            data['choice'] = body['choice']
+        code = EventType.NOTIFICATION_PROMPT
+    elif event in ('opened', 'destination'):
+        notif_id = body.get('notif_id')
+        if not isinstance(notif_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16}', notif_id):
+            raise ValueError('Invalid notif_id')
+        data['notif_id'] = notif_id
+        if event == 'opened':
+            if (not allowed('entry', NOTIFICATION_OPEN_ENTRIES)
+                    or not allowed('app_state', NOTIFICATION_APP_STATES)
+                    or (body['entry'] == 'cold_start' and body['app_state'] == 'warm')):
+                raise ValueError('Invalid open')
+            data.update(entry=body['entry'], app_state=body['app_state'])
+            code = EventType.NOTIFICATION_OPENED
+        else:
+            if (not allowed('destination', NOTIFICATION_DESTINATIONS)
+                    or not allowed('result', NOTIFICATION_DESTINATION_RESULTS)
+                    or (body['destination'] == 'none' and body['result'] == 'opened')):
+                raise ValueError('Invalid destination')
+            data.update(destination=body['destination'], result=body['result'])
+            code = EventType.NOTIFICATION_DESTINATION
+    else:
+        raise ValueError('Invalid event')
+    if 'occurred_at' in body:
+        value = body['occurred_at']
+        if not isinstance(value, str) or not re.fullmatch(
+                r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
+                r'(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])', value):
+            raise ValueError('Invalid occurred_at')
+        try:
+            occurred = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            raise ValueError('Invalid occurred_at') from None
+        now = timezone.now()
+        if not now - timedelta(hours=24) <= occurred <= now + timedelta(minutes=5):
+            raise ValueError('Invalid occurred_at')
+        data['occurred_at'] = occurred.astimezone(datetime_timezone.utc).isoformat()
+    return code, data

@@ -5,6 +5,7 @@ Provides endpoints for retrieving events, analytics, and statistics.
 
 from .event_semantics import user_visible_events
 
+import logging
 import re
 
 from django.conf import settings
@@ -15,13 +16,14 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.settings import api_settings
 from rest_framework.throttling import ScopedRateThrottle
 from django.utils.translation import activate, get_language_from_request
 
-from .event_schema import NOTIFICATION_DESTINATIONS, NOTIFICATION_KINDS
+from .event_schema import validate_notification_telemetry
 from .middleware import session_cache_key
 from .models import Event, EventType, UserActivityFeed
 from .participation_analytics import analytics_events, transition_counts
@@ -30,6 +32,10 @@ from .serializers import (
     EventStatsSerializer, UserEventStatsSerializer, FastEventStatsSerializer,
     UserActivityFeedSerializer
 )
+from .services.notification_telemetry import record_notification_telemetry
+
+
+logger = logging.getLogger(__name__)
 
 
 def _user_can_access_church_resource(user, church_id):
@@ -406,11 +412,16 @@ class FastEventStatsView(APIView):
         return Response(serializer.data)
 
 
-class ScreenViewThrottle(ScopedRateThrottle):
-    """Per-user screen telemetry budget; DEFAULT_THROTTLE_RATES['screen_view'] overrides it."""
+class SettingsScopedRateThrottle(ScopedRateThrottle):
+    """Read scoped overrides dynamically, with shared settings defaults."""
 
     def get_rate(self):
-        return api_settings.DEFAULT_THROTTLE_RATES.get(self.scope, '120/min')
+        return api_settings.DEFAULT_THROTTLE_RATES.get(
+            self.scope, settings.CLIENT_TELEMETRY_THROTTLE_DEFAULTS[self.scope])
+
+
+class ScreenViewThrottle(SettingsScopedRateThrottle):
+    pass
 
 
 def _valid_screen_name(value):
@@ -440,13 +451,10 @@ class TrackScreenViewView(APIView):
         elif not _valid_screen_name(previous_screen):
             return Response({'error': 'Invalid previous_screen'}, status=status.HTTP_400_BAD_REQUEST)
 
-        session = cache.get(session_cache_key(request.user.id)) or {}
         data = {
             'source': 'client_ui',
             'screen': request.data['screen'],
-            'session_id': session.get('id'),
-            'app_version': _header_or_none(request, 'X-App-Version', r'[0-9A-Za-z.+-]{1,32}'),
-            'platform': _header_or_none(request, 'X-Platform', r'[a-z]{1,16}'),
+            **_client_ui_envelope(request),
         }
         if previous_screen is not None:
             data['previous_screen'] = previous_screen
@@ -464,87 +472,41 @@ class TrackScreenViewView(APIView):
         return Response({'status': 'ok'})
 
 
-class NotificationTelemetryThrottle(ScopedRateThrottle):
-    """Independent per-user notification telemetry budget."""
+class NotificationTelemetryThrottle(SettingsScopedRateThrottle):
+    pass
 
-    def get_rate(self):
-        return api_settings.DEFAULT_THROTTLE_RATES.get(self.scope, '60/min')
+
+def _client_ui_envelope(request):
+    session = cache.get(session_cache_key(request.user.id)) or {}
+    return {
+        'session_id': session.get('id'),
+        'app_version': _header_or_none(request, 'X-App-Version', r'[0-9A-Za-z.+-]{1,32}'),
+        'platform': _header_or_none(request, 'X-Platform', r'[a-z]{1,16}'),
+    }
 
 
 class TrackNotificationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [JSONParser]
     throttle_classes = [NotificationTelemetryThrottle]
     throttle_scope = 'notification_telemetry'
 
     def post(self, request):
         if not settings.NOTIFICATION_TELEMETRY_ENABLED:
             return Response({'status': 'skipped'})
-        body = request.data
-        if not isinstance(body, dict):
-            return Response({'error': 'Expected an object'}, status=status.HTTP_400_BAD_REQUEST)
-
-        def allowed(key, values):
-            return isinstance(body.get(key), str) and body[key] in values
-
-        event = body.get('event')
-        data = {'source': 'client_ui'}
-        if event == 'prompt':
-            choices = {
-                'shown': (None,),
-                'selected': ('enable', 'not_now'),
-                'os_result': ('granted', 'denied', 'undetermined'),
-            }
-            if (not allowed('stage', choices)
-                    or body.get('choice') not in choices[body['stage']]
-                    or not allowed('trigger', ('first_prayer', 'first_fast_join', 'settings', 'other'))):
-                return Response({'error': 'Invalid prompt'}, status=status.HTTP_400_BAD_REQUEST)
-            data.update(stage=body['stage'], trigger=body['trigger'])
-            if body['stage'] != 'shown':
-                data['choice'] = body['choice']
-            code, title = EventType.NOTIFICATION_PROMPT, 'Notification prompt'
-        elif event in ('opened', 'destination'):
-            notif_id = body.get('notif_id')
-            if not isinstance(notif_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16}', notif_id):
-                return Response({'error': 'Invalid notif_id'}, status=status.HTTP_400_BAD_REQUEST)
-            data['notif_id'] = notif_id
-            if event == 'opened':
-                if not allowed('entry', ('tap', 'cold_start')) or not allowed('app_state', ('cold', 'warm')):
-                    return Response({'error': 'Invalid open'}, status=status.HTTP_400_BAD_REQUEST)
-                data.update(entry=body['entry'], app_state=body['app_state'])
-                code, title = EventType.NOTIFICATION_OPENED, 'Notification opened'
-            else:
-                if (not allowed('destination', NOTIFICATION_DESTINATIONS)
-                        or not allowed('result', ('opened', 'unresolved', 'rejected'))):
-                    return Response({'error': 'Invalid destination'}, status=status.HTTP_400_BAD_REQUEST)
-                data.update(destination=body['destination'], result=body['result'])
-                code, title = EventType.NOTIFICATION_DESTINATION, 'Notification destination'
-        else:
-            return Response({'error': 'Invalid event'}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            if event != 'prompt':
-                send = Event.objects.filter(
-                    event_type__code=EventType.NOTIFICATION_SEND,
-                    user=request.user,
-                    timestamp__gte=timezone.now() - timedelta(days=14),
-                    data__notif_id=data['notif_id'],
-                ).order_by('-timestamp', '-pk').first()
-                data['matched'] = send is not None
-                if event == 'opened':
-                    kind = send.data.get('kind') if send else None
-                    data['kind'] = kind if isinstance(kind, str) and kind in NOTIFICATION_KINDS else 'unclassified'
-            session = cache.get(session_cache_key(request.user.id)) or {}
-            data.update(
-                session_id=session.get('id'),
-                app_version=_header_or_none(request, 'X-App-Version', r'[0-9A-Za-z.+-]{1,32}'),
-                platform=_header_or_none(request, 'X-Platform', r'ios|android|web'),
-            )
-            # Never pass request: notification telemetry must not persist IP/UA.
-            Event.create_event(event_type_code=code, user=request.user, title=title, data=data)
-        except Exception:
-            # Telemetry is best effort; never expose payloads or exception text.
+            code, data = validate_notification_telemetry(request.data)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = record_notification_telemetry(
+                request.user, code, data, lambda: _client_ui_envelope(request))
+        except ValueError:
             return Response({'status': 'skipped'})
-        return Response({'status': 'ok'})
+        except Exception:
+            logger.exception('Notification telemetry write failed')
+            return Response({'status': 'skipped'})
+        return Response({'status': result})
 
 
 class TrackDevotionalViewedView(APIView):
