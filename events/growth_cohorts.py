@@ -8,14 +8,15 @@ from zoneinfo import ZoneInfo, available_timezones
 from decouple import Csv, config
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Case, Count, DateField, Exists, F, Max, OuterRef, Q, Subquery, Value, When
-from django.db.models.functions import Cast, TruncDate, TruncWeek
+from django.db import connection, transaction
+from django.db.models import F, Max, Q
 
 from events.event_schema import MEANINGFUL_EVENT_CODES
-from events.models import Event, EventType
+from events.models import EventType
 from events.participation_analytics import analytics_events, legacy_transition_events
 from hub.models import FastParticipation
 
+ITERATOR_CHUNK_SIZE = 5000
 FALLBACK = 'America/Los_Angeles'
 ACTIVATION = {'activation_24h': 1, 'activation_72h': 3, 'activation_7d': 7}
 RETENTION = {'d1': (1, 1), 'd7': (7, 7), 'd30': (30, 30),
@@ -111,12 +112,42 @@ def _suppress_distribution(first_actions, counts, minimum):
             break
 
 
+def _record_action(snapshot, uid, at, code, *, participation=False):
+    row = snapshot.get(uid)
+    # Keep the initial population snapshot; ignore users who become eligible later.
+    if row is None:
+        return
+    if not row['joined'] <= at < row['end']:
+        return
+    # Equal timestamp/code Events differ only by pk; their compact rows
+    # have identical effects. An authoritative participation wins any tie.
+    candidate = (at, 0 if participation else 1, code)
+    first = row['first']
+    if first is None or candidate < first:
+        row['first'] = candidate
+    day = (at.astimezone(row['tz']).date() - row['signup_day']).days
+    if 0 <= day <= 30:
+        row['days'].add(day)
+
+
 def build_report(as_of, min_cell=10):
     """as_of is an exclusive UTC midnight; signup weeks are Monday-based UTC.
 
-    A fixed set of grouped SQL queries runs per distinct stored timezone, never
-    per user/week. Correlated subqueries use the database to inspect actions.
+    Stream compact action rows in a fixed number of queries, then aggregate
+    per-user local days in Python. No user-level data leaves this function.
+    Open a snapshot transaction only outside an existing atomic block; nested
+    callers supply their own transaction isolation and snapshot semantics.
     """
+    if connection.in_atomic_block:
+        return _build_report(as_of, min_cell)
+    with transaction.atomic():
+        if connection.vendor == 'postgresql':
+            with connection.cursor() as cursor:
+                cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        return _build_report(as_of, min_cell)
+
+
+def _build_report(as_of, min_cell):
     if min_cell < 1:
         raise ValueError('min_cell must be positive')
     end = datetime.combine(as_of, time.min, tzinfo=timezone.utc)
@@ -136,66 +167,69 @@ def build_report(as_of, min_cell=10):
         excluded[name] = _cell(users.filter(rule).count(), min_cell)
         users = users.exclude(rule)
 
-    legacy = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True)
-    events = analytics_events().filter(
-        Q(event_type__code__in=MEANINGFUL_EVENT_CODES - {EventType.USER_JOINED_FAST})
-        | Q(pk__in=legacy.values('pk')))
-    events = events.filter(user_id=OuterRef('pk'), timestamp__gte=OuterRef('date_joined'), timestamp__lt=end)
-    periods = FastParticipation.objects.filter(profile__user_id=OuterRef('pk'),
-                                               joined_at__gte=OuterRef('date_joined'), joined_at__lt=end)
     grouped = defaultdict(lambda: defaultdict(int))
-    # Profiles are validated with pytz, which ignores case; ZoneInfo does not, and
-    # a tzdata folder name such as 'America' raises IsADirectoryError.
+    # Profiles are validated with pytz, which ignores case; ZoneInfo does not,
+    # and a tzdata folder name such as America raises IsADirectoryError.
     zones = {name.lower(): name for name in available_timezones()}
-    for stored_tz in users.order_by().values_list('profile__timezone', flat=True).distinct():
+    snapshot = {}
+    local_end_dates = {}
+    activation_cutoffs = {name: cutoff - timedelta(days=days) for name, days in ACTIVATION.items()}
+    for uid, joined, stored_tz in users.order_by().values_list(
+            'pk', 'date_joined', 'profile__timezone').iterator(chunk_size=ITERATOR_CHUNK_SIZE):
         key = zones.get(stored_tz.lower()) if stored_tz else None
         fallback = key in (None, 'UTC')
         tz = ZoneInfo(FALLBACK if fallback else key)
-        bucket = users.filter(profile__timezone=stored_tz) if stored_tz is not None else users.filter(profile__timezone__isnull=True)
-        bucket = bucket.annotate(
-            signup_day=TruncDate('date_joined', tzinfo=tz),
-            week=TruncWeek('date_joined', tzinfo=timezone.utc),
-            event_first=Subquery(events.order_by('timestamp', 'event_type__code', 'pk').values('timestamp')[:1]),
-            period_first=Subquery(periods.order_by('joined_at').values('joined_at')[:1]),
-            event_code=Subquery(events.order_by('timestamp', 'event_type__code', 'pk').values('event_type__code')[:1]),
-        ).annotate(
-            first=Case(When(Q(period_first__isnull=False) & (Q(event_first__isnull=True) |
-                       Q(period_first__lte=F('event_first'))), then=F('period_first')), default=F('event_first')),
-            first_code=Case(When(Q(period_first__isnull=False) & (Q(event_first__isnull=True) |
-                            Q(period_first__lte=F('event_first'))), then=Value(EventType.USER_JOINED_FAST)),
-                            default=F('event_code')),
-        )
-        aggregates = {'population': Count('pk')}
+        signup_day = joined.astimezone(tz).date()
+        window_end = min(end, datetime.combine(
+            signup_day + timedelta(days=31), time.min, tzinfo=tz).astimezone(timezone.utc))
+        if tz not in local_end_dates:
+            local_end_dates[tz] = end.astimezone(tz).date()
+        snapshot[uid] = {'joined': joined, 'tz': tz, 'fallback': fallback,
+                         'signup_day': signup_day, 'end': window_end,
+                         'first': None, 'days': set()}
+
+    if snapshot:
+        events = analytics_events().filter(
+            event_type__code__in=MEANINGFUL_EVENT_CODES - {EventType.USER_JOINED_FAST},
+            timestamp__gte=F('user__date_joined'),
+            timestamp__lt=F('user__date_joined') + timedelta(days=32)).filter(timestamp__lt=end)
+        for uid, at, code in events.order_by().values_list(
+                'user_id', 'timestamp', 'event_type__code').iterator(chunk_size=ITERATOR_CHUNK_SIZE):
+            _record_action(snapshot, uid, at, code)
+        # Keep legacy joins separate: an IN subquery inside OR prevents a
+        # PostgreSQL semi-join and can produce a costly hashed SubPlan.
+        legacy = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True).filter(
+            timestamp__gte=F('user__date_joined'),
+            timestamp__lt=F('user__date_joined') + timedelta(days=32)).filter(timestamp__lt=end)
+        for uid, at in legacy.order_by().values_list(
+                'user_id', 'timestamp').iterator(chunk_size=ITERATOR_CHUNK_SIZE):
+            _record_action(snapshot, uid, at, EventType.USER_JOINED_FAST)
+        periods = FastParticipation.objects.filter(
+            joined_at__gte=F('profile__user__date_joined'),
+            joined_at__lt=F('profile__user__date_joined') + timedelta(days=32)).filter(joined_at__lt=end)
+        for uid, at in periods.order_by().values_list(
+                'profile__user_id', 'joined_at').iterator(chunk_size=ITERATOR_CHUNK_SIZE):
+            _record_action(snapshot, uid, at, EventType.USER_JOINED_FAST, participation=True)
+
+    for row in snapshot.values():
+        joined, first = row['joined'], row['first']
+        signup_utc = joined.astimezone(timezone.utc).date()
+        week = signup_utc - timedelta(days=signup_utc.weekday())
+        counts = grouped[week.isoformat()]
+        counts['population'] += 1
+        counts['fallback'] += row['fallback']
         for name, days in ACTIVATION.items():
-            mature = Q(date_joined__lte=cutoff - timedelta(days=days))
-            hit = Q(first__lte=F('date_joined') + timedelta(days=days))
-            aggregates[name + '_d'] = Count('pk', filter=mature)
-            aggregates[name + '_n'] = Count('pk', filter=mature & hit)
+            mature = joined <= activation_cutoffs[name]
+            hit = first is not None and first[0] <= joined + timedelta(days=days)
+            counts[name + '_d'] += mature
+            counts[name + '_n'] += mature and hit
+            if name == 'activation_7d' and mature and hit:
+                counts['first_' + first[2]] += 1
         for name, (start, stop) in RETENTION.items():
-            # Date arithmetic stays in predicates: SQL datetime arithmetic on
-            # date-valued annotations is backend-dependent.
-            closed = end.astimezone(tz).date() - timedelta(days=stop + 1)
-            mature = Q(signup_day__lte=closed)
-            day_events = events.annotate(day=TruncDate('timestamp', tzinfo=tz))
-            day_periods = periods.annotate(day=TruncDate('joined_at', tzinfo=tz))
-            # Compare signup day to action day shifted by calendar-day offsets.
-            day_events = day_events.filter(day__gte=Cast(OuterRef('signup_day') + timedelta(days=start), DateField()),
-                                           day__lte=Cast(OuterRef('signup_day') + timedelta(days=stop), DateField()))
-            day_periods = day_periods.filter(day__gte=Cast(OuterRef('signup_day') + timedelta(days=start), DateField()),
-                                             day__lte=Cast(OuterRef('signup_day') + timedelta(days=stop), DateField()))
-            bucket = bucket.annotate(**{name + '_hit': Exists(day_events) | Exists(day_periods)})
-            aggregates[name + '_d'] = Count('pk', filter=mature)
-            aggregates[name + '_n'] = Count('pk', filter=mature & Q(**{name + '_hit': True}))
-        for code in sorted(MEANINGFUL_EVENT_CODES):
-            aggregates['first_' + code] = Count('pk', filter=Q(
-                date_joined__lte=cutoff - timedelta(days=7), first__lte=F('date_joined') + timedelta(days=7),
-                first_code=code))
-        for row in bucket.values('week').annotate(**aggregates).order_by():
-            target = grouped[row.pop('week').date().isoformat()]
-            for key, count in row.items():
-                target[key] += count
-            if fallback:
-                target['fallback'] += row['population']
+            closed = local_end_dates[row['tz']] - timedelta(days=stop + 1)
+            mature = row['signup_day'] <= closed
+            counts[name + '_d'] += mature
+            counts[name + '_n'] += mature and any(start <= day <= stop for day in row['days'])
 
     cohorts = []
     for week, counts in sorted(grouped.items()):
@@ -224,7 +258,7 @@ def build_report(as_of, min_cell=10):
         cohorts.append({'week_start': week, 'population': _cell(population, min_cell),
                         'timezone_fallback': _metric(counts['fallback'], population, None, min_cell),
                         'metrics': metrics, 'first_action_within_7d': first_actions})
-    freshness = Event.objects.filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
+    freshness = analytics_events().filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
     # One row's exact timestamp could identify its author; the hour is enough.
     freshness = freshness and freshness.replace(minute=0, second=0, microsecond=0)
     return {'as_of': end.isoformat(), 'activation_data_through': cutoff.isoformat(),

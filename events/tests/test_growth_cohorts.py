@@ -6,11 +6,13 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection
+from django.db import connection, transaction
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
-from events.growth_cohorts import _configured, _metric, _suppress_distribution, _suppress_nested, build_report
+from events.growth_cohorts import (
+    _configured, _metric, _record_action, _suppress_distribution, _suppress_nested, build_report,
+)
 from events.models import Event, EventType
 from hub.models import FastParticipation, Profile
 from tests.base import BaseTestCase
@@ -42,6 +44,96 @@ class GrowthCohortTests(BaseTestCase):
 
     def metric(self, report, name):
         return report['cohorts'][0]['metrics'][name]
+
+    def test_stream_user_outside_population_snapshot_is_ignored(self):
+        at = self.joined + timedelta(hours=1)
+        code = EventType.DEVOTIONAL_VIEWED
+        self.event(code, at)
+        outsider = self.make_user('lateeligible', self.joined, is_staff=True)
+        before = self.report()
+        # Only the action stream includes this user, simulating eligibility
+        # changing after the initial population query without a timing race.
+        from events.participation_analytics import analytics_events
+        source = mock.Mock()
+        with mock.patch('events.growth_cohorts.analytics_events',
+                        side_effect=[source, analytics_events()]) as events:
+            stream = source.filter.return_value.filter.return_value.order_by.return_value.values_list.return_value
+            stream.iterator.return_value = iter([
+                (self.user.pk, at, code),
+                (outsider.pk, at, code),
+            ])
+            self.assertEqual(self.report(), before)
+        stream.iterator.assert_called_once()
+        self.assertEqual(events.call_count, 2)
+
+    def test_report_inside_outer_atomic_matches_report_outside(self):
+        self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(hours=1))
+        before = self.report()
+        # BaseTestCase already supplies an atomic block; add an explicit caller.
+        with transaction.atomic():
+            self.assertTrue(get_user_model().objects.filter(pk=self.user.pk).exists())
+            self.assertEqual(self.report(), before)
+
+    def test_population_snapshot_survives_staff_flip(self):
+        # This proves the Python population snapshot, not PostgreSQL isolation.
+        from events.participation_analytics import analytics_events
+        self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(hours=1))
+        before = self.report()
+
+        def flip_staff():
+            get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
+            return analytics_events()
+
+        with mock.patch('events.growth_cohorts.analytics_events', side_effect=flip_staff):
+            self.assertEqual(self.report(), before)
+        self.assertTrue(get_user_model().objects.get(pk=self.user.pk).is_staff)
+
+    def test_sql_window_does_not_fetch_late_events(self):
+        late = self.joined + timedelta(days=40)
+        self.event(EventType.DEVOTIONAL_VIEWED, late)
+        self.event(EventType.USER_JOINED_FAST, late)
+        FastParticipation.objects.create(profile=self.profile, fast=self.create_fast(), joined_at=late)
+        with mock.patch('events.growth_cohorts._record_action', wraps=_record_action) as record:
+            report = self.report()
+        record.assert_not_called()
+        self.assertEqual(self.metric(report, 'd30')['numerator'], '<1')
+
+    def test_sql_fall_dst_safety_bound_keeps_31d23h_candidate(self):
+        joined = datetime(2026, 10, 31, 7, tzinfo=timezone.utc)
+        get_user_model().objects.filter(pk=self.user.pk).update(date_joined=joined)
+        at = joined + timedelta(days=31, hours=23)
+        self.event(EventType.DEVOTIONAL_VIEWED, at)
+        with mock.patch('events.growth_cohorts._record_action', wraps=_record_action) as record:
+            report = self.report(date(2026, 12, 3))
+        record.assert_called_once_with(mock.ANY, self.user.pk, at, EventType.DEVOTIONAL_VIEWED)
+        # Fetched by the safe SQL bound, rejected by the exact local day-30 bound.
+        self.assertEqual(self.metric(report, 'd30')['numerator'], '<1')
+
+    def test_reverse_action_order_keeps_participation_tie(self):
+        from zoneinfo import ZoneInfo
+        at = self.joined + timedelta(hours=1)
+        actions = [(at, EventType.DEVOTIONAL_VIEWED, False),
+                   (at, EventType.USER_JOINED_FAST, True),
+                   (at, EventType.PRAYER_SET_VIEWED, False)]
+        results = []
+        for ordered in (actions, list(reversed(actions))):
+            snapshot = {self.user.pk: {'joined': self.joined, 'end': self.joined + timedelta(days=31),
+                                      'tz': ZoneInfo('America/Los_Angeles'),
+                                      'signup_day': self.joined.astimezone(ZoneInfo('America/Los_Angeles')).date(),
+                                      'first': None, 'days': set()}}
+            for timestamp, code, participation in ordered:
+                _record_action(snapshot, self.user.pk, timestamp, code, participation=participation)
+            results.append(snapshot)
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0][self.user.pk]['first'], (at, 0, EventType.USER_JOINED_FAST))
+
+    def test_noops_and_legacy_screens_do_not_advance_freshness(self):
+        self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(hours=1))
+        before = self.report()
+        self.event(EventType.USER_JOINED_FAST, self.joined + timedelta(days=2),
+                   data={'participation_tracked': True, 'participation_changed': False})
+        self.event(EventType.SCREEN_VIEW, self.joined + timedelta(days=3))
+        self.assertEqual(self.report(), before)
 
     def test_dst_exact_local_day_and_elapsed_activation(self):
         # March 8 is 23h in LA; March 9 00:15 is only 21h45 after signup.
@@ -215,6 +307,101 @@ class GrowthCohortTests(BaseTestCase):
         with CaptureQueriesContext(connection) as expanded:
             self.report()
         self.assertEqual(len(baseline), len(expanded))
+        # Four exclusion counts + population + three streams + freshness.
+        self.assertLessEqual(sum(q['sql'].lstrip().upper().startswith('SELECT') for q in expanded), 9)
+
+    def test_query_count_is_fixed_across_events_users_weeks_and_timezones(self):
+        with CaptureQueriesContext(connection) as baseline:
+            self.report()
+        for index in range(12):
+            joined = self.joined - timedelta(weeks=index)
+            user = self.make_user(f'eventbounded{index}', joined)
+            profile, _ = Profile.objects.get_or_create(user=user)
+            Profile.objects.filter(pk=profile.pk).update(
+                timezone='Asia/Tokyo' if index % 2 else 'America/Los_Angeles')
+            for day in (1, 7, 30):
+                event = self.event(EventType.DEVOTIONAL_VIEWED, joined + timedelta(days=day))
+                Event.objects.filter(pk=event.pk).update(user=user)
+        with CaptureQueriesContext(connection) as expanded:
+            self.report()
+        self.assertEqual(len(baseline), len(expanded))
+        self.assertLessEqual(sum(q['sql'].lstrip().upper().startswith('SELECT') for q in expanded), 9)
+
+    def test_multiple_timezones_keep_independent_local_days(self):
+        joined = datetime(2026, 3, 8, tzinfo=timezone.utc)
+        get_user_model().objects.filter(pk=self.user.pk).update(date_joined=joined)
+        other = self.make_user('tokyo', joined)
+        profile, _ = Profile.objects.get_or_create(user=other)
+        Profile.objects.filter(pk=profile.pk).update(timezone='Asia/Tokyo')
+        at = datetime(2026, 3, 9, 8, tzinfo=timezone.utc)
+        self.event(EventType.DEVOTIONAL_VIEWED, at)
+        event = self.event(EventType.DEVOTIONAL_VIEWED, at)
+        Event.objects.filter(pk=event.pk).update(user=other)
+        # Tokyo: March 8 -> March 9 (D1). LA: March 7 -> March 9 (D2).
+        # Same UTC signup week, but this LA user's D1 has not closed yet.
+        self.make_user('immature', datetime(2026, 3, 8, 23, tzinfo=timezone.utc))
+        d1 = self.metric(self.report(date(2026, 3, 10)), 'd1')
+        self.assertEqual(d1['numerator'], 1)
+        self.assertEqual(d1['mature_denominator'], 2)
+        self.assertEqual(d1['immature'], 1)
+
+    def test_fall_dst_day30_tail_and_31_day_edge(self):
+        joined = datetime(2026, 10, 31, 7, tzinfo=timezone.utc)  # LA midnight
+        get_user_model().objects.filter(pk=self.user.pk).update(date_joined=joined)
+        # November 30 23:30 LA is 31 elapsed days + 30 minutes after signup.
+        self.event(EventType.DEVOTIONAL_VIEWED, joined + timedelta(days=31, minutes=30))
+        self.assertEqual(self.metric(self.report(date(2026, 12, 3)), 'd30')['numerator'], 'suppressed')
+        # December 1 00:00 LA is day 31 and must not count.
+        Event.objects.filter(user=self.user).delete()
+        self.event(EventType.DEVOTIONAL_VIEWED, joined + timedelta(days=31, hours=1))
+        self.assertEqual(self.metric(self.report(date(2026, 12, 3)), 'd30')['numerator'], '<1')
+
+    def test_events_across_elapsed_31_day_edge(self):
+        # Spring DST has already advanced the local clock by the endpoint.
+        self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(days=30))
+        self.event(EventType.PRAYER_SET_VIEWED, self.joined + timedelta(days=31))
+        self.event(EventType.PRAYER_SET_VIEWED, self.joined + timedelta(days=32))
+        report = self.report()
+        self.assertEqual(self.metric(report, 'd30')['numerator'], 'suppressed')
+        self.assertEqual(self.metric(report, 'activation_7d')['numerator'], '<1')
+
+    def test_participation_wins_event_tie_and_earlier_event_wins(self):
+        at = self.joined + timedelta(hours=1)
+        self.event(EventType.DEVOTIONAL_VIEWED, at)
+        period = FastParticipation.objects.create(profile=self.profile, fast=self.target, joined_at=at)
+        with mock.patch('events.growth_cohorts._suppress_distribution', wraps=_suppress_distribution) as distribution:
+            self.report()
+        self.assertEqual(distribution.call_args.args[1][EventType.USER_JOINED_FAST], 1)
+        self.assertEqual(distribution.call_args.args[1][EventType.DEVOTIONAL_VIEWED], 0)
+        FastParticipation.objects.filter(pk=period.pk).update(joined_at=at + timedelta(seconds=1))
+        with mock.patch('events.growth_cohorts._suppress_distribution', wraps=_suppress_distribution) as distribution:
+            self.report()
+        self.assertEqual(distribution.call_args.args[1][EventType.DEVOTIONAL_VIEWED], 1)
+
+    def test_event_ties_use_code_before_primary_key(self):
+        codes = sorted([EventType.DEVOTIONAL_VIEWED, EventType.PRAYER_SET_VIEWED])
+        for code in reversed(codes):
+            self.event(code, self.joined + timedelta(hours=1))
+        with mock.patch('events.growth_cohorts._suppress_distribution', wraps=_suppress_distribution) as distribution:
+            self.report()
+        self.assertEqual(distribution.call_args.args[1][codes[0]], 1)
+        self.assertEqual(distribution.call_args.args[1][codes[1]], 0)
+
+    def test_iterator_chunk_boundary_preserves_report_and_query_count(self):
+        for index in range(5):
+            self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(days=index))
+            user = self.make_user(f'chunk{index}', self.joined)
+            profile, _ = Profile.objects.get_or_create(user=user)
+            FastParticipation.objects.create(profile=profile, fast=self.target,
+                                             joined_at=self.joined + timedelta(days=index))
+        with CaptureQueriesContext(connection) as normal_queries:
+            normal = self.report()
+        with mock.patch('events.growth_cohorts.ITERATOR_CHUNK_SIZE', 2):
+            with CaptureQueriesContext(connection) as chunked_queries:
+                chunked = self.report()
+        self.assertEqual(chunked, normal)
+        self.assertEqual(len(normal_queries), len(chunked_queries))
+        self.assertLessEqual(sum(q['sql'].lstrip().upper().startswith('SELECT') for q in chunked_queries), 9)
 
     def test_pre_signup_and_account_creation_do_not_activate(self):
         self.event(EventType.DEVOTIONAL_VIEWED, self.joined - timedelta(seconds=1))
