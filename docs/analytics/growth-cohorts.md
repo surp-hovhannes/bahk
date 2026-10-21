@@ -5,6 +5,18 @@ Run `python manage.py growth_cohorts --as-of 2026-05-01 --format json --min-cell
 only reads data; it emits no identifiers, per-user rows, emails, or CSVs.
 
 The as-of date means **exclusive midnight UTC at the start of that date**.
+`--granularity week` (default) groups signups by Monday-based UTC week and keeps
+the `week_start` key. `--granularity month` groups by UTC calendar month using
+`month_start` (`YYYY-MM-01`). `--granularity all` combines all eligible signups
+before as-of into one cohort labelled `cohort: all_signups`. The header records
+`granularity`. Each run is self-consistent: it applies the same metric definitions,
+maturity rules, exclusions and suppression to its chosen groups.
+
+Comparing different granularities or as-of dates for the same data can narrow
+small cells through **differencing**. Operators must not publish week-level and
+month/all-level tables side by side without review. This is a minimal mitigation,
+not a general privacy guarantee.
+
 Weekly signup cohorts start Monday in UTC, while retention days use each user’s
 profile timezone. All eligible historical weeks are
 included, including partial/immature weeks. Population excludes staff, then
@@ -53,8 +65,10 @@ the numerator, denominator, or complementary cell is below threshold, or the
 denominator is empty. Secondary suppression uses the literal `"suppressed"`
 for counts at or above the threshold: the numerator is hidden when denominator
 minus numerator is below threshold; both numerator and denominator are hidden
-when the immature count is below threshold (including zero), since population
-is reported separately. Percentages and intervals are also null in that case.
+when 0 < immature < threshold, since population is reported separately.
+Percentages and intervals are also null for that small nonzero immature cell.
+Exactly zero immature users is published as the integer `0`: there is no small
+nonempty immature group to disclose, so zero alone does not hide either count.
 Conversely, the immature count is hidden when the mature denominator is below
 threshold, since population minus immature would otherwise recover it.
 First-action counts and derived statistics are also withheld when their shared

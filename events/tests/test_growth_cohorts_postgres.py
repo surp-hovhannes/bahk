@@ -34,14 +34,14 @@ class GrowthCohortPostgresTests(TransactionTestCase):
         report = build_report(date(2026, 5, 1), 1)
         # Same suppression and local-day expectations as the backend-independent suite:
         # one mature activated user, no return days, and no immature users.
-        activated = {'numerator': 'suppressed', 'mature_denominator': 'suppressed',
-                     'percent': None, 'wilson_95': None, 'immature': '<1'}
+        activated = {'numerator': 'suppressed', 'mature_denominator': 1,
+                     'percent': None, 'wilson_95': None, 'immature': 0}
         no_return = {**activated, 'numerator': '<1'}
         self.assertEqual(report, {
             'as_of': '2026-05-01T00:00:00+00:00',
             'activation_data_through': '2026-04-30T00:00:00+00:00',
             'data_freshness': '2026-03-08T10:00:00+00:00',
-            'min_cell': 1, 'cohort_timezone': 'UTC',
+            'min_cell': 1, 'granularity': 'week', 'cohort_timezone': 'UTC',
             'exclusions_sequential': dict.fromkeys(
                 ['staff', 'superuser', 'configured_ids', 'configured_email_domains'], '<1'),
             'caveats': CAVEATS,
@@ -54,7 +54,8 @@ class GrowthCohortPostgresTests(TransactionTestCase):
                     **dict.fromkeys(['d1', 'd7', 'd30', 'return_days_1_7', 'return_days_8_30'], no_return),
                 },
                 'first_action_within_7d': {
-                    code: activated if code == EventType.CHECKLIST_USED else no_return
+                    code: {**(activated if code == EventType.CHECKLIST_USED else no_return),
+                           'mature_denominator': 'suppressed'}
                     for code in MEANINGFUL_EVENT_CODES
                 },
             }],
