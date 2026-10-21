@@ -6,7 +6,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection
+from django.db import connection, transaction
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
@@ -66,7 +66,16 @@ class GrowthCohortTests(BaseTestCase):
         stream.iterator.assert_called_once()
         self.assertEqual(events.call_count, 2)
 
+    def test_report_inside_outer_atomic_matches_report_outside(self):
+        self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(hours=1))
+        before = self.report()
+        # BaseTestCase already supplies an atomic block; add an explicit caller.
+        with transaction.atomic():
+            self.assertTrue(get_user_model().objects.filter(pk=self.user.pk).exists())
+            self.assertEqual(self.report(), before)
+
     def test_population_snapshot_survives_staff_flip(self):
+        # This proves the Python population snapshot, not PostgreSQL isolation.
         from events.participation_analytics import analytics_events
         self.event(EventType.DEVOTIONAL_VIEWED, self.joined + timedelta(hours=1))
         before = self.report()

@@ -135,7 +135,11 @@ def build_report(as_of, min_cell=10):
 
     Stream compact action rows in a fixed number of queries, then aggregate
     per-user local days in Python. No user-level data leaves this function.
+    Open a snapshot transaction only outside an existing atomic block; nested
+    callers supply their own transaction isolation and snapshot semantics.
     """
+    if connection.in_atomic_block:
+        return _build_report(as_of, min_cell)
     with transaction.atomic():
         if connection.vendor == 'postgresql':
             with connection.cursor() as cursor:

@@ -100,8 +100,10 @@ three action streams, and freshness), plus transaction control. Empty population
 skip the action streams. Eligibility is decided once from the population and
 applied to stream rows in Python, without a live eligibility subquery.
 
-The entire report runs in one atomic transaction. PostgreSQL uses a read-only
-REPEATABLE READ snapshot for population, exclusions, streams and freshness.
+Outside an existing atomic block, the entire report opens one atomic transaction.
+PostgreSQL uses a read-only REPEATABLE READ snapshot for population, exclusions,
+streams and freshness. Inside an existing atomic block, the report uses the
+caller’s transaction and snapshot semantics without changing isolation.
 Streams use `.iterator(chunk_size=5000)` inside that transaction, so PostgreSQL
 server-side cursors do not require WITH HOLD. Python memory is bounded by the
 population and at most 31 distinct local days per user, rather than event history.
@@ -114,9 +116,20 @@ No tables, indexes, models or migrations are changed.
 ### Operator notes
 
 Use a direct PostgreSQL connection for the first post-deploy production run.
-Capture EXPLAIN ANALYZE for both the meaningful-event and legacy-join queries:
-the latter retains NOT IN over linked events and correlated EXISTS predicates.
+The first production run must capture EXPLAIN ANALYZE for the meaningful-event,
+legacy-join, and freshness queries. The legacy-join query retains NOT IN over
+linked events and correlated EXISTS predicates. Freshness now uses
+`analytics_events()` with its NOT IN no-op subquery rather than the old plain MAX;
+include that filtered aggregate when assessing query plans.
 Per-user bounds shrink candidates, but fixed query count does not establish
 production latency. PgBouncer transaction pooling still requires attention to
 server-side cursors; use a direct connection or configure
 `DISABLE_SERVER_SIDE_CURSORS=True` as appropriate for the deployment.
+
+The snapshot transaction is opened only when the caller is not already in an
+atomic block; nested callers supply their own snapshot semantics. A long
+REPEATABLE READ READ ONLY transaction on a live primary holds back vacuum
+cleanup through its xmin horizon. On a hot-standby replica it can be cancelled
+due to recovery conflicts under `max_standby_streaming_delay`. It is also subject
+to `idle_in_transaction_session_timeout`, including while Python processes rows
+between queries.
