@@ -15,23 +15,29 @@ class Command(BaseCommand):
         parser.add_argument(
             '--force',
             action='store_true',
-            help='Force recreation of event types (will update existing ones)',
+            help='Repair lifecycle category/target/analytics attributes; preserve activation',
         )
 
     def handle(self, *args, **options):
+        if options['check'] and options['force']:
+            raise CommandError('--check and --force cannot be combined.')
         if options['check']:
             problems = EventType.missing_core_types()
             for status, codes in problems.items():
                 if codes:
                     self.stdout.write(f"{status.capitalize()} core event types: {', '.join(codes)}")
-            if any(problems.values()):
-                raise CommandError('Core event type registration check failed.')
-            self.stdout.write(self.style.SUCCESS('OK: all core event types are registered and active.'))
+            if problems['missing'] or problems['invalid']:
+                raise CommandError('Core registration check failed; run init_event_types --force to repair lifecycle attributes.')
+            self.stdout.write(self.style.SUCCESS('OK: all core event types are registered with valid lifecycle attributes.'))
             return
 
         self.stdout.write('Initializing event types...')
         
         created_types = EventType.get_or_create_default_types()
+        if options['force']:
+            EventType.objects.filter(code__in=EventType.NOTIFICATION_LIFECYCLE_CODES).update(
+                category='notification', requires_target=False, track_in_analytics=False,
+            )
         
         if created_types:
             self.stdout.write(
