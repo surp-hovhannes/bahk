@@ -9,11 +9,14 @@ from events.growth_cohorts import build_report
 
 
 class Command(BaseCommand):
-    help = 'Read-only weekly growth cohorts, with mature denominators and small-cell suppression.'
+    help = ('Read-only week/month/all signup cohorts with mature denominators and small-cell suppression. '
+            'Comparing granularities or as-of dates can reveal small cells; review before publishing together.')
 
     def add_arguments(self, parser):
         parser.add_argument('--as-of', required=True, type=date.fromisoformat)
         parser.add_argument('--format', choices=['json', 'md'], default='json')
+        parser.add_argument('--granularity', choices=['week', 'month', 'all'], default='week',
+                            help='UTC signup weeks (default), calendar months, or all eligible signups.')
         parser.add_argument('--min-cell', type=int, default=10)
         parser.add_argument('--unsafe-min-cell', action='store_true',
                             help='Allow thresholds below 10 for synthetic testing only.')
@@ -25,7 +28,7 @@ class Command(BaseCommand):
             as_of = options['as_of']
             if isinstance(as_of, str):
                 as_of = date.fromisoformat(as_of)
-            report = build_report(as_of, options['min_cell'])
+            report = build_report(as_of, options['min_cell'], options['granularity'])
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
         content = json.dumps(report, indent=2)

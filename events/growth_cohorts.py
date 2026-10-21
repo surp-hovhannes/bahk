@@ -1,4 +1,4 @@
-"""Read-only weekly growth cohorts. Only aggregate cells leave this module."""
+"""Read-only growth cohorts. Only aggregate cells leave this module."""
 
 import math
 from collections import defaultdict
@@ -52,11 +52,11 @@ def _metric(n, d, immature, minimum):
     result = {'numerator': _cell(n, minimum), 'mature_denominator': _cell(d, minimum),
               'percent': None, 'wilson_95': None}
     if immature is not None:
-        result['immature'] = _cell(immature, minimum)
+        result['immature'] = 0 if immature == 0 else _cell(immature, minimum)
     # Population is released separately. Hide both counts when subtracting
     # the denominator would recover the suppressed immature cell; hiding only
     # the denominator can still leak it when the numerator equals it.
-    if immature is not None and immature < minimum:
+    if immature is not None and 0 < immature < minimum:
         for key in ('numerator', 'mature_denominator'):
             if isinstance(result[key], int):
                 result[key] = 'suppressed'
@@ -65,7 +65,7 @@ def _metric(n, d, immature, minimum):
         result['immature'] = 'suppressed'
     elif d - n < minimum and isinstance(result['numerator'], int):
         result['numerator'] = 'suppressed'
-    if d and min(n, d, d - n) >= minimum and (immature is None or immature >= minimum):
+    if d and min(n, d, d - n) >= minimum and (immature is None or immature == 0 or immature >= minimum):
         p, z = n / d, 1.959963984540054
         center = (p + z * z / (2 * d)) / (1 + z * z / d)
         radius = z * math.sqrt(p * (1 - p) / d + z * z / (4 * d * d)) / (1 + z * z / d)
@@ -130,8 +130,8 @@ def _record_action(snapshot, uid, at, code, *, participation=False):
         row['days'].add(day)
 
 
-def build_report(as_of, min_cell=10):
-    """as_of is an exclusive UTC midnight; signup weeks are Monday-based UTC.
+def build_report(as_of, min_cell=10, granularity='week'):
+    """as_of is an exclusive UTC midnight; signup weeks/months use UTC.
 
     Stream compact action rows in a fixed number of queries, then aggregate
     per-user local days in Python. No user-level data leaves this function.
@@ -139,15 +139,17 @@ def build_report(as_of, min_cell=10):
     callers supply their own transaction isolation and snapshot semantics.
     """
     if connection.in_atomic_block:
-        return _build_report(as_of, min_cell)
+        return _build_report(as_of, min_cell, granularity)
     with transaction.atomic():
         if connection.vendor == 'postgresql':
             with connection.cursor() as cursor:
                 cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
-        return _build_report(as_of, min_cell)
+        return _build_report(as_of, min_cell, granularity)
 
 
-def _build_report(as_of, min_cell):
+def _build_report(as_of, min_cell, granularity='week'):
+    if granularity not in ('week', 'month', 'all'):
+        raise ValueError('granularity must be week, month, or all')
     if min_cell < 1:
         raise ValueError('min_cell must be positive')
     end = datetime.combine(as_of, time.min, tzinfo=timezone.utc)
@@ -168,6 +170,8 @@ def _build_report(as_of, min_cell):
         users = users.exclude(rule)
 
     grouped = defaultdict(lambda: defaultdict(int))
+    if granularity == 'all':
+        grouped['all_signups']  # Preserve a single cohort even for an empty population.
     # Profiles are validated with pytz, which ignores case; ZoneInfo does not,
     # and a tzdata folder name such as America raises IsADirectoryError.
     zones = {name.lower(): name for name in available_timezones()}
@@ -215,7 +219,9 @@ def _build_report(as_of, min_cell):
         joined, first = row['joined'], row['first']
         signup_utc = joined.astimezone(timezone.utc).date()
         week = signup_utc - timedelta(days=signup_utc.weekday())
-        counts = grouped[week.isoformat()]
+        key = (week.isoformat() if granularity == 'week' else
+               signup_utc.strftime('%Y-%m') if granularity == 'month' else 'all_signups')
+        counts = grouped[key]
         counts['population'] += 1
         counts['fallback'] += row['fallback']
         for name, days in ACTIVATION.items():
@@ -232,7 +238,7 @@ def _build_report(as_of, min_cell):
             counts[name + '_n'] += mature and any(start <= day <= stop for day in row['days'])
 
     cohorts = []
-    for week, counts in sorted(grouped.items()):
+    for group_key, counts in sorted(grouped.items()):
         population = counts['population']
         metrics = {name: _metric(counts[name + '_n'], counts[name + '_d'],
                                 population - counts[name + '_d'], min_cell)
@@ -255,7 +261,9 @@ def _build_report(as_of, min_cell):
                         metric[key] = 'suppressed'
                 metric.update(percent=None, wilson_95=None)
         _suppress_distribution(first_actions, {code: counts['first_' + code] for code in first_actions}, min_cell)
-        cohorts.append({'week_start': week, 'population': _cell(population, min_cell),
+        cohort_key = ({'week_start': group_key} if granularity == 'week' else
+                      {'month_start': group_key + '-01'} if granularity == 'month' else {'cohort': group_key})
+        cohorts.append({**cohort_key, 'population': _cell(population, min_cell),
                         'timezone_fallback': _metric(counts['fallback'], population, None, min_cell),
                         'metrics': metrics, 'first_action_within_7d': first_actions})
     freshness = analytics_events().filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
@@ -263,5 +271,5 @@ def _build_report(as_of, min_cell):
     freshness = freshness and freshness.replace(minute=0, second=0, microsecond=0)
     return {'as_of': end.isoformat(), 'activation_data_through': cutoff.isoformat(),
             'data_freshness': freshness.isoformat() if freshness else None,
-            'min_cell': min_cell, 'cohort_timezone': 'UTC', 'exclusions_sequential': excluded,
+            'min_cell': min_cell, 'granularity': granularity, 'cohort_timezone': 'UTC', 'exclusions_sequential': excluded,
             'caveats': CAVEATS, 'cohorts': cohorts}

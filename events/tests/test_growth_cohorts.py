@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import date, datetime, timedelta, timezone
 from io import StringIO
@@ -11,7 +12,7 @@ from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
 from events.growth_cohorts import (
-    _configured, _metric, _record_action, _suppress_distribution, _suppress_nested, build_report,
+    ACTIVATION, RETENTION, _configured, _metric, _record_action, _suppress_distribution, _suppress_nested, build_report,
 )
 from events.models import Event, EventType
 from hub.models import FastParticipation, Profile
@@ -44,6 +45,84 @@ class GrowthCohortTests(BaseTestCase):
 
     def metric(self, report, name):
         return report['cohorts'][0]['metrics'][name]
+
+    def synthetic_group(self, prefix, joined, size):
+        users = get_user_model().objects.bulk_create([
+            get_user_model()(username=f'{prefix}{index}', date_joined=joined)
+            for index in range(size)
+        ])
+        Profile.objects.bulk_create([
+            Profile(user=user, timezone='America/Los_Angeles') for user in users
+        ])
+        for user in users[:size // 2]:
+            for delta in (timedelta(hours=1), timedelta(days=1),
+                          timedelta(days=7), timedelta(days=30)):
+                event = Event.create_event(EventType.CHECKLIST_USED, user=user,
+                                           title='Synthetic cohort checklist')
+                Event.objects.filter(pk=event.pk).update(timestamp=joined + delta)
+
+    def test_fully_mature_cells_release_counts_percent_and_wilson(self):
+        get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
+        self.synthetic_group('mature', self.joined, 40)
+        for minimum in (1, 10):
+            with self.subTest(minimum=minimum):
+                cohort = self.report(minimum=minimum)['cohorts'][0]
+                for metric in cohort['metrics'].values():
+                    self.assertEqual(metric['numerator'], 20)
+                    self.assertEqual(metric['mature_denominator'], 40)
+                    self.assertEqual(metric['immature'], 0)
+                    self.assertEqual(metric['percent'], 50)
+                    self.assertEqual(metric['wilson_95'], [35.2, 64.8])
+                # Mirroring keeps zero visible even when distribution suppression
+                # hides the only nonempty category (its complement is zero).
+                for metric in cohort['first_action_within_7d'].values():
+                    self.assertEqual(metric['immature'], 0)
+                self.assertEqual(cohort['first_action_within_7d'][EventType.CHECKLIST_USED]['numerator'],
+                                 'suppressed')
+
+    def test_granularity_aggregates_same_unsuppressed_metrics(self):
+        get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
+        for index, day in enumerate((date(2026, 1, 12), date(2026, 1, 19),
+                                     date(2026, 2, 9), date(2026, 2, 16))):
+            self.synthetic_group(f'group{index}-', datetime.combine(day, datetime.min.time(),
+                                                                  tzinfo=timezone.utc), 4)
+        reports = {g: build_report(date(2026, 5, 1), 1, g) for g in ('week', 'month', 'all')}
+        self.assertEqual([c['month_start'] for c in reports['month']['cohorts']],
+                         ['2026-01-01', '2026-02-01'])
+        self.assertEqual(reports['all']['cohorts'][0]['cohort'], 'all_signups')
+        for granularity, report in reports.items():
+            self.assertEqual(report['granularity'], granularity)
+            self.assertEqual(report['exclusions_sequential'], reports['week']['exclusions_sequential'])
+            self.assertEqual(sum(c['population'] for c in report['cohorts']), 16)
+            for name in (*ACTIVATION, *RETENTION):
+                for field, expected in (('numerator', 8), ('mature_denominator', 16)):
+                    total = sum(c['metrics'][name][field] for c in report['cohorts'])
+                    weekly = sum(c['metrics'][name][field] for c in reports['week']['cohorts'])
+                    self.assertEqual(total, weekly)
+                    self.assertEqual(total, expected)
+        self.assertEqual(self.report(), build_report(date(2026, 5, 1), 1, 'week'))
+
+    def test_all_granularity_empty_population(self):
+        report = build_report(date(2000, 1, 1), granularity='all')
+        self.assertEqual(len(report['cohorts']), 1)
+        self.assertEqual(report['cohorts'][0]['cohort'], 'all_signups')
+        self.assertEqual(report['cohorts'][0]['population'], '<10')
+
+    def test_command_granularity_choices(self):
+        for granularity in ('week', 'month', 'all'):
+            output = StringIO()
+            call_command('growth_cohorts', '--as-of', '2026-05-01',
+                         '--granularity', granularity, stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['granularity'], granularity)
+            key, value = {'week': ('week_start', '2026-03-02'),
+                          'month': ('month_start', '2026-03-01'),
+                          'all': ('cohort', 'all_signups')}[granularity]
+            self.assertEqual(report['cohorts'][0][key], value)
+        with self.assertRaisesMessage(CommandError, 'invalid choice'):
+            call_command('growth_cohorts', '--as-of', '2026-05-01', '--granularity', 'day')
+        with self.assertRaisesMessage(ValueError, 'granularity must be'):
+            build_report(date(2026, 5, 1), granularity='day')
 
     def test_stream_user_outside_population_snapshot_is_ignored(self):
         at = self.joined + timedelta(hours=1)
@@ -151,7 +230,7 @@ class GrowthCohortTests(BaseTestCase):
         self.event(EventType.DEVOTIONAL_VIEWED, joined + timedelta(hours=24))
         # March 10 midnight minus 24h lag closes the 24h window exactly.
         report = self.report(date(2026, 3, 10))
-        self.assertEqual(self.metric(report, 'activation_24h')['mature_denominator'], 'suppressed')
+        self.assertEqual(self.metric(report, 'activation_24h')['mature_denominator'], 1)
         self.assertEqual(self.metric(report, 'activation_24h')['numerator'], 'suppressed')
         # Immature users leave no mature denominator; the immature cell is then
         # hidden too, since population minus it would recover the denominator.
@@ -159,7 +238,7 @@ class GrowthCohortTests(BaseTestCase):
         self.assertEqual(self.metric(report, 'activation_72h')['immature'], 'suppressed')
         self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'activation_24h')['mature_denominator'], '<1')
         # Signup is March 7 locally; March 8 has closed by March 10 UTC.
-        self.assertEqual(self.metric(report, 'd1')['mature_denominator'], 'suppressed')
+        self.assertEqual(self.metric(report, 'd1')['mature_denominator'], 1)
         self.assertEqual(self.metric(self.report(date(2026, 3, 9)), 'd1')['mature_denominator'], '<1')
 
     @override_settings(ANALYTICS_EXCLUDED_USER_IDS=[], ANALYTICS_EXCLUDED_EMAIL_DOMAINS=['example.invalid'])
@@ -281,7 +360,7 @@ class GrowthCohortTests(BaseTestCase):
                 self.assertEqual(metric['mature_denominator'], d)
                 self.assertIsNone(metric['percent'])
                 self.assertIsNone(metric['wilson_95'])
-        for immature in (0, 1, 9):
+        for immature in (1, 9):
             with self.subTest(immature=immature):
                 metric = _metric(10, 20, immature, 10)
                 self.assertEqual(metric['numerator'], 'suppressed')
@@ -419,7 +498,7 @@ class GrowthCohortTests(BaseTestCase):
 
     def test_first_action_distribution_complementary_suppression(self):
         counts = {'a': 20, 'b': 20, 'c': 5}
-        actions = {code: _metric(n, 45, 10, 10) for code, n in counts.items()}
+        actions = {code: _metric(n, 45, 0, 10) for code, n in counts.items()}
         _suppress_distribution(actions, counts, 10)
         self.assertEqual(actions['c']['numerator'], '<10')
         self.assertEqual(actions['a']['numerator'], 'suppressed')
@@ -430,13 +509,13 @@ class GrowthCohortTests(BaseTestCase):
         # Hiding only the 10 would pin it at 10 and every '<10' cell at 0,
         # because 'suppressed' already says it is at least the threshold.
         counts = {'devotional': 30, 'prayer_set': 10, 'other': 0}
-        actions = {code: _metric(n, 40, 10, 10) for code, n in counts.items()}
+        actions = {code: _metric(n, 40, 0, 10) for code, n in counts.items()}
         _suppress_distribution(actions, counts, 10)
         for code in ('devotional', 'prayer_set'):
             self.assertEqual(actions[code]['numerator'], 'suppressed')
 
     def test_nested_window_complementary_suppression(self):
-        metrics = {name: _metric(n, 80, 10, 10) for name, n in [
+        metrics = {name: _metric(n, 80, 0, 10) for name, n in [
             ('activation_24h', 20), ('activation_72h', 25), ('activation_7d', 40),
             ('d1', 20), ('d7', 25), ('return_days_1_7', 30),
             ('d30', 20), ('return_days_8_30', 25)]}
