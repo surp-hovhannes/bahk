@@ -85,7 +85,7 @@ class DeviceTokenCreateView(generics.CreateAPIView):
                 self.perform_create(serializer)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             else:
-                serializer.save(user=request.user)
+                serializer.save(user=request.user, is_active=True)
                 return Response(serializer.data)
         except ValidationError as e:
             # Handle model-level validation errors
