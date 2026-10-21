@@ -1,4 +1,5 @@
 """Views for prayers app."""
+from notifications.utils import telemetry_task_kwargs
 from django.db.models import Q
 from django.db import transaction
 from django.utils.translation import activate, get_language_from_request
@@ -684,6 +685,7 @@ class PrayerRequestViewSet(viewsets.ModelViewSet):
                 'prayer_request_id': prayer_request.id,
             },
             user_ids=recipient_ids,
+            **telemetry_task_kwargs('prayer_thanks'),
         )
 
         return Response({

@@ -317,6 +317,11 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+CLIENT_TELEMETRY_THROTTLE_DEFAULTS = {
+    'screen_view': '120/min',
+    'notification_telemetry': '30/min',
+}
+
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -326,12 +331,20 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
     # Scoped rates only; no throttle class is enabled globally.
     'DEFAULT_THROTTLE_RATES': {
-        'screen_view': config('SCREEN_VIEW_THROTTLE_RATE', default='120/min'),
+        'notification_telemetry': config(
+            'NOTIFICATION_TELEMETRY_THROTTLE_RATE',
+            default=CLIENT_TELEMETRY_THROTTLE_DEFAULTS['notification_telemetry'],
+        ),
+        'screen_view': config('SCREEN_VIEW_THROTTLE_RATE', default=CLIENT_TELEMETRY_THROTTLE_DEFAULTS['screen_view']),
     },
 }
 
 # Analytics settings
 ANALYTICS_SESSION_TIMEOUT_MINUTES = int(config('ANALYTICS_SESSION_TIMEOUT_MINUTES', default=30))
+
+# Enable only after init_event_types and init_event_types --check succeed.
+NOTIFICATION_TELEMETRY_ENABLED = config("NOTIFICATION_TELEMETRY_ENABLED", default=False, cast=bool)
+
 
 SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': datetime.timedelta(

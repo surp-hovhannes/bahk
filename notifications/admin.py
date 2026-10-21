@@ -1,3 +1,4 @@
+from notifications.utils import telemetry_task_kwargs
 from django.contrib import admin
 from django.contrib import messages
 from django.template.response import TemplateResponse
@@ -186,6 +187,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                         message=message,
                         data=data,
                         device_token_ids=token_ids,
+                        **telemetry_task_kwargs('admin_manual'),
                     )
                     messages.success(
                         request,
@@ -196,7 +198,8 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                     result = send_push_notification(
                         message=message,
                         data=data,
-                        device_token_ids=token_ids
+                        device_token_ids=token_ids,
+                        kind='admin_manual',
                     )
 
                     if result['success']:
@@ -239,7 +242,8 @@ class DeviceTokenAdmin(admin.ModelAdmin):
         users = list(queryset.values_list('user', flat=True).distinct())
         result = send_push_notification(
             message="Test notification from admin",
-            users=users
+            users=users,
+            kind='test',
         )
         
         if result['success']:

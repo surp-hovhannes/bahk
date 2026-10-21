@@ -2,6 +2,7 @@
 Django signals for automatically tracking user events.
 These signals listen for specific model changes and create corresponding event records.
 """
+from notifications.utils import telemetry_task_kwargs
 
 import logging
 from django.contrib.auth.signals import user_logged_in, user_logged_out
@@ -422,6 +423,7 @@ def track_fast_participant_milestone(fast, participant_count, milestone_type="pa
                         message=message,
                         data={'screen': f'fast/{fast.id}'},
                         user_ids=user_ids,
+                        **telemetry_task_kwargs('fast_milestone'),
                     )
                     logger.info(
                         f"Sent milestone push for {fast.name} ({milestone_hit} participants) "
@@ -551,6 +553,9 @@ def create_activity_feed_item(sender, instance, created, **kwargs):
     Create activity feed items when events are created.
     Supports both synchronous and asynchronous creation.
     """
+    if instance.event_type.code in EventType.NOTIFICATION_LIFECYCLE_CODES:
+        return
+
     if created and instance.user:
         from .models import UserActivityFeed
         from django.conf import settings

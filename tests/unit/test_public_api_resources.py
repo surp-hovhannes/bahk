@@ -78,6 +78,7 @@ class PublicApiResourceTests(TestCase):
             "image_url",
             "thumbnail_url",
             "learn_more_url",
+            "share_url",
         }
 
         self.assertEqual(list_response.status_code, 200)
@@ -235,7 +236,17 @@ class PublicApiResourceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["date"], "2026-01-06")
-        self.assertEqual(response.json()["feasts"], [{"name": feast.name, "icon": None}])
+        self.assertEqual(
+            response.json()["feasts"],
+            [
+                {
+                    "name": feast.name,
+                    "icon": None,
+                    "description": None,
+                    "share_url": f"https://web.fastandpray.app/share/feast/2026-01-06?id={feast.pk}",
+                }
+            ],
+        )
         lookup.assert_called_once_with(date(2026, 1, 6), self.church)
 
     def test_legacy_fast_days_route_is_not_part_of_public_v1(self):
@@ -379,7 +390,8 @@ class PublicApiResourceTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(set(response.json()), {"date", "feasts"})
                 self.assertEqual([f["name"] for f in response.json()["feasts"]], expected)
-                self.assertLessEqual(len(queries), 2)
+                # Church, feasts, and one batched active-context query.
+                self.assertLessEqual(len(queries), 3)
                 self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in queries))
 
     @patch("hub.services.feast_service.get_feast_for_date")
@@ -479,7 +491,13 @@ class PublicApiResourceTests(TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json()["feasts"][0], {"name": "Stored name", "icon": None}
+            response.json()["feasts"][0],
+            {
+                "name": "Stored name",
+                "icon": None,
+                "description": None,
+                "share_url": f"https://web.fastandpray.app/share/feast/2026-03-01?id={feast.pk}",
+            },
         )
         stored.assert_called_once_with(church=self.church, observance_id__in=[feast.observance_id])
         stored.return_value.select_related.assert_called_once_with("icon")

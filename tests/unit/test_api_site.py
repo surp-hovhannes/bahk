@@ -336,7 +336,7 @@ class PublishedApiDocsTests(SimpleTestCase):
         self.assertEqual(set(examples["reading-by-date"]["readings"][0]), set(ReadingPublicSerializer.Meta.fields))
         feast = examples["feast-by-date"]["feasts"][0]
         self.assertEqual(set(feast), set(FeastPublicSerializer.Meta.fields))
-        self.assertEqual(set(feast), {"name", "icon"})
+        self.assertEqual(set(feast), {"name", "icon", "description", "share_url"})
         self.assertEqual(examples["calendar"]["feasts"], [feast])
         self.assertEqual(set(feast["icon"]), set(IconPublicSerializer.Meta.fields))
         self.assertEqual(
