@@ -346,6 +346,9 @@ class NotificationFunnelTests(TestCase):
                     for node, value in graph.values.items():
                         if 0 < value < 10:
                             self.assertIn(node, graph.hidden)
+                    for node, contributors in graph.contributors.items():
+                        if graph.values[node] > 0 and len({uid for uid, _ in contributors}) < 10:
+                            self.assertIn(node, graph.hidden)
                     for total, parts in graph.relations:
                         nodes = (total, *parts)
                         hidden = [n for n in nodes if n in graph.hidden]
