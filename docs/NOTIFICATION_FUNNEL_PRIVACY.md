@@ -55,3 +55,24 @@ This protects the declared within-report relations. Comparing overlapping report
 windows or changing cutoffs still requires privacy review, as the report caveat
 states. CI must run the Django tests; local validation for this change was limited
 to syntax and whitespace checks.
+
+Every positive event cell also requires at least k distinct eligible contributing
+users. Internal event references retain the user and source row only inside this
+module. Matched receipts inherit the eligible ticket owner's user and source row,
+so null-user receipts cannot bypass eligibility and complements have the correct
+contributors. Internal residuals receive the same two floors. Identifiers and
+contributor sets are never serialized.
+
+Before correlation and graph construction, reporting kinds with positive attempts
+below k, or fewer than k distinct attempting users, are folded into `other_kinds`.
+All their events and associations follow that bucket; nothing is discarded.
+Overall remains the sum of the resulting event buckets. If the pooled bucket is
+still sparse, normal complementary suppression applies (and can hide connected
+large cells). Absent kinds remain structural zeros.
+
+The repeatable-read snapshot counts candidate lifecycle rows before materializing
+them. More than `MAX_LIFECYCLE_ROWS` (500,000, a module-level operational constant)
+aborts with a recommendation to reduce `--since-days`. The bound includes unmatched
+null-user receipts, which consume memory even though they do not advance freshness.
+Freshness includes eligible lifecycle rows and successfully matched receipts only.
+Text output renders labeled counts and ratios without embedding JSON.

@@ -4,7 +4,7 @@ from datetime import datetime, time, timedelta, timezone
 
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
-from django.db.models import Exists, Max, OuterRef, Q
+from django.db.models import Exists, OuterRef, Q
 
 from events.event_schema import (
     NOTIFICATION_DESTINATIONS, NOTIFICATION_DESTINATION_RESULTS, NOTIFICATION_OPEN_ENTRIES,
@@ -16,9 +16,13 @@ from events.participation_analytics import analytics_events, legacy_transition_e
 from hub.models import FastParticipation
 from notifications.utils import EXPO_ERROR_CODES
 
+MAX_LIFECYCLE_ROWS = 500_000
+
 PRAYER_CODES = {EventType.PRAYER_SET_VIEWED, EventType.DEVOTIONAL_VIEWED,
                 EventType.PRAYER_REQUEST_ACCEPTED}
 CAVEATS = [
+    "Positive event cells require both count and distinct eligible contributors >= k; identifiers stay internal.",
+    "Kinds below either attempt floor are pooled into other_kinds before disclosure protection.",
     'Provider ticket acceptance means accepted by provider; device delivery is not measured.',
     'Receipt ok means handed to the platform push service per Expo receipt; not seen on the device.',
     'Receipt coverage can be incomplete because of ledger capacity, expiry, or disabled telemetry.',
@@ -54,21 +58,31 @@ class _DisclosureGraph:
         self.relations = []
         self.hidden = set()
         self.bindings = []
+        self.contributors = {}
 
-    def node(self, name, value):
+    def node(self, name, value, contributors=None):
         if name in self.values:
-            assert self.values[name] == value, name
+            if self.values[name] != value:
+                raise RuntimeError(f"Inconsistent disclosure node: {name}")
+        if contributors is not None:
+            self.contributors[name] = contributors
+            if value > 0 and len({uid for uid, _ in contributors}) < self.minimum:
+                self.hidden.add(name)
         self.values[name] = value
         return name
 
     def partition(self, total, parts):
         parts = tuple(parts)
-        assert self.values[total] == sum(self.values[p] for p in parts), total
+        if self.values[total] != sum(self.values[p] for p in parts):
+            raise RuntimeError(f"Invalid disclosure partition: {total}")
         self.relations.append((total, parts))
 
     def subset(self, total, part, name):
         residual = self.node(name, self.values[total] - self.values[part])
-        assert self.values[residual] >= 0, name
+        if self.values[residual] < 0:
+            raise RuntimeError(f"Negative disclosure residual: {name}")
+        if total in self.contributors and part in self.contributors:
+            self.node(name, self.values[residual], self.contributors[total] - self.contributors[part])
         self.partition(total, (part, residual))
 
     def bind(self, cell, field, node):
@@ -94,13 +108,13 @@ class _DisclosureGraph:
                 cell.update(percent=None, wilson_95=None)
 
 
-def _protect_output(output, prompts, counters, prompt_users, open_populations, associated, minimum):
+def _protect_output(output, prompts, counters, prompt_users, open_populations, associated, minimum, contributors):
     """Build the single relation list over the finished report, then suppress."""
     graph = _DisclosureGraph(minimum)
     groups = list(output)
 
     def count(group, key):
-        return graph.node((group, key), counters[group][key])
+        return graph.node((group, key), counters[group][key], contributors[(group, key)])
 
     # Every event count, including internal totals, partitions across kinds.
     keys = set().union(*(set(c) for c in counters.values()))
@@ -109,6 +123,8 @@ def _protect_output(output, prompts, counters, prompt_users, open_populations, a
     keys.update(('destination_events', 'all_opens', 'send_failures'))
     for group in groups:
         counters[group]['all_opens'] = counters[group]['matched_opens'] + counters[group]['unmatched_opens']
+        contributors[(group, 'all_opens')] = contributors[(group, 'matched_opens')] | contributors[(group, 'unmatched_opens')]
+        contributors[(group, 'send_failures')] = contributors[(group, 'provider_rejected')] | contributors[(group, 'send_error')]
         counters[group]['send_failures'] = counters[group]['provider_rejected'] + counters[group]['send_error']
     for key in sorted(keys):
         graph.partition(count('overall', key), [count(g, key) for g in groups if g != 'overall'])
@@ -128,7 +144,10 @@ def _protect_output(output, prompts, counters, prompt_users, open_populations, a
         for index, (total, parts) in enumerate(partitions):
             remainder = graph.node((group, 'remainder', index),
                                    counters[group][total] - sum(counters[group][p] for p in parts))
-            assert graph.values[remainder] >= 0
+            if graph.values[remainder] < 0:
+                raise RuntimeError("Negative category remainder")
+            graph.node(remainder, graph.values[remainder], contributors[(group, total)] -
+                       set().union(*(contributors[(group, p)] for p in parts)))
             graph.partition(count(group, total), [*(count(group, p) for p in parts), remainder])
         graph.subset(count(group, 'provider_accepted'), count(group, 'accepted_tickets'),
                      (group, 'accepted_without_ticket'))
@@ -219,21 +238,41 @@ def _build_report(as_of, since_days, minimum):
     events = Event.objects.filter(event_type__code__in=EventType.NOTIFICATION_LIFECYCLE_CODES,
                                   timestamp__gte=start, timestamp__lt=end)
     events = events.filter(eligible | Q(user__isnull=True, event_type__code=EventType.NOTIFICATION_RECEIPT))
+    if events.count() > MAX_LIFECYCLE_ROWS:
+        raise ValueError(f'Notification funnel exceeds {MAX_LIFECYCLE_ROWS:,} lifecycle rows; reduce --since-days.')
     rows = list(events.order_by('timestamp', 'pk').values_list(
-        'event_type__code', 'user_id', 'timestamp', 'data').iterator(chunk_size=ITERATOR_CHUNK_SIZE))
+        'event_type__code', 'user_id', 'timestamp', 'data'))
     counters = defaultdict(Counter)
     sends, tickets, opens = {}, {}, defaultdict(list)
     groups = ['overall', *sorted(set(NOTIFICATION_REPORTING_GROUPS.values()))]
 
+    contributors = defaultdict(set)
+    freshness = None
+    attempt_users = defaultdict(set)
+    attempt_counts = Counter()
+    for code, uid, at, data in rows:
+        if code == EventType.NOTIFICATION_SEND:
+            group = NOTIFICATION_REPORTING_GROUPS.get(data.get('kind'), 'unclassified')
+            attempt_counts[group] += 1
+            attempt_users[group].add(uid)
+    folded = {g for g in attempt_counts if attempt_counts[g] < minimum or len(attempt_users[g]) < minimum}
+    groups = [g for g in groups if g not in folded]
+    if folded:
+        groups.append('other_kinds')
+
     def add(group, key, count=1):
+        contributors[('overall', key)].add((uid, row_id))
+        if group != 'overall':
+            contributors[(group, key)].add((uid, row_id))
         counters['overall'][key] += count
         if group != 'overall':
             counters[group][key] += count
 
-    for code, uid, at, data in rows:
+    for row_id, (code, uid, at, data) in enumerate(rows):
         if code != EventType.NOTIFICATION_SEND:
             continue
         group = NOTIFICATION_REPORTING_GROUPS.get(data.get('kind'), 'unclassified')
+        group = 'other_kinds' if group in folded else group
         add(group, 'attempted_tokens')
         outcome = data.get('outcome')
         if outcome in {'provider_accepted', 'provider_rejected', 'send_error'}:
@@ -245,18 +284,21 @@ def _build_report(as_of, since_days, minimum):
         if nid and uid:
             sends[(uid, nid)] = (group, at)
         if nid and data.get('ticket_id') and outcome == 'provider_accepted':
-            tickets[(nid, data['ticket_id'])] = (group, at)
+            tickets[(nid, data['ticket_id'])] = (group, at, uid, row_id)
             add(group, 'accepted_tickets')
     prompt_users = defaultdict(set)
     prompt_state = defaultdict(set)
     seen_receipts = set()
-    for code, uid, at, data in rows:
+    for row_id, (code, uid, at, data) in enumerate(rows):
+        if code != EventType.NOTIFICATION_RECEIPT:
+            freshness = max(freshness, at) if freshness else at
         if code == EventType.NOTIFICATION_RECEIPT:
             key = (data.get('notif_id'), data.get('ticket_id'))
             send = tickets.get(key)
             if send and send[1] <= at and key not in seen_receipts and data.get('receipt_status') in {'ok', 'error'}:
                 seen_receipts.add(key)
-                group = send[0]
+                group, _, uid, row_id = send
+                freshness = max(freshness, at) if freshness else at
                 add(group, 'receipts_received')
                 add(group, 'receipt:' + data['receipt_status'])
                 if data['receipt_status'] == 'error':
@@ -271,14 +313,15 @@ def _build_report(as_of, since_days, minimum):
                 if not data.get('session_id'):
                     add(group, 'opens_missing_session')
             else:
-                group = 'unclassified'
+                group = 'other_kinds' if 'unclassified' in folded else 'unclassified'
                 add(group, 'unmatched_opens')
             entry = data.get('entry')
             if entry in NOTIFICATION_OPEN_ENTRIES:
                 add(group, 'open:' + entry)
         elif code == EventType.NOTIFICATION_DESTINATION:
             send = sends.get((uid, data.get('notif_id')))
-            group = send[0] if send and send[1] <= at else 'unclassified'
+            group = send[0] if send and send[1] <= at else (
+                'other_kinds' if 'unclassified' in folded else 'unclassified')
             dest, result = data.get('destination'), data.get('result')
             if dest in NOTIFICATION_DESTINATIONS and result in NOTIFICATION_DESTINATION_RESULTS:
                 add(group, f'destination:{dest}:{result}')
@@ -380,8 +423,7 @@ def _build_report(as_of, since_days, minimum):
                     else _release(count, len(denominator), minimum))
         unmatched = len(prompt_users[(trigger, 'unmatched', None)])
         prompts[f'{trigger}:unmatched'] = {'count': unmatched if unmatched >= minimum else 'suppressed'}
-    _protect_output(output, prompts, counters, prompt_users, open_populations, associated, minimum)
-    freshness = events.aggregate(latest=Max('timestamp'))['latest']
+    _protect_output(output, prompts, counters, prompt_users, open_populations, associated, minimum, contributors)
     freshness = freshness and freshness.replace(minute=0, second=0, microsecond=0)
     return {'as_of': end.isoformat(), 'since': start.isoformat(), 'min_cell': minimum,
             'data_freshness': freshness.isoformat() if freshness else None,

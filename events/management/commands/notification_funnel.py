@@ -26,5 +26,14 @@ class Command(BaseCommand):
             raise CommandError(str(exc)) from exc
         content = json.dumps(report, indent=2)
         if options['format'] == 'text':
-            content = 'Notification funnel — accepted by provider\n' + content
+            lines = [f"Notification funnel — {report['since']} to {report['as_of']}",
+                     f"Minimum cell: {report['min_cell']}", f"Data freshness: {report['data_freshness']}"]
+            for label, metrics in [*report['groups'].items(), ('permission_prompts', report['permission_prompts'])]:
+                lines.append(label)
+                for name, cell in metrics.items():
+                    value = (str(cell['count']) if 'count' in cell else
+                             f"{cell['numerator']} / {cell['mature_denominator']} ({cell['percent']}%)")
+                    lines.append(f"  {name}: {value}")
+            lines.extend(report['caveats'])
+            content = '\n'.join(lines)
         self.stdout.write(content)
