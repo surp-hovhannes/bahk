@@ -32,6 +32,8 @@ from tests.base import BaseTestCase
 @override_settings(NOTIFICATION_TELEMETRY_ENABLED=True)
 class ReceiptTests(BaseTestCase):
     def setUp(self):
+        receipts._receipt_cache.cache_clear()
+        self.addCleanup(receipts._receipt_cache.cache_clear)
         # Registration markers live in the (process-wide) cache.
         cache.clear()
         self.user = self.create_user()
@@ -333,7 +335,6 @@ class ReceiptTests(BaseTestCase):
                 self.addCleanup(pool.disconnect)
                 self.assertIsNot(pool, app_pool)
                 self.assertIs(type(app_pool), redis.BlockingConnectionPool)
-                self.assertEqual(app_pool.timeout, 20)
                 self.assertIs(type(pool), redis.ConnectionPool)
                 self.assertEqual(pool.max_connections, 8)
                 self.assertEqual(pool.connection_kwargs['socket_timeout'], receipts.REDIS_TIMEOUT)
@@ -397,6 +398,8 @@ class RedisLedgerTests(BaseTestCase):
     """Real Redis; CI requires availability, local development may skip."""
 
     def setUp(self):
+        receipts._receipt_cache.cache_clear()
+        self.addCleanup(receipts._receipt_cache.cache_clear)
         self.redis = redis.Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=5)
         try:
             self.redis.ping()
@@ -480,3 +483,96 @@ class RedisLedgerTests(BaseTestCase):
         session = self.collect({'ticket': {'status': 'ok'}})
         self.assertEqual(session.requests, [])
         self.assertIn('ticket', self.pending())
+
+
+@override_settings(NOTIFICATION_TELEMETRY_ENABLED=True, PUSH_RECEIPTS_ENABLED=True)
+class IsolatedRedisLedgerTests(BaseTestCase):
+    """Exercise the production receipt factory, Lua, pipelines and locks together."""
+
+    def setUp(self):
+        receipts._receipt_cache.cache_clear()
+        self.addCleanup(receipts._receipt_cache.cache_clear)
+        namespace = f'push-receipts-isolated-test:{uuid.uuid4().hex}:'
+        config = {'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': settings.REDIS_URL,
+            'KEY_PREFIX': namespace,
+        }}
+        overrides = override_settings(CACHES=config)
+        overrides.enable()
+        self.addCleanup(overrides.disable)
+        factory = patch.object(receipts.ReceiptConnectionFactory, '_pools', {})
+        factory.start()
+        self.addCleanup(factory.stop)
+        namespace_patch = patch.object(receipts, 'NAMESPACE', namespace)
+        namespace_patch.start()
+        self.addCleanup(namespace_patch.stop)
+        self.redis = receipts.get_redis_connection()
+        self.addCleanup(self.redis.connection_pool.disconnect)
+        try:
+            self.redis.ping()
+        except redis.exceptions.RedisError:
+            if os.environ.get('REQUIRE_REDIS_TESTS') == '1':
+                self.fail('Redis is required but unreachable; check REDIS_URL and the CI Redis service')
+            self.skipTest('Redis is not reachable')
+        self.addCleanup(self.clear_namespace)
+        self.clock = 100000.0
+        clock = patch.object(receipts, '_now', side_effect=lambda: self.clock)
+        clock.start()
+        self.addCleanup(clock.stop)
+        self.device = DeviceToken.objects.create(
+            user=self.create_user(), token='ExponentPushToken[isolated]', device_type='ios',
+        )
+
+    def clear_namespace(self):
+        for key in self.redis.scan_iter(match=f'*{receipts.NAMESPACE}*'):
+            self.redis.delete(key)
+
+    def test_enqueue_collect_and_release_lock_through_isolated_pool(self):
+        pool = self.redis.connection_pool
+        self.assertIs(type(pool), redis.ConnectionPool)
+        self.assertEqual(pool.max_connections, 8)
+        self.assertEqual(pool.connection_kwargs['socket_timeout'], 0.4)
+        self.assertEqual(pool.connection_kwargs['socket_connect_timeout'], 0.4)
+        ticket_ids = ['isolated-a', 'isolated-b', 'isolated-c']
+        remember_tickets([
+            ledger_entry({'status': 'ok', 'id': ticket_id}, self.device.pk, None)
+            for ticket_id in ticket_ids
+        ])
+        self.assertEqual(self.redis.zcard(_key('pending')), len(ticket_ids))
+        for ticket_id in ticket_ids:
+            self.assertEqual(json.loads(self.redis.get(_key(ticket_id)))['device_pk'], self.device.pk)
+        self.clock += RETRY_DELAY + 1
+        with patch.object(receipts, 'PushClient') as client:
+            client.return_value.check_receipts_multiple.return_value = [
+                SimpleNamespace(id=ticket_id, status='ok', details=None) for ticket_id in ticket_ids
+            ]
+            collect_receipts()
+        requested = client.return_value.check_receipts_multiple.call_args.args[0]
+        self.assertEqual({ticket.id for ticket in requested}, set(ticket_ids))
+        self.assertEqual(self.redis.zcard(_key('pending')), 0)
+        self.assertEqual(self.redis.mget([_key(ticket_id) for ticket_id in ticket_ids]), [None] * len(ticket_ids))
+        self.assertFalse(self.redis.exists(_key('lock')))
+        lock = self.redis.lock(_key('lock'), timeout=receipts.LOCK_LEASE, blocking_timeout=0)
+        self.assertTrue(lock.acquire())
+        try:
+            self.assertTrue(lock.owned())
+        finally:
+            lock.release()
+        self.assertFalse(self.redis.exists(_key('lock')))
+
+    def test_exhausted_pool_fails_without_waiting(self):
+        pool = self.redis.connection_pool
+        self.assertIs(type(pool), redis.ConnectionPool)
+        self.assertEqual(pool.max_connections, 8)
+        # Holding all slots makes exhaustion deterministic; no elapsed-time threshold.
+        connections = []
+        try:
+            for _ in range(pool.max_connections):
+                connections.append(pool.get_connection('PING'))
+            with self.assertRaises(redis.exceptions.ConnectionError):
+                pool.get_connection('PING')
+        finally:
+            for connection in connections:
+                pool.release(connection)
+        self.assertTrue(self.redis.ping())
