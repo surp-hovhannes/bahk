@@ -16,7 +16,8 @@ from events.participation_analytics import analytics_events, legacy_transition_e
 from hub.models import FastParticipation
 from notifications.utils import EXPO_ERROR_CODES
 
-MAX_LIFECYCLE_ROWS = 500_000
+# Operational memory guard; includes JSON payloads and disclosure contributors.
+MAX_LIFECYCLE_ROWS = 200_000
 
 PRAYER_CODES = {EventType.PRAYER_SET_VIEWED, EventType.DEVOTIONAL_VIEWED,
                 EventType.PRAYER_REQUEST_ACCEPTED}
