@@ -16,7 +16,8 @@ pytz
 django-imagekit
 imagehash
 django-celery-beat
-redis
+# Match the production resolution exercised by Gate 1 CI and receipt-pool ping.
+redis==8.1.0
 celery
 django-anymail
 django-markdownx
