@@ -145,6 +145,25 @@ class NotificationFunnelTests(TestCase):
                     self.assertIsNone(groups[group][key]['percent'])
                     self.assertIsNone(groups[group][key]['wilson_95'])
 
+    def test_entry_breakdown_includes_unmatched_opens(self):
+        other = get_user_model().objects.create_user(username='entry-other', date_joined=self.at)
+        for i in range(10):
+            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=f'matched-{i}', kind='daily_fast')
+            self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=f'matched-{i}', entry='tap')
+            # Wrong-user correlation and sends preceding the report window both
+            # remain raw opens with a known entry and an unknown kind.
+            self.event(EventType.NOTIFICATION_OPENED, other, notif_id=f'matched-{i}', entry='tap')
+            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=f'old-{i}', kind='daily_fast',
+                       at=self.at - timedelta(days=40))
+            self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=f'old-{i}', entry='cold_start')
+        groups = self.report()['groups']
+        self.assertEqual(groups['daily_fast']['open:tap']['count'], 10)
+        self.assertEqual(groups['unclassified']['unmatched_opens']['count'], 20)
+        self.assertEqual(groups['unclassified']['open:tap']['count'], 10)
+        self.assertEqual(groups['unclassified']['open:cold_start']['count'], 10)
+        self.assertEqual(groups['overall']['open:tap']['count'], 20)
+        self.assertEqual(groups['overall']['open:cold_start']['count'], 10)
+
     def test_sparse_missing_sessions_hide_cross_kind_partition(self):
         for kind, count in (('daily_fast', 15), ('prayer_thanks', 5)):
             for i in range(count):

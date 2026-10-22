@@ -116,14 +116,15 @@ def _build_report(as_of, since_days, minimum):
             if send and send[1] <= at:
                 group = send[0]
                 add(group, 'matched_opens')
-                entry = data.get('entry')
-                if entry in NOTIFICATION_OPEN_ENTRIES:
-                    add(group, 'open:' + entry)
                 opens[uid].append((at, data.get('session_id'), group))
                 if not data.get('session_id'):
                     add(group, 'opens_missing_session')
             else:
-                add('unclassified', 'unmatched_opens')
+                group = 'unclassified'
+                add(group, 'unmatched_opens')
+            entry = data.get('entry')
+            if entry in NOTIFICATION_OPEN_ENTRIES:
+                add(group, 'open:' + entry)
         elif code == EventType.NOTIFICATION_DESTINATION:
             send = sends.get((uid, data.get('notif_id')))
             group = send[0] if send and send[1] <= at else 'unclassified'
