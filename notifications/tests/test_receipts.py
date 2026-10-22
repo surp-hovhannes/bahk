@@ -1,6 +1,7 @@
 """Receipt-boundary tests. ReceiptTests mock Redis and Expo; RedisLedgerTests run the
 real Lua script, lock and SDK parsing against a live Redis with Expo's HTTP faked."""
 import json
+import os
 import uuid
 from datetime import timedelta
 from types import SimpleNamespace
@@ -338,6 +339,8 @@ class RedisLedgerTests(BaseTestCase):
         try:
             self.redis.ping()
         except redis.exceptions.RedisError:
+            if os.environ.get('REQUIRE_REDIS_TESTS') == '1':
+                self.fail('Redis is required but unreachable; check REDIS_URL and the CI Redis service')
             self.skipTest('Redis is not reachable')
         namespace = f'push-receipts-test:{uuid.uuid4().hex}:'
         for target, value in (('NAMESPACE', namespace), ('get_redis_connection', lambda alias: self.redis)):
