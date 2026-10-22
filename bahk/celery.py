@@ -58,6 +58,11 @@ app.autodiscover_tasks()
 
 # Configure scheduled tasks with Sentry Cron monitoring
 app.conf.beat_schedule = {
+    'collect-push-receipts': {
+        'task': 'notifications.tasks.collect_push_receipts_task',
+        'schedule': crontab(minute='*/15'),
+        'options': {'sentry': {'monitor_slug': 'push-receipts'}},
+    },
     'send-post-fast-encouragement-daily': {
         'task': 'notifications.tasks.send_post_fast_encouragement_task',
         'schedule': crontab(hour=9, minute=0),
