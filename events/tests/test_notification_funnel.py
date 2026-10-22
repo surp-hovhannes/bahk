@@ -15,6 +15,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
+from events import notification_funnel
 from events.growth_cohorts import build_report as cohort_report
 from events.models import Event, EventType
 from events.notification_funnel import _protect_output, _release, build_report
@@ -504,6 +505,122 @@ class NotificationFunnelTests(TestCase):
         self.assertIn('Minimum cell: 10', out.getvalue())
         self.assertIn('  attempted_tokens:', out.getvalue())
         self.assertNotIn('"groups":', out.getvalue())
+
+    def test_lifecycle_row_limit(self):
+        self.assertEqual(notification_funnel.MAX_LIFECYCLE_ROWS, 200_000)
+
+    def test_row_guard_inclusive_boundary(self):
+        # Small patched limit exercises the same > comparison without 200k rows.
+        with patch('events.notification_funnel.MAX_LIFECYCLE_ROWS', 2):
+            for _ in range(2):
+                self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast')
+            self.report()
+            self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast')
+            with self.assertRaisesMessage(ValueError, 'exceeds 2 lifecycle rows'):
+                self.report()
+
+    def test_distinct_user_receipt_and_residual_floors(self):
+        # Counts are constructed here, independently of production contributor sets.
+        # Each sparse population has ten events but only one distinct user.
+        for sparse in ('receipts', 'pending', 'ticketless', 'category'):
+            with self.subTest(sparse=sparse):
+                Event.objects.filter(event_type__in=self.types.values()).delete()
+                for i in range(50):
+                    repeated = i < 10
+                    user = self.user if repeated else self.person(f'floor-{i}')
+                    outcome = 'provider_accepted' if i < 30 else 'provider_rejected'
+                    if sparse == 'category' and repeated:
+                        # Deliberate legacy data: attempts still count, but no
+                        # recognized outcome does. Its remainder has one user.
+                        outcome = 'legacy_unknown'
+                    data = dict(notif_id=str(i), kind='daily_fast', outcome=outcome)
+                    if not (sparse == 'ticketless' and repeated):
+                        data['ticket_id'] = str(i)
+                    self.event(EventType.NOTIFICATION_SEND, user, **data)
+                    receipt = (repeated if sparse == 'receipts' else 10 <= i < 30)
+                    if receipt:
+                        self.event(EventType.NOTIFICATION_RECEIPT,
+                                   at=self.at + timedelta(seconds=1), notif_id=str(i),
+                                   ticket_id=str(i), receipt_status='ok')
+                report = self.report()
+                cells = report['groups']['daily_fast']
+                self.assertEqual(cells['attempted_tokens']['count'], 'suppressed')
+                self.assertEqual(cells['provider_accepted']['numerator'], 'suppressed')
+                if sparse in ('receipts', 'pending'):
+                    self.assertEqual(cells['receipts_received']['numerator'], 'suppressed')
+                    self.assertEqual(cells['receipt:ok']['mature_denominator'], 'suppressed')
+                self.assertEqual(report['groups']['overall']['attempted_tokens']['count'], 'suppressed')
+                self.assert_public_oracle(report)
+
+    def test_repeated_unmatched_open_and_destination_user_floor(self):
+        for i in range(10):
+            self.event(EventType.NOTIFICATION_OPENED, self.user,
+                       notif_id=f'missing-{i}', entry='tap')
+            self.event(EventType.NOTIFICATION_DESTINATION, self.user,
+                       notif_id=f'missing-{i}', destination='fast', result='opened')
+        report = self.report()
+        for group in ('unclassified', 'overall'):
+            cells = report['groups'][group]
+            for key in ('unmatched_opens', 'matched_opens', 'open:tap'):
+                self.assertEqual(cells[key]['count'], 'suppressed')
+            self.assertEqual(cells['destination:fast:opened']['numerator'], 'suppressed')
+            self.assertEqual(cells['destination:fast:unresolved']['mature_denominator'], 'suppressed')
+        self.assert_public_oracle(report)
+
+    def test_correlation_edge_cases_and_category_remainders(self):
+        graphs = []
+
+        def capture(*args):
+            graph = _protect_output(*args)
+            graphs.append(graph)
+            return graph
+
+        # Duplicate composite ticket keys retain the last chronological send;
+        # the same ticket id under another notification id is independent.
+        for delay, nid in ((0, 'duplicate'), (2, 'duplicate'), (0, 'separate')):
+            self.event(EventType.NOTIFICATION_SEND, self.user,
+                       at=self.at + timedelta(seconds=delay), kind='daily_fast',
+                       notif_id=nid, ticket_id='shared', outcome='provider_accepted')
+        for delay in (-1, 1, 3, 4):
+            self.event(EventType.NOTIFICATION_RECEIPT,
+                       at=self.at + timedelta(seconds=delay), notif_id='duplicate',
+                       ticket_id='shared', receipt_status='ok')
+        self.event(EventType.NOTIFICATION_RECEIPT, notif_id='separate',
+                   ticket_id='shared', receipt_status='ok')
+        self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast',
+                   notif_id='ticketless', outcome='provider_accepted')
+        # Deliberate legacy categories exercise the internal remainders. Neither
+        # drops the row: unknown outcomes still count as attempts, and unknown
+        # entries still count as opens. Open correlation needs no ticket_id.
+        self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast',
+                   outcome='legacy_unknown')
+        self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id='ticketless', entry='legacy_unknown')
+        old = self.at - timedelta(days=40)
+        self.event(EventType.NOTIFICATION_SEND, self.user, at=old, kind='daily_fast',
+                   notif_id='old', ticket_id='old', outcome='provider_accepted')
+        self.event(EventType.NOTIFICATION_RECEIPT, notif_id='old', ticket_id='old', receipt_status='ok')
+        self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id='old', entry='tap')
+        self.event(EventType.NOTIFICATION_DESTINATION, self.user, notif_id='old',
+                   destination='fast', result='opened')
+        with patch('events.notification_funnel._protect_output', side_effect=capture):
+            report = self.report()
+        values = graphs[0].values
+        # Fixture-derived expectations inspect counts, never contributor metadata.
+        # Five in-window sends fold into other_kinds (one contributor). Both
+        # duplicate sends count as tickets, but only the receipt at +3s joins
+        # the last send at +2s; +4s is deduplicated. The separate notif_id joins
+        # independently. The pre-window send supplies no correlation state.
+        for key, expected in (('attempted_tokens', 5), ('provider_accepted', 4),
+                              ('accepted_tickets', 3), ('receipts_received', 2),
+                              ('matched_opens', 1), ('accepted_without_ticket', 1)):
+            self.assertEqual(values[('other_kinds', key)], expected)
+        self.assertEqual(values[('other_kinds', 'remainder', 0)], 1)
+        # Every open is matched or unmatched, even with an unknown entry.
+        self.assertEqual(values[('other_kinds', 'remainder', 5)], 0)
+        self.assertEqual(values[('other_kinds', 'remainder', 6)], 1)
+        self.assertEqual(values[('unclassified', 'unmatched_opens')], 1)
+        self.assertEqual(values[('unclassified', 'destination_events')], 1)
+        self.assert_public_oracle(report)
 
     def test_row_guard_command_error(self):
         with patch('events.notification_funnel.MAX_LIFECYCLE_ROWS', 0):

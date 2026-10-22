@@ -78,7 +78,12 @@ Minimum k is 10 and cannot be lowered. No user, token, notification identifier,
 content or arbitrary error text leaves the report. Rate cells reuse cohort
 Wilson 95% intervals and complement suppression: numerator, denominator and
 complement must all meet k. If a count is hidden, its denominator is also hidden.
-Raw counts below k (including zero) are suppressed. Sparse additive breakdowns
+Positive event counts require both count and distinct eligible contributors >= k.
+Matched receipts use the send owner as their contributor. Complements and
+category remainders receive the same protection. Exact zeros are public unless
+connected to a hidden cell. Kinds below either attempt floor are pooled into
+`other_kinds` and omitted individually; kinds with no sends remain listed with
+zero send counts unless connected suppression hides them. Sparse additive breakdowns
 receive conservative complementary suppression, including their totals; sparse
 kind cells also hide overall totals. Suppression propagates across kind
 partitions and every metric that exposes a hidden total as its denominator,
@@ -92,7 +97,7 @@ cutoffs and repeated exports may permit differencing. **Do not publish reports
 with different cutoffs side by side without privacy review**, including daily
 stepping, overlapping since-days windows and combinations with other reports.
 
-Queries bound lifecycle events by type and timestamp, stream compact rows and
+Queries bound lifecycle events by type and timestamp, materialize bounded rows and
 join opaque IDs in memory. Existing Event(event_type, -timestamp),
 Event(user, -timestamp) and participation join indexes support this structure;
 no migration is added. Prior-action EXISTS uses indexed user lookups, rather
@@ -102,3 +107,50 @@ Runtime and memory scale with the selected window's events and matched users;
 seconds is the target, not yet measured against production volume. The report
 uses a read-only repeatable-read transaction on PostgreSQL (caller supplies
 snapshot semantics inside an existing transaction).
+
+The lifecycle row guard is `MAX_LIFECYCLE_ROWS = 200_000`, including unmatched
+null-user receipts. Exactly that many rows are allowed; any larger window aborts
+before JSON materialization and asks for fewer `--since-days`. The former
+500,000-row limit was estimated in review at about 1 GB; at a comparable event
+mix the new limit targets about 400 MB (60% less), not a measured peak-memory
+ceiling. JSON sizes and transient contributor set copies still affect memory.
+
+Correlation edge cases: duplicate `(notif_id, ticket_id)` keys use the last send
+in timestamp/primary-key order. Accepted-ticket counts still count all accepted
+send rows carrying tickets; receipts deduplicate by the composite key. Reusing a
+ticket id with a different notification id is a separate key. A receipt earlier
+than the selected send is ignored without consuming the deduplication key, so a
+later receipt can count. Ticketless accepted sends count as accepted but cannot
+join receipts. Pre-window sends cannot join receipts, opens or destinations.
+Unknown send outcomes and open entries contribute to internal category remainders
+and receive disclosure protection.
+
+## Dependency notes
+
+`requirements.txt` pins redis-py to 8.1.0, matching the supplied Render production
+resolution (django-redis 5.4.0, exponent_server_sdk 2.2.0, hiredis 2.3.2, Celery
+5.6.3). The production receipt pool reportedly initialized and pinged successfully
+with this version. No receipt pool behavior is changed here.
+
+The redis-py 8.1.0 wheel was source-checked: `ConnectionPool`, `from_url`,
+`retry`/`retry_on_timeout`, `max_connections`, `Retry`/`NoBackoff`, and `LockError`
+are present. It requires Python >=3.10; django-redis 5.4.0 requires
+`redis!=4.0.0,!=4.0.1,>=3`. Production runs redis-py 8.1.0. The isolated receipt
+pool uses `Retry(NoBackoff(), 0)`, `retry_on_timeout=False`, and django-redis's
+`OPTIONS.CONNECTION_POOL_KWARGS` for connection options.
+
+With hiredis==2.3.2, redis-py 8.1.0 silently falls back to its pure-Python parser:
+`HIREDIS_AVAILABLE` requires hiredis >=3.2.0. The hiredis pin is therefore
+currently inert and harmless. Kombu declares `redis<6.5` only in its `redis`
+extra; the bare Celery requirement does not enforce it. The production Celery
+Redis broker already runs outside Kombu's declared range, and pinning redis-py
+freezes that state. A future Celery/Kombu upgrade should re-check compatibility.
+
+## Known Redis configuration item
+
+The default cache's `OPTIONS.CONNECTION_POOL_CLASS_KWARGS` in `bahk/settings.py`
+(`max_connections`/`timeout`) is dead configuration under django-redis 5.4.0;
+the supported option is `CONNECTION_POOL_KWARGS`. Leave this known item unchanged:
+correcting it would change the production app cache pool's behavior and needs
+separate review. The isolated receipt pool already uses the supported key and
+removes the dead key from its copied configuration.

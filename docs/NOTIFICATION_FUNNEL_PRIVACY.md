@@ -74,10 +74,12 @@ below k, or fewer than k distinct attempting users, are folded into `other_kinds
 All their events and associations follow that bucket; nothing is discarded.
 Overall remains the sum of the resulting event buckets. If the pooled bucket is
 still sparse, normal complementary suppression applies to that bucket and overall
-without propagating back into unrelated kinds. Absent kinds remain structural zeros.
+without propagating back into unrelated kinds. Kinds folded into `other_kinds` are omitted as individual groups, not zero.
+Kinds with no sends remain listed with zero send counts (unless related
+suppression hides them); unmatched events can still populate such a group.
 
 The repeatable-read snapshot counts candidate lifecycle rows before materializing
-them. More than `MAX_LIFECYCLE_ROWS` (500,000, a module-level operational constant)
+them. More than `MAX_LIFECYCLE_ROWS` (200,000, a module-level operational constant)
 aborts with a recommendation to reduce `--since-days`. The bound includes unmatched
 null-user receipts, which consume memory even though they do not advance freshness.
 Freshness includes eligible lifecycle rows and successfully matched receipts only.
@@ -94,3 +96,11 @@ coverage inequalities, and requires every released percentage's numerator,
 denominator and complement to meet k. It never imports production relation
 metadata. This tests exact linear identities, not arbitrary external knowledge
 or cross-report differencing.
+
+The guard accepts exactly the limit and aborts above it, before loading JSON.
+Contributor references still use internal `(user_id, row_id)` tuples so residual
+set subtraction preserves event identity. Using the review estimate of roughly
+1 GB at the former 500,000-row limit, the new limit targets roughly 400 MB
+for a comparable event mix (60% less). This is a planning estimate, not a
+measured RSS ceiling: payload sizes, event mix, Python and transient set copies
+affect peak memory. Reduce `--since-days` further on constrained workers.
