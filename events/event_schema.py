@@ -35,7 +35,7 @@ NOTIFICATION_PAYLOAD_KEYS = {
         'notif_id', 'kind', 'destination', 'platform', 'outcome', 'error_code', 'ticket_id', 'correlatable',
     }),
     EventType.NOTIFICATION_RECEIPT: frozenset({
-        'notif_id', 'ticket_id', 'receipt_status', 'error_code', 'lag_seconds',
+        'notif_id', 'ticket_id', 'kind', 'outcome', 'receipt_status', 'error_code', 'lag_seconds',
     }),
     EventType.NOTIFICATION_OPENED: frozenset({
         'notif_id', 'entry', 'app_state', 'matched', 'kind',

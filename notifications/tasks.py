@@ -1017,3 +1017,10 @@ def send_prayer_acceptance_nudge_task():
         total_sent += 1
 
     logger.info(f'Push Notification: Prayer acceptance nudge sent to {total_sent} users')
+
+
+@shared_task(soft_time_limit=210, time_limit=240)
+def collect_push_receipts_task():
+    from .receipts import collect_receipts
+
+    collect_receipts()

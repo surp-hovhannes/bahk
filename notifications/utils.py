@@ -248,6 +248,9 @@ def send_push_notification(
                 result['failed'] += 1
                 result['errors'].append(type(e).__name__)
             finally:
+                from .receipts import remember_ticket
+
+                remember_ticket(ticket, device.pk, telemetry)
                 if telemetry is not None:
                     try:
                         _record_send(telemetry, ticket, error)
