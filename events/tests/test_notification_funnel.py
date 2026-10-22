@@ -14,6 +14,7 @@ from events.growth_cohorts import build_report as cohort_report
 from events.models import Event, EventType
 from events.notification_funnel import _protect_output, _release, build_report
 from hub.models import Fast, FastParticipation, Profile
+from prayers.models import PrayerSet
 from tests.fixtures.test_data import TestDataFactory
 
 
@@ -30,6 +31,7 @@ class NotificationFunnelTests(TestCase):
 
     def event(self, code, user=None, at=None, **data):
         return Event.objects.create(event_type=self.types[code], user=user,
+                                    title=EventType.NOTIFICATION_LIFECYCLE_TITLES[code],
                                     timestamp=at or self.at, data=data)
 
     def report(self):
@@ -85,7 +87,10 @@ class NotificationFunnelTests(TestCase):
 
     def test_attribution_boundaries_and_sessions(self):
         prayer_type, _ = EventType.objects.get_or_create(
-            code=EventType.PRAYER_SET_VIEWED, defaults={'name': 'Prayer'})
+            code=EventType.PRAYER_SET_VIEWED, defaults={'name': 'Prayer', 'requires_target': True})
+        prayer_set = PrayerSet.objects.create(
+            title='Boundary prayers', church=TestDataFactory.create_church())
+        prayer_set_type = ContentType.objects.get_for_model(PrayerSet)
         # Ten at each boundary; ten too late, ten with another session.
         for i in range(40):
             user = get_user_model().objects.create_user(username=f'boundary{i}', date_joined=self.at)
@@ -93,7 +98,8 @@ class NotificationFunnelTests(TestCase):
                        outcome='provider_accepted')
             self.event(EventType.NOTIFICATION_OPENED, user, notif_id=str(i), session_id='session')
             delay = (0 if i < 10 else 30 if i < 20 else 31 if i < 30 else 1)
-            Event.objects.create(event_type=prayer_type, user=user,
+            Event.objects.create(event_type=prayer_type, user=user, title='Prayer set viewed',
+                                 content_type=prayer_set_type, object_id=prayer_set.pk,
                                  timestamp=self.at + timedelta(minutes=delay),
                                  data={'session_id': 'other' if i >= 30 else 'session'})
         metric = self.report()['groups']['daily_fast']['associated_prayer_users']
@@ -191,7 +197,7 @@ class NotificationFunnelTests(TestCase):
 
     def test_first_fast_join_uses_only_eligible_prior_evidence(self):
         join_type, _ = EventType.objects.get_or_create(
-            code=EventType.USER_JOINED_FAST, defaults={'name': 'Joined fast'})
+            code=EventType.USER_JOINED_FAST, defaults={'name': 'Joined fast', 'requires_target': True})
         fast = TestDataFactory.create_fast()
         fast_type = ContentType.objects.get_for_model(Fast)
         # Exercise both candidate sources, both discarded histories, and a real
@@ -205,14 +211,14 @@ class NotificationFunnelTests(TestCase):
                     prior_data = ({'participation_tracked': True, 'participation_changed': False}
                                   if history == 'noop' else {'participation_id': 999999}
                                   if history == 'removed_link' else {})
-                    Event.objects.create(event_type=join_type, user=user,
+                    Event.objects.create(event_type=join_type, user=user, title='Joined fast',
                                          content_type=fast_type, object_id=fast.pk,
                                          timestamp=self.at - timedelta(days=1), data=prior_data)
                     self.event(EventType.NOTIFICATION_SEND, user, kind='daily_fast',
                                notif_id=str(user.pk), outcome='provider_accepted')
                     self.event(EventType.NOTIFICATION_OPENED, user, notif_id=str(user.pk))
                     if source == 'legacy':
-                        Event.objects.create(event_type=join_type, user=user,
+                        Event.objects.create(event_type=join_type, user=user, title='Joined fast',
                                              content_type=fast_type, object_id=fast.pk,
                                              timestamp=self.at + timedelta(minutes=1), data={})
                     else:
@@ -257,11 +263,14 @@ class NotificationFunnelTests(TestCase):
                     for outcome in ('provider_accepted', 'provider_rejected', 'send_error'):
                         for _ in range(rng.randrange(31)):
                             rows.append(Event(event_type=self.types[EventType.NOTIFICATION_SEND],
+                                              title=EventType.NOTIFICATION_LIFECYCLE_TITLES[EventType.NOTIFICATION_SEND],
                                               user=self.user, timestamp=self.at,
                                               data={'kind': kind, 'notif_id': nid, 'outcome': outcome}))
                     for result in ('opened', 'unresolved', 'rejected'):
                         for _ in range(rng.randrange(31)):
                             rows.append(Event(event_type=self.types[EventType.NOTIFICATION_DESTINATION],
+                                              title=EventType.NOTIFICATION_LIFECYCLE_TITLES[
+                                                  EventType.NOTIFICATION_DESTINATION],
                                               user=self.user, timestamp=self.at + timedelta(seconds=1),
                                               data={'notif_id': nid, 'destination': 'fast', 'result': result}))
                 Event.objects.bulk_create(rows)
