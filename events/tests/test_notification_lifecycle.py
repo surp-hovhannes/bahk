@@ -118,7 +118,14 @@ class NotificationLifecycleTests(BaseTestCase):
         output = StringIO()
         call_command('init_event_types', check=True, stdout=output)
         self.assertIn('Inactive core event types: app_open', output.getvalue())
+        self.assertIn('OK: all core event types', output.getvalue())
         self.assertEqual(list(EventType.objects.order_by('pk').values()), before)
+
+    def test_inactive_unrelated_core_type_does_not_mask_invalid_lifecycle(self):
+        EventType.objects.filter(code=EventType.APP_OPEN).update(is_active=False)
+        EventType.objects.filter(code=EventType.NOTIFICATION_SEND).update(requires_target=True)
+        with self.assertRaises(CommandError):
+            call_command('init_event_types', check=True, stdout=StringIO())
 
     def test_documented_routes_have_non_fallback_families(self):
         docs = (Path(__file__).resolve().parents[2] / 'CLAUDE.md').read_text()

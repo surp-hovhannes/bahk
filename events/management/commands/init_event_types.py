@@ -11,7 +11,8 @@ class Command(BaseCommand):
     help = 'Initialize default event types for the events app'
 
     def add_arguments(self, parser):
-        parser.add_argument('--check', action='store_true', help='Check core registration without writes')
+        parser.add_argument('--check', action='store_true',
+                            help='Check core registration without writes; inactive types are reported, not failures')
         parser.add_argument(
             '--force',
             action='store_true',
