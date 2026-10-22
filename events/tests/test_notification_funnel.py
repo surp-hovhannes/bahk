@@ -4,12 +4,15 @@ from datetime import date, datetime, timedelta, timezone
 from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 
 from events.growth_cohorts import build_report as cohort_report
 from events.models import Event, EventType
 from events.notification_funnel import _release, build_report
+from hub.models import Fast, FastParticipation, Profile
+from tests.fixtures.test_data import TestDataFactory
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}},
@@ -141,3 +144,39 @@ class NotificationFunnelTests(TestCase):
                     self.assertEqual(groups[group][key]['mature_denominator'], 'suppressed')
                     self.assertIsNone(groups[group][key]['percent'])
                     self.assertIsNone(groups[group][key]['wilson_95'])
+
+    def test_first_fast_join_uses_only_eligible_prior_evidence(self):
+        join_type, _ = EventType.objects.get_or_create(
+            code=EventType.USER_JOINED_FAST, defaults={'name': 'Joined fast'})
+        fast = TestDataFactory.create_fast()
+        fast_type = ContentType.objects.get_for_model(Fast)
+        # Exercise both candidate sources, both discarded histories, and a real
+        # historical join that must continue to disqualify association.
+        for source in ('legacy', 'period'):
+            for history in ('noop', 'removed_link', 'real'):
+                for i in range(10):
+                    user = get_user_model().objects.create_user(
+                        username=f'{source}-{history}-{i}', date_joined=self.at - timedelta(days=2))
+                    profile, _ = Profile.objects.get_or_create(user=user)
+                    prior_data = ({'participation_tracked': True, 'participation_changed': False}
+                                  if history == 'noop' else {'participation_id': 999999}
+                                  if history == 'removed_link' else {})
+                    Event.objects.create(event_type=join_type, user=user,
+                                         content_type=fast_type, object_id=fast.pk,
+                                         timestamp=self.at - timedelta(days=1), data=prior_data)
+                    self.event(EventType.NOTIFICATION_SEND, user, kind='daily_fast',
+                               notif_id=str(user.pk), outcome='provider_accepted')
+                    self.event(EventType.NOTIFICATION_OPENED, user, notif_id=str(user.pk))
+                    if source == 'legacy':
+                        Event.objects.create(event_type=join_type, user=user,
+                                             content_type=fast_type, object_id=fast.pk,
+                                             timestamp=self.at + timedelta(minutes=1), data={})
+                    else:
+                        # Use a different pair so the period cannot supersede
+                        # the real historical legacy evidence in this control.
+                        FastParticipation.objects.create(profile=profile, fast=None,
+                                                         fast_original_id=fast.pk + 100000,
+                                                         joined_at=self.at + timedelta(minutes=1))
+        metric = self.report()['groups']['daily_fast']['associated_fast_join_users']
+        self.assertEqual(metric['numerator'], 40)
+        self.assertEqual(metric['mature_denominator'], 60)

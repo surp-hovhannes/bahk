@@ -163,9 +163,8 @@ def _build_report(as_of, since_days, minimum):
             associate(uid, at, data.get('session_id'), 'prayer')
         joins = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True).filter(
             user_id__in=open_user_ids, timestamp__gte=start, timestamp__lt=end)
-        prior_join = Event.objects.filter(user_id=OuterRef('user_id'),
-                                          event_type__code=EventType.USER_JOINED_FAST,
-                                          timestamp__lt=OuterRef('timestamp'))
+        prior_join = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True).filter(
+            user_id=OuterRef('user_id'), timestamp__lt=OuterRef('timestamp'))
         prior_period = FastParticipation.objects.filter(profile__user_id=OuterRef('user_id'),
                                                        joined_at__lt=OuterRef('timestamp'))
         joins = joins.annotate(prior_event=Exists(prior_join), prior_period=Exists(prior_period)).filter(
@@ -177,9 +176,8 @@ def _build_report(as_of, since_days, minimum):
                                                    joined_at__gte=start, joined_at__lt=end)
         prior_period = FastParticipation.objects.filter(profile__user_id=OuterRef('profile__user_id'),
                                                        joined_at__lt=OuterRef('joined_at'))
-        prior_join = Event.objects.filter(user_id=OuterRef('profile__user_id'),
-                                          event_type__code=EventType.USER_JOINED_FAST,
-                                          timestamp__lt=OuterRef('joined_at'))
+        prior_join = legacy_transition_events(EventType.USER_JOINED_FAST, dated_joins_only=True).filter(
+            user_id=OuterRef('profile__user_id'), timestamp__lt=OuterRef('joined_at'))
         periods = periods.annotate(prior_event=Exists(prior_join), prior_period=Exists(prior_period)).filter(
             prior_event=False, prior_period=False)
         for uid, at in periods.order_by().values_list('profile__user_id', 'joined_at').iterator(
