@@ -120,6 +120,8 @@ def _build_report(as_of, since_days, minimum):
                 if entry in NOTIFICATION_OPEN_ENTRIES:
                     add(group, 'open:' + entry)
                 opens[uid].append((at, data.get('session_id'), group))
+                if not data.get('session_id'):
+                    add(group, 'opens_missing_session')
             else:
                 add('unclassified', 'unmatched_opens')
         elif code == EventType.NOTIFICATION_DESTINATION:
@@ -186,7 +188,7 @@ def _build_report(as_of, since_days, minimum):
     denominators = {'attempted_tokens': 'attempted_tokens', 'provider_accepted': 'attempted_tokens',
                     'provider_rejected': 'attempted_tokens', 'send_error': 'attempted_tokens',
                     'accepted_tickets': 'attempted_tokens', 'receipts_received': 'accepted_tickets',
-                    'matched_opens': None, 'unmatched_opens': None}
+                    'matched_opens': None, 'unmatched_opens': None, 'opens_missing_session': None}
     keys = list(denominators)
     keys += ['send_error:' + e for e in sorted(EXPO_ERROR_CODES | {'other'})]
     keys += ['receipt:' + s for s in ('ok', 'error')]
@@ -218,9 +220,6 @@ def _build_report(as_of, since_days, minimum):
         for action in ('prayer', 'fast_join'):
             metrics['associated_' + action + '_users'] = _release(
                 len(associated[(group, action)]), len(open_users), minimum)
-        missing_session = sum(not session for entries in opens.values() for _, session, g in entries
-                              if group == 'overall' or g == group)
-        metrics['opens_missing_session'] = {'count': missing_session if missing_session >= minimum else 'suppressed'}
         output[group] = metrics
     prompts = {}
     for trigger in sorted(NOTIFICATION_PROMPT_TRIGGERS):

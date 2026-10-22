@@ -145,6 +145,26 @@ class NotificationFunnelTests(TestCase):
                     self.assertIsNone(groups[group][key]['percent'])
                     self.assertIsNone(groups[group][key]['wilson_95'])
 
+    def test_sparse_missing_sessions_hide_cross_kind_partition(self):
+        for kind, count in (('daily_fast', 15), ('prayer_thanks', 5)):
+            for i in range(count):
+                nid = f'{kind}-{i}'
+                self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=nid, kind=kind)
+                self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=nid, entry='tap')
+        groups = self.report()['groups']
+        for group in ('overall', 'daily_fast', 'prayer_request_notifications'):
+            with self.subTest(group=group):
+                self.assertEqual(groups[group]['opens_missing_session']['count'], 'suppressed')
+        # A fully publishable partition still exposes the correct raw counts.
+        for i in range(5):
+            nid = f'extra-{i}'
+            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=nid, kind='prayer_thanks')
+            self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=nid, entry='tap')
+        groups = self.report()['groups']
+        self.assertEqual(groups['overall']['opens_missing_session']['count'], 25)
+        self.assertEqual(groups['daily_fast']['opens_missing_session']['count'], 15)
+        self.assertEqual(groups['prayer_request_notifications']['opens_missing_session']['count'], 10)
+
     def test_first_fast_join_uses_only_eligible_prior_evidence(self):
         join_type, _ = EventType.objects.get_or_create(
             code=EventType.USER_JOINED_FAST, defaults={'name': 'Joined fast'})
