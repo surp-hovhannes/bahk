@@ -1,13 +1,18 @@
 """Synthetic report contracts; no telemetry flag or producer is required."""
 import json
 import random
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from io import StringIO
+from contextlib import nullcontext
+from fractions import Fraction
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
 from events.growth_cohorts import build_report as cohort_report
@@ -34,6 +39,9 @@ class NotificationFunnelTests(TestCase):
                                     title=EventType.NOTIFICATION_LIFECYCLE_TITLES[code],
                                     timestamp=at or self.at, data=data)
 
+    def person(self, name):
+        return get_user_model().objects.get_or_create(username=name, defaults={"date_joined": self.at})[0]
+
     def report(self):
         return build_report(date(2026, 3, 12))
 
@@ -51,31 +59,34 @@ class NotificationFunnelTests(TestCase):
         self.assertEqual(_release(10, 20, 10)['percent'], 50)
 
     def test_same_user_correlation_receipts_and_staff(self):
-        other = get_user_model().objects.create_user(username='other', date_joined=self.at)
         for i in range(20):
-            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), ticket_id=str(i),
+            user = self.person(f"same-{i}")
+            other = self.person(f"other-{i}")
+            self.event(EventType.NOTIFICATION_SEND, user, notif_id=str(i), ticket_id=str(i),
                        kind='daily_fast', outcome='provider_accepted')
-            self.event(EventType.NOTIFICATION_OPENED, self.user if i < 10 else other,
+            self.event(EventType.NOTIFICATION_OPENED, user if i < 10 else other,
                        at=self.at + timedelta(minutes=1), notif_id=str(i), entry='tap')
             if i < 10:
                 self.event(EventType.NOTIFICATION_RECEIPT, at=self.at + timedelta(minutes=2),
                            notif_id=str(i), ticket_id=str(i), receipt_status='ok')
         # Keep the accepted-ticket numerator and its complement above k.
-        for _ in range(20):
-            self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast',
+        for i in range(20):
+            user = self.person(f"reject-{i}")
+            self.event(EventType.NOTIFICATION_SEND, user, kind='daily_fast',
                        outcome='provider_rejected')
         report = self.report()['groups']
         self.assertEqual(report['daily_fast']['matched_opens']['count'], 10)
         self.assertEqual(report['unclassified']['unmatched_opens']['count'], 10)
         self.assertEqual(report['daily_fast']['receipts_received']['percent'], 50)
-        get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
+        get_user_model().objects.exclude(pk=self.user.pk).update(is_staff=True)
         self.assertEqual(self.report()['groups']['daily_fast']['attempted_tokens']['count'], 0)
 
     def test_freshness_excludes_notification_rows_in_cohorts(self):
         before = cohort_report(date(2026, 3, 12))['data_freshness']
-        self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast')
+        self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast',
+                   at=self.at + timedelta(days=1))
         self.assertEqual(cohort_report(date(2026, 3, 12))['data_freshness'], before)
-        self.assertEqual(self.report()['data_freshness'], self.at.isoformat())
+        self.assertEqual(self.report()['data_freshness'], (self.at + timedelta(days=1)).isoformat())
 
     def test_prompt_cells_are_suppressed(self):
         self.event(EventType.NOTIFICATION_PROMPT, self.user, stage='selected', choice='enable', trigger='settings')
@@ -123,10 +134,11 @@ class NotificationFunnelTests(TestCase):
 
     def test_wrong_ticket_and_window_edges(self):
         for i in range(20):
-            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), ticket_id=str(i),
+            user = self.person(f"sender-{i}")
+            self.event(EventType.NOTIFICATION_SEND, user, notif_id=str(i), ticket_id=str(i),
                        kind='daily_fast', outcome='provider_accepted')
             self.event(EventType.NOTIFICATION_RECEIPT, notif_id=str(i), ticket_id='wrong', receipt_status='ok')
-        self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id='0',
+        self.event(EventType.NOTIFICATION_OPENED, user, notif_id='0',
                    at=datetime(2026, 3, 12, tzinfo=timezone.utc))
         report = self.report()['groups']['daily_fast']
         self.assertEqual(report['receipts_received']['numerator'], 0)
@@ -138,15 +150,18 @@ class NotificationFunnelTests(TestCase):
 
     def test_40_attempts_plus_five_rejected_kind_hide_dependent_denominators(self):
         for i in range(40):
-            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), ticket_id=str(i),
+            user = self.person(f"sender-{i}")
+            self.event(EventType.NOTIFICATION_SEND, user, notif_id=str(i), ticket_id=str(i),
                        kind='daily_fast', outcome='provider_accepted' if i < 20 else 'provider_rejected')
             if i < 10:
                 self.event(EventType.NOTIFICATION_RECEIPT, notif_id=str(i), ticket_id=str(i),
                            receipt_status='ok')
         for _ in range(5):
-            self.event(EventType.NOTIFICATION_SEND, self.user, kind='unknown', outcome='provider_rejected')
+            self.event(EventType.NOTIFICATION_SEND, user, kind='unknown', outcome='provider_rejected')
         groups = self.report()['groups']
-        for group in ('daily_fast', 'overall'):
+        self.assertEqual(groups['daily_fast']['attempted_tokens']['count'], 40)
+        self.assertEqual(groups['daily_fast']['receipts_received']['percent'], 50)
+        for group in ('other_kinds', 'overall'):
             self.assertEqual(groups[group]['attempted_tokens']['count'], 'suppressed')
             for key in ('provider_accepted', 'provider_rejected', 'accepted_tickets', 'receipts_received',
                         'receipt:ok'):
@@ -157,16 +172,17 @@ class NotificationFunnelTests(TestCase):
                     self.assertIsNone(groups[group][key]['wilson_95'])
 
     def test_entry_breakdown_includes_unmatched_opens(self):
-        other = get_user_model().objects.create_user(username='entry-other', date_joined=self.at)
         for i in range(10):
-            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=f'matched-{i}', kind='daily_fast')
-            self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=f'matched-{i}', entry='tap')
+            user = self.person(f"sender-{i}")
+            other = self.person(f"other-{i}")
+            self.event(EventType.NOTIFICATION_SEND, user, notif_id=f'matched-{i}', kind='daily_fast')
+            self.event(EventType.NOTIFICATION_OPENED, user, notif_id=f'matched-{i}', entry='tap')
             # Wrong-user correlation and sends preceding the report window both
             # remain raw opens with a known entry and an unknown kind.
             self.event(EventType.NOTIFICATION_OPENED, other, notif_id=f'matched-{i}', entry='tap')
-            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=f'old-{i}', kind='daily_fast',
+            self.event(EventType.NOTIFICATION_SEND, user, notif_id=f'old-{i}', kind='daily_fast',
                        at=self.at - timedelta(days=40))
-            self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=f'old-{i}', entry='cold_start')
+            self.event(EventType.NOTIFICATION_OPENED, user, notif_id=f'old-{i}', entry='cold_start')
         groups = self.report()['groups']
         self.assertEqual(groups['daily_fast']['open:tap']['count'], 10)
         self.assertEqual(groups['unclassified']['unmatched_opens']['count'], 20)
@@ -178,18 +194,21 @@ class NotificationFunnelTests(TestCase):
     def test_sparse_missing_sessions_hide_cross_kind_partition(self):
         for kind, count in (('daily_fast', 15), ('prayer_thanks', 5)):
             for i in range(count):
+                user = self.person(f"{kind}-{i}")
                 nid = f'{kind}-{i}'
-                self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=nid, kind=kind)
-                self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=nid, entry='tap')
+                self.event(EventType.NOTIFICATION_SEND, user, notif_id=nid, kind=kind)
+                self.event(EventType.NOTIFICATION_OPENED, user, notif_id=nid, entry='tap')
         groups = self.report()['groups']
-        for group in ('overall', 'daily_fast', 'prayer_request_notifications'):
+        self.assertEqual(groups['daily_fast']['opens_missing_session']['count'], 15)
+        for group in ('overall', 'other_kinds'):
             with self.subTest(group=group):
                 self.assertEqual(groups[group]['opens_missing_session']['count'], 'suppressed')
         # A fully publishable partition still exposes the correct raw counts.
         for i in range(5):
+            user = self.person(f"extra-{i}")
             nid = f'extra-{i}'
-            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=nid, kind='prayer_thanks')
-            self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id=nid, entry='tap')
+            self.event(EventType.NOTIFICATION_SEND, user, notif_id=nid, kind='prayer_thanks')
+            self.event(EventType.NOTIFICATION_OPENED, user, notif_id=nid, entry='tap')
         groups = self.report()['groups']
         self.assertEqual(groups['overall']['opens_missing_session']['count'], 25)
         self.assertEqual(groups['daily_fast']['opens_missing_session']['count'], 15)
@@ -233,21 +252,30 @@ class NotificationFunnelTests(TestCase):
 
     def test_destination_denominators_follow_hidden_kind_total(self):
         for i in range(40):
-            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), kind='daily_fast')
-            self.event(EventType.NOTIFICATION_DESTINATION, self.user, notif_id=str(i),
+            user = self.person(f"sender-{i}")
+            self.event(EventType.NOTIFICATION_SEND, user, notif_id=str(i), kind='daily_fast')
+            self.event(EventType.NOTIFICATION_DESTINATION, user, notif_id=str(i),
                        destination='fast', result='opened' if i < 20 else 'unresolved')
         for i in range(5):
-            self.event(EventType.NOTIFICATION_DESTINATION, self.user, notif_id=f'unknown-{i}',
+            user = self.person(f"extra-{i}")
+            self.event(EventType.NOTIFICATION_DESTINATION, user, notif_id=f'unknown-{i}',
                        destination='fast', result='opened')
         groups = self.report()['groups']
-        for group in ('daily_fast', 'overall'):
-            self.assertEqual(groups[group]['destination:fast:unresolved']['mature_denominator'], 'suppressed')
+        self.assertEqual(groups['daily_fast']['destination:fast:unresolved']['mature_denominator'], 40)
+        self.assertEqual(groups['overall']['destination:fast:unresolved']['mature_denominator'], 'suppressed')
 
     def test_randomized_finished_report_disclosure_relations(self):
         # Exercise the actual report builder and its final graph, not a second
         # implementation of the relation catalogue in the test.
         rng = random.Random(460)
         graphs = []
+        released_event_cells = 0
+        people = [self.person(f'oracle-{i}') for i in range(30)]
+        profiles = [Profile.objects.get_or_create(user=u)[0] for u in people]
+        prayer_type, _ = EventType.objects.get_or_create(
+            code=EventType.PRAYER_SET_VIEWED, defaults={'name': 'Prayer', 'requires_target': True})
+        prayer = PrayerSet.objects.create(title='Oracle prayers', church=TestDataFactory.create_church())
+        prayer_ct = ContentType.objects.get_for_model(PrayerSet)
 
         def capture(*args):
             graph = _protect_output(*args)
@@ -258,23 +286,61 @@ class NotificationFunnelTests(TestCase):
             for case in range(200):
                 Event.objects.filter(event_type__in=self.types.values()).delete()
                 rows = []
-                for kind in ('daily_fast', 'unknown'):
-                    nid = f'{case}-{kind}'
+                Event.objects.filter(event_type=prayer_type, user__in=people).delete()
+                FastParticipation.objects.filter(profile__in=profiles).delete()
+
+                def emit(code, user, delay=0, **data):
+                    rows.append(Event(event_type=self.types[code],
+                                      title=EventType.NOTIFICATION_LIFECYCLE_TITLES[code],
+                                      user=user, timestamp=self.at + timedelta(seconds=delay), data=data))
+
+                # Alternate fully populated partitions with boundary mixtures.
+                def draw():
+                    return rng.choice((0, 10, 20, 30)) if case % 2 == 0 else rng.randrange(31)
+
+                for kind in ('daily_fast', 'admin_manual', 'prayer_thanks', 'unknown'):
                     for outcome in ('provider_accepted', 'provider_rejected', 'send_error'):
-                        for _ in range(rng.randrange(31)):
-                            rows.append(Event(event_type=self.types[EventType.NOTIFICATION_SEND],
-                                              title=EventType.NOTIFICATION_LIFECYCLE_TITLES[EventType.NOTIFICATION_SEND],
-                                              user=self.user, timestamp=self.at,
-                                              data={'kind': kind, 'notif_id': nid, 'outcome': outcome}))
-                    for result in ('opened', 'unresolved', 'rejected'):
-                        for _ in range(rng.randrange(31)):
-                            rows.append(Event(event_type=self.types[EventType.NOTIFICATION_DESTINATION],
-                                              title=EventType.NOTIFICATION_LIFECYCLE_TITLES[
-                                                  EventType.NOTIFICATION_DESTINATION],
-                                              user=self.user, timestamp=self.at + timedelta(seconds=1),
-                                              data={'notif_id': nid, 'destination': 'fast', 'result': result}))
+                        for i in range(draw()):
+                            user = people[i]
+                            nid = f'{case}-{kind}-{outcome}-{i}'
+                            emit(EventType.NOTIFICATION_SEND, user, kind=kind, notif_id=nid,
+                                 ticket_id=nid, outcome=outcome,
+                                 error_code=rng.choice(('DeviceNotRegistered', 'MessageTooBig'))
+                                 if case % 2 else 'DeviceNotRegistered')
+                            if outcome == 'provider_accepted' and (case % 2 == 0 or rng.choice((True, False))):
+                                emit(EventType.NOTIFICATION_RECEIPT, None, 1, notif_id=nid, ticket_id=nid,
+                                     receipt_status='error' if i < 10 else 'ok', error_code='DeviceNotRegistered')
+                            emit(EventType.NOTIFICATION_OPENED, user, 2, notif_id=nid,
+                                 entry='tap' if i < 10 else 'cold_start',
+                                 session_id=None if i < 10 else 'session')
+                            for result in ('opened', 'unresolved', 'rejected'):
+                                emit(EventType.NOTIFICATION_DESTINATION, user, 3, notif_id=nid,
+                                     destination='fast' if i < 10 else 'prayer', result=result)
+                    for i in range(draw()):
+                        emit(EventType.NOTIFICATION_OPENED, people[i], 2, notif_id='missing', entry='tap')
+                for trigger in ('settings', 'first_prayer', 'first_fast_join', 'other'):
+                    for i in range(draw()):
+                        user = people[i]
+                        emit(EventType.NOTIFICATION_PROMPT, user, trigger=trigger, stage='shown')
+                        emit(EventType.NOTIFICATION_PROMPT, user, 1, trigger=trigger, stage='selected',
+                             choice='enable' if i < 20 else 'not_now')
+                        emit(EventType.NOTIFICATION_PROMPT, user, 2, trigger=trigger, stage='os_result',
+                             choice='granted' if i < 10 else 'denied')
                 Event.objects.bulk_create(rows)
+                for i in range(draw()):
+                    Event.objects.create(event_type=prayer_type, user=people[i], title='Prayer set viewed',
+                                         content_type=prayer_ct, object_id=prayer.pk,
+                                         timestamp=self.at + timedelta(minutes=1),
+                                         data={'session_id': 'session' if i % 2 else 'wrong'})
+                    FastParticipation.objects.create(profile=profiles[i], fast=None,
+                                                     fast_original_id=900000 + i,
+                                                     joined_at=self.at + timedelta(minutes=1))
                 report = self.report()
+                released_event_cells += sum(
+                    isinstance(cell.get('count', cell.get('numerator')), int)
+                    and cell.get('count', cell.get('numerator')) >= 10
+                    for cells in report['groups'].values() for cell in cells.values())
+                self.assert_public_oracle(report)
                 graph = graphs.pop()
                 with self.subTest(case=case):
                     for node, value in graph.values.items():
@@ -283,6 +349,10 @@ class NotificationFunnelTests(TestCase):
                     for total, parts in graph.relations:
                         nodes = (total, *parts)
                         hidden = [n for n in nodes if n in graph.hidden]
+                        if (total, parts) in graph.kind_partitions:
+                            if any(n in graph.hidden for n in parts):
+                                self.assertIn(total, graph.hidden)
+                            continue
                         self.assertTrue(not hidden or len(hidden) == len(nodes))
                         # Brute force every subtraction this equation allows.
                         for missing in nodes:
@@ -303,3 +373,187 @@ class NotificationFunnelTests(TestCase):
                                 self.assertIsInstance(cell['mature_denominator'], int)
                                 self.assertGreaterEqual(cell['numerator'], 10)
                                 self.assertGreaterEqual(cell['mature_denominator'], 10)
+                                self.assertGreaterEqual(cell['mature_denominator'] - cell['numerator'], 10)
+        self.assertGreater(released_event_cells, 0)
+
+    def assert_public_oracle(self, report):
+        """Independent public identities; eliminate equations using released JSON only."""
+        equations = []
+        known = {}
+
+        def equation(total, parts):
+            row = Counter({total: Fraction(1)})
+            for part in parts:
+                row[part] -= 1
+            equations.append((dict(row), Fraction(0)))
+
+        def observe(node, value):
+            if isinstance(value, int):
+                if node in known:
+                    self.assertEqual(known[node], value)
+                known[node] = value
+                self.assertFalse(0 < value < 10)
+
+        for group, cells in report['groups'].items():
+            for key, cell in cells.items():
+                node = (group, key)
+                observe(node, cell.get('count', cell.get('numerator')))
+                if 'mature_denominator' in cell:
+                    if key.startswith(('provider_', 'send_error', 'accepted_tickets')):
+                        parent = 'attempted_tokens'
+                    elif key == 'receipts_received':
+                        parent = 'accepted_tickets'
+                    elif key.startswith('receipt'):
+                        parent = 'receipts_received'
+                    elif key.startswith('destination:'):
+                        parent = 'destination_events'
+                    else:
+                        parent = 'open_users'
+                    observe((group, parent), cell['mature_denominator'])
+                    equation((group, parent), [node, (group, key, 'complement')])
+                if cell.get('percent') is not None:
+                    n, d = cell['numerator'], cell['mature_denominator']
+                    self.assertGreaterEqual(min(n, d, d - n), 10)
+            identities = [
+                ('attempted_tokens', ['provider_accepted', 'provider_rejected', 'send_error']),
+                ('receipts_received', ['receipt:ok', 'receipt:error']),
+                ('send_failures', ['provider_rejected', 'send_error']),
+                ('send_failures', [k for k in cells if k.startswith('send_error:')]),
+                ('receipt:error', [k for k in cells if k.startswith('receipt_error:')]),
+                ('all_opens', ['matched_opens', 'unmatched_opens']),
+                ('all_opens', [k for k in cells if k.startswith('open:')]),
+                ('destination_events', [k for k in cells if k.startswith('destination:')]),
+                ('accepted_tickets', ['receipts_received', 'pending_receipts']),
+                ('provider_accepted', ['accepted_tickets', 'ticketless']),
+                ('matched_opens', ['opens_missing_session', 'session_present']),
+            ]
+            for total, parts in identities:
+                equation((group, total), [(group, p) for p in parts])
+        for key in ('open_users', 'associated_prayer_users', 'associated_fast_join_users'):
+            for group in report['groups']:
+                if group != 'overall':
+                    equation(('overall', key), [(group, key), (group, key, 'outside')])
+        for key in report['groups']['overall']:
+            if not key.startswith('associated_'):
+                equation(('overall', key), [(g, key) for g in report['groups'] if g != 'overall'])
+        for key, cell in report['permission_prompts'].items():
+            observe(('prompt', key), cell.get('count', cell.get('numerator')))
+            if 'mature_denominator' in cell:
+                trigger, stage, _ = key.split(':')
+                parent = trigger + (':selected:enable' if stage == 'os_result' else ':shown:None')
+                observe(('prompt', parent), cell['mature_denominator'])
+                equation(('prompt', parent), [('prompt', key), ('prompt', key, 'complement')])
+                if cell.get('percent') is not None:
+                    self.assertGreaterEqual(min(cell['numerator'], cell['mature_denominator'] - cell['numerator']), 10)
+        # Sparse rational Gaussian elimination combines intersecting identities,
+        # including ratios' exact numerator/denominator aliases, to a fixed basis.
+        basis = {}
+        for row, rhs in [*equations, *(({n: Fraction(1)}, Fraction(v)) for n, v in known.items())]:
+            row = {n: Fraction(v) for n, v in row.items() if v}
+            while row:
+                pivot = min(row, key=repr)
+                factor = row[pivot]
+                if pivot not in basis:
+                    basis[pivot] = ({n: v / factor for n, v in row.items()}, rhs / factor)
+                    break
+                other, value = basis[pivot]
+                rhs -= factor * value
+                for n, v in other.items():
+                    row[n] = row.get(n, 0) - factor * v
+                    if not row[n]:
+                        del row[n]
+            else:
+                self.assertEqual(rhs, 0)
+        resolved = {}
+        for pivot in sorted(basis, key=repr, reverse=True):
+            row, rhs = basis[pivot]
+            if all(n == pivot or n in resolved for n in row):
+                value = rhs - sum(v * resolved[n] for n, v in row.items() if n != pivot)
+                resolved[pivot] = value
+                self.assertFalse(0 < value < 10, (pivot, value))
+
+    def test_one_user_cannot_release_repeated_errors(self):
+        for i in range(12):
+            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), kind='admin_manual',
+                       outcome='send_error', error_code='DeviceNotRegistered')
+        groups = self.report()['groups']
+        self.assertNotIn('admin_manual', groups)
+        self.assertEqual(groups['other_kinds']['send_error:DeviceNotRegistered']['numerator'], 'suppressed')
+        self.assertEqual(groups['overall']['attempted_tokens']['count'], 'suppressed')
+
+    def test_excluded_ticket_receipt_does_not_advance_freshness(self):
+        self.user.is_staff = True
+        self.user.save()
+        self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast', notif_id='excluded',
+                   ticket_id='ticket', outcome='provider_accepted')
+        before = self.report()
+        self.event(EventType.NOTIFICATION_RECEIPT, notif_id='excluded', ticket_id='ticket',
+                   receipt_status='ok', at=self.at + timedelta(days=1))
+        self.assertEqual(self.report(), before)
+
+    def test_os_result_unmatched_and_text(self):
+        self.event(EventType.NOTIFICATION_PROMPT, self.user, trigger='settings', stage='os_result', choice='denied')
+        cells = self.report()['permission_prompts']
+        self.assertEqual(cells['settings:unmatched']['count'], 'suppressed')
+        self.assertEqual(cells['settings:os_result:denied']['numerator'], 0)
+        out = StringIO()
+        call_command('notification_funnel', as_of='2026-03-12', format='text', stdout=out)
+        self.assertIn('Minimum cell: 10', out.getvalue())
+        self.assertIn('  attempted_tokens:', out.getvalue())
+        self.assertNotIn('"groups":', out.getvalue())
+
+    def test_row_guard_command_error(self):
+        with patch('events.notification_funnel.MAX_LIFECYCLE_ROWS', 0):
+            self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast')
+            with self.assertRaisesMessage(CommandError, 'reduce --since-days'):
+                call_command('notification_funnel', as_of='2026-03-12')
+
+    def test_postgres_read_only_snapshot_setup(self):
+        conn = MagicMock(in_atomic_block=False, vendor='postgresql')
+        with patch('events.notification_funnel.connection', conn), \
+                patch('events.notification_funnel.transaction.atomic', return_value=nullcontext()), \
+                patch('events.notification_funnel._build_report', return_value={}) as build:
+            build_report(date(2026, 3, 12))
+        conn.cursor.return_value.__enter__.return_value.execute.assert_called_once_with(
+            'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        build.assert_called_once()
+
+    def test_send_and_receipt_error_breakdowns(self):
+        for i in range(60):
+            user = self.person(f'errors-{i}')
+            outcome = 'provider_accepted' if i < 40 else 'send_error'
+            self.event(EventType.NOTIFICATION_SEND, user, kind='daily_fast', notif_id=str(i),
+                       ticket_id=str(i), outcome=outcome,
+                       error_code='DeviceNotRegistered' if i < 50 else 'MessageTooBig')
+            if i < 30:
+                self.event(EventType.NOTIFICATION_RECEIPT, notif_id=str(i), ticket_id=str(i),
+                           receipt_status='ok' if i < 10 else 'error',
+                           error_code='DeviceNotRegistered' if i < 20 else 'MessageTooBig')
+        report = self.report()
+        cells = report['groups']['daily_fast']
+        self.assertEqual(cells['send_error:DeviceNotRegistered']['numerator'], 10)
+        self.assertEqual(cells['send_error:MessageTooBig']['numerator'], 10)
+        self.assertEqual(cells['receipt_error:DeviceNotRegistered']['numerator'], 10)
+        self.assertEqual(cells['receipt_error:MessageTooBig']['numerator'], 10)
+        self.assert_public_oracle(report)
+
+    def test_pooled_kinds_can_clear_both_floors(self):
+        for kind in ('admin_manual', 'test'):
+            for i in range(6):
+                self.event(EventType.NOTIFICATION_SEND, self.person(f'{kind}-{i}'), kind=kind,
+                           outcome='provider_accepted')
+        groups = self.report()['groups']
+        self.assertNotIn('admin_manual', groups)
+        self.assertNotIn('test', groups)
+        self.assertEqual(groups['other_kinds']['attempted_tokens']['count'], 12)
+        self.assertEqual(groups['overall']['attempted_tokens']['count'], 12)
+
+    def test_public_oracle_detects_derived_small_receipt_complement(self):
+        # Both released values pass the raw threshold, but subtraction gives 5.
+        report = {'groups': {'overall': {
+            'accepted_tickets': {'numerator': 20, 'mature_denominator': 40, 'percent': 50},
+            'receipts_received': {'numerator': 15, 'mature_denominator': 20, 'percent': None},
+        }}, 'permission_prompts': {}}
+        report['groups']['daily_fast'] = dict(report['groups']['overall'])
+        with self.assertRaises(AssertionError):
+            self.assert_public_oracle(report)
