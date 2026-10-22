@@ -397,8 +397,14 @@ Accepted tickets with valid IDs enter a shared Redis ledger, including while
 `NOTIFICATION_TELEMETRY_ENABLED=False`, so receipt-only `DeviceNotRegistered`
 errors can deactivate exactly the mapped device row. The mapping contains only
 its device primary key, notif_id/kind (when send telemetry was prepared), and a
-fixed expiry. It contains no raw token or notification content. Flag-off sends
-have no notif_id and never become receipt telemetry after a flag change.
+send time and fixed expiry. It contains no raw token or notification content.
+Flag-off sends have no notif_id and never become receipt telemetry after a flag
+change. A send writes its mappings in one pipelined Redis round trip after the
+loop, never a blocking call per device.
+
+`PUSH_RECEIPTS_ENABLED` (default on, independent of the telemetry switch) is the
+kill switch for the ledger, the collector and receipt-driven token cleanup. Turn
+it off by config if the receipt path misbehaves; no deploy is needed.
 
 The existing `notification_receipt` type is reused; `init_event_types` already
 initializes it. Only active types and an enabled switch permit writes. Each row
@@ -410,20 +416,31 @@ reserved `lag_seconds` field is not emitted. Events have no device/token IDs,
 content, IP, user agent, or request. “Delivered” means Expo/provider receipt
 success, not handset display or human readership.
 
-Retention is 36 hours, with a maximum 50,000 indexed tickets. A Lua insertion
-atomically enforces capacity and does not refresh duplicate ticket retention.
-A run examines at most 5,000 indexed IDs in batches of at most 1,000. Missing
-receipts and provider failures retry after 15 minutes; stale IDs are removed
-within the same work bound. Pending retries rotate behind later tickets. The
-index itself expires after 36 hours without new inserts; individual mappings
-always expire 36 hours after insertion. Cache failure/capacity saturation skips
-mapping with a constant warning, without changing send behavior.
+Retention is 24 hours, Expo's receipt retention, with a maximum 50,000 indexed
+tickets. A Lua insertion atomically enforces capacity and does not refresh
+duplicate ticket retention. A run examines at most 5,000 indexed IDs in batches
+of at most 1,000. A ticket is first polled 14 minutes after its send, since
+receipts are seldom ready at once. Missing receipts and provider failures retry
+14 minutes later: below the 15-minute beat interval, because each run starts a
+little after its tick and a 15-minute delay would wait 30. Missing, unreadable
+and expired mappings are removed within the same work bound. Pending retries
+rotate behind later tickets. The index itself expires 24 hours after the last
+insert; individual mappings always expire 24 hours after their send. Cache
+failure or capacity saturation skips mapping with a warning, without changing
+send behavior.
 
 A nonblocking Redis lock has a 300-second lease; the Celery hard time limit is
-240 seconds. Receipt writes lock the receipt EventType row and deduplicate by
-notif_id plus ticket_id in the same transaction, including retries after cache
-cleanup failure. DNR cleanup runs independently of event writing and the flag;
-other errors never deactivate devices. Deletion of completed mappings makes
+240 seconds and the soft limit 210. Expo requests time out after 20 seconds, and
+the soft limit is never swallowed: it ends the run cleanly and releases the lock.
+Receipt writes lock the receipt EventType row and deduplicate by notif_id plus
+ticket_id in the same transaction, including retries after cache cleanup
+failure. The duplicate check only scans receipt rows from the last 24 hours (a
+mapping is never processed later than that), so it stays on the
+`(event_type, -timestamp)` index however many receipt rows accumulate. DNR
+cleanup runs independently of event writing and the telemetry flag; other
+errors never deactivate devices. It also never undoes a re-registration:
+registering an existing token records the time, and a DNR receipt for a send
+made before that registration is ignored. Deletion of completed mappings makes
 flag-off processing idempotent too. Retain receipt events for at least the
 ledger's retry horizon to preserve durable deduplication.
 
@@ -432,6 +449,9 @@ The exact accepted-send denominator comes from `notification_send`; report
 resolved success, resolved provider error, and unresolved separately. Never use
 only returned receipts as the delivery denominator. Cache eviction/outages,
 capacity skips, expiry, failed send-event writes, or a flag change can leave gaps;
-receipt collection is best effort, not a durable delivery guarantee. Operational
-monitoring should watch constant ledger/provider/processing warnings. This change
+receipt collection is best effort, not a durable delivery guarantee. Warnings
+carry a constant message plus the exception type, never provider or cache text.
+Collector-wide failures (cache outage, time limit) fail the task, so the
+`push-receipts` Sentry cron monitor reports them; lock contention, provider
+failures and per-ticket errors are retried and only warn. This change
 leaves the telemetry switch default OFF.

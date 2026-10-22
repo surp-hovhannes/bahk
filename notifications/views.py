@@ -7,6 +7,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .utils import _device_token_log_id
+from .receipts import note_registration
 from .models import DeviceToken
 from .serializers import DeviceTokenSerializer
 from .tasks import send_push_notification_task
@@ -86,6 +87,8 @@ class DeviceTokenCreateView(generics.CreateAPIView):
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             else:
                 serializer.save(user=request.user, is_active=True)
+                # Late DNR receipts for sends before this registration must not undo it.
+                note_registration(existing_token.pk)
                 return Response(serializer.data)
         except ValidationError as e:
             # Handle model-level validation errors

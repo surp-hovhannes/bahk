@@ -344,6 +344,9 @@ ANALYTICS_SESSION_TIMEOUT_MINUTES = int(config('ANALYTICS_SESSION_TIMEOUT_MINUTE
 
 # Enable only after init_event_types and init_event_types --check succeed.
 NOTIFICATION_TELEMETRY_ENABLED = config("NOTIFICATION_TELEMETRY_ENABLED", default=False, cast=bool)
+# Expo receipt ledger, collection and receipt-driven dead-token cleanup; independent
+# of telemetry. Turning it off needs no deploy if the receipt path misbehaves.
+PUSH_RECEIPTS_ENABLED = config("PUSH_RECEIPTS_ENABLED", default=True, cast=bool)
 
 
 SIMPLE_JWT = {

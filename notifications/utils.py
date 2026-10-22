@@ -80,6 +80,17 @@ def _ticket_field(ticket, name):
     return ticket.get(name) if isinstance(ticket, dict) else getattr(ticket, name, None)
 
 
+def _valid_ticket_id(value):
+    # Expo's opaque IDs use this bounded alphabet. Ignore unexpected shapes.
+    return isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', value) is not None
+
+
+def _expo_error_code(details):
+    """Bounded Expo error vocabulary for ticket and receipt details."""
+    code = details.get('error') if isinstance(details, dict) else None
+    return code if isinstance(code, str) and code in EXPO_ERROR_CODES else 'other'
+
+
 def _prepare_telemetry(data, message, kind, destination, device):
     telemetry = {
         'source': 'server_domain', 'notif_id': secrets.token_urlsafe(12),
@@ -108,11 +119,9 @@ def _record_send(telemetry, ticket, error):
             telemetry['outcome'] = 'provider_accepted'
         elif status == 'error':
             telemetry['outcome'] = 'provider_rejected'
-            details = _ticket_field(ticket, 'details')
-            code = details.get('error') if isinstance(details, dict) else None
-            telemetry.setdefault('error_code', code if isinstance(code, str) and code in EXPO_ERROR_CODES else 'other')
+            telemetry.setdefault('error_code', _expo_error_code(_ticket_field(ticket, 'details')))
         ticket_id = _ticket_field(ticket, 'id')
-        if isinstance(ticket_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', ticket_id):
+        if _valid_ticket_id(ticket_id):
             telemetry['ticket_id'] = ticket_id
 
 
@@ -169,7 +178,9 @@ def send_push_notification(
 
         # Initialize Expo client
         client = PushClient()
-        
+        # receipts imports this module's helpers, so import it lazily.
+        from .receipts import ledger_entry, remember_tickets
+
         # Validate data parameter
         if data and not isinstance(data, dict):
             try:
@@ -196,6 +207,7 @@ def send_push_notification(
                 logger.warning('Push telemetry type unavailable')
         destination = notification_destination(data) if event_type else None
         telemetry_rows = []
+        ledger_entries = []
 
         # Send notifications
         for device in tokens:
@@ -219,11 +231,9 @@ def send_push_notification(
                     )
                 )
                 
-                details = _ticket_field(ticket, 'details')
                 if (
                     _ticket_field(ticket, 'status') == 'error'
-                    and isinstance(details, dict)
-                    and details.get('error') == 'DeviceNotRegistered'
+                    and _expo_error_code(_ticket_field(ticket, 'details')) == 'DeviceNotRegistered'
                 ):
                     _deactivate_dead_token(token, result)
                     continue
@@ -248,9 +258,9 @@ def send_push_notification(
                 result['failed'] += 1
                 result['errors'].append(type(e).__name__)
             finally:
-                from .receipts import remember_ticket
-
-                remember_ticket(ticket, device.pk, telemetry)
+                entry = ledger_entry(ticket, device.pk, telemetry)
+                if entry is not None:
+                    ledger_entries.append(entry)
                 if telemetry is not None:
                     try:
                         _record_send(telemetry, ticket, error)
@@ -263,6 +273,8 @@ def send_push_notification(
                     except Exception:
                         logger.warning('Push telemetry outcome skipped')
 
+        # One pipelined Redis write per send, not a blocking round trip per device.
+        remember_tickets(ledger_entries)
         if telemetry_rows:
             try:
                 with transaction.atomic():
