@@ -5,6 +5,7 @@ import os
 import uuid
 from datetime import timedelta
 from types import SimpleNamespace
+from unittest import SkipTest
 from unittest.mock import patch
 
 import redis
@@ -55,6 +56,16 @@ class ReceiptTests(BaseTestCase):
 
     def events(self):
         return Event.objects.filter(event_type__code=EventType.NOTIFICATION_RECEIPT)
+
+    def test_redis_outage_fails_required_suite_but_skips_locally(self):
+        for required, exception in (('1', AssertionError), ('0', SkipTest)):
+            with self.subTest(required=required), patch.dict(os.environ, REQUIRE_REDIS_TESTS=required), patch(
+                'notifications.tests.test_receipts.redis.Redis.from_url',
+            ) as connect:
+                connect.return_value.ping.side_effect = redis.exceptions.ConnectionError('unreachable')
+                case = RedisLedgerTests('test_held_lock_skips_the_run')
+                with self.assertRaises(exception):
+                    case.setUp()
 
     def pending(self, receipt):
         self.redis.zrangebyscore.side_effect = [[b'ticket'], []]
@@ -283,6 +294,42 @@ class ReceiptTests(BaseTestCase):
             remember_tickets([ledger_entry({'status': 'ok', 'id': 'ticket'}, self.device.pk, None)])
         self.assertNotIn('secret', str(logs.output))
 
+    def test_capacity_warning_is_constant_and_throttled(self):
+        self.pipe.execute.return_value = [0]
+        entry = ledger_entry({'status': 'ok', 'id': 'ticket'}, self.device.pk, None)
+        with patch.object(receipts, '_next_capacity_warning', 0), patch(
+            'notifications.receipts.time.monotonic', side_effect=[100, 101, 160],
+        ), patch.object(receipts.logger, 'warning') as warning:
+            for _ in range(3):
+                remember_tickets([entry])
+        self.assertEqual(warning.call_count, 2)
+        for call in warning.call_args_list:
+            self.assertEqual(call.args, ('Push receipt ledger insert skipped',))
+
+    def test_receipt_cache_has_isolated_short_timeout_pool(self):
+        config = {'default': {
+            'BACKEND': 'django_redis.cache.RedisCache', 'LOCATION': 'rediss://localhost/1',
+            'KEY_PREFIX': 'bahk', 'OPTIONS': {
+                'CONNECTION_POOL_CLASS': 'redis.BlockingConnectionPool',
+                'CONNECTION_POOL_CLASS_KWARGS': {'timeout': 20},
+                'CONNECTION_POOL_KWARGS': {'ssl_cert_reqs': None},
+            },
+        }}
+        with override_settings(CACHES=config), patch.object(receipts, 'CacheHandler') as handler:
+            # Bypass memoization so this test cannot replace the shared test cache.
+            receipts._receipt_cache.__wrapped__()
+        isolated = handler.call_args.args[0]['default']
+        self.assertEqual(isolated['KEY_PREFIX'], 'bahk')
+        options = isolated['OPTIONS']
+        self.assertEqual(options['CONNECTION_POOL_CLASS'], 'redis.ConnectionPool')
+        self.assertNotIn('CONNECTION_POOL_CLASS_KWARGS', options)
+        pool = options['CONNECTION_POOL_KWARGS']
+        self.assertEqual(pool['socket_timeout'], receipts.REDIS_TIMEOUT)
+        self.assertEqual(pool['socket_connect_timeout'], receipts.REDIS_TIMEOUT)
+        self.assertIsNone(pool['ssl_cert_reqs'])
+        self.assertFalse(pool['retry_on_timeout'])
+        self.assertNotIn('SOCKET_TIMEOUT', config['default']['OPTIONS'])
+
     def test_flag_off_mapping_never_becomes_telemetry(self):
         self.row['notif_id'] = None
         self.assertTrue(_apply_receipt(self.row, 'ticket', {'status': 'ok'}))
@@ -332,7 +379,7 @@ class FakeExpoSession:
 
 @override_settings(NOTIFICATION_TELEMETRY_ENABLED=True)
 class RedisLedgerTests(BaseTestCase):
-    """Runs where Redis is reachable (CI provides REDIS_URL); skipped elsewhere."""
+    """Real Redis; CI requires availability, local development may skip."""
 
     def setUp(self):
         self.redis = redis.Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=5)
