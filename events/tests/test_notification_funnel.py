@@ -78,7 +78,10 @@ class NotificationFunnelTests(TestCase):
     def test_prompt_cells_are_suppressed(self):
         self.event(EventType.NOTIFICATION_PROMPT, self.user, stage='selected', choice='enable', trigger='settings')
         cells = self.report()['permission_prompts']
-        self.assertEqual(cells['settings:selected:enable']['numerator'], 'suppressed')
+        self.assertEqual(cells['settings:selected:enable']['numerator'], 0)
+        self.assertEqual(cells['settings:selected:enable']['mature_denominator'], 0)
+        self.assertIsNone(cells['settings:selected:enable']['percent'])
+        self.assertEqual(cells['settings:unmatched']['count'], 'suppressed')
 
     def test_attribution_boundaries_and_sessions(self):
         prayer_type, _ = EventType.objects.get_or_create(
