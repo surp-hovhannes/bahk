@@ -30,6 +30,15 @@ def _device_token_log_id(token_value):
     return hashlib.sha256(token_value.encode('utf-8')).hexdigest()[:12]
 
 
+def _deactivate_dead_token(token, result):
+    """Share reversible dead-device handling for returned tickets and exceptions."""
+    DeviceToken.objects.filter(token=token).update(is_active=False)
+    result['failed'] += 1
+    token_id = _device_token_log_id(token)
+    result['invalid_tokens'].append(token_id)
+    logger.warning("Device not registered: %s", token_id)
+
+
 EXPO_ERROR_CODES = frozenset({
     'DeviceNotRegistered', 'MessageTooBig', 'MessageRateExceeded',
     'MismatchSenderId', 'InvalidCredentials', 'DeveloperError',
@@ -92,7 +101,7 @@ def _prepare_telemetry(data, message, kind, destination, device):
 def _record_send(telemetry, ticket, error):
     if ticket is None and error is not None:
         ticket = getattr(error, 'push_response', None)
-    # Never validate_response(): that would change legacy token/count behavior.
+    # Read ticket fields directly; other provider rejections retain legacy counts.
     if ticket is not None:
         status = _ticket_field(ticket, 'status')
         if status == 'ok':
@@ -113,8 +122,8 @@ def send_push_notification(
     """
     Send push notifications to specified tokens or all registered devices.
 
-    Legacy sent counts mean non-raising publishes to the provider, never delivery.
-    Ticket rejections are recorded separately without changing these counts.
+    Sent counts mean non-raising publishes except DeviceNotRegistered, never delivery.
+    Other ticket rejections retain their legacy sent counts.
     
     Args:
         message (str): The notification message to send
@@ -210,6 +219,15 @@ def send_push_notification(
                     )
                 )
                 
+                details = _ticket_field(ticket, 'details')
+                if (
+                    _ticket_field(ticket, 'status') == 'error'
+                    and isinstance(details, dict)
+                    and details.get('error') == 'DeviceNotRegistered'
+                ):
+                    _deactivate_dead_token(token, result)
+                    continue
+
                 # Update device token last_used timestamp
                 DeviceToken.objects.filter(token=token).update(
                     last_used=timezone.now()
@@ -220,12 +238,9 @@ def send_push_notification(
                 
             except DeviceNotRegisteredError as exc:
                 error = exc
-                logger.warning("Device not registered: %s", _device_token_log_id(token))
                 if telemetry is not None:
                     telemetry.update(outcome="provider_rejected", error_code="DeviceNotRegistered")
-                DeviceToken.objects.filter(token=token).update(is_active=False)
-                result['failed'] += 1
-                result['invalid_tokens'].append(_device_token_log_id(token))
+                _deactivate_dead_token(token, result)
                 
             except Exception as e:
                 error = e

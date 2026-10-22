@@ -3,9 +3,11 @@ from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from unittest.mock import patch
+from exponent_server_sdk import PushTicket
 from ..models import DeviceToken
 from ..tasks import send_push_notification_to_users_task
 from ..views import _device_token_log_id
+from ..utils import send_push_notification
 from tests.fixtures.test_data import TestDataFactory
 
 class DeviceTokenTests(APITestCase):
@@ -65,6 +67,51 @@ class DeviceTokenTests(APITestCase):
         self.assertEqual(tokens.count(), 2)
         self.assertTrue(tokens.filter(token=self.valid_token_data['token']).exists())
         self.assertTrue(tokens.filter(token=new_token_data['token']).exists())
+
+    @override_settings(NOTIFICATION_TELEMETRY_ENABLED=False)
+    def assert_reregistration_reactivates_token(self, registering_user):
+        token = DeviceToken.objects.create(user=self.user, is_active=False, **self.valid_token_data)
+        self.client.force_authenticate(user=registering_user)
+
+        response = self.client.post(
+            reverse('notifications:register-device-token'), self.valid_token_data, format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        token.refresh_from_db()
+        self.assertTrue(token.is_active)
+        self.assertTrue(response.data['is_active'])
+        self.assertEqual(token.user, registering_user)
+        self.assertEqual(DeviceToken.objects.count(), 1)
+
+        with patch('notifications.utils.PushClient') as push_client:
+            publish = push_client.return_value.publish
+            publish.return_value = PushTicket(
+                push_message=None, status='ok', message=None, details=None, id='test-ticket',
+            )
+            result = send_push_notification('Test notification', users=[registering_user])
+
+        publish.assert_called_once()
+        self.assertEqual(publish.call_args.args[0].to, token.token)
+        self.assertEqual(result['sent'], 1)
+        self.assertTrue(result['success'])
+
+    def test_inactive_token_reregistered_by_same_user(self):
+        self.assert_reregistration_reactivates_token(self.user)
+
+    def test_inactive_token_reregistered_by_different_user(self):
+        self.assert_reregistration_reactivates_token(self.user2)
+
+    def test_client_cannot_deactivate_token(self):
+        url = reverse('notifications:register-device-token')
+        data = {**self.valid_token_data, 'is_active': False}
+        for expected_status in (status.HTTP_201_CREATED, status.HTTP_200_OK):
+            with self.subTest(expected_status=expected_status):
+                response = self.client.post(url, data, format='json')
+
+                self.assertEqual(response.status_code, expected_status, response.data)
+                self.assertTrue(response.data['is_active'])
+                self.assertTrue(DeviceToken.objects.get(token=data['token']).is_active)
 
     def test_create_token_invalid_data(self):
         """Test creating a token with invalid data"""

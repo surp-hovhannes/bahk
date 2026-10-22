@@ -283,11 +283,22 @@ with a ticket attached are classified from that ticket; other exceptions and
 unknown/missing ticket shapes use `send_error` (outcome could not be established).
 Raw exception text never enters an event or sender log.
 
-Legacy `sent` remains the count of non-raising publishes to the push provider,
-not delivery. It may include a returned error ticket: telemetry distinguishes
-those rejections without changing existing result dictionaries. Only the existing
-`DeviceNotRegisteredError` exception branch deactivates a token; returned error
-tickets do not add deactivation. No receipt-based disabling is added.
+`sent` counts non-raising publishes to the push provider except returned
+`DeviceNotRegistered` error tickets; it never means delivery. Such tickets count
+as `failed`, append a hashed identifier to `invalid_tokens`, and set the token's
+`is_active=False`, just like the retained `DeviceNotRegisteredError` exception
+path. This behavior applies with telemetry enabled or disabled. When enabled,
+the event remains `provider_rejected` with error code `DeviceNotRegistered`.
+Other error tickets retain their sent count and leave the token active.
+Inactive tokens are excluded from subsequent sends; existing dead tokens deactivate
+naturally on their next send, without a bulk cleanup or deletion.
+
+Deactivation is reversible by setting `is_active=True` (for example in admin).
+`DeviceTokenCreateView` updates an existing token through `DeviceTokenSerializer`,
+where `is_active` is read-only; re-registering the same inactive token does **not**
+reactivate it. Receipt-level `DeviceNotRegistered` (delivery receipts roughly
+15+ minutes later) will be handled by the receipts collector in a separate PR.
+No receipt polling is included here.
 
 SDK verification: the local validation venv has `exponent_server_sdk` 2.2.0,
 while requirements are unpinned and the deployed app version has not been
@@ -306,10 +317,6 @@ All task producers with explicit kinds use `telemetry_task_kwargs`; the five
 scheduled senders derive the default kind from their existing notification_type.
 Keep the flag off throughout worker replacement. This PR does not enable it.
 
-Dead-device tickets are currently counted as sent and tokens are not
-auto-deactivated (pre-existing; separate decision). The legacy
-DeviceNotRegisteredError exception branch remains unchanged in behavior;
-publish() in SDK 2.2.0 returns error tickets without raising that exception.
 Result invalid_tokens contains hashed identifiers, and errors contains exception
 class names, never raw tokens or exception text. Callers only count invalid tokens
 or join error labels. Pinning the SDK still needs a confirmed deployed version;
