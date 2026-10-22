@@ -1,7 +1,9 @@
 """Synthetic report contracts; no telemetry flag or producer is required."""
 import json
+import random
 from datetime import date, datetime, timedelta, timezone
 from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
@@ -10,7 +12,7 @@ from django.test import TestCase, override_settings
 
 from events.growth_cohorts import build_report as cohort_report
 from events.models import Event, EventType
-from events.notification_funnel import _release, build_report
+from events.notification_funnel import _protect_output, _release, build_report
 from hub.models import Fast, FastParticipation, Profile
 from tests.fixtures.test_data import TestDataFactory
 
@@ -65,7 +67,7 @@ class NotificationFunnelTests(TestCase):
         self.assertEqual(report['unclassified']['unmatched_opens']['count'], 10)
         self.assertEqual(report['daily_fast']['receipts_received']['percent'], 50)
         get_user_model().objects.filter(pk=self.user.pk).update(is_staff=True)
-        self.assertEqual(self.report()['groups']['daily_fast']['attempted_tokens']['count'], 'suppressed')
+        self.assertEqual(self.report()['groups']['daily_fast']['attempted_tokens']['count'], 0)
 
     def test_freshness_excludes_notification_rows_in_cohorts(self):
         before = cohort_report(date(2026, 3, 12))['data_freshness']
@@ -118,14 +120,14 @@ class NotificationFunnelTests(TestCase):
         self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id='0',
                    at=datetime(2026, 3, 12, tzinfo=timezone.utc))
         report = self.report()['groups']['daily_fast']
-        self.assertEqual(report['receipts_received']['numerator'], 'suppressed')
-        self.assertEqual(report['matched_opens']['count'], 'suppressed')
+        self.assertEqual(report['receipts_received']['numerator'], 0)
+        self.assertEqual(report['matched_opens']['count'], 0)
         with self.assertRaises(ValueError):
             build_report(date(2026, 3, 12), since_days=401)
         with self.assertRaises(ValueError):
             build_report(date(2026, 3, 12), min_cell=9)
 
-    def test_sparse_kind_totals_hide_all_dependent_denominators(self):
+    def test_40_attempts_plus_five_rejected_kind_hide_dependent_denominators(self):
         for i in range(40):
             self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), ticket_id=str(i),
                        kind='daily_fast', outcome='provider_accepted' if i < 20 else 'provider_rejected')
@@ -219,3 +221,73 @@ class NotificationFunnelTests(TestCase):
         metric = self.report()['groups']['daily_fast']['associated_fast_join_users']
         self.assertEqual(metric['numerator'], 40)
         self.assertEqual(metric['mature_denominator'], 60)
+
+    def test_destination_denominators_follow_hidden_kind_total(self):
+        for i in range(40):
+            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), kind='daily_fast')
+            self.event(EventType.NOTIFICATION_DESTINATION, self.user, notif_id=str(i),
+                       destination='fast', result='opened' if i < 20 else 'unresolved')
+        for i in range(5):
+            self.event(EventType.NOTIFICATION_DESTINATION, self.user, notif_id=f'unknown-{i}',
+                       destination='fast', result='opened')
+        groups = self.report()['groups']
+        for group in ('daily_fast', 'overall'):
+            self.assertEqual(groups[group]['destination:fast:unresolved']['mature_denominator'], 'suppressed')
+
+    def test_randomized_finished_report_disclosure_relations(self):
+        # Exercise the actual report builder and its final graph, not a second
+        # implementation of the relation catalogue in the test.
+        rng = random.Random(460)
+        graphs = []
+
+        def capture(*args):
+            graph = _protect_output(*args)
+            graphs.append(graph)
+            return graph
+
+        with patch('events.notification_funnel._protect_output', side_effect=capture):
+            for case in range(200):
+                Event.objects.filter(event_type__in=self.types.values()).delete()
+                rows = []
+                for kind in ('daily_fast', 'unknown'):
+                    nid = f'{case}-{kind}'
+                    for outcome in ('provider_accepted', 'provider_rejected', 'send_error'):
+                        for _ in range(rng.randrange(31)):
+                            rows.append(Event(event_type=self.types[EventType.NOTIFICATION_SEND],
+                                              user=self.user, timestamp=self.at,
+                                              data={'kind': kind, 'notif_id': nid, 'outcome': outcome}))
+                    for result in ('opened', 'unresolved', 'rejected'):
+                        for _ in range(rng.randrange(31)):
+                            rows.append(Event(event_type=self.types[EventType.NOTIFICATION_DESTINATION],
+                                              user=self.user, timestamp=self.at + timedelta(seconds=1),
+                                              data={'notif_id': nid, 'destination': 'fast', 'result': result}))
+                Event.objects.bulk_create(rows)
+                report = self.report()
+                graph = graphs.pop()
+                with self.subTest(case=case):
+                    for node, value in graph.values.items():
+                        if 0 < value < 10:
+                            self.assertIn(node, graph.hidden)
+                    for total, parts in graph.relations:
+                        nodes = (total, *parts)
+                        hidden = [n for n in nodes if n in graph.hidden]
+                        self.assertTrue(not hidden or len(hidden) == len(nodes))
+                        # Brute force every subtraction this equation allows.
+                        for missing in nodes:
+                            others = [n for n in nodes if n != missing]
+                            if all(n not in graph.hidden for n in others):
+                                inferred = (sum(graph.values[n] for n in parts) if missing == total
+                                            else graph.values[total] - sum(
+                                                graph.values[n] for n in parts if n != missing))
+                                self.assertEqual(inferred, graph.values[missing])
+                                self.assertFalse(0 < inferred < 10)
+                                self.assertNotIn(missing, graph.hidden)
+                    for cell, field, node in graph.bindings:
+                        self.assertEqual(cell[field], 'suppressed' if node in graph.hidden else graph.values[node])
+                    for metrics in [*report['groups'].values(), report['permission_prompts']]:
+                        for cell in metrics.values():
+                            if cell.get('percent') is not None:
+                                self.assertIsInstance(cell['numerator'], int)
+                                self.assertIsInstance(cell['mature_denominator'], int)
+                                self.assertGreaterEqual(cell['numerator'], 10)
+                                self.assertGreaterEqual(cell['mature_denominator'], 10)

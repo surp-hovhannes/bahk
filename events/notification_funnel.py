@@ -38,6 +38,157 @@ def _release(n, d, minimum):
     return cell
 
 
+class _DisclosureGraph:
+    """Canonical counts and declarative (total, parts) relations.
+
+    Aliases (not numerical coincidences) share a node, including denominators.
+    Whole-relation suppression deliberately sacrifices utility: even multiple
+    hidden parts can be recovered by combining intersecting released equations.
+    No equation touching a hidden node is released, so that attack has no inputs.
+    Internal residuals are counts too, even though they are never serialized.
+    """
+
+    def __init__(self, minimum):
+        self.minimum = minimum
+        self.values = {}
+        self.relations = []
+        self.hidden = set()
+        self.bindings = []
+
+    def node(self, name, value):
+        if name in self.values:
+            assert self.values[name] == value, name
+        self.values[name] = value
+        return name
+
+    def partition(self, total, parts):
+        parts = tuple(parts)
+        assert self.values[total] == sum(self.values[p] for p in parts), total
+        self.relations.append((total, parts))
+
+    def subset(self, total, part, name):
+        residual = self.node(name, self.values[total] - self.values[part])
+        assert self.values[residual] >= 0, name
+        self.partition(total, (part, residual))
+
+    def bind(self, cell, field, node):
+        self.bindings.append((cell, field, node))
+
+    def finish(self):
+        # Zero is a public structural count unless connected to a hidden count.
+        # Percentages still require numerator, denominator and complement >= k.
+        # Restoring canonical zeros avoids treating an absent kind as a secret
+        # and thereby suppressing every partition in an otherwise safe report.
+        self.hidden.update(n for n, v in self.values.items() if 0 < v < self.minimum)
+        changed = True
+        while changed:
+            before = len(self.hidden)
+            for total, parts in self.relations:
+                nodes = {total, *parts}
+                if nodes & self.hidden:
+                    self.hidden.update(nodes)
+            changed = len(self.hidden) != before
+        for cell, field, node in self.bindings:
+            cell[field] = 'suppressed' if node in self.hidden else self.values[node]
+            if node in self.hidden and 'percent' in cell:
+                cell.update(percent=None, wilson_95=None)
+
+
+def _protect_output(output, prompts, counters, prompt_users, open_populations, associated, minimum):
+    """Build the single relation list over the finished report, then suppress."""
+    graph = _DisclosureGraph(minimum)
+    groups = list(output)
+
+    def count(group, key):
+        return graph.node((group, key), counters[group][key])
+
+    # Every event count, including internal totals, partitions across kinds.
+    keys = set().union(*(set(c) for c in counters.values()))
+    keys.update(key for metrics in output.values() for key in metrics
+                if not key.startswith('associated_'))
+    keys.update(('destination_events', 'all_opens', 'send_failures'))
+    for group in groups:
+        counters[group]['all_opens'] = counters[group]['matched_opens'] + counters[group]['unmatched_opens']
+        counters[group]['send_failures'] = counters[group]['provider_rejected'] + counters[group]['send_error']
+    for key in sorted(keys):
+        graph.partition(count('overall', key), [count(g, key) for g in groups if g != 'overall'])
+    for group, metrics in output.items():
+        # Exhaustive categories have an internal remainder for legacy/malformed
+        # rows with no recognized category. It must receive primary suppression.
+        partitions = [
+            ('attempted_tokens', ('provider_accepted', 'provider_rejected', 'send_error')),
+            ('send_failures', ('provider_rejected', 'send_error')),
+            ('receipts_received', tuple(k for k in metrics if k.startswith('receipt:'))),
+            ('send_failures', tuple(k for k in metrics if k.startswith('send_error:'))),
+            ('receipt:error', tuple(k for k in metrics if k.startswith('receipt_error:'))),
+            ('all_opens', ('matched_opens', 'unmatched_opens')),
+            ('all_opens', tuple(k for k in metrics if k.startswith('open:'))),
+            ('destination_events', tuple(k for k in metrics if k.startswith('destination:'))),
+        ]
+        for index, (total, parts) in enumerate(partitions):
+            remainder = graph.node((group, 'remainder', index),
+                                   counters[group][total] - sum(counters[group][p] for p in parts))
+            assert graph.values[remainder] >= 0
+            graph.partition(count(group, total), [*(count(group, p) for p in parts), remainder])
+        graph.subset(count(group, 'provider_accepted'), count(group, 'accepted_tickets'),
+                     (group, 'accepted_without_ticket'))
+        graph.subset(count(group, 'matched_opens'), count(group, 'opens_missing_session'),
+                     (group, 'sessions_present'))
+        for key, cell in metrics.items():
+            if key.startswith('associated_'):
+                action = key.removeprefix('associated_').removesuffix('_users')
+                numerator = graph.node((group, key), len(associated[(group, action)]))
+                denominator = graph.node((group, 'open_users'), open_populations[group])
+            else:
+                numerator = count(group, key)
+                denominator = count(group, _denominator(key)) if _denominator(key) else None
+            if 'count' in cell:
+                graph.bind(cell, 'count', numerator)
+            else:
+                graph.bind(cell, 'numerator', numerator)
+                graph.bind(cell, 'mature_denominator', denominator)
+                graph.subset(denominator, numerator, (group, key, 'complement'))
+    # Unique users can occur in several kinds: use subset/complement relations,
+    # never incorrectly claim that those populations sum to overall.
+    for key in ('open_users', 'associated_prayer_users', 'associated_fast_join_users'):
+        for group in groups:
+            if group != 'overall':
+                graph.subset(('overall', key), (group, key), (group, key, 'outside_kind'))
+    # Distinct prompt users can select multiple choices; choices are NOT an
+    # additive partition. Each row is a subset of its own eligible population.
+    for trigger in sorted(NOTIFICATION_PROMPT_TRIGGERS):
+        for stage, choices in NOTIFICATION_PROMPT_CHOICES.items():
+            for choice in choices:
+                key = f'{trigger}:{stage}:{choice}'
+                node = graph.node(('prompt', key), len(prompt_users[(trigger, stage, choice)]))
+                cell = prompts[key]
+                if stage == 'shown':
+                    graph.bind(cell, 'count', node)
+                else:
+                    parent = f'{trigger}:selected:enable' if stage == 'os_result' else f'{trigger}:shown:None'
+                    parent_stage, parent_choice = ('selected', 'enable') if stage == 'os_result' else ('shown', None)
+                    total = graph.node(('prompt', parent), len(prompt_users[(trigger, parent_stage, parent_choice)]))
+                    graph.bind(cell, 'numerator', node)
+                    graph.bind(cell, 'mature_denominator', total)
+                    graph.subset(total, node, ('prompt', key, 'complement'))
+        key = f'{trigger}:unmatched'
+        graph.bind(prompts[key], 'count', graph.node(('prompt', key), len(prompt_users[(trigger, 'unmatched', None)])))
+    graph.finish()
+    return graph
+
+
+def _denominator(key):
+    if key in {'provider_accepted', 'provider_rejected', 'send_error', 'accepted_tickets'} or key.startswith('send_error:'):
+        return 'attempted_tokens'
+    if key == 'receipts_received':
+        return 'accepted_tickets'
+    if key.startswith(('receipt:', 'receipt_error:')):
+        return 'receipts_received'
+    if key.startswith('destination:'):
+        return 'destination_events'
+    return None
+
+
 def build_report(as_of, since_days=30, min_cell=10):
     if not 1 <= since_days <= 400:
         raise ValueError('since_days must be between 1 and 400')
@@ -198,19 +349,12 @@ def _build_report(as_of, since_days, minimum):
     keys += [f'destination:{d}:{r}' for d in sorted(NOTIFICATION_DESTINATIONS)
              for r in sorted(NOTIFICATION_DESTINATION_RESULTS)]
     output = {}
-    metric_denominators = {}
+    open_populations = {}
     for group in groups:
         counts = counters[group]
         metrics = {}
         for key in keys:
-            denominator = denominators.get(key)
-            if key.startswith('send_error:'):
-                denominator = 'attempted_tokens'
-            elif key.startswith('receipt:') or key.startswith('receipt_error:'):
-                denominator = 'receipts_received'
-            elif key.startswith('destination:'):
-                denominator = 'destination_events'
-            metric_denominators[key] = denominator
+            denominator = _denominator(key)
             # Raw opens deliberately have no send denominator or percentage.
             if denominator is None or key == 'attempted_tokens':
                 metrics[key] = {'count': counts[key] if counts[key] >= minimum else 'suppressed'}
@@ -218,6 +362,7 @@ def _build_report(as_of, since_days, minimum):
                 metrics[key] = _release(counts[key], counts[denominator], minimum)
         open_users = {uid for uid, entries in opens.items() if group == 'overall'
                       or any(entry[2] == group for entry in entries)}
+        open_populations[group] = len(open_users)
         for action in ('prayer', 'fast_join'):
             metrics['associated_' + action + '_users'] = _release(
                 len(associated[(group, action)]), len(open_users), minimum)
@@ -235,65 +380,7 @@ def _build_report(as_of, since_days, minimum):
                     else _release(count, len(denominator), minimum))
         unmatched = len(prompt_users[(trigger, 'unmatched', None)])
         prompts[f'{trigger}:unmatched'] = {'count': unmatched if unmatched >= minimum else 'suppressed'}
-    # Conservative complementary suppression: if any component is hidden, hide
-    # the entire additive partition, including its total. This also protects zeros.
-    def hide(cell):
-        for key in ('count', 'numerator', 'mature_denominator'):
-            if key in cell:
-                cell[key] = 'suppressed'
-        if 'percent' in cell:
-            cell.update(percent=None, wilson_95=None)
-
-    for key in keys:
-        cells = [output[group][key] for group in groups]
-        if any(0 < counters[group][key] < minimum for group in groups[1:]):
-            for cell in cells:
-                hide(cell)
-    for group, metrics in output.items():
-        outcome_keys = ('provider_accepted', 'provider_rejected', 'send_error')
-        if any(0 < counters[group][key] < minimum for key in outcome_keys):
-            for key in (*outcome_keys, 'attempted_tokens'):
-                hide(metrics[key])
-        for prefix in ('send_error:', 'receipt:', 'receipt_error:', 'open:', 'destination:'):
-            cells = [cell for key, cell in metrics.items() if key.startswith(prefix)]
-            if any(0 < counters[group][key] < minimum for key in metrics if key.startswith(prefix)):
-                for cell in cells:
-                    hide(cell)
-                total = {'send_error:': 'attempted_tokens', 'receipt:': 'receipts_received',
-                         'receipt_error:': 'receipts_received', 'open:': 'matched_opens'}.get(prefix)
-                if total:
-                    hide(metrics[total])
-    for key in keys:
-        if any(counters[group][key] > 0 and
-               not isinstance(output[group][key].get('count', output[group][key].get('numerator')), int)
-               for group in groups[1:]):
-            hide(output['overall'][key])
-    # A hidden total must stay hidden wherever it occurs as a denominator.
-    # Iterate because hiding a dependent numerator can hide another kind total,
-    # whose denominators in turn need suppression (tickets -> receipt coverage).
-    changed = True
-    while changed:
-        before = repr(output)
-        for group, metrics in output.items():
-            for key, denominator in metric_denominators.items():
-                if denominator in metrics:
-                    total = metrics[denominator]
-                    if not isinstance(total.get('count', total.get('numerator')), int):
-                        hide(metrics[key])
-        for key in keys:
-            if any(counters[group][key] > 0 and not isinstance(
-                    output[group][key].get('count', output[group][key].get('numerator')), int)
-                    for group in groups[1:]):
-                for group in groups:
-                    hide(output[group][key])
-        changed = before != repr(output)
-    # Prompt rows are event distributions, not linked user transitions.
-    for trigger in NOTIFICATION_PROMPT_TRIGGERS:
-        cells = [cell for key, cell in prompts.items() if key.startswith(trigger + ':')]
-        if any(0 < len(prompt_users[(trigger, stage, choice)]) < minimum
-               for stage, choices in NOTIFICATION_PROMPT_CHOICES.items() for choice in choices):
-            for cell in cells:
-                hide(cell)
+    _protect_output(output, prompts, counters, prompt_users, open_populations, associated, minimum)
     freshness = events.aggregate(latest=Max('timestamp'))['latest']
     freshness = freshness and freshness.replace(minute=0, second=0, microsecond=0)
     return {'as_of': end.isoformat(), 'since': start.isoformat(), 'min_cell': minimum,
