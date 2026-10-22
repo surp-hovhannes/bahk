@@ -48,7 +48,8 @@ class _DisclosureGraph:
     Aliases (not numerical coincidences) share a node, including denominators.
     Whole-relation suppression deliberately sacrifices utility: even multiple
     hidden parts can be recovered by combining intersecting released equations.
-    No equation touching a hidden node is released, so that attack has no inputs.
+    Cross-kind sums propagate protection upward only: child components remain
+    independent, and both a hidden child and its aggregate are unavailable.
     Internal residuals are counts too, even though they are never serialized.
     """
 
@@ -56,6 +57,7 @@ class _DisclosureGraph:
         self.minimum = minimum
         self.values = {}
         self.relations = []
+        self.kind_partitions = set()
         self.hidden = set()
         self.bindings = []
         self.contributors = {}
@@ -99,7 +101,12 @@ class _DisclosureGraph:
             before = len(self.hidden)
             for total, parts in self.relations:
                 nodes = {total, *parts}
-                if nodes & self.hidden:
+                if (total, parts) in self.kind_partitions:
+                    # Child components are protected independently. Never send
+                    # aggregate suppression back down into unrelated kinds.
+                    if set(parts) & self.hidden:
+                        self.hidden.add(total)
+                elif nodes & self.hidden:
                     self.hidden.update(nodes)
             changed = len(self.hidden) != before
         for cell, field, node in self.bindings:
@@ -127,7 +134,10 @@ def _protect_output(output, prompts, counters, prompt_users, open_populations, a
         contributors[(group, 'send_failures')] = contributors[(group, 'provider_rejected')] | contributors[(group, 'send_error')]
         counters[group]['send_failures'] = counters[group]['provider_rejected'] + counters[group]['send_error']
     for key in sorted(keys):
-        graph.partition(count('overall', key), [count(g, key) for g in groups if g != 'overall'])
+        total = count('overall', key)
+        parts = tuple(count(g, key) for g in groups if g != 'overall')
+        graph.partition(total, parts)
+        graph.kind_partitions.add((total, parts))
     for group, metrics in output.items():
         # Exhaustive categories have an internal remainder for legacy/malformed
         # rows with no recognized category. It must receive primary suppression.

@@ -31,14 +31,20 @@ Category relations include internal remainders for older or malformed rows.
 These remainders and all complements receive the same protection as output cells.
 
 The final pass marks every positive count below k hidden, then repeatedly hides
-**every node in any equation touching a hidden node** until no new nodes are
-hidden. This is deliberately stronger than choosing one complementary cell:
+**every node in any within-group equation touching a hidden node** until no new
+nodes are hidden. Cross-kind sum equations propagate hidden child cells upward
+to overall, never downward into unrelated kinds. A protected child component and
+the corresponding aggregate component therefore remain unavailable while other
+kind components can remain useful. The public sum identity is still present;
+no events are removed. This is deliberately stronger than choosing one complementary cell:
 intersecting equations cannot reconstruct a hidden value because no released
-arithmetic equation touches it. Shared denominator bindings propagate the same
+within-group arithmetic equation touches it. Cross-kind equations have both
+the hidden child and aggregate unavailable; the independent public oracle also
+checks combinations of those sum equations with all other public identities. Shared denominator bindings propagate the same
 suppression everywhere. Suppressed percentages and intervals are cleared.
 The graph is bounded by the fixed report dimensions and adds no database queries.
 
-No metric family is unconditionally disabled. Whole connected components can be
+No metric family is unconditionally disabled. Whole within-group connected components can be
 suppressed, including otherwise large counts, when a small count is connected to
 them. Exact zeros are public unless connected to suppression; this changes the
 previous blanket hiding of zero counts. A zero or zero-complement row has no
@@ -67,8 +73,8 @@ Before correlation and graph construction, reporting kinds with positive attempt
 below k, or fewer than k distinct attempting users, are folded into `other_kinds`.
 All their events and associations follow that bucket; nothing is discarded.
 Overall remains the sum of the resulting event buckets. If the pooled bucket is
-still sparse, normal complementary suppression applies (and can hide connected
-large cells). Absent kinds remain structural zeros.
+still sparse, normal complementary suppression applies to that bucket and overall
+without propagating back into unrelated kinds. Absent kinds remain structural zeros.
 
 The repeatable-read snapshot counts candidate lifecycle rows before materializing
 them. More than `MAX_LIFECYCLE_ROWS` (500,000, a module-level operational constant)
@@ -76,3 +82,15 @@ aborts with a recommendation to reduce `--since-days`. The bound includes unmatc
 null-user receipts, which consume memory even though they do not advance freshness.
 Freshness includes eligible lifecycle rows and successfully matched receipts only.
 Text output renders labeled counts and ratios without embedding JSON.
+
+The seeded generator covers multiple users, several kinds, receipt statuses and
+error codes, send error codes, matched/unmatched opens and entries, missing
+sessions, destinations, prompt stages by trigger, and prayer/fast associations.
+It alternates boundary draws in 0..3k with multiples of k to exercise released
+cells. In addition to internal graph checks, an independent JSON-only oracle
+uses a hand-written identity catalogue and rational Gaussian elimination. It
+checks every uniquely determined count, including residuals implied by receipt
+coverage inequalities, and requires every released percentage's numerator,
+denominator and complement to meet k. It never imports production relation
+metadata. This tests exact linear identities, not arbitrary external knowledge
+or cross-report differencing.
