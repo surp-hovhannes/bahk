@@ -2,16 +2,22 @@
 import json
 import logging
 import time
+from copy import deepcopy
 from datetime import timedelta
+from functools import lru_cache
+from threading import Lock
 
 from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.core.cache import cache
+from django.core.cache import CacheHandler
 from django.db import transaction
 from django.utils import timezone
-from django_redis import get_redis_connection
+from django_redis.pool import ConnectionFactory
 from exponent_server_sdk import PushClient, PushTicket
 from redis.exceptions import LockError
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 
 from .models import DeviceToken
 from .utils import _device_token_log_id, _expo_error_code, _ticket_field, _valid_ticket_id
@@ -28,6 +34,48 @@ MAX_BATCHES = 5
 RETRY_DELAY = 14 * 60
 PROVIDER_TIMEOUT = 20
 LOCK_LEASE = 300
+REDIS_TIMEOUT = 0.4
+_warning_lock = Lock()
+_next_capacity_warning = 0
+
+
+class ReceiptConnectionFactory(ConnectionFactory):
+    # django-redis keys pools by URL across cache handlers. Own the registry so
+    # the shared app cache and receipt ledger cannot inherit each other's pool.
+    _pools = {}
+
+
+@lru_cache(maxsize=1)
+def _receipt_cache():
+    """Separate pool, same keys/serializer/TLS; never alter the app cache pool."""
+    config = deepcopy(settings.CACHES['default'])
+    if config['BACKEND'] == 'django_redis.cache.RedisCache':
+        options = config.setdefault('OPTIONS', {})
+        options.update(SOCKET_CONNECT_TIMEOUT=REDIS_TIMEOUT, SOCKET_TIMEOUT=REDIS_TIMEOUT,
+                       CONNECTION_FACTORY='notifications.receipts.ReceiptConnectionFactory',
+                       CONNECTION_POOL_CLASS='redis.ConnectionPool')
+        # Nonblocking pool exhaustion and no implicit redis-py retries.
+        options.pop('CONNECTION_POOL_CLASS_KWARGS', None)
+        options.setdefault('CONNECTION_POOL_KWARGS', {}).update(
+            socket_connect_timeout=REDIS_TIMEOUT, socket_timeout=REDIS_TIMEOUT,
+            max_connections=8, retry=Retry(NoBackoff(), 0), retry_on_timeout=False,
+        )
+    return CacheHandler({'default': config})['default']
+
+
+def get_redis_connection(alias='default'):
+    return _receipt_cache().client.get_client(write=True)
+
+
+def _warn_capacity():
+    """At most one constant warning per minute per process; no extra Redis I/O."""
+    global _next_capacity_warning
+    with _warning_lock:
+        now = time.monotonic()
+        if now < _next_capacity_warning:
+            return
+        _next_capacity_warning = now + 60
+    logger.warning('Push receipt ledger insert skipped')
 
 
 def _now():
@@ -89,7 +137,7 @@ def remember_tickets(entries):
                         client=pipe)
             skipped += sum(1 for stored in pipe.execute() if not stored)
         if skipped:
-            logger.warning('Push receipt ledger insert skipped: %d', skipped)
+            _warn_capacity()
     except Exception as exc:
         logger.warning('Push receipt ledger unavailable (%s)', type(exc).__name__)
 
@@ -101,7 +149,7 @@ def note_registration(device_pk):
     are still collected once it is back on.
     """
     try:
-        cache.set(_registration_key(device_pk), _now(), TTL)
+        _receipt_cache().set(_registration_key(device_pk), _now(), TTL)
     except Exception as exc:
         logger.warning('Push receipt registration marker unavailable (%s)', type(exc).__name__)
 
@@ -118,7 +166,7 @@ def _parse(raw):
 
 
 def _deactivate_dead_device(row):
-    registered_at = cache.get(_registration_key(row['device_pk']))
+    registered_at = _receipt_cache().get(_registration_key(row['device_pk']))
     if registered_at is not None and registered_at >= row['sent_at']:
         # Re-registration since the send (#593 reactivates the row) wins over this receipt.
         return

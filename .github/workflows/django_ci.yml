@@ -86,6 +86,7 @@ jobs:
         
         # Point to the Redis service started above
         REDIS_URL: redis://localhost:6379/1 
+        REQUIRE_REDIS_TESTS: '1' # The real ledger suite must fail rather than skip.
         
         # If using PostgreSQL service (uncomment corresponding service above)
         # DATABASE_URL: postgresql://test_user_ci:test_password_ci@localhost:5432/test_db_ci
