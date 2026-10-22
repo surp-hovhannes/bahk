@@ -102,3 +102,18 @@ class NotificationFunnelTests(TestCase):
         cells = self.report()['permission_prompts']
         self.assertEqual(cells['settings:os_result:granted']['percent'], 50)
         self.assertEqual(cells['settings:selected:enable']['mature_denominator'], 40)
+
+    def test_wrong_ticket_and_window_edges(self):
+        for i in range(20):
+            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), ticket_id=str(i),
+                       kind='daily_fast', outcome='provider_accepted')
+            self.event(EventType.NOTIFICATION_RECEIPT, notif_id=str(i), ticket_id='wrong', receipt_status='ok')
+        self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id='0',
+                   at=datetime(2026, 3, 12, tzinfo=timezone.utc))
+        report = self.report()['groups']['daily_fast']
+        self.assertEqual(report['receipts_received']['numerator'], 'suppressed')
+        self.assertEqual(report['matched_opens']['count'], 'suppressed')
+        with self.assertRaises(ValueError):
+            build_report(date(2026, 3, 12), since_days=401)
+        with self.assertRaises(ValueError):
+            build_report(date(2026, 3, 12), min_cell=9)
