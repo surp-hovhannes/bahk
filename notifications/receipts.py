@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django_redis import get_redis_connection
-from exponent_server_sdk import PushClient
+from exponent_server_sdk import PushClient, PushTicket
 
 from .models import DeviceToken
 
@@ -127,7 +127,11 @@ def collect_receipts():
                 if not rows:
                     continue
                 try:
-                    receipts = client.check_receipts_multiple(list(rows))
+                    tickets = [
+                        PushTicket(push_message=None, status='ok', message=None, details=None, id=ticket_id)
+                        for ticket_id in rows
+                    ]
+                    receipts = {receipt.id: receipt for receipt in client.check_receipts_multiple(tickets)}
                 except Exception:
                     logger.warning('Push receipt provider unavailable')
                     continue

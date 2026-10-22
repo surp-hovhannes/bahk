@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import override_settings
+from exponent_server_sdk import PushTicket
 
 from events.models import Event, EventType
 from notifications.models import DeviceToken
@@ -36,7 +37,27 @@ class ReceiptTests(BaseTestCase):
     def pending(self, receipt):
         self.redis.zrangebyscore.side_effect = [[b'ticket'], []]
         self.redis.mget.return_value = [json.dumps(self.row)]
-        self.client.check_receipts_multiple.return_value = {'ticket': receipt}
+        self.client.check_receipts_multiple.return_value = [SimpleNamespace(id='ticket', **receipt)] if receipt else []
+
+    def test_sdk_ticket_inputs_and_receipt_ids(self):
+        self.pending({'status': 'ok'})
+
+        def check_receipts(tickets):
+            self.assertEqual(len(tickets), 1)
+            self.assertIsInstance(tickets[0], PushTicket)
+            self.assertEqual(tickets[0].id, 'ticket')
+            # Results need not follow request order; unrelated IDs must be ignored.
+            return [
+                SimpleNamespace(id='unmatched', status='error', details={'error': 'DeviceNotRegistered'}),
+                SimpleNamespace(id='ticket', status='ok', details=None),
+            ]
+
+        self.client.check_receipts_multiple.side_effect = check_receipts
+        collect_receipts()
+        self.assertEqual(self.events().get().data['ticket_id'], 'ticket')
+        self.redis.delete.assert_called_once_with(_key('ticket'))
+        self.device.refresh_from_db()
+        self.assertTrue(self.device.is_active)
 
     def test_ok_once_even_after_cache_delete_failure(self):
         self.pending({'status': 'ok'})
@@ -113,6 +134,8 @@ class ReceiptTests(BaseTestCase):
         self.assertEqual(self.client.check_receipts_multiple.call_count, 5)
         for call in self.client.check_receipts_multiple.call_args_list:
             self.assertLessEqual(len(call.args[0]), 1000)
+            self.assertEqual([ticket.id for ticket in call.args[0]], ids)
+            self.assertTrue(all(isinstance(ticket, PushTicket) for ticket in call.args[0]))
         self.redis.delete.assert_not_called()
         self.assertNotIn('private token content', str(logs.output))
 
