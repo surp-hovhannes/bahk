@@ -275,7 +275,9 @@ def _build_report(as_of, min_cell, granularity='week', signups_before=None):
         cohorts.append({**cohort_key, 'population': _cell(population, min_cell),
                         'timezone_fallback': _metric(counts['fallback'], population, None, min_cell),
                         'metrics': metrics, 'first_action_within_7d': first_actions})
-    freshness = analytics_events().filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
+    freshness = analytics_events().exclude(
+        event_type__code__in=EventType.NOTIFICATION_LIFECYCLE_CODES,
+    ).filter(timestamp__lt=end).aggregate(latest=Max('timestamp'))['latest']
     # One row's exact timestamp could identify its author; the hour is enough.
     freshness = freshness and freshness.replace(minute=0, second=0, microsecond=0)
     return {'as_of': end.isoformat(), 'signups_before': signup_end.isoformat() if signup_end else None,
