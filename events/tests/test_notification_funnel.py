@@ -53,6 +53,10 @@ class NotificationFunnelTests(TestCase):
             if i < 10:
                 self.event(EventType.NOTIFICATION_RECEIPT, at=self.at + timedelta(minutes=2),
                            notif_id=str(i), ticket_id=str(i), receipt_status='ok')
+        # Keep the accepted-ticket numerator and its complement above k.
+        for _ in range(20):
+            self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast',
+                       outcome='provider_rejected')
         report = self.report()['groups']
         self.assertEqual(report['daily_fast']['matched_opens']['count'], 10)
         self.assertEqual(report['unclassified']['unmatched_opens']['count'], 10)
@@ -117,3 +121,23 @@ class NotificationFunnelTests(TestCase):
             build_report(date(2026, 3, 12), since_days=401)
         with self.assertRaises(ValueError):
             build_report(date(2026, 3, 12), min_cell=9)
+
+    def test_sparse_kind_totals_hide_all_dependent_denominators(self):
+        for i in range(40):
+            self.event(EventType.NOTIFICATION_SEND, self.user, notif_id=str(i), ticket_id=str(i),
+                       kind='daily_fast', outcome='provider_accepted' if i < 20 else 'provider_rejected')
+            if i < 10:
+                self.event(EventType.NOTIFICATION_RECEIPT, notif_id=str(i), ticket_id=str(i),
+                           receipt_status='ok')
+        for _ in range(5):
+            self.event(EventType.NOTIFICATION_SEND, self.user, kind='unknown', outcome='provider_rejected')
+        groups = self.report()['groups']
+        for group in ('daily_fast', 'overall'):
+            self.assertEqual(groups[group]['attempted_tokens']['count'], 'suppressed')
+            for key in ('provider_accepted', 'provider_rejected', 'accepted_tickets', 'receipts_received',
+                        'receipt:ok'):
+                with self.subTest(group=group, key=key):
+                    self.assertEqual(groups[group][key]['numerator'], 'suppressed')
+                    self.assertEqual(groups[group][key]['mature_denominator'], 'suppressed')
+                    self.assertIsNone(groups[group][key]['percent'])
+                    self.assertIsNone(groups[group][key]['wilson_95'])

@@ -80,7 +80,9 @@ Wilson 95% intervals and complement suppression: numerator, denominator and
 complement must all meet k. If a count is hidden, its denominator is also hidden.
 Raw counts below k (including zero) are suppressed. Sparse additive breakdowns
 receive conservative complementary suppression, including their totals; sparse
-kind cells also hide overall totals. Prompt stages are conservatively hidden
+kind cells also hide overall totals. Suppression propagates across kind
+partitions and every metric that exposes a hidden total as its denominator,
+including dependent ticket and receipt totals, until no further cells change. Prompt stages are conservatively hidden
 together when a positive cell is below k. This intentionally reduces utility for sparse
 data. `mature_denominator` is the reused cohort output key; it means the eligible
 metric denominator here, not a fully matured observation window.

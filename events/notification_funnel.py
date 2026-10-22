@@ -197,6 +197,7 @@ def _build_report(as_of, since_days, minimum):
     keys += [f'destination:{d}:{r}' for d in sorted(NOTIFICATION_DESTINATIONS)
              for r in sorted(NOTIFICATION_DESTINATION_RESULTS)]
     output = {}
+    metric_denominators = {}
     for group in groups:
         counts = counters[group]
         metrics = {}
@@ -208,6 +209,7 @@ def _build_report(as_of, since_days, minimum):
                 denominator = 'receipts_received'
             elif key.startswith('destination:'):
                 denominator = 'destination_events'
+            metric_denominators[key] = denominator
             # Raw opens deliberately have no send denominator or percentage.
             if denominator is None or key == 'attempted_tokens':
                 metrics[key] = {'count': counts[key] if counts[key] >= minimum else 'suppressed'}
@@ -268,6 +270,25 @@ def _build_report(as_of, since_days, minimum):
                not isinstance(output[group][key].get('count', output[group][key].get('numerator')), int)
                for group in groups[1:]):
             hide(output['overall'][key])
+    # A hidden total must stay hidden wherever it occurs as a denominator.
+    # Iterate because hiding a dependent numerator can hide another kind total,
+    # whose denominators in turn need suppression (tickets -> receipt coverage).
+    changed = True
+    while changed:
+        before = repr(output)
+        for group, metrics in output.items():
+            for key, denominator in metric_denominators.items():
+                if denominator in metrics:
+                    total = metrics[denominator]
+                    if not isinstance(total.get('count', total.get('numerator')), int):
+                        hide(metrics[key])
+        for key in keys:
+            if any(counters[group][key] > 0 and not isinstance(
+                    output[group][key].get('count', output[group][key].get('numerator')), int)
+                    for group in groups[1:]):
+                for group in groups:
+                    hide(output[group][key])
+        changed = before != repr(output)
     # Prompt rows are event distributions, not linked user transitions.
     for trigger in NOTIFICATION_PROMPT_TRIGGERS:
         cells = [cell for key, cell in prompts.items() if key.startswith(trigger + ':')]
