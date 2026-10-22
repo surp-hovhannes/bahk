@@ -11,9 +11,10 @@ from unittest.mock import patch
 import redis
 from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
-from django.core.cache import cache
+from django.core.cache import CacheHandler, cache
 from django.test import override_settings
 from django.utils import timezone
+from django_redis.pool import ConnectionFactory
 from exponent_server_sdk import PushClient, PushTicket
 from rest_framework.test import APIClient
 
@@ -315,19 +316,33 @@ class ReceiptTests(BaseTestCase):
                 'CONNECTION_POOL_KWARGS': {'ssl_cert_reqs': None},
             },
         }}
-        with override_settings(CACHES=config), patch.object(receipts, 'CacheHandler') as handler:
-            # Bypass memoization so this test cannot replace the shared test cache.
-            receipts._receipt_cache.__wrapped__()
-        isolated = handler.call_args.args[0]['default']
-        self.assertEqual(isolated['KEY_PREFIX'], 'bahk')
-        options = isolated['OPTIONS']
-        self.assertEqual(options['CONNECTION_POOL_CLASS'], 'redis.ConnectionPool')
-        self.assertNotIn('CONNECTION_POOL_CLASS_KWARGS', options)
-        pool = options['CONNECTION_POOL_KWARGS']
-        self.assertEqual(pool['socket_timeout'], receipts.REDIS_TIMEOUT)
-        self.assertEqual(pool['socket_connect_timeout'], receipts.REDIS_TIMEOUT)
-        self.assertIsNone(pool['ssl_cert_reqs'])
-        self.assertFalse(pool['retry_on_timeout'])
+        # Pool construction is lazy: get_client creates real pools without I/O.
+        # Test both startup orders against empty registries with the same URL.
+        for receipts_first in (False, True):
+            with self.subTest(receipts_first=receipts_first), override_settings(CACHES=config), patch.object(
+                ConnectionFactory, '_pools', {},
+            ), patch.object(receipts.ReceiptConnectionFactory, '_pools', {}):
+                app_cache = CacheHandler(config)['default']
+                receipt_cache = receipts._receipt_cache.__wrapped__()
+                ordered = (receipt_cache, app_cache) if receipts_first else (app_cache, receipt_cache)
+                for backend in ordered:
+                    backend.client.get_client(write=True)
+                app_pool = app_cache.client.get_client(write=True).connection_pool
+                pool = receipt_cache.client.get_client(write=True).connection_pool
+                self.addCleanup(app_pool.disconnect)
+                self.addCleanup(pool.disconnect)
+                self.assertIsNot(pool, app_pool)
+                self.assertIs(type(app_pool), redis.BlockingConnectionPool)
+                self.assertEqual(app_pool.timeout, 20)
+                self.assertIs(type(pool), redis.ConnectionPool)
+                self.assertEqual(pool.max_connections, 8)
+                self.assertEqual(pool.connection_kwargs['socket_timeout'], receipts.REDIS_TIMEOUT)
+                self.assertEqual(pool.connection_kwargs['socket_connect_timeout'], receipts.REDIS_TIMEOUT)
+                self.assertIsNone(pool.connection_kwargs['ssl_cert_reqs'])
+                self.assertFalse(pool.connection_kwargs['retry_on_timeout'])
+                self.assertNotEqual(app_pool.connection_kwargs.get('socket_timeout'), receipts.REDIS_TIMEOUT)
+                self.assertNotEqual(app_pool.connection_kwargs.get('socket_connect_timeout'), receipts.REDIS_TIMEOUT)
+                self.assertEqual(receipt_cache.make_key('ticket'), app_cache.make_key('ticket'))
         self.assertNotIn('SOCKET_TIMEOUT', config['default']['OPTIONS'])
 
     def test_flag_off_mapping_never_becomes_telemetry(self):

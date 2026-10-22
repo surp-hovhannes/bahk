@@ -13,6 +13,7 @@ from django.core.cache import cache
 from django.core.cache import CacheHandler
 from django.db import transaction
 from django.utils import timezone
+from django_redis.pool import ConnectionFactory
 from exponent_server_sdk import PushClient, PushTicket
 from redis.exceptions import LockError
 from redis.backoff import NoBackoff
@@ -38,6 +39,12 @@ _warning_lock = Lock()
 _next_capacity_warning = 0
 
 
+class ReceiptConnectionFactory(ConnectionFactory):
+    # django-redis keys pools by URL across cache handlers. Own the registry so
+    # the shared app cache and receipt ledger cannot inherit each other's pool.
+    _pools = {}
+
+
 @lru_cache(maxsize=1)
 def _receipt_cache():
     """Separate pool, same keys/serializer/TLS; never alter the app cache pool."""
@@ -45,6 +52,7 @@ def _receipt_cache():
     if config['BACKEND'] == 'django_redis.cache.RedisCache':
         options = config.setdefault('OPTIONS', {})
         options.update(SOCKET_CONNECT_TIMEOUT=REDIS_TIMEOUT, SOCKET_TIMEOUT=REDIS_TIMEOUT,
+                       CONNECTION_FACTORY='notifications.receipts.ReceiptConnectionFactory',
                        CONNECTION_POOL_CLASS='redis.ConnectionPool')
         # Nonblocking pool exhaustion and no implicit redis-py retries.
         options.pop('CONNECTION_POOL_CLASS_KWARGS', None)
