@@ -526,6 +526,8 @@ class NotificationFunnelTests(TestCase):
                     user = self.user if repeated else self.person(f'floor-{i}')
                     outcome = 'provider_accepted' if i < 30 else 'provider_rejected'
                     if sparse == 'category' and repeated:
+                        # Deliberate legacy data: attempts still count, but no
+                        # recognized outcome does. Its remainder has one user.
                         outcome = 'legacy_unknown'
                     data = dict(notif_id=str(i), kind='daily_fast', outcome=outcome)
                     if not (sparse == 'ticketless' and repeated):
@@ -583,6 +585,9 @@ class NotificationFunnelTests(TestCase):
                    ticket_id='shared', receipt_status='ok')
         self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast',
                    notif_id='ticketless', outcome='provider_accepted')
+        # Deliberate legacy categories exercise the internal remainders. Neither
+        # drops the row: unknown outcomes still count as attempts, and unknown
+        # entries still count as opens. Open correlation needs no ticket_id.
         self.event(EventType.NOTIFICATION_SEND, self.user, kind='daily_fast',
                    outcome='legacy_unknown')
         self.event(EventType.NOTIFICATION_OPENED, self.user, notif_id='ticketless', entry='legacy_unknown')
@@ -597,12 +602,18 @@ class NotificationFunnelTests(TestCase):
             report = self.report()
         values = graphs[0].values
         # Fixture-derived expectations inspect counts, never contributor metadata.
+        # Five in-window sends fold into other_kinds (one contributor). Both
+        # duplicate sends count as tickets, but only the receipt at +3s joins
+        # the last send at +2s; +4s is deduplicated. The separate notif_id joins
+        # independently. The pre-window send supplies no correlation state.
         for key, expected in (('attempted_tokens', 5), ('provider_accepted', 4),
                               ('accepted_tickets', 3), ('receipts_received', 2),
                               ('matched_opens', 1), ('accepted_without_ticket', 1)):
             self.assertEqual(values[('other_kinds', key)], expected)
         self.assertEqual(values[('other_kinds', 'remainder', 0)], 1)
-        self.assertEqual(values[('other_kinds', 'remainder', 5)], 1)
+        # Every open is matched or unmatched, even with an unknown entry.
+        self.assertEqual(values[('other_kinds', 'remainder', 5)], 0)
+        self.assertEqual(values[('other_kinds', 'remainder', 6)], 1)
         self.assertEqual(values[('unclassified', 'unmatched_opens')], 1)
         self.assertEqual(values[('unclassified', 'destination_events')], 1)
         self.assert_public_oracle(report)
