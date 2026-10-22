@@ -15,6 +15,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
+from events import notification_funnel
 from events.growth_cohorts import build_report as cohort_report
 from events.models import Event, EventType
 from events.notification_funnel import _protect_output, _release, build_report
@@ -504,6 +505,9 @@ class NotificationFunnelTests(TestCase):
         self.assertIn('Minimum cell: 10', out.getvalue())
         self.assertIn('  attempted_tokens:', out.getvalue())
         self.assertNotIn('"groups":', out.getvalue())
+
+    def test_lifecycle_row_limit(self):
+        self.assertEqual(notification_funnel.MAX_LIFECYCLE_ROWS, 200_000)
 
     def test_row_guard_inclusive_boundary(self):
         # Small patched limit exercises the same > comparison without 200k rows.

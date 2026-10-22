@@ -125,19 +125,28 @@ join receipts. Pre-window sends cannot join receipts, opens or destinations.
 Unknown send outcomes and open entries contribute to internal category remainders
 and receive disclosure protection.
 
-## Known Redis configuration item
+## Dependency notes
 
 `requirements.txt` pins redis-py to 8.1.0, matching the supplied Render production
 resolution (django-redis 5.4.0, exponent_server_sdk 2.2.0, hiredis 2.3.2, Celery
 5.6.3). The production receipt pool reportedly initialized and pinged successfully
 with this version. No receipt pool behavior is changed here.
 
-The isolated receipt pool uses `Retry(NoBackoff(), 0)`, `retry_on_timeout=False`,
-and django-redis's `OPTIONS.CONNECTION_POOL_KWARGS` for connection options. A
-source-level check of redis-py 8.1.0 remains pending: this offline follow-up had
-no installed Redis packages or matching source in the searched pip/uv caches,
-and network access and installs were prohibited. The reported production ping
-is runtime evidence, not a substitute for that source review.
+The redis-py 8.1.0 wheel was source-checked: `ConnectionPool`, `from_url`,
+`retry`/`retry_on_timeout`, `max_connections`, `Retry`/`NoBackoff`, and `LockError`
+are present. It requires Python >=3.10; django-redis 5.4.0 requires
+`redis!=4.0.0,!=4.0.1,>=3`. Production runs redis-py 8.1.0. The isolated receipt
+pool uses `Retry(NoBackoff(), 0)`, `retry_on_timeout=False`, and django-redis's
+`OPTIONS.CONNECTION_POOL_KWARGS` for connection options.
+
+With hiredis==2.3.2, redis-py 8.1.0 silently falls back to its pure-Python parser:
+`HIREDIS_AVAILABLE` requires hiredis >=3.2.0. The hiredis pin is therefore
+currently inert and harmless. Kombu declares `redis<6.5` only in its `redis`
+extra; the bare Celery requirement does not enforce it. The production Celery
+Redis broker already runs outside Kombu's declared range, and pinning redis-py
+freezes that state. A future Celery/Kombu upgrade should re-check compatibility.
+
+## Known Redis configuration item
 
 The default cache's `OPTIONS.CONNECTION_POOL_CLASS_KWARGS` in `bahk/settings.py`
 (`max_connections`/`timeout`) is dead configuration under django-redis 5.4.0;
