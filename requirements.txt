@@ -8,6 +8,9 @@ gunicorn
 dj-database-url
 psycopg2-binary
 djangorestframework_simplejwt
+# RS256/ES256 for Sign in with Apple/Google verification and Fernet for the
+# stored Apple revocation token (issue #598). PyJWT comes with SimpleJWT.
+cryptography>=44
 django-storages
 Pillow
 boto3

@@ -760,22 +760,28 @@ def track_user_account_creation(sender, instance, created, **kwargs):
 
     if not created:
         return  # Only track new profile creation, not updates
-        
+
     try:
+        data = {
+            'user_id': instance.user.id,
+            'username': instance.user.username,
+            'email': instance.user.email,
+            'profile_id': instance.id,
+            'church_id': instance.church.id if instance.church else None,
+            'church_name': instance.church.name if instance.church else None,
+            'name': instance.name,
+        }
+        # Set by hub.services.accounts.create_user_with_profile:
+        # "password", "apple" or "google". Absent for admin/fixture profiles.
+        signup_method = getattr(instance, 'signup_method', None)
+        if signup_method:
+            data['method'] = signup_method
         Event.create_event(
             event_type_code=EventType.USER_ACCOUNT_CREATED,
             user=instance.user,
             target=instance,  # The profile is the target of the account creation event
             description=f"User {instance.user.username} completed account creation",
-            data={
-                'user_id': instance.user.id,
-                'username': instance.user.username,
-                'email': instance.user.email,
-                'profile_id': instance.id,
-                'church_id': instance.church.id if instance.church else None,
-                'church_name': instance.church.name if instance.church else None,
-                'name': instance.name,
-            }
+            data=data,
         )
         logger.info(f"Tracked USER_ACCOUNT_CREATED event: {instance.user.username}")
         

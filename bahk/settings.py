@@ -355,6 +355,41 @@ SIMPLE_JWT = {
     )
 }
 
+# Sign in with Apple / Google (issue #598; contract in docs/SOCIAL_AUTH.md).
+# The master switch defaults OFF: every social endpoint answers 503
+# `social_auth_unavailable` and GET /api/auth/social/config/ tells the app to hide
+# its buttons. A provider is live only when the master switch, its own switch and
+# its audience allowlist are all set.
+SOCIAL_AUTH_ENABLED = config('SOCIAL_AUTH_ENABLED', default=False, cast=bool)
+SOCIAL_AUTH_APPLE_ENABLED = config('SOCIAL_AUTH_APPLE_ENABLED', default=True, cast=bool)
+SOCIAL_AUTH_GOOGLE_ENABLED = config('SOCIAL_AUTH_GOOGLE_ENABLED', default=True, cast=bool)
+# Accepted ID-token `aud` values. Apple: the iOS bundle ID. Google: the single web
+# OAuth client ID the app requests ID tokens for (decision recorded in #598);
+# iOS/Android client IDs are deliberately not accepted.
+APPLE_ALLOWED_AUDIENCES = config('APPLE_ALLOWED_AUDIENCES', default='', cast=Csv())
+GOOGLE_ALLOWED_AUDIENCES = config('GOOGLE_ALLOWED_AUDIENCES', default='', cast=Csv())
+# Sign in with Apple key, used only to exchange the authorization code for a
+# refresh token and to revoke it at account deletion. APPLE_PRIVATE_KEY is the
+# .p8 PEM (literal "\n" escapes accepted). It is a secret: never log it.
+APPLE_TEAM_ID = config('APPLE_TEAM_ID', default='')
+APPLE_KEY_ID = config('APPLE_KEY_ID', default='')
+APPLE_PRIVATE_KEY = config('APPLE_PRIVATE_KEY', default='')
+# Fernet keys (comma separated, newest first) encrypting stored Apple refresh
+# tokens. Empty derives one key from SECRET_KEY; set an explicit key before
+# rotating SECRET_KEY or stored tokens can no longer be revoked.
+SOCIAL_AUTH_TOKEN_ENCRYPTION_KEYS = config('SOCIAL_AUTH_TOKEN_ENCRYPTION_KEYS', default='', cast=Csv())
+# Apple always binds the nonce. Google binds it only when the client SDK passes
+# one; when this is False a Google token without a nonce claim is accepted (a
+# token that carries one must still match).
+SOCIAL_AUTH_GOOGLE_REQUIRE_NONCE = config('SOCIAL_AUTH_GOOGLE_REQUIRE_NONCE', default=False, cast=bool)
+# Linking/unlinking a sign-in method requires an app sign-in this recent.
+SOCIAL_AUTH_REAUTH_MAX_AGE_SECONDS = config('SOCIAL_AUTH_REAUTH_MAX_AGE_SECONDS', default=900, cast=int)
+SOCIAL_AUTH_JWT_LEEWAY_SECONDS = config('SOCIAL_AUTH_JWT_LEEWAY_SECONDS', default=60, cast=int)
+SOCIAL_AUTH_HTTP_TIMEOUT_SECONDS = config('SOCIAL_AUTH_HTTP_TIMEOUT_SECONDS', default=5, cast=float)
+# Sign-in/link/unlink requests: per client IP when anonymous, per user otherwise.
+# Read at request time (hub.views.social_auth.SocialAuthThrottle).
+SOCIAL_AUTH_THROTTLE_RATE = config('SOCIAL_AUTH_THROTTLE_RATE', default='20/min')
+
 # path to backend for authenticating users by email
 AUTHENTICATION_BACKENDS = ["hub.auth.EmailBackend"]
 

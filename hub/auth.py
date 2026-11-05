@@ -6,7 +6,7 @@ from django.contrib.auth.backends import ModelBackend
 from django.core.exceptions import ObjectDoesNotExist
 
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 
 
 class EmailBackend(ModelBackend):
@@ -50,3 +50,18 @@ class SafeTokenRefreshSerializer(TokenRefreshSerializer):
             # TokenViewMixin turns TokenError into InvalidToken (401). It reads
             # e.args[0], so the detail argument is required.
             raise TokenError("User account no longer exists")
+
+
+class AuthTimeTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Password login that records when the user authenticated.
+
+    Identical to SimpleJWT's serializer apart from the ``auth_time`` claim, which
+    the social link/unlink endpoints use to require a recent sign-in. Token
+    lifetimes, refresh and validation are unchanged.
+    """
+
+    @classmethod
+    def get_token(cls, user):
+        from hub.services.accounts import add_auth_time
+
+        return add_auth_time(super().get_token(user))

@@ -31,7 +31,7 @@ from rest_framework_simplejwt.views import (
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
-from hub.auth import SafeTokenRefreshSerializer
+from hub.auth import AuthTimeTokenObtainPairSerializer, SafeTokenRefreshSerializer
 from rest_framework.views import APIView
 from rest_framework import status
 
@@ -86,6 +86,8 @@ class HealthCheckView(APIView):
 
 class TrackingTokenObtainPairView(TokenObtainPairView):
     """Subclass to emit a USER_LOGGED_IN event for JWT credentials."""
+    serializer_class = AuthTimeTokenObtainPairSerializer
+
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
