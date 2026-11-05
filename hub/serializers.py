@@ -12,7 +12,7 @@ from rest_framework import serializers
 from django.utils.translation import activate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from rest_framework_simplejwt.tokens import RefreshToken
+from hub.services.accounts import EmailAlreadyExists, create_user_with_profile, issue_tokens_for_user
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
@@ -134,26 +134,20 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        user = User.objects.create(
-            username=validated_data['email'],
-            email=validated_data['email'],
-        )
-        user.set_password(validated_data['password'])
-        user.save()
         profile = validated_data.pop('profile')
-        church = profile.pop('church')
-        name = profile.pop('name')
-        models.Profile.objects.create(user=user, name=name, church=church)
-
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
-        tokens = {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }
+        try:
+            user, _profile = create_user_with_profile(
+                username=validated_data['email'],
+                email=validated_data['email'],
+                password=validated_data['password'],
+                name=profile.pop('name'),
+                church=profile.pop('church'),
+            )
+        except EmailAlreadyExists:
+            raise serializers.ValidationError({"email": "user with this email already exists."}) from None
 
         # Add tokens to the response
-        user.tokens = tokens
+        user.tokens = issue_tokens_for_user(user)
         return user
 
     def to_representation(self, instance):

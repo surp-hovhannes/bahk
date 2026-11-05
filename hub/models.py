@@ -1577,3 +1577,81 @@ class PassageText(models.Model):
         if self.fetched_at is None:
             return True
         return self.fetched_at < (now or timezone.now()) - timedelta(days=max_age)
+
+
+class SocialIdentity(models.Model):
+    """A verified Sign in with Apple / Google identity linked to a Django user.
+
+    The durable key is ``(provider, provider_subject)``: the provider's stable,
+    never-reassigned ``sub`` claim. Email is mutable, can be relayed (Apple) or
+    absent on repeat sign-ins, so it is never used to find an account. A user has
+    at most one identity per provider. Deleting the user cascades the identity.
+
+    ``apple_refresh_token_encrypted`` exists for one purpose only: Apple requires
+    apps to revoke a user's Sign in with Apple tokens when the account is deleted
+    (App Store Review Guideline 5.1.1(v)). It holds Fernet ciphertext (see
+    ``hub.services.social_auth.crypto``) and is never logged or served. Google
+    stores no credential at all.
+    """
+
+    PROVIDER_APPLE = "apple"
+    PROVIDER_GOOGLE = "google"
+    PROVIDER_CHOICES = [
+        (PROVIDER_APPLE, "Apple"),
+        (PROVIDER_GOOGLE, "Google"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="social_identities",
+    )
+    provider = models.CharField(max_length=16, choices=PROVIDER_CHOICES)
+    provider_subject = models.CharField(
+        max_length=255,
+        help_text="The provider's stable subject identifier (the ID token 'sub' claim).",
+    )
+    email_at_link = models.EmailField(
+        blank=True,
+        default="",
+        help_text=(
+            "Diagnostic only: the email the provider asserted when this identity was "
+            "linked. Never used for lookup or matching."
+        ),
+    )
+    email_is_private_relay = models.BooleanField(
+        default=False,
+        help_text="Apple 'Hide My Email' relay address at link time (diagnostic only).",
+    )
+    apple_refresh_token_encrypted = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Encrypted Apple refresh token, kept only to revoke Sign in with Apple at "
+            "account deletion. Never displayed or logged."
+        ),
+    )
+    last_login_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "provider_subject"],
+                name="unique_social_identity_provider_subject",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "provider"],
+                name="unique_social_identity_per_user_provider",
+            ),
+        ]
+        verbose_name = "Social Identity"
+        verbose_name_plural = "Social Identities"
+
+    def __str__(self):
+        return f"{self.get_provider_display()} identity for user {self.user_id}"
+
+    @property
+    def has_apple_refresh_token(self) -> bool:
+        return bool(self.apple_refresh_token_encrypted)

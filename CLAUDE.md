@@ -375,6 +375,10 @@ Uses `python-decouple` for environment variables. Key variables in `.env`:
 - `BIBLE_API_KEY` (API.Bible text retrieval); see Key Features #6 for the spend-control
   vars: `READING_TEXT_MAX_AGE_DAYS`, `READING_REFRESH_LIMIT` (distinct passages, not
   readings), `READING_FETCH_DAILY_BUDGET`, `BIBLE_API_MONTHLY_BUDGET`
+- `SOCIAL_AUTH_ENABLED` (default off), `APPLE_ALLOWED_AUDIENCES`, `GOOGLE_ALLOWED_AUDIENCES`,
+  `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (secret) for Sign in with Apple/Google;
+  contract, error codes and runbook in `docs/SOCIAL_AUTH.md`. Check with
+  `python manage.py check_social_auth`
 - `SENTRY_DSN` (error monitoring)
 
 ### Celery Scheduled Tasks
@@ -556,6 +560,7 @@ Main API routes are in `bahk/urls.py` and individual app `urls.py` files:
 - `/api/events/` - Activity tracking and analytics
 - `/api/icons/` - Icon management
 - `/api/token/` - JWT authentication
+- `/api/auth/social/` - Sign in with Apple/Google, link/unlink (`docs/SOCIAL_AUTH.md`)
 
 ## Project Structure
 

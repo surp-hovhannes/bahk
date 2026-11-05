@@ -35,6 +35,13 @@ from .views.user import (
     DeleteAccountView,
 )
 from .views.church import ChurchListView, ChurchDetailView
+from .views.social_auth import (
+    SocialAuthConfigView,
+    SocialIdentityDetailView,
+    SocialIdentityListView,
+    SocialLinkView,
+    SocialSignInView,
+)
 from .views.readings import GetDailyReadingsForDate, ReadingContextFeedbackView
 from .views.feasts import (
     FeastAssignIconView,
@@ -86,6 +93,17 @@ urlpatterns = [
     path('password/reset/', PasswordResetView.as_view(), name='password_reset'),
     path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('account/delete/', DeleteAccountView.as_view(), name='account-delete'),
+
+    # Sign in with Apple / Google (docs/SOCIAL_AUTH.md)
+    path('auth/social/', SocialSignInView.as_view(), name='social-auth'),
+    path('auth/social/config/', SocialAuthConfigView.as_view(), name='social-auth-config'),
+    path('auth/social/link/', SocialLinkView.as_view(), name='social-auth-link'),
+    path('auth/social/identities/', SocialIdentityListView.as_view(), name='social-auth-identities'),
+    path(
+        'auth/social/identities/<int:pk>/',
+        SocialIdentityDetailView.as_view(),
+        name='social-auth-identity-detail',
+    ),
 
     # Fast endpoints
     path('fasts/', FastListView.as_view(), name='fast-list'),

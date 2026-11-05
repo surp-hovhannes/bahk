@@ -42,6 +42,7 @@ from hub.models import (
     Reading,
     ReadingContext,
     FastIntention,
+    SocialIdentity,
 )
 from hub.services.bible_api_service import BibleAPIService
 from hub.services.feast_contexts import (
@@ -1843,3 +1844,38 @@ class PassageTextAdmin(admin.ModelAdmin):
     @admin.display(description="Text")
     def text_preview(self, obj):
         return Truncator(obj.text).chars(80) if obj.text else "(empty)"
+
+
+
+@admin.register(SocialIdentity, site=admin.site)
+class SocialIdentityAdmin(admin.ModelAdmin):
+    """Read-only view of linked Apple/Google sign-ins (issue #598).
+
+    Identities are created only by verified sign-in or link requests. The
+    encrypted Apple refresh token is never shown; deleting an identity here does
+    not revoke it with Apple (use the app's unlink or account deletion for that).
+    """
+
+    list_display = ("id", "user", "provider", "email_is_private_relay", "has_apple_token", "created_at", "last_login_at")
+    list_filter = ("provider", "email_is_private_relay")
+    search_fields = ("user__email", "user__username", "user__id")
+    raw_id_fields = ("user",)
+    exclude = ("apple_refresh_token_encrypted",)
+    readonly_fields = (
+        "user",
+        "provider",
+        "provider_subject",
+        "email_at_link",
+        "email_is_private_relay",
+        "has_apple_token",
+        "last_login_at",
+        "created_at",
+        "updated_at",
+    )
+
+    @admin.display(boolean=True, description="Apple revocation token")
+    def has_apple_token(self, obj):
+        return obj.has_apple_refresh_token
+
+    def has_add_permission(self, request):
+        return False

@@ -15,6 +15,7 @@ from .bible_api_tasks import (
     refresh_all_reading_texts_task,
 )
 from .armenian_text_tasks import fetch_armenian_reading_text_task
+from .social_auth_tasks import revoke_apple_tokens_task
 from celery import shared_task
 
 @shared_task
@@ -38,5 +39,6 @@ __all__ = [
     'fetch_reading_text_task',
     'refresh_all_reading_texts_task',
     'fetch_armenian_reading_text_task',
+    'revoke_apple_tokens_task',
     'add'
 ]
