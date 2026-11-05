@@ -1852,8 +1852,8 @@ class SocialIdentityAdmin(admin.ModelAdmin):
     """Read-only view of linked Apple/Google sign-ins (issue #598).
 
     Identities are created only by verified sign-in or link requests. The
-    encrypted Apple refresh token is never shown; deleting an identity here does
-    not revoke it with Apple (use the app's unlink or account deletion for that).
+    encrypted Apple refresh token is never shown. Use the app's guarded unlink
+    or account deletion; individual and bulk admin deletion are disabled.
     """
 
     list_display = ("id", "user", "provider", "email_is_private_relay", "has_apple_token", "created_at", "last_login_at")
@@ -1878,4 +1878,10 @@ class SocialIdentityAdmin(admin.ModelAdmin):
         return obj.has_apple_refresh_token
 
     def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False

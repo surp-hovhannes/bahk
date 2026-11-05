@@ -18,7 +18,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from events.models import Event, EventType
-from hub.models import Profile, SocialIdentity
+from hub.models import PendingAppleRevocation, Profile, SocialIdentity
 from hub.services.accounts import AUTH_TIME_CLAIM, issue_tokens_for_user
 from hub.services.social_auth import accounts as social_accounts
 from hub.services.social_auth import providers
@@ -34,7 +34,7 @@ from hub.services.social_auth.errors import (
     ProviderUnavailable,
     SocialAuthUnavailable,
 )
-from hub.tasks.social_auth_tasks import revoke_apple_tokens_task
+from hub.tasks.social_auth_tasks import process_pending_apple_revocations_task, revoke_apple_tokens_task
 from hub.tests.social_auth_helpers import (
     APPLE_AUDIENCE,
     GOOGLE_AUDIENCE,
@@ -772,7 +772,8 @@ class AccountDeletionTests(SocialAuthTestMixin, TestCase):
         user_id = body["user"]["id"]
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {body['tokens']['access']}")
 
-        response = self.client.delete("/api/account/delete/")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete("/api/account/delete/")
         self.assertEqual(response.status_code, 204)
         self.assertFalse(User.objects.filter(pk=user_id).exists())
         self.assertFalse(SocialIdentity.objects.exists())
@@ -808,21 +809,24 @@ class RevocationTaskTests(SocialAuthTestMixin, TestCase):
 
     def test_transient_failure_retries_only_the_failed_token(self):
         self.apple_client.fail_revoke = [None, AppleTokenError("http_503", retryable=True)]
-        with mock.patch.object(revoke_apple_tokens_task, "retry", side_effect=RuntimeError("retry")) as retry:
-            with self.assertRaises(RuntimeError):
-                revoke_apple_tokens_task.apply(args=[[self.ciphertext("a"), self.ciphertext("b")]], throw=True)
-        self.assertEqual(len(retry.call_args.kwargs["args"][0]), 1)
-        self.assertEqual(decrypt_payload(retry.call_args.kwargs["args"][0][0])["refresh_token"], "b")
+        result = revoke_apple_tokens_task.apply(args=[[self.ciphertext("a"), self.ciphertext("b")]]).get()
+        self.assertEqual(result, {"revoked": 1, "deferred": 1})
+        pending = PendingAppleRevocation.objects.get()
+        self.assertEqual(decrypt_payload(pending.token_encrypted)["refresh_token"], "b")
+        self.assertEqual(pending.attempts, 1)
+        self.assertEqual(process_pending_apple_revocations_task(), {"revoked": 0, "deferred": 0})
 
-    def test_undecryptable_token_is_skipped(self):
+    def test_undecryptable_token_is_retained(self):
         result = revoke_apple_tokens_task.apply(args=[["not-a-ciphertext"]]).get()
-        self.assertEqual((result["revoked"], result["failed"]), (0, 1))
+        self.assertEqual(result, {"revoked": 0, "deferred": 1})
+        self.assertEqual(PendingAppleRevocation.objects.get().last_error, "undecryptable_token")
 
     @override_settings(APPLE_PRIVATE_KEY="")
-    def test_unconfigured_key_logs_and_drops(self):
+    def test_unconfigured_key_retains_pending_work(self):
         result = revoke_apple_tokens_task.apply(args=[[self.ciphertext()]]).get()
-        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result, {"revoked": 0, "deferred": 1})
         self.assertEqual(self.apple_client.revoked, [])
+        self.assertEqual(PendingAppleRevocation.objects.get().last_error, "apple_key_not_configured")
 
 
 class ExistingAuthUnaffectedTests(TestCase):

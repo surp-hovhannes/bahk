@@ -201,3 +201,45 @@ class SocialAuthPostgresRaceTests(SocialAuthTestMixin, TransactionTestCase):
         self.assertEqual(confirmed.status_code, 200, confirmed.content)
         login = client.post("/api/token/", {"username": email, "password": password}, format="json")
         self.assertEqual(login.status_code, 200, login.content)
+
+
+@skipUnless(connection.vendor == "postgresql", "Requires real row locks")
+class AppleRevocationPostgresTests(SocialAuthTestMixin, TransactionTestCase):
+    def test_overlapping_workers_only_revoke_once(self):
+        from threading import Event
+        from unittest.mock import patch
+        from django.test import override_settings
+        from hub.models import PendingAppleRevocation
+        from hub.services.social_auth.crypto import encrypt_payload
+        from hub.services.social_auth.revocation import persist_revocations
+        from hub.tasks.social_auth_tasks import process_pending_apple_revocations_task
+
+        ids = persist_revocations([encrypt_payload({"client_id": "test-client", "refresh_token": "test-token"})])
+        entered, release = Event(), Event()
+
+        def revoke(*args, **kwargs):
+            entered.set()
+            if not release.wait(timeout=10):
+                raise AssertionError("Worker did not release")
+
+        def worker():
+            try:
+                return process_pending_apple_revocations_task(ids)
+            finally:
+                connection.close()
+
+        with (
+            override_settings(APPLE_TEAM_ID="TEAM", APPLE_KEY_ID="KEY", APPLE_PRIVATE_KEY="configured"),
+            patch.object(self.apple_client, "revoke_refresh_token", side_effect=revoke) as remote,
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            first = pool.submit(worker)
+            try:
+                self.assertTrue(entered.wait(timeout=10))
+                second = pool.submit(worker)
+                self.assertEqual(second.result(timeout=10), {"revoked": 0, "deferred": 0})
+            finally:
+                release.set()
+            self.assertEqual(first.result(timeout=10), {"revoked": 1, "deferred": 0})
+            self.assertEqual(remote.call_count, 1)
+        self.assertFalse(PendingAppleRevocation.objects.exists())
