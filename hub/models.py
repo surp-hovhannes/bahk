@@ -1655,3 +1655,21 @@ class SocialIdentity(models.Model):
     @property
     def has_apple_refresh_token(self) -> bool:
         return bool(self.apple_refresh_token_encrypted)
+
+
+class PendingAppleRevocation(models.Model):
+    """Encrypted revocation work that survives account/identity deletion.
+
+    Deliberately has no user FK or identifying metadata. Only a successful
+    revocation removes the row; failures retain the credential for recovery.
+    """
+
+    token_encrypted = models.TextField()
+    ciphertext_digest = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    next_attempt_at = models.DateTimeField(default=timezone.now, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=32, blank=True, default="")
+
+    def __str__(self):
+        return f"Pending Apple revocation {self.pk}"

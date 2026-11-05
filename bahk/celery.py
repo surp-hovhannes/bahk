@@ -58,6 +58,11 @@ app.autodiscover_tasks()
 
 # Configure scheduled tasks with Sentry Cron monitoring
 app.conf.beat_schedule = {
+    'retry-pending-apple-revocations': {
+        'task': 'hub.tasks.social_auth_tasks.process_pending_apple_revocations_task',
+        'schedule': crontab(minute='*'),
+        'options': {'sentry': {'monitor_slug': 'pending-apple-revocations'}},
+    },
     'collect-push-receipts': {
         'task': 'notifications.tasks.collect_push_receipts_task',
         'schedule': crontab(minute='*/15'),

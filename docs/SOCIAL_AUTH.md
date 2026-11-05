@@ -18,7 +18,7 @@ deletion are unchanged. Email/password keeps working indefinitely.
 | Sign-in, link and unlink rules | `hub/services/social_auth/accounts.py` |
 | Apple code exchange + revocation client | `hub/services/social_auth/apple.py` |
 | Encryption of the stored Apple refresh token | `hub/services/social_auth/crypto.py` |
-| Revocation task | `hub/tasks/social_auth_tasks.py` |
+| Durable revocation work and worker | `PendingAppleRevocation`, `hub/services/social_auth/revocation.py`, `hub/tasks/social_auth_tasks.py` |
 | Endpoints | `hub/views/social_auth.py` |
 | Config check | `python manage.py check_social_auth [--fetch-jwks]` |
 | Tests | `hub/tests/test_social_auth.py`, `hub/tests/test_social_auth_postgres.py` |
@@ -179,11 +179,37 @@ Required by App Store Review Guideline 5.1.1(v) (decision 8 on #598).
 - When `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` are set, the backend exchanges it
   (ES256 client secret, 5-minute lifetime) and stores the refresh token Fernet-encrypted with its
   client ID. Without the key the exchange is skipped and logged; sign-in still succeeds.
-- Account deletion and Apple unlink enqueue `revoke_apple_tokens_task` with the **ciphertext**;
-  plaintext exists only in the worker during the call. Transient failures retry with backoff;
-  `invalid_grant` counts as already revoked.
-- Exchange failures never fail sign-in; revocation failures never block deletion. Both log Apple's
-  short error code only.
+- A `SocialIdentity` pre-delete signal saves its encrypted credential in `PendingAppleRevocation`
+  in the same transaction as deletion. This covers account deletion, unlink, and admin user/bulk
+  cascades. No user FK, email, name, or provider subject is retained in the pending row. If saving
+  that row fails, deletion rolls back; losing the only revocation credential is never allowed.
+- After commit, a best-effort task wakeup carries row IDs only. A broker outage leaves the row
+  intact and never runs inline retries. Beat scans due rows every minute, at most 50 per batch,
+  independently of `SOCIAL_AUTH_ENABLED`. The worker tolerates starting before migration `0074`.
+- Workers lock each pending row while calling Apple, so overlapping deliveries do not both
+  process it. Only confirmed success (including `invalid_grant`/`invalid_token`) deletes the row.
+  Transient failures back off from one minute to at most one hour, without a retry-count cutoff.
+  Configuration, rejected-token and decryption failures retain the credential and retry daily.
+  Failures record fixed reason codes, never token contents or raw exception messages.
+- The legacy `revoke_apple_tokens_task(ciphertexts)` remains registered for queued messages from
+  the previous release; it persists them before attempting revocation.
+- Exchange failures still do not fail sign-in. Provider/broker revocation failures do not block
+  account deletion once the encrypted work is durably stored.
+- The SocialIdentity admin is view-only: add, change, individual delete and bulk delete are
+  disabled. Use the guarded unlink/account-deletion endpoints for sign-in method removal.
+
+### Revocation operations and data preservation
+
+- Read-only aggregate status: `python manage.py process_apple_revocations --status`.
+- Process a due batch manually: `python manage.py process_apple_revocations --limit 50`.
+  This calls Apple and does not require the social-auth flag to be enabled.
+- Configure the Apple key and encryption keys consistently on web and worker. Keep beat running
+  for recovery if the initial wakeup is lost. Investigate nonzero failed/pending counts and fixed
+  `apple_revocation_pending` reason codes; fix credentials or restore the correct encryption key.
+- Migration `0074` only creates the pending table; it does not alter users or existing identity
+  credentials. Keep both `0073` and `0074` applied while identities or pending revocations exist.
+  Back up the database and retain the encryption keys before any future schema rollback. Never
+  reverse `0074` to clear errors: that destroys the only remaining credentials for deleted users.
 
 ## Settings
 
@@ -243,6 +269,12 @@ off except for the validation window, or stand up a staging service first; recor
   next config fetch; existing sessions keep working because they are ordinary SimpleJWT tokens.
   Social-only users cannot start a new session while the switch is off; they can still set a
   password through "Forgot password" when their account has an email.
-- **Code:** reverting the release is safe; the `SocialIdentity` table is additive and no existing
-  credential or row was modified. Leave the table in place (it holds the Apple tokens needed for
-  revocation) rather than reversing migration `0073`.
+- **Use the feature flag as the supported rollback.** Keep the current models, deletion signal,
+  pending-revocation worker and beat schedule deployed so existing accounts can be deleted and
+  outstanding Apple cleanup can finish with social sign-in off.
+- **Do not deploy the pre-social-auth code over a populated SocialIdentity table.** Its ORM does
+  not know that relationship, and PostgreSQL blocks user deletion with a foreign-key error.
+  Likewise, reverting the durable worker leaves pending work unprocessed. A code rollback needs
+  a separately reviewed compatible model/deletion/revocation path; it is not part of this release.
+- Preserve both tables and the encryption keys. Do not reverse migrations `0073`/`0074` while
+  either table contains data; reversing them discards identity or revocation credentials.

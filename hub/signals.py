@@ -218,3 +218,16 @@ def handle_icon_tags_change(sender, instance, action, **kwargs):
     """Invalidate feast API cache entries when serialized icon tags change."""
     if isinstance(instance, Icon) and action in ("post_add", "post_remove", "post_clear"):
         invalidate_feast_api_cache_for_icon(instance)
+
+
+@receiver(pre_delete, sender="hub.SocialIdentity")
+def preserve_deleted_apple_identity(sender, instance, using, **kwargs):
+    """The collector's transaction atomically saves revocation before deletion.
+
+    This also covers user cascades and bulk deletion, not just the API views.
+    Failure to persist must roll back deletion instead of losing the token.
+    """
+    if instance.provider == "apple" and instance.apple_refresh_token_encrypted:
+        from hub.services.social_auth.revocation import preserve_revocations
+
+        preserve_revocations([instance.apple_refresh_token_encrypted], using=using)

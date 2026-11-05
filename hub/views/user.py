@@ -1,5 +1,3 @@
-import logging
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User, Group
 from rest_framework import viewsets, permissions, generics
@@ -14,10 +12,6 @@ from django.conf import settings
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
-
-from hub.services.social_auth.accounts import apple_ciphertexts_for, enqueue_apple_revocation
-
-logger = logging.getLogger(__name__)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -123,21 +117,9 @@ class DeleteAccountView(APIView):
     def delete(self, request):
         user = request.user
         try:
-            # Sign in with Apple tokens must be revoked when the account goes
-            # (App Store Review Guideline 5.1.1(v)). Collect them, still
-            # encrypted, before the cascade removes the identities.
-            apple_tokens = apple_ciphertexts_for(user)
-            user_id = user.pk
-            # Delete the user account
+            # The SocialIdentity pre-delete signal preserves pending Apple
+            # revocations in the same transaction as the user cascade.
             user.delete()
-            if apple_tokens:
-                try:
-                    enqueue_apple_revocation(apple_tokens)
-                except Exception:
-                    logger.exception(
-                        "social_auth.apple_revocation_enqueue_failed",
-                        extra={"user_id": user_id},
-                    )
             return Response(
                 {"detail": "Account successfully deleted."},
                 status=status.HTTP_204_NO_CONTENT

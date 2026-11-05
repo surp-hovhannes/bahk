@@ -290,33 +290,5 @@ def unlink_identity(user, identity_id) -> None:
             audit("unlink_rejected_last_method", user_id=user.pk, provider=social.provider, identity_id=social.pk)
             raise LastSignInMethod(reason="last_sign_in_method")
         provider, social_id = social.provider, social.pk
-        ciphertext = social.apple_refresh_token_encrypted
         social.delete()
-        if ciphertext:
-            transaction.on_commit(lambda: enqueue_apple_revocation([ciphertext]))
     audit("identity_unlinked", user_id=user.pk, provider=provider, identity_id=social_id)
-
-
-def enqueue_apple_revocation(ciphertexts) -> None:
-    """Queue revocation of stored Apple refresh tokens (still encrypted)."""
-    ciphertexts = [c for c in ciphertexts if c]
-    if not ciphertexts:
-        return
-    from hub.tasks.social_auth_tasks import revoke_apple_tokens_task
-
-    try:
-        revoke_apple_tokens_task.delay(ciphertexts)
-    except Exception:
-        # Broker down: revoke inline rather than lose the obligation.
-        logger.exception("social_auth.apple_revocation_enqueue_failed")
-        revoke_apple_tokens_task.apply(args=[ciphertexts])
-
-
-def apple_ciphertexts_for(user) -> list[str]:
-    return [
-        value
-        for value in SocialIdentity.objects.filter(user=user, provider=APPLE).values_list(
-            "apple_refresh_token_encrypted", flat=True
-        )
-        if value
-    ]
