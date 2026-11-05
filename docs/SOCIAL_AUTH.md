@@ -129,10 +129,13 @@ memory for that attempt only, and sends the raw value to the backend.
 
 - **Apple:** the app gives Apple `SHA-256(raw)` as lowercase hex; the token's `nonce` claim is that
   hash. The backend hashes the raw nonce and compares. Required.
-- **Google:** the app gives the SDK the raw nonce; the token's `nonce` claim is the raw value. When
-  the claim is present it must match. A token without a nonce claim is accepted unless
-  `SOCIAL_AUTH_GOOGLE_REQUIRE_NONCE=true` (the native Google SDK on Android does not bind a nonce;
-  see the app docs). Short expiry, audience, issuer and the replay guard still apply.
+- **Google:** when an SDK binds one, the token's `nonce` claim is the raw value and must match. The
+  app's Google package (`@react-native-google-signin/google-signin`, free "Original" API) cannot
+  bind a nonce on iOS or Android, so a Google token without a nonce claim is accepted unless
+  `SOCIAL_AUTH_GOOGLE_REQUIRE_NONCE=true`. Signature, issuer, the single web-client audience, short
+  expiry and the replay guard still apply, and the app signs out of the Google SDK before each
+  sign-in so a cached, already-used token is never resent. Keep the setting `false` until the app
+  adopts an SDK that binds nonces, or every Google sign-in will fail with `invalid_nonce`.
 
 Every verified token is accepted **once** (keyed on its hash in the shared cache until it expires).
 A retry needs a new provider sign-in.
