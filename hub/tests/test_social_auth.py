@@ -687,6 +687,18 @@ class LinkAndIdentityManagementTests(SocialAuthTestMixin, TestCase):
         with override_settings(SOCIAL_AUTH_ENABLED=False):
             self.assertEqual(self.link("google", "g-off").json()["code"], "social_auth_unavailable")
 
+    def test_flag_off_blocks_listing_and_unlink_without_changing_identities(self):
+        self.password_login()
+        identity_id = self.link("google", "g-disabled").json()["identity"]["id"]
+        with override_settings(SOCIAL_AUTH_ENABLED=False):
+            for response in (
+                self.client.get(IDENTITIES_URL),
+                self.client.delete(identity_url(identity_id)),
+            ):
+                self.assertEqual(response.status_code, 503)
+                self.assertEqual(response.json()["code"], "social_auth_unavailable")
+        self.assertTrue(SocialIdentity.objects.filter(pk=identity_id).exists())
+
     def test_list_and_unlink_with_ownership(self):
         self.password_login()
         identity_id = self.link("google", "g-own").json()["identity"]["id"]
@@ -838,6 +850,46 @@ class ExistingAuthUnaffectedTests(TestCase):
         self.assertTrue(user.check_password("StrongPass123!"))
         self.assertEqual(Profile.objects.get(user=user).church, self.church)
         self.assertIn(AUTH_TIME_CLAIM, AccessToken(response.json()["tokens"]["access"]).payload)
+
+    @override_settings(SOCIAL_AUTH_ENABLED=False)
+    def test_password_account_lifecycle(self):
+        import re
+        from django.core import mail
+
+        email = "lifecycle@example.com"
+        password = "AccountOriginal123!"
+        new_password = "AccountChanged456!"
+        registered = self.client.post("/api/register/", {
+            "email": email, "password": password, "password2": password,
+            "profile": {"name": "Test Account", "church": self.church.pk},
+        }, format="json")
+        self.assertEqual(registered.status_code, 201, registered.content)
+        login = self.client.post("/api/token/", {"username": email, "password": password}, format="json")
+        self.assertEqual(login.status_code, 200)
+        reset = self.client.post("/api/password/reset/", {"email": email}, format="json")
+        self.assertEqual(reset.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        match = re.search(
+            r"/reset-password/([A-Za-z0-9_-]+)/([A-Za-z0-9_-]+)", mail.outbox[0].alternatives[0][0]
+        )
+        self.assertIsNotNone(match)
+        confirmed = self.client.post("/api/password/reset/confirm/", {
+            "uidb64": match[1], "token": match[2],
+            "new_password": new_password, "confirm_password": new_password,
+        }, format="json")
+        self.assertEqual(confirmed.status_code, 200, confirmed.content)
+        old_login = self.client.post("/api/token/", {"username": email, "password": password}, format="json")
+        self.assertEqual(old_login.status_code, 401)
+        credentials = {"username": email, "password": new_password}
+        login = self.client.post("/api/token/", credentials, format="json")
+        self.assertEqual(login.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + login.json()["access"])
+        self.assertEqual(self.client.delete("/api/account/delete/").status_code, 204)
+        self.assertFalse(User.objects.filter(email=email).exists())
+        self.client.credentials()
+        refresh = self.client.post("/api/token/refresh/", {"refresh": login.json()["refresh"]}, format="json")
+        self.assertEqual(refresh.status_code, 401)
+        self.assertEqual(self.client.post("/api/token/", credentials, format="json").status_code, 401)
 
     def test_registration_records_password_method(self):
         EventType.get_or_create_default_types()

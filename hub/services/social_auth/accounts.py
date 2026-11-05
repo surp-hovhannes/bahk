@@ -30,7 +30,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from hub.models import Profile, SocialIdentity
-from hub.services.accounts import create_user_with_profile, profile_is_incomplete
+from hub.services.accounts import account_email_lock, create_user_with_profile, profile_is_incomplete
 
 from .apple import AppleTokenError, apple_key_configured, get_apple_client
 from .config import APPLE
@@ -188,37 +188,43 @@ def sign_in_with_identity(
         return _returning(social, identity, authorization_code)
 
     email = identity.trusted_email
-    if email and not identity.is_private_relay and _email_taken(email):
-        # The address may belong to an account a concurrent first sign-in of
-        # this same identity just created; only a different account conflicts.
+    with account_email_lock(email):
+        # A same-identity sign-up may have committed while we waited for the
+        # email lock. Resolve it before treating the email as a conflict.
         winner = _find_identity(identity)
         if winner is not None:
             return _returning(winner, identity, authorization_code)
-        audit("link_required", user_id=None, provider=identity.provider)
-        raise AccountLinkRequired(reason="email_matches_existing_account")
-    # A relay address that happens to collide is stored nowhere rather than
-    # creating a second account that shares a login email.
-    stored_email = "" if _email_taken(email) else email
-    name = clean_display_name(display_name) or clean_display_name(identity.name)
-
-    for attempt in range(2):
-        try:
-            user, profile, social = _create_account(
-                identity,
-                email=stored_email,
-                name=name,
-                username=_username_for(identity, randomize=attempt > 0),
-            )
-            break
-        except IntegrityError:
+        if email and not identity.is_private_relay and _email_taken(email):
+            # The address may belong to an account a concurrent first sign-in of
+            # this same identity just created; only a different account conflicts.
             winner = _find_identity(identity)
             if winner is not None:
-                # A concurrent first sign-in for the same identity committed first.
                 return _returning(winner, identity, authorization_code)
-            if attempt:
-                raise
-            # The deterministic username belongs to an older account whose
-            # identity was since unlinked; retry once with a random username.
+            audit("link_required", user_id=None, provider=identity.provider)
+            raise AccountLinkRequired(reason="email_matches_existing_account")
+        # A relay address that happens to collide is stored nowhere rather than
+        # creating a second account that shares a login email.
+        stored_email = "" if _email_taken(email) else email
+        name = clean_display_name(display_name) or clean_display_name(identity.name)
+
+        for attempt in range(2):
+            try:
+                user, profile, social = _create_account(
+                    identity,
+                    email=stored_email,
+                    name=name,
+                    username=_username_for(identity, randomize=attempt > 0),
+                )
+                break
+            except IntegrityError:
+                winner = _find_identity(identity)
+                if winner is not None:
+                    # A concurrent first sign-in for the same identity committed first.
+                    return _returning(winner, identity, authorization_code)
+                if attempt:
+                    raise
+                # The deterministic username belongs to an older account whose
+                # identity was since unlinked; retry once with a random username.
     audit("account_created", user_id=user.pk, provider=identity.provider, identity_id=social.pk)
     store_apple_refresh_token(social, identity, authorization_code)
     return SignInResult(user=user, profile=profile, identity=social, is_new_user=True)

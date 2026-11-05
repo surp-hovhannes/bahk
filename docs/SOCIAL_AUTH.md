@@ -154,7 +154,10 @@ A retry needs a new provider sign-in.
    when one is available, and the name from Google's token or Apple's first-sign-in `name`.
 5. A user has at most one identity per provider. An identity can belong to one user only.
 6. Concurrent first sign-ins / links are settled by the unique constraints; the loser re-reads the
-   winner's row, so tokens are only minted for the account that owns the identity.
+   winner's row, so tokens are only minted for the account that owns the identity. On PostgreSQL,
+   password registration and social sign-up also share a transaction advisory lock per
+   case-insensitive email. Ownership is rechecked while holding the lock, so concurrent
+   sign-ups across providers cannot create duplicate login emails. This adds no schema changes.
 7. Unlinking never removes the last usable sign-in method (password counts only with an email).
 8. Account deletion (`DELETE /api/account/delete/`) works for social-only accounts, cascades the
    identities, revokes Apple tokens, and the account's refresh tokens stay rejected.

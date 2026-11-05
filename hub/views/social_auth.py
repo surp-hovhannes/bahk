@@ -232,6 +232,8 @@ class SocialIdentityListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        if not config.social_auth_enabled():
+            return error_response(SocialAuthUnavailable(reason="feature_disabled"), endpoint="identities")
         return Response(serialize_sign_in_methods(request.user))
 
 
@@ -243,6 +245,8 @@ class SocialIdentityDetailView(APIView):
     throttle_scope = "social_auth"
 
     def delete(self, request, pk):
+        if not config.social_auth_enabled():
+            return error_response(SocialAuthUnavailable(reason="feature_disabled"), endpoint="unlink")
         try:
             require_recent_authentication(request)
             unlink_identity(request.user, pk)

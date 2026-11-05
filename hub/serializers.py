@@ -12,7 +12,7 @@ from rest_framework import serializers
 from django.utils.translation import activate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from hub.services.accounts import create_user_with_profile, issue_tokens_for_user
+from hub.services.accounts import EmailAlreadyExists, create_user_with_profile, issue_tokens_for_user
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
@@ -135,13 +135,16 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         profile = validated_data.pop('profile')
-        user, _profile = create_user_with_profile(
-            username=validated_data['email'],
-            email=validated_data['email'],
-            password=validated_data['password'],
-            name=profile.pop('name'),
-            church=profile.pop('church'),
-        )
+        try:
+            user, _profile = create_user_with_profile(
+                username=validated_data['email'],
+                email=validated_data['email'],
+                password=validated_data['password'],
+                name=profile.pop('name'),
+                church=profile.pop('church'),
+            )
+        except EmailAlreadyExists:
+            raise serializers.ValidationError({"email": "user with this email already exists."}) from None
 
         # Add tokens to the response
         user.tokens = issue_tokens_for_user(user)
