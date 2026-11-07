@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from django.db.models import Prefetch
 from ..serializers import ProfileSerializer, ProfileImageSerializer
 from ..models import Profile, Fast
+from hub.services.church_selection import assign_only_church
 
 
 PROFILE_IMAGE_PENDING_PREFIX = "profile_images/pending/"
@@ -205,9 +206,10 @@ class ProfileDetailView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         # Optimized: Use select_related and prefetch_related for better performance
         # This prevents N+1 queries when accessing user and church data
-        return Profile.objects.select_related('user', 'church').prefetch_related(
+        profile = Profile.objects.select_related('user', 'church').prefetch_related(
             Prefetch('fasts', queryset=Fast.objects.select_related('church'))
         ).get(id=self.request.user.profile.id)
+        return assign_only_church(profile)
 
 
 class ProfileImageUploadView(generics.UpdateAPIView):

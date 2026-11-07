@@ -28,6 +28,7 @@ from hub.services.reading_text_service import (
 from hub.services.lectionary_service import get_daily_readings, persist_readings
 from hub.tasks import fetch_missing_passage_texts_task, generate_reading_context_task
 from hub.utils import get_user_profile_safe
+from hub.services.church_selection import content_church
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,7 @@ class GetDailyReadingsForDate(generics.GenericAPIView):
 
         if request.user.is_authenticated:
             profile = get_user_profile_safe(request.user)
-            church = profile.church if profile else Church.objects.get(pk=Church.get_default_pk())
+            church = content_church(profile)
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 

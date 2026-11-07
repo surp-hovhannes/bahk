@@ -69,6 +69,16 @@ Activate the pair exactly like a password login (`tokenManager.setTokens`). `pro
 is `true` while the profile lacks a name or a church (the two fields email registration requires);
 ask for them **after** sign-in. It is never an auth failure.
 
+When exactly one church exists, social signup assigns it automatically. Existing profiles without
+a church are repaired on social sign-in, profile retrieval, or church-scoped content access.
+Existing church selections are preserved; no church ID is hardcoded and no church is created.
+When multiple churches exist, the profile remains unassigned and the app must require a choice
+before proceeding. Authenticated church-scoped content returns HTTP 400 with
+`{"code":"church_selection_required","detail":"Select a church before continuing."}` until
+`PATCH /api/profile/` saves a valid church. The same error applies if no churches exist; the app
+must offer retry/sign-out rather than inventing a choice. Missing names remain a dismissible
+profile-completion reminder. No migration or bulk profile update is required.
+
 ### `POST /api/auth/social/link/` (authenticated, recent sign-in, throttled)
 
 Same body as above minus `name`. The credential must be **fresh** (a new provider sign-in with a new

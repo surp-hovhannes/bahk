@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from hub.cache import feast_api_cache_key, invalidate_feast_api_cache_for_feast
 from hub.models import Church, Feast, FeastContext
 from hub.services.feast_service import FeastDataUnavailable
+from hub.services.church_selection import content_church
 from hub.tasks import generate_feast_context_task
 from hub.tasks.icon_tasks import match_icon_to_feast_task
 from hub.tasks.llm_tasks import is_feast_context_generation_eligible
@@ -102,7 +103,7 @@ class GetFeastForDate(generics.GenericAPIView):
 
         if request.user.is_authenticated:
             profile = get_user_profile_safe(request.user)
-            church = profile.church if (profile and profile.church) else Church.objects.get(pk=Church.get_default_pk())
+            church = content_church(profile)
         else:
             church = Church.objects.get(pk=Church.get_default_pk())
 

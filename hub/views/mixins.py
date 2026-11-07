@@ -3,6 +3,8 @@ from ..models import Church
 from django.core.exceptions import ObjectDoesNotExist
 import pytz
 from pytz.exceptions import UnknownTimeZoneError
+from hub.services.church_selection import content_church
+from hub.utils import get_user_profile_safe
 
 
 class ChurchContextMixin:
@@ -10,10 +12,7 @@ class ChurchContextMixin:
 
     def get_church(self):
         if self.request.user.is_authenticated:
-            # Use the church associated with the user's profile
-            church = self.request.user.profile.church
-            if not church:
-                raise ValidationError("No church associated with your profile.")
+            church = content_church(get_user_profile_safe(self.request.user))
         else:
             # If not authenticated, get church_id from query parameters
             church_id = self.request.query_params.get('church_id')

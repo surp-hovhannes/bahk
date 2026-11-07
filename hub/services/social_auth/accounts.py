@@ -9,8 +9,9 @@ Rules (issue #598 and the decisions recorded on it):
   response is ``account_link_required``: the person signs in to that account and
   links explicitly. Apple relay and unverified addresses are never matched.
 - Otherwise a new ``User`` + ``Profile`` + ``SocialIdentity`` is created in one
-  transaction, with an unusable password. Missing name/church is completed in
-  the app after sign-in.
+  transaction, with an unusable password. The sole church is assigned automatically;
+  when multiple churches exist, the app requires a choice after sign-in. Missing
+  names can be completed later.
 - Concurrent first sign-ins and links are settled by the unique constraints;
   after an ``IntegrityError`` the winner's row is re-read, so tokens are only
   ever minted for the user that actually owns the identity.
@@ -31,6 +32,7 @@ from django.utils import timezone
 
 from hub.models import Profile, SocialIdentity
 from hub.services.accounts import account_email_lock, create_user_with_profile, profile_is_incomplete
+from hub.services.church_selection import assign_only_church, only_church
 
 from .apple import AppleTokenError, apple_key_configured, get_apple_client
 from .config import APPLE
@@ -108,7 +110,7 @@ def _find_identity(identity: VerifiedIdentity):
 
 
 def _profile_for(user):
-    return Profile.objects.filter(user=user).select_related("church").first()
+    return assign_only_church(Profile.objects.filter(user=user).select_related("church").first())
 
 
 def _email_taken(email: str) -> bool:
@@ -162,7 +164,7 @@ def _create_account(identity: VerifiedIdentity, *, email: str, name: str, userna
             email=email,
             password=None,
             name=name or None,
-            church=None,
+            church=only_church(),
             signup_method=identity.provider,
         )
         social = SocialIdentity.objects.create(
