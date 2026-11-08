@@ -7,7 +7,8 @@ from ..serializers import (
     FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer,
     FastParticipantMapSerializer, FastIntentionSerializer
 )
-from .mixins import ChurchContextMixin, TimezoneMixin
+from .mixins import ChurchContextMixin, TimezoneMixin, request_church
+from rest_framework.renderers import BrowsableAPIRenderer, JSONRenderer
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 import datetime
@@ -36,6 +37,15 @@ def get_cache_key(prefix, *args):
     """Generate a cache key with the given prefix and arguments."""
     return f"bahk:{prefix}:{'_'.join(force_str(arg) for arg in args)}"
 
+class FastListBrowsableAPIRenderer(BrowsableAPIRenderer):
+    def get_filter_form(self, data, view, request):
+        # DRF otherwise calls get_queryset even when there are no filter controls,
+        # repeating church validation outside the view's exception handling.
+        if not view.filter_backends:
+            return None
+        return super().get_filter_form(data, view, request)
+
+
 class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
     API view to list all fasts for a specific church within a configurable date range.
@@ -56,6 +66,7 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
         - start_date: Optional. Start date in YYYY-MM-DD format. Defaults to 6 months ago.
         - end_date: Optional. End date in YYYY-MM-DD format. Defaults to 6 months in future.
         - tz: Optional. Timezone offset from UTC in the IANA format (e.g., America/New_York).
+        - church_id: Required for anonymous callers; missing, malformed, or unknown IDs return 400.
     
     Returns:
         - A list of fasts filtered by:
@@ -66,6 +77,7 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
+    renderer_classes = [JSONRenderer, FastListBrowsableAPIRenderer]
 
     def get_church_participant_count(self, church_id):
         """Get the total number of participants across all fasts for this church."""
@@ -891,6 +903,10 @@ class FastOnDateWithoutUser(views.APIView):
     
     If no date provided, defaults to today. If there is no fast on the given date, or the date string provided is
     invalid or malformed, the response will contain no fast information.
+
+    Anonymous callers must supply church_id; missing, malformed, or unknown IDs
+    return 400. Without an explicit ID, authenticated callers use their profile's
+    church context.
     """
 
     def get(self, request):
@@ -930,11 +946,7 @@ def _get_fast_on_date(request):
     else:
         date = _parse_date_str(date_str)
 
-    church_id = request.query_params.get("church_id")
-    if church_id is None:
-        church = request.user.profile.church
-    else:
-        church = Church.objects.get(id=church_id)
+    church = request_church(request, allow_authenticated_override=True)
 
     # Filter the fasts based on the church
     # there should not be multiple fasts per day, but in case of bug, return last created
