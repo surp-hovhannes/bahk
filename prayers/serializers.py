@@ -198,6 +198,8 @@ class PrayerSetListSerializer(BookmarkOptimizedSerializerMixin, serializers.Mode
     
     def get_prayer_count(self, obj):
         """Return the number of prayers in this set."""
+        if hasattr(obj, '_prayer_count'):
+            return obj._prayer_count
         return obj.prayers.count()
     
     def to_representation(self, instance):
