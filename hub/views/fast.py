@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from ..constants import NUMBER_PARTICIPANTS_TO_SHOW_WEB
 from ..models import (
-    Fast, Church, Profile, Day, FastParticipantMap, FastIntention
+    Fast, Profile, Day, FastParticipantMap, FastIntention
 )
 from ..serializers import (
     FastSerializer, JoinFastSerializer, ParticipantSerializer, FastStatsSerializer,
