@@ -1,10 +1,11 @@
-from exponent_server_sdk import DeviceNotRegisteredError, PushClient, PushMessage
+from exponent_server_sdk import DeviceNotRegisteredError, PushClient, PushMessage, PushServerError
 from .models import DeviceToken
 import hashlib
 import secrets
 import logging
 import json
 import re
+import time
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -43,6 +44,57 @@ EXPO_ERROR_CODES = frozenset({
     'DeviceNotRegistered', 'MessageTooBig', 'MessageRateExceeded',
     'MismatchSenderId', 'InvalidCredentials', 'DeveloperError',
 })
+
+
+# Only a structured whole-request rejection proves Expo did not enqueue this send.
+# Bare HTTP failures (including 503), timeouts and malformed replies may follow
+# acceptance. Never replay those. Keep retries inside the single-device boundary.
+PUSH_RETRY_DELAYS = (1, 2)
+
+
+def _transport_failure(error):
+    response = getattr(error, 'response', None)
+    status = getattr(response, 'status_code', None)
+    status = status if type(status) is int and 100 <= status <= 599 else None
+    structured = (
+        isinstance(error, PushServerError)
+        and isinstance(error.response_data, dict)
+        and isinstance(error.response_data.get('errors'), list)
+        and bool(error.response_data['errors'])
+        and all(isinstance(item, dict) for item in error.response_data['errors'])
+        and 'data' not in error.response_data
+    )
+    transient = status == 429 or (status is not None and 500 <= status <= 599)
+    if isinstance(error, PushServerError) and isinstance(error.response_data, dict) and 'data' in error.response_data:
+        classification = 'ambiguous_acceptance'
+    elif structured and transient:
+        classification = 'transient_reject'
+    elif status is not None and 400 <= status < 500 and status not in {408, 429}:
+        classification = 'permanent_reject'
+    elif structured and status == 200:
+        classification = 'permanent_reject'
+    else:
+        classification = 'ambiguous_acceptance'
+    return {'operation': 'publish', 'classification': classification, 'http_status': status}
+
+
+def _publish_with_recovery(client, message, failures, eligible):
+    for attempt in range(len(PUSH_RETRY_DELAYS) + 1):
+        try:
+            return client.publish(message)
+        except Exception as error:
+            if isinstance(error, DeviceNotRegisteredError) or getattr(error, 'push_response', None) is not None:
+                raise
+            failure = dict(_transport_failure(error), attempt=attempt + 1)
+            failures.append(failure)
+            logger.warning('Push transport operation=%s classification=%s status=%s attempt=%s',
+                           failure['operation'], failure['classification'], failure['http_status'], failure['attempt'])
+            if failure['classification'] != 'transient_reject' or attempt == len(PUSH_RETRY_DELAYS):
+                raise
+            time.sleep(PUSH_RETRY_DELAYS[attempt])
+            # Consent or token activity can change during backoff.
+            if not eligible():
+                raise
 
 
 def notification_destination(data):
@@ -151,7 +203,8 @@ def send_push_notification(
         'sent': 0,
         'failed': 0,
         'invalid_tokens': [],
-        'errors': []
+        'errors': [],
+        'transport_errors': []
     }
 
     try:
@@ -177,7 +230,7 @@ def send_push_notification(
             return result
 
         # Initialize Expo client
-        client = PushClient()
+        client = PushClient(timeout=10)
         # receipts imports this module's helpers, so import it lazily.
         from .receipts import ledger_entry, remember_tickets
 
@@ -221,14 +274,15 @@ def send_push_notification(
             ticket = None
             error = None
             try:
-                ticket = client.publish(
-                    PushMessage(
+                ticket = _publish_with_recovery(
+                    client, PushMessage(
                         to=token,
                         body=message,
                         data=payload,
                         sound="default",
                         priority='high',
-                    )
+                    ), result['transport_errors'],
+                    lambda: tokens_queryset.filter(pk=device.pk, token=token, user_id=device.user_id).exists(),
                 )
                 
                 if (
