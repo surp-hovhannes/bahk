@@ -8,7 +8,8 @@ from ..serializers import (
     FastParticipantMapSerializer, FastIntentionSerializer
 )
 from .mixins import ChurchContextMixin, TimezoneMixin, request_church
-from rest_framework.renderers import BrowsableAPIRenderer, JSONRenderer
+from rest_framework.renderers import JSONRenderer
+from hub.renderers import ChurchListBrowsableAPIRenderer
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 import datetime
@@ -36,15 +37,6 @@ CACHE_TTL = getattr(settings, 'CACHE_MIDDLEWARE_SECONDS', 60 * 15)  # 15 minutes
 def get_cache_key(prefix, *args):
     """Generate a cache key with the given prefix and arguments."""
     return f"bahk:{prefix}:{'_'.join(force_str(arg) for arg in args)}"
-
-class FastListBrowsableAPIRenderer(BrowsableAPIRenderer):
-    def get_filter_form(self, data, view, request):
-        # DRF otherwise calls get_queryset even when there are no filter controls,
-        # repeating church validation outside the view's exception handling.
-        if not view.filter_backends:
-            return None
-        return super().get_filter_form(data, view, request)
-
 
 class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     """
@@ -77,7 +69,7 @@ class FastListView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
-    renderer_classes = [JSONRenderer, FastListBrowsableAPIRenderer]
+    renderer_classes = [JSONRenderer, ChurchListBrowsableAPIRenderer]
 
     def get_church_participant_count(self, church_id):
         """Get the total number of participants across all fasts for this church."""
@@ -299,6 +291,7 @@ class FastByDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIView):
     Returns:
         - A list of fasts filtered by the church and date context.
     """
+    renderer_classes = [JSONRenderer, ChurchListBrowsableAPIRenderer]
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]  # Allow any user to access this view
 
@@ -374,6 +367,7 @@ class FastByFeastDateView(ChurchContextMixin, TimezoneMixin, generics.ListAPIVie
     Returns:
         - A list of fasts filtered by the church and culmination feast date.
     """
+    renderer_classes = [JSONRenderer, ChurchListBrowsableAPIRenderer]
     serializer_class = FastSerializer
     permission_classes = [permissions.AllowAny]  # Allow any user to access this view
 

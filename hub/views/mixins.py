@@ -26,7 +26,7 @@ def request_church(request, *, allow_authenticated_override=False):
         raise ValidationError("church_id query parameter is required.")
     try:
         return Church.objects.get(id=church_id)
-    except (ValueError, TypeError, OverflowError):
+    except ValueError:
         raise ValidationError("church_id must be a valid integer.")
     except Church.DoesNotExist:
         raise ValidationError("Church with the provided ID does not exist.")
