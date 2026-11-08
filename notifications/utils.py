@@ -265,6 +265,10 @@ def send_push_notification(
         # Send notifications
         for device in tokens:
             token = device.token
+            # Earlier devices may have spent seconds in outage backoff. Recheck
+            # the original audience and consent filters before this first send.
+            if not tokens_queryset.filter(pk=device.pk, token=token, user_id=device.user_id).exists():
+                continue
             payload, telemetry = data, None
             if event_type is not None:
                 try:

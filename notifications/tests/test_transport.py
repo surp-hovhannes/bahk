@@ -1,4 +1,5 @@
 """Mocked Expo transport regressions; never contact the provider."""
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.test import override_settings
@@ -111,6 +112,47 @@ class TransportTests(BaseTestCase):
         tokens = [c.args[0].to for c in self.publish.call_args_list]
         self.assertNotEqual(tokens[0], tokens[1])
         self.assertEqual(tokens[1], tokens[2])
+
+    def test_later_device_revoked_during_earlier_backoff_is_never_attempted(self):
+        from hub.models import Profile
+
+        Profile.objects.create(user=self.user, receive_daily_fast_push_notifications=True)
+        later_user = self.create_user()
+        later_profile = Profile.objects.create(user=later_user, receive_daily_fast_push_notifications=True)
+        later_device = DeviceToken.objects.create(
+            user=later_user, token='ExponentPushToken[later-private]', device_type='ios',
+        )
+        # DeviceToken sends newest first; make this device deterministically later.
+        DeviceToken.objects.filter(pk=later_device.pk).update(created_at=self.device.created_at - timedelta(seconds=1))
+        for revocation in ('preference', 'inactive', 'replacement'):
+            with self.subTest(revocation=revocation):
+                later_profile.receive_daily_fast_push_notifications = True
+                later_profile.save()
+                DeviceToken.objects.filter(pk=later_device.pk).update(is_active=True, token=later_device.token)
+                self.rows().delete()
+                self.publish.reset_mock()
+                self.publish.side_effect = [self.rejection(503), self.ticket()]
+
+                def revoke(_delay):
+                    if revocation == 'preference':
+                        later_profile.receive_daily_fast_push_notifications = False
+                        later_profile.save()
+                    elif revocation == 'inactive':
+                        DeviceToken.objects.filter(pk=later_device.pk).update(is_active=False)
+                    else:
+                        DeviceToken.objects.filter(pk=later_device.pk).update(token='ExponentPushToken[replacement]')
+
+                with patch('notifications.utils.time.sleep', side_effect=revoke), \
+                        patch('notifications.receipts.remember_tickets') as remember:
+                    result = send_push_notification(
+                        'test', users=[self.user, later_user], notification_type='daily_fast',
+                    )
+                self.assertEqual((result['sent'], result['failed']), (1, 0))
+                self.assertEqual(result['errors'], [])
+                self.assertEqual(len(result['transport_errors']), 1)
+                self.assertEqual([call.args[0].to for call in self.publish.call_args_list], [self.device.token] * 2)
+                self.assertEqual(self.rows().get().user_id, self.user.pk)
+                self.assertEqual(len(remember.call_args.args[0]), 1)
 
     def test_real_sdk_json_and_non_json_failure_shapes(self):
         # Exercise the pinned SDK parser instead of assuming HTTPError for JSON.

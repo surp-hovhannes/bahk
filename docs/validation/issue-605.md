@@ -108,3 +108,44 @@ Ruff passed**; installed SDK inspection passed and confirmed version **2.2.0**
 and the exception paths described above. Crabbox run
 `run_9c28e4d7db0a529b7f022feb9a8c1561` exited 0. Only documentation changed after
 this final runtime validation. Final `git diff --check` passed.
+
+## Independent Lens repair
+
+The first publish for each materialized device now rechecks the original audience
+queryset, including current preference, active token, exact token value and owner.
+This happens before telemetry preparation. Devices revoked while an earlier device
+backs off are skipped without increasing sent/failed counts, recording a send
+event, or creating a receipt ledger entry. The existing result has no separate
+skipped counter; this repair preserves that API and failure accounting for devices
+already attempted. No transport classification or retry policy changed.
+
+The mocked regression deterministically places a second user's device later in
+the batch, then revokes its preference, deactivates its token, or replaces its
+token during the first device's retry backoff. It asserts only the earlier device
+is published, counted, recorded in telemetry and entered into the receipt ledger.
+
+Concurrency limitation: this is a fresh database check, not an atomic consent/send
+transaction. Revocation can still race between the check and provider acceptance;
+concurrent tasks also have no shared send idempotency. Each candidate adds one
+eligibility query. Roll back this repair with `git revert <repair-commit>`; no
+schema or persisted-data conversion needs reversal.
+
+Repair environment: the initial sandboxed `scripts/crabbox-box.sh warm` failed on
+local lease-directory permissions; the elevated retry failed on provider core
+limits. `crabbox list` found existing leases, allowing reuse of
+`cbx_8e9eb047b59e` with workspace ownership admission. Local
+`docker ps --format '{{.Names}}'` failed because the Docker daemon is unavailable.
+Full CI, repository-wide lint/format, and slow/performance tests remain deferred
+as requested. The existing SDK investigation and status evidence above remain
+unchanged by this consent-only repair.
+
+Repair validation command (passed, exit 0):
+
+```sh
+crabbox run --id cbx_8e9eb047b59e --shell 'sudo docker compose -f .devcontainer/docker-compose.yml up -d --build redis app && sudo docker compose -f .devcontainer/docker-compose.yml exec -T -e IS_PRODUCTION=false -e SENTRY_DSN= app python manage.py test notifications.tests.test_transport notifications.tests.test_send_telemetry notifications.tests.test_device_tokens notifications.tests.test_receipts --noinput --settings=tests.test_settings && sudo docker compose -f .devcontainer/docker-compose.yml exec -T app ruff check notifications/utils.py notifications/tests/test_transport.py'
+```
+
+Result: **82 tests passed** in 15.440 seconds; system check reported no issues;
+changed-file Ruff reported **All checks passed!** Run
+`run_ea66cebb693ff8c3fb8656610b83bf43`. Final `git diff --check` passed.
+Only this validation documentation changed after the successful runtime checks.
