@@ -33,7 +33,8 @@ def _device_token_log_id(token_value):
 
 def _deactivate_dead_token(token, result):
     """Share reversible dead-device handling for returned tickets and exceptions."""
-    DeviceToken.objects.filter(token=token).update(is_active=False)
+    with transaction.atomic():
+        DeviceToken.objects.filter(token=token).update(is_active=False)
     result['failed'] += 1
     token_id = _device_token_log_id(token)
     result['invalid_tokens'].append(token_id)
@@ -50,6 +51,10 @@ EXPO_ERROR_CODES = frozenset({
 # Bare HTTP failures (including 503), timeouts and malformed replies may follow
 # acceptance. Never replay those. Keep retries inside the single-device boundary.
 PUSH_RETRY_DELAYS = (1, 2)
+# A call-wide budget (not reset by successes) bounds outage amplification.
+PUSH_TRANSIENT_LIMIT = 3
+TRANSPORT_ERROR_LIMIT = 20
+_SKIP_SEND = object()
 
 
 def _transport_failure(error):
@@ -78,7 +83,7 @@ def _transport_failure(error):
     return {'operation': 'publish', 'classification': classification, 'http_status': status}
 
 
-def _publish_with_recovery(client, message, failures, eligible):
+def _publish_with_recovery(client, message, result, eligible, recovery):
     for attempt in range(len(PUSH_RETRY_DELAYS) + 1):
         try:
             return client.publish(message)
@@ -86,15 +91,36 @@ def _publish_with_recovery(client, message, failures, eligible):
             if isinstance(error, DeviceNotRegisteredError) or getattr(error, 'push_response', None) is not None:
                 raise
             failure = dict(_transport_failure(error), attempt=attempt + 1)
-            failures.append(failure)
+            if len(result['transport_errors']) < TRANSPORT_ERROR_LIMIT:
+                result['transport_errors'].append(failure)
+            else:
+                result['transport_errors_omitted'] += 1
+            if failure['classification'] == 'transient_reject':
+                recovery['transient_rejections'] += 1
+                recovery['circuit_open'] = recovery['transient_rejections'] >= PUSH_TRANSIENT_LIMIT
             logger.warning('Push transport operation=%s classification=%s status=%s attempt=%s',
                            failure['operation'], failure['classification'], failure['http_status'], failure['attempt'])
-            if failure['classification'] != 'transient_reject' or attempt == len(PUSH_RETRY_DELAYS):
+            if (failure['classification'] != 'transient_reject'
+                    or recovery['circuit_open'] or attempt == len(PUSH_RETRY_DELAYS)):
                 raise
+            recovery['backed_off'] = True
             time.sleep(PUSH_RETRY_DELAYS[attempt])
             # Consent or token activity can change during backoff.
             if not eligible():
-                raise
+                return _SKIP_SEND
+
+
+def _still_eligible(device, notification_type):
+    # The materialized audience is fixed. Never repeat its potentially huge IN
+    # clause; only mutable identity, activity and consent need refreshing.
+    with transaction.atomic():
+        query = DeviceToken.objects.filter(
+            pk=device.pk, token=device.token, user_id=device.user_id, is_active=True,
+        )
+        preference = NOTIFICATION_TYPE_FILTERS.get(notification_type)
+        if preference:
+            query = query.filter(**{f'user__profile__{preference}': True})
+        return query.exists()
 
 
 def notification_destination(data):
@@ -184,7 +210,9 @@ def send_push_notification(
     Send push notifications to specified tokens or all registered devices.
 
     Sent counts mean non-raising publishes except DeviceNotRegistered, never delivery.
-    Other ticket rejections retain their legacy sent counts.
+    Other ticket rejections retain their legacy sent counts. Skipped counts
+    revoked eligibility and circuit-suppressed devices, without send telemetry.
+    Accepted publishes remain sent even when local bookkeeping fails.
     
     Args:
         message (str): The notification message to send
@@ -202,6 +230,9 @@ def send_push_notification(
         'success': False,
         'sent': 0,
         'failed': 0,
+        'skipped': 0,
+        'circuit_open': False,
+        'transport_errors_omitted': 0,
         'invalid_tokens': [],
         'errors': [],
         'transport_errors': []
@@ -262,22 +293,27 @@ def send_push_notification(
         telemetry_rows = []
         ledger_entries = []
 
+        recovery = {'backed_off': False, 'transient_rejections': 0, 'circuit_open': False}
+
         # Send notifications
         for device in tokens:
             token = device.token
-            # Earlier devices may have spent seconds in outage backoff. Recheck
-            # the original audience and consent filters before this first send.
-            if not tokens_queryset.filter(pk=device.pk, token=token, user_id=device.user_id).exists():
-                continue
             payload, telemetry = data, None
-            if event_type is not None:
-                try:
-                    payload, telemetry = _prepare_telemetry(data, message, kind, destination, device)
-                except Exception:
-                    logger.warning('Push telemetry preparation skipped')
             ticket = None
             error = None
+            accepted = False
             try:
+                if recovery['circuit_open']:
+                    result['skipped'] += 1
+                    continue
+                if recovery['backed_off'] and not _still_eligible(device, notification_type):
+                    result['skipped'] += 1
+                    continue
+                if event_type is not None:
+                    try:
+                        payload, telemetry = _prepare_telemetry(data, message, kind, destination, device)
+                    except Exception:
+                        logger.warning('Push telemetry preparation skipped')
                 ticket = _publish_with_recovery(
                     client, PushMessage(
                         to=token,
@@ -285,10 +321,15 @@ def send_push_notification(
                         data=payload,
                         sound="default",
                         priority='high',
-                    ), result['transport_errors'],
-                    lambda: tokens_queryset.filter(pk=device.pk, token=token, user_id=device.user_id).exists(),
+                    ), result,
+                    lambda: _still_eligible(device, notification_type), recovery,
                 )
                 
+                if ticket is _SKIP_SEND:
+                    ticket, telemetry = None, None
+                    result['skipped'] += 1
+                    continue
+
                 if (
                     _ticket_field(ticket, 'status') == 'error'
                     and _expo_error_code(_ticket_field(ticket, 'details')) == 'DeviceNotRegistered'
@@ -296,25 +337,33 @@ def send_push_notification(
                     _deactivate_dead_token(token, result)
                     continue
 
-                # Update device token last_used timestamp
-                DeviceToken.objects.filter(token=token).update(
-                    last_used=timezone.now()
-                )
-                
+                # Acceptance survives local bookkeeping failure. A savepoint
+                # prevents a DB error from poisoning the caller's transaction.
+                accepted = True
                 result['sent'] += 1
+                with transaction.atomic():
+                    DeviceToken.objects.filter(token=token).update(last_used=timezone.now())
                 logger.info("Sent to push provider: %s", _device_token_log_id(token))
-                
+
             except DeviceNotRegisteredError as exc:
                 error = exc
                 if telemetry is not None:
                     telemetry.update(outcome="provider_rejected", error_code="DeviceNotRegistered")
-                _deactivate_dead_token(token, result)
-                
+                try:
+                    _deactivate_dead_token(token, result)
+                except Exception as cleanup_error:
+                    result['failed'] += 1
+                    if len(result['errors']) < TRANSPORT_ERROR_LIMIT:
+                        result['errors'].append(type(cleanup_error).__name__)
+                    logger.warning('Push dead-token cleanup unavailable')
+
             except Exception as e:
                 error = e
                 logger.error('Push send failed: %s (%s)', _device_token_log_id(token), type(e).__name__)
-                result['failed'] += 1
-                result['errors'].append(type(e).__name__)
+                if not accepted:
+                    result['failed'] += 1
+                if len(result['errors']) < TRANSPORT_ERROR_LIMIT:
+                    result['errors'].append(type(e).__name__)
             finally:
                 entry = ledger_entry(ticket, device.pk, telemetry)
                 if entry is not None:
@@ -331,6 +380,7 @@ def send_push_notification(
                     except Exception:
                         logger.warning('Push telemetry outcome skipped')
 
+        result['circuit_open'] = recovery['circuit_open']
         # One pipelined Redis write per send, not a blocking round trip per device.
         remember_tickets(ledger_entries)
         if telemetry_rows:
