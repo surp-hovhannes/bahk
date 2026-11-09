@@ -1,5 +1,5 @@
 """Views for prayers app."""
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.db import transaction
 from django.utils.translation import activate, get_language_from_request
 from rest_framework import generics
@@ -163,7 +163,9 @@ class PrayerSetListView(generics.ListAPIView):
         ) or 'en'
         activate(lang)
         
-        queryset = PrayerSet.objects.select_related('church', 'icon')
+        queryset = PrayerSet.objects.select_related('church', 'icon').annotate(
+            _prayer_count=Count('prayers')
+        )
         
         # Apply search filter if provided
         search = self.request.query_params.get('search', None)

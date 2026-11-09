@@ -1,4 +1,6 @@
 """Views for accessing and editing daily devotionals."""
+from rest_framework.renderers import JSONRenderer
+from hub.renderers import ChurchListBrowsableAPIRenderer
 import datetime
 import logging
 from django.conf import settings
@@ -190,6 +192,7 @@ class DevotionalListView(
         - POST: Staff users only
         - PUT/PATCH/DELETE: Not supported
     """
+    renderer_classes = [JSONRenderer, ChurchListBrowsableAPIRenderer]
     serializer_class = DevotionalSerializer
     permission_classes = [IsAdminOrReadOnly]
     pagination_class = PageNumberPagination
