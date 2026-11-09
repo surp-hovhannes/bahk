@@ -1,0 +1,37 @@
+{
+  "name": "expo-transport-warning",
+  "repo": "surp-hovhannes/bahk",
+  "pr": 608,
+  "target": {
+    "kind": "ci-artifact"
+  },
+  "viewports": [
+    "mobile",
+    "desktop"
+  ],
+  "scenarios": [
+    {
+      "name": "admin-retry-circuit-warning",
+      "path": "/admin/notifications/devicetoken/?q=visual-qa-transport",
+      "steps": [
+        {
+          "check": "input.action-select"
+        },
+        {
+          "select": [
+            "select[name=action]",
+            "send_test_notification"
+          ]
+        },
+        {
+          "click": "button[name=index]"
+        },
+        {
+          "waitFor": ".messagelist .warning:has-text('Skipped: 0. Retry circuit open: True.')"
+        }
+      ],
+      "waitFor": ".messagelist .warning:has-text('Skipped: 0. Retry circuit open: True.')",
+      "fullPage": true
+    }
+  ]
+}

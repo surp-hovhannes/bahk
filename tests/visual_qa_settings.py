@@ -20,3 +20,6 @@ ANTHROPIC_API_KEY = ''
 OPENAI_API_KEY = ''
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 READING_FETCH_DAILY_BUDGET = 0
+
+# Test-only offline transport fixture; no production URL, setting or app hook.
+MIDDLEWARE = [*MIDDLEWARE, 'tests.visual_qa_transport.TransportWarningFixtureMiddleware']
