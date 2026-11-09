@@ -11,20 +11,25 @@ class ChurchContextMixin:
     """Mixin to provide church context based on the user's profile or query parameter."""
 
     def get_church(self):
-        if self.request.user.is_authenticated:
-            church = content_church(get_user_profile_safe(self.request.user))
-        else:
-            # If not authenticated, get church_id from query parameters
-            church_id = self.request.query_params.get('church_id')
-            if not church_id:
-                raise ValidationError("church_id query parameter is required.")
-            
-            try:
-                church = Church.objects.get(id=church_id)
-            except Church.DoesNotExist:
-                raise ValidationError("Church with the provided ID does not exist.")
+        return request_church(self.request)
 
-        return church
+
+def request_church(request, *, allow_authenticated_override=False):
+    """Resolve legacy content context without guessing an anonymous user's church."""
+    if request.user.is_authenticated and not (
+        allow_authenticated_override and 'church_id' in request.query_params
+    ):
+        return content_church(get_user_profile_safe(request.user))
+
+    church_id = request.query_params.get('church_id')
+    if not church_id:
+        raise ValidationError("church_id query parameter is required.")
+    try:
+        return Church.objects.get(id=church_id)
+    except ValueError:
+        raise ValidationError("church_id must be a valid integer.")
+    except Church.DoesNotExist:
+        raise ValidationError("Church with the provided ID does not exist.")
 
 class TimezoneMixin:
     """
