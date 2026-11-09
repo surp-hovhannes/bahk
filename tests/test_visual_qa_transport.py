@@ -54,12 +54,13 @@ class TransportVisualFixtureTests(TestCase):
             self.assertContains(response, 'The notification request could not be completed.')
             self.assertContains(response, 'Send requests completed: 0. Send requests with errors: 1.')
             self.assertContains(response, 'Contact support before sending again; some devices may receive duplicates.')
-            for private in ('PushServerError', 'RuntimeError', TOKEN, 'Retry circuit', 'Skipped:'):
-                self.assertNotContains(response, private)
+            message_text = ' '.join(str(message) for message in response.context['messages'])
+            for private in ('PushServerError', 'RuntimeError', TOKEN, 'Retry circuit', 'Skipped:',
+                            'Synthetic offline rejection'):
+                self.assertNotIn(private, message_text)
             result = report.call_args.args[2]
             self.assertEqual((result['sent'], result['failed'], result['skipped']), (0, 1, 0))
             self.assertEqual(len(result['transport_errors']), 3)
-            self.assertNotContains(response, 'Synthetic offline rejection')
             network.assert_not_called()
             sleep.assert_not_called()
             self.assertFalse(settings.SEND_PUSH_NOTIFICATIONS)

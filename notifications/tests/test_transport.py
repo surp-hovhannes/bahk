@@ -468,8 +468,11 @@ class TransportTests(BaseTestCase):
             patch('notifications.admin.messages') as messages,
         ):
             devices.return_value.count.return_value = 101
-            devices.return_value.values_list.return_value = [self.device.pk]
-            devices.return_value.values.return_value.distinct.return_value.count.return_value = 1
+            token_ids = Mock()
+            token_ids.__iter__ = Mock(return_value=iter([self.device.pk]))
+            user_ids = Mock()
+            user_ids.distinct.return_value.count.return_value = 1
+            devices.return_value.values_list.side_effect = [token_ids, user_ids]
             admin.send_push_view(request)
             enqueue.assert_called_once()
             send.assert_not_called()
