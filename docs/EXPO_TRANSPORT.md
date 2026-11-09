@@ -5,8 +5,13 @@ HTTP 429/5xx. Bare HTTP failures, timeouts, malformed/mixed responses and accept
 tickets are never replayed. Each device has at most three attempts (1s/2s waits).
 A per-call circuit opens after three total transient rejections, even across
 successful devices: at most two waits and three seconds of backoff per call.
-The attempted device fails; remaining devices are skipped, with no fabricated
-send telemetry or receipt entries. The circuit does not persist across calls.
+The exhausted rejection counts as failed; every later eligible device gets one
+request without retry or backoff. Sustained outage load is one request per device
+plus at most two retries per call. Later transient rejects have no recovery, while
+healthy recipients still get their attempt. Consent skips produce no send telemetry
+or receipt entries. A single actionable error logs the circuit opening; task logs
+include skipped counts and circuit state, also visible in synchronous admin results.
+The circuit does not persist across calls or admin chunks.
 
 The normal path uses the materialized audience without extra eligibility reads.
 After any backoff, each subsequent publish checks current token identity, owner,
@@ -32,7 +37,8 @@ identifies YV as 503 but its response shape is unknown; YZ's exact status remain
 unverified. Tests exercise the real SDK parser through mocked HTTP sessions.
 
 Ambiguous sends may be lost to avoid duplicates. Task redelivery has no shared
-idempotency guarantee. The circuit may suppress healthy recipients after unrelated
-structured failures; it favors bounded work during outages. Requests timeouts
+idempotency guarantee. The circuit disables recovery for later transient rejects
+after unrelated structured failures; provider request time still scales with
+eligible devices. Requests timeouts
 are not total wall-clock deadlines. Rollback by reverting the repair commit;
 there are no schema, migration or configuration changes to undo.

@@ -97,7 +97,12 @@ def _publish_with_recovery(client, message, result, eligible, recovery):
                 result['transport_errors_omitted'] += 1
             if failure['classification'] == 'transient_reject':
                 recovery['transient_rejections'] += 1
-                recovery['circuit_open'] = recovery['transient_rejections'] >= PUSH_TRANSIENT_LIMIT
+                if not recovery['circuit_open'] and recovery['transient_rejections'] >= PUSH_TRANSIENT_LIMIT:
+                    recovery['circuit_open'] = True
+                    logger.error(
+                        'Push retry circuit open: retry budget exhausted; later eligible devices get one attempt. '
+                        'Check Expo service health and rate limits; do not replay ambiguous or accepted sends.'
+                    )
             logger.warning('Push transport operation=%s classification=%s status=%s attempt=%s',
                            failure['operation'], failure['classification'], failure['http_status'], failure['attempt'])
             if (failure['classification'] != 'transient_reject'
@@ -211,7 +216,7 @@ def send_push_notification(
 
     Sent counts mean non-raising publishes except DeviceNotRegistered, never delivery.
     Other ticket rejections retain their legacy sent counts. Skipped counts
-    revoked eligibility and circuit-suppressed devices, without send telemetry.
+    revoked eligibility, without send telemetry.
     Accepted publishes remain sent even when local bookkeeping fails.
     
     Args:
@@ -303,9 +308,6 @@ def send_push_notification(
             error = None
             accepted = False
             try:
-                if recovery['circuit_open']:
-                    result['skipped'] += 1
-                    continue
                 if recovery['backed_off'] and not _still_eligible(device, notification_type):
                     result['skipped'] += 1
                     continue
@@ -359,7 +361,11 @@ def send_push_notification(
 
             except Exception as e:
                 error = e
-                logger.error('Push send failed: %s (%s)', _device_token_log_id(token), type(e).__name__)
+                if accepted:
+                    logger.error('Push accepted but local bookkeeping failed: %s (%s)',
+                                 _device_token_log_id(token), type(e).__name__)
+                else:
+                    logger.error('Push send failed: %s (%s)', _device_token_log_id(token), type(e).__name__)
                 if not accepted:
                     result['failed'] += 1
                 if len(result['errors']) < TRANSPORT_ERROR_LIMIT:

@@ -215,11 +215,14 @@ class TransportTests(BaseTestCase):
 
     def test_successful_send_never_retries_local_bookkeeping_failure(self):
         self.publish.return_value = self.ticket()
-        with patch('django.db.models.query.QuerySet.update', side_effect=RuntimeError('private-response')):
+        with patch('django.db.models.query.QuerySet.update', side_effect=RuntimeError('private-response')), \
+                self.assertLogs('notifications.utils') as logs:
             with patch('notifications.utils.time.sleep') as sleep:
                 result = self.send()
         self.publish.assert_called_once()
         sleep.assert_not_called()
+        self.assertTrue(any('accepted but local bookkeeping failed' in line for line in logs.output))
+        self.assertFalse(any('Push send failed:' in line for line in logs.output))
         self.assertEqual(result['transport_errors'], [])
         self.assertEqual(self.rows().get().data['outcome'], 'provider_accepted')
 
@@ -260,27 +263,32 @@ class TransportTests(BaseTestCase):
         self.assertEqual(len(checks), 5)
         self.assertTrue(all(' IN (' not in sql and '100199' not in sql for sql in checks))
 
-    def test_circuit_stops_sustained_outage_and_preserves_accepted_ticket(self):
+    def test_circuit_bounds_sustained_outage_and_preserves_accepted_ticket(self):
         self.add_devices(9)
-        self.publish.side_effect = [self.ticket()] + [self.rejection(503)] * 3
+        self.publish.side_effect = [self.ticket()] + [self.rejection(503)] * 11
         with patch('notifications.utils.time.sleep') as sleep, \
                 patch('notifications.receipts.remember_tickets') as remember:
             result = self.send()
-        self.assertEqual((result['sent'], result['failed'], result['skipped']), (1, 1, 8))
+        self.assertEqual((result['sent'], result['failed'], result['skipped']), (1, 9, 0))
         self.assertTrue(result['circuit_open'])
-        self.assertEqual(self.publish.call_count, 4)
+        self.assertEqual(self.publish.call_count, 12)
         self.assertEqual([c.args[0] for c in sleep.call_args_list], [1, 2])
         self.assertEqual(len(remember.call_args.args[0]), 1)
-        self.assertEqual(self.rows().count(), 2)
+        self.assertEqual(self.rows().count(), 10)
 
     def test_call_wide_budget_survives_success_between_rejections(self):
         self.add_devices(4)
         self.publish.side_effect = [
             self.rejection(429), self.ticket(), self.rejection(503), self.ticket(), self.rejection(503),
+            self.ticket(), self.ticket(),
         ]
-        with patch('notifications.utils.time.sleep') as sleep:
+        with patch('notifications.utils.time.sleep') as sleep, self.assertLogs('notifications.utils') as logs:
             result = self.send()
-        self.assertEqual((result['sent'], result['failed'], result['skipped']), (2, 1, 2))
+        self.assertEqual(sum('Push retry circuit open:' in line for line in logs.output), 1)
+        self.assertNotIn('private-response', str(logs.output))
+        self.assertEqual(self.publish.call_count, 7)
+        self.assertEqual(len({call.args[0].to for call in self.publish.call_args_list}), 5)
+        self.assertEqual((result['sent'], result['failed'], result['skipped']), (4, 1, 0))
         self.assertTrue(result['circuit_open'])
         self.assertEqual(sleep.call_count, 2)
 
@@ -371,3 +379,25 @@ class TransportTests(BaseTestCase):
                 outcomes = list(self.rows().values_list('data__outcome', flat=True))
                 self.assertEqual(outcomes.count('provider_accepted'), 2)
                 self.assertEqual(outcomes.count('provider_rejected'), 1)
+
+    def test_open_circuit_still_checks_later_consent_and_never_replays_ambiguous(self):
+        self.add_devices(3)
+        self.publish.side_effect = [self.rejection(503)] * 3 + [ReadTimeout('private-response'), self.ticket()]
+        with patch('notifications.utils.time.sleep') as sleep, \
+                patch('notifications.utils._still_eligible', side_effect=[True, True, False, True, True]), \
+                patch('notifications.receipts.remember_tickets') as remember:
+            result = self.send()
+        self.assertEqual((result['sent'], result['failed'], result['skipped']), (1, 2, 1))
+        self.assertTrue(result['circuit_open'])
+        self.assertEqual(self.publish.call_count, 5)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(self.rows().count(), 3)
+        self.assertEqual(len(remember.call_args.args[0]), 1)
+
+    def test_admin_surfaces_skips_and_retry_circuit(self):
+        from notifications.admin import DeviceTokenAdmin
+        result = {'skipped': 2, 'circuit_open': True}
+        with patch('notifications.admin.messages.warning') as warning:
+            DeviceTokenAdmin.report_transport_status(None, Mock(), result)
+        self.assertIn('Skipped: 2. Retry circuit open: True.', warning.call_args.args[1])
+        self.assertIn('one attempt without retries', warning.call_args.args[1])

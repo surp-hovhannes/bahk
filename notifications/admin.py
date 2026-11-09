@@ -201,6 +201,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                         kind='admin_manual',
                     )
 
+                    self.report_transport_status(request, result)
                     if result['success']:
                         messages.success(
                             request,
@@ -237,6 +238,14 @@ class DeviceTokenAdmin(admin.ModelAdmin):
             'admin/notifications/devicetoken/send_push.html',
             context
         )
+    def report_transport_status(self, request, result):
+        if result.get('circuit_open') or result.get('skipped'):
+            messages.warning(
+                request,
+                f"Skipped: {result.get('skipped', 0)}. Retry circuit open: {result.get('circuit_open', False)}. "
+                'When open, later eligible devices receive one attempt without retries.'
+            )
+
     def send_test_notification(self, request, queryset):
         users = list(queryset.values_list('user', flat=True).distinct())
         result = send_push_notification(
@@ -245,6 +254,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
             kind='test',
         )
         
+        self.report_transport_status(request, result)
         if result['success']:
             messages.success(
                 request, 
