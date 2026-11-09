@@ -162,9 +162,11 @@ def send_push_notification_task(message, data=None, user_ids=None, notification_
         kind=kind,
     )
     logger.info(
-        "send_push_notification_task result: sent=%d, failed=%d",
+        "send_push_notification_task result: sent=%d, failed=%d, skipped=%d, circuit_open=%s",
         result.get('sent', 0),
         result.get('failed', 0),
+        result.get('skipped', 0),
+        result.get('circuit_open', False),
     )
     return result
 
@@ -192,6 +194,8 @@ def send_push_notification_to_users_task(message, data=None, user_ids=None, devi
     total_sent = 0
     total_failed = 0
     total_invalid = 0
+    total_skipped = 0
+    circuit_open = False
 
     for i in range(0, len(target_ids), chunk_size):
         chunk = target_ids[i:i + chunk_size]
@@ -204,11 +208,13 @@ def send_push_notification_to_users_task(message, data=None, user_ids=None, devi
         )
         total_sent += result['sent']
         total_failed += result['failed']
+        total_skipped += result.get('skipped', 0)
+        circuit_open = circuit_open or result.get('circuit_open', False)
         total_invalid += len(result.get('invalid_tokens', []))
 
     logger.info(
-        "Chunked push notification complete: sent=%d, failed=%d, invalid_tokens=%d, total_targets=%d",
-        total_sent, total_failed, total_invalid, len(target_ids)
+        "Chunked push notification complete: sent=%d, failed=%d, invalid_tokens=%d, total_targets=%d, skipped=%d, circuit_open=%s",
+        total_sent, total_failed, total_invalid, len(target_ids), total_skipped, circuit_open
     )
 
 @shared_task

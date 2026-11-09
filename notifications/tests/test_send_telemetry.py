@@ -299,6 +299,21 @@ class SendTelemetryTests(BaseTestCase):
             self.assertEqual(send.call_args.kwargs['kind'], 'admin_manual')
             self.assertEqual(send.call_args.kwargs['device_token_ids'], [101])
 
+    def test_task_logs_surface_skips_and_circuit_across_chunks(self):
+        results = [
+            {'sent': 2, 'failed': 1, 'skipped': 3, 'circuit_open': True},
+            {'sent': 4, 'failed': 0, 'skipped': 1, 'circuit_open': False},
+        ]
+        with patch('notifications.tasks.send_push_notification', return_value=results[0]), \
+                self.assertLogs('notifications.tasks', level='INFO') as logs:
+            send_push_notification_task('message', user_ids=[self.user.pk])
+        self.assertIn('sent=2, failed=1, skipped=3, circuit_open=True', str(logs.output))
+        with patch('notifications.tasks.send_push_notification', side_effect=results), \
+                self.assertLogs('notifications.tasks', level='INFO') as logs:
+            send_push_notification_to_users_task('message', device_token_ids=list(range(101)))
+        self.assertIn('sent=6, failed=1', str(logs.output))
+        self.assertIn('skipped=4, circuit_open=True', str(logs.output))
+
     def production_notification_calls(self, source, path):
         names = {'send_push_notification', 'send_push_notification_task', 'send_push_notification_to_users_task'}
         calls = []

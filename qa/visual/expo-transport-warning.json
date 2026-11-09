@@ -1,0 +1,43 @@
+{
+  "name": "expo-transport-warning",
+  "repo": "surp-hovhannes/bahk",
+  "pr": 608,
+  "target": {
+    "kind": "ci-artifact"
+  },
+  "viewports": [
+    "mobile",
+    "desktop"
+  ],
+  "scenarios": [
+    {
+      "name": "admin-retry-circuit-warning",
+      "path": "/admin/notifications/devicetoken/?q=visual-qa-transport",
+      "steps": [
+        {
+          "check": "input.action-select"
+        },
+        {
+          "select": [
+            "select[name=action]",
+            "send_test_notification"
+          ]
+        },
+        {
+          "click": "button[name=index]"
+        },
+        {
+          "waitFor": ".messagelist .warning:has-text('The notification service repeatedly rejected send requests.')"
+        },
+        {
+          "waitFor": ".messagelist .error:has-text('The notification request could not be completed.'):has-text('Send requests completed: 0. Send requests with errors: 1.'):has-text('Delivery to devices is not confirmed.')"
+        },
+        {
+          "waitFor": ".messagelist .warning:has-text('Contact support before sending again; some devices may receive duplicates.')"
+        }
+      ],
+      "waitFor": ".messagelist .warning:has-text('The notification service repeatedly rejected send requests.')",
+      "fullPage": true
+    }
+  ]
+}

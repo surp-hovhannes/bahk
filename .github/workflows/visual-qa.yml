@@ -75,6 +75,11 @@ jobs:
           python manage.py migrate --noinput
           python manage.py seed_visual_qa
 
+      - name: Offline transport warning fixture
+        if: contains(inputs.plan, 'admin-retry-circuit-warning')
+        id: transport_fixture
+        run: python manage.py shell -c "from tests.visual_qa_transport import seed; seed()"
+
       - name: One-run admin user
         id: admin
         run: |
@@ -121,7 +126,7 @@ jobs:
       - name: Record setup failure
         if: failure()
         env:
-          FAILED_STEP: ${{ steps.validate_label.outcome == 'failure' && 'Validate run label' || steps.checkout.outcome == 'failure' && 'Checkout' || steps.python.outcome == 'failure' && 'Set up Python' || steps.install_python.outcome == 'failure' && 'Install Python dependencies' || steps.database.outcome == 'failure' && 'Database and deterministic seed data' || steps.admin.outcome == 'failure' && 'One-run admin user' || steps.django.outcome == 'failure' && 'Start Django' || steps.node.outcome == 'failure' && 'Set up Node' || steps.playwright.outcome == 'failure' && 'Install Playwright' || steps.capture.outcome == 'failure' && 'Capture admin scenarios' || 'Unknown setup step' }}
+          FAILED_STEP: ${{ steps.validate_label.outcome == 'failure' && 'Validate run label' || steps.checkout.outcome == 'failure' && 'Checkout' || steps.python.outcome == 'failure' && 'Set up Python' || steps.install_python.outcome == 'failure' && 'Install Python dependencies' || steps.database.outcome == 'failure' && 'Database and deterministic seed data' || steps.transport_fixture.outcome == 'failure' && 'Offline transport warning fixture' || steps.admin.outcome == 'failure' && 'One-run admin user' || steps.django.outcome == 'failure' && 'Start Django' || steps.node.outcome == 'failure' && 'Set up Node' || steps.playwright.outcome == 'failure' && 'Install Playwright' || steps.capture.outcome == 'failure' && 'Capture admin scenarios' || 'Unknown setup step' }}
         run: |
           if [ ! -f qa-results/manifest.json ]; then
             mkdir -p qa-results
