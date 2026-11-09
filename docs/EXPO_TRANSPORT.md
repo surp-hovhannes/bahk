@@ -10,7 +10,7 @@ request without retry or backoff. Sustained outage load is one request per devic
 plus at most two retries per call. Later transient rejects have no recovery, while
 healthy recipients still get their attempt. Consent skips produce no send telemetry
 or receipt entries. A single actionable error logs the circuit opening; task logs
-include skipped counts and circuit state, also visible in synchronous admin results.
+include skipped counts and circuit state. Admin messages use plain language.
 The circuit does not persist across calls or admin chunks.
 
 The normal path uses the materialized audience without extra eligibility reads.
@@ -50,8 +50,10 @@ as its plan input after the commit is available to CI. This worker does not star
 CI or publish the branch. Only plans containing `admin-retry-circuit-warning`
 seed the synthetic iOS device belonging to visual-qa-anna, then the plan filters the device changelist, selects it, and
 runs the actual **Send test notification to selected devices** action. The normal
-`report_transport_status` renders **Skipped: 0. Retry circuit open: True.** alongside
-the send failure. Inspect both mobile and desktop screenshots and manifest in the
+`report_transport_status` renders **The notification service repeatedly rejected send requests.**
+alongside **The notification request could not be completed. Send requests completed: 0.
+Send requests with errors: 1. Delivery to devices is not confirmed.** and
+**Contact support before sending again; some devices may receive duplicates.** Inspect both mobile and desktop screenshots and manifest in the
 `visual-qa-<run_label>` artifact; a missing warning fails the scenario wait.
 
 Only `tests.visual_qa_settings` installs the fixture middleware. For that
@@ -72,3 +74,52 @@ skips, not a real outage, receipt delivery, or consent concurrency. Automated
 regressions verify the actual action/HTML and isolation; CI screenshot capture
 and independent review remain separate checks. Roll back this fixture by reverting
 its commit; it has no schema or production configuration effects.
+
+## Admin wording and count limits
+
+Both synchronous admin actions share the same summary for all outcomes:
+“Send requests completed: N. Send requests with errors: N. Delivery to devices is
+not confirmed.” Completed requests retain the legacy `sent` count, which can include
+returned rejection tickets; this is neither confirmed acceptance nor delivery.
+An unsuccessful result prefixes “The notification request could not be completed.”
+Errors (including partial failures and unknown outcomes) advise contacting support
+before sending again because some devices may receive duplicates. No automatic or
+manual replay is recommended. No raw `errors` or exception text is displayed.
+Diagnostic details remain in existing server logs; the sender result contract and
+sending behavior are unchanged.
+
+A nonzero skipped count adds “Not sent to N devices because they were no longer
+eligible for this notification. No action is needed for these devices.” It does
+not infer a particular preference change. Invalid registrations add “Notifications
+were turned off for N devices because the notification service no longer recognizes
+their registrations.” Identifiers are never displayed in these notices.
+
+Background sending says “Notifications queued for background sending to N devices
+(N users). Delivery is not confirmed. Do not send again before checking with
+support; some devices may receive duplicates.” An unexpected manual-view exception
+says “The notification request could not be completed. Delivery is not confirmed.
+Contact support before sending again; some devices may receive duplicates.” This
+also covers an uncertain queue submission, without promising delivery or assuming
+nothing was sent. Routine form validation remains separate.
+
+### Plain-language change self-review
+
+Reviewed both synchronous actions, queued sends, partial/all failures, no available
+devices, eligibility skips, invalid registrations, and unexpected manual-view
+exceptions. Reviewed the full synthetic warning plus failure output (not just the
+warning selector). The offline plan now requires both messages and the support
+advice. No screenshot was supplied with this task; fresh mobile/desktop capture
+and visual inspection remain the PM's follow-up. The scenario identifier is kept
+for compatibility with existing fixture seeding.
+
+The diff changes presentation, regression assertions, the QA plan, and this
+reference only. No sender, result fields, audience selection, task arguments,
+retry rules, migrations, or schema were changed. Existing diagnostic logging is
+retained. Python 3.11 syntax parsing, visual plan validation, and `git diff --check`
+passed locally. `ruff check .` could not run because Ruff is absent. Focused
+Django regressions (`notifications.tests.test_transport` and
+`tests.test_visual_qa_transport`) remain unexecuted: local Docker is unavailable,
+and the warmed Crabbox has no Docker. Automatic approval review blocked a further
+Crabbox probe because its sync exports the private checkout to an external host.
+No dependency installations were attempted. Full CI and fresh visual QA are
+reserved for PM review; do not treat static checks as a test or lint pass.

@@ -394,10 +394,86 @@ class TransportTests(BaseTestCase):
         self.assertEqual(self.rows().count(), 3)
         self.assertEqual(len(remember.call_args.args[0]), 1)
 
-    def test_admin_surfaces_skips_and_retry_circuit(self):
+    def test_admin_plain_language_outcomes(self):
         from notifications.admin import DeviceTokenAdmin
-        result = {'skipped': 2, 'circuit_open': True}
-        with patch('notifications.admin.messages.warning') as warning:
-            DeviceTokenAdmin.report_transport_status(None, Mock(), result)
-        self.assertIn('Skipped: 2. Retry circuit open: True.', warning.call_args.args[1])
-        self.assertIn('one attempt without retries', warning.call_args.args[1])
+        for success, sent, failed, skipped, circuit, invalid in (
+            (True, 2, 0, 0, False, []),
+            (True, 1, 1, 2, False, ['private-hash']),
+            (False, 0, 1, 0, True, []),
+            (False, 0, 1, 0, False, ['private-hash']),
+            (False, 1, 1, 0, False, []),
+            (True, 1, 1, 0, True, []),
+            (False, 0, 0, 2, False, []),
+            (False, 0, 0, 0, False, []),
+        ):
+            with self.subTest(success=success, sent=sent, failed=failed, skipped=skipped, circuit=circuit):
+                result = dict(success=success, sent=sent, failed=failed, skipped=skipped,
+                              circuit_open=circuit, invalid_tokens=invalid,
+                              errors=['PushServerError private-response'])
+                with patch('notifications.admin.messages') as messages:
+                    DeviceTokenAdmin.report_transport_status(None, Mock(), result)
+                summary = messages.success if success else messages.error
+                self.assertIn(f'Send requests completed: {sent}. Send requests with errors: {failed}.',
+                              summary.call_args.args[1])
+                self.assertIn('Delivery to devices is not confirmed.', summary.call_args.args[1])
+                warnings = ' '.join(call.args[1] for call in messages.warning.call_args_list)
+                self.assertEqual('repeatedly rejected' in warnings, circuit)
+                self.assertEqual('no longer eligible' in warnings, bool(skipped))
+                self.assertEqual('no longer recognizes' in warnings, bool(invalid))
+                self.assertEqual('Contact support before sending again' in warnings, circuit or bool(failed) or not success)
+                output = ' '.join(call.args[1] for call in messages.mock_calls)
+                for private in ('PushServerError', 'private-response', 'private-hash', 'True', 'False', 'circuit'):
+                    self.assertNotIn(private, output)
+
+    def test_manual_admin_result_and_exception_hide_diagnostics(self):
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        from notifications.admin import DeviceTokenAdmin
+
+        admin = DeviceTokenAdmin(DeviceToken, AdminSite())
+        request = RequestFactory().post('/', {'message': 'test'})
+        request.session = {'selected_tokens': [self.device.pk]}
+        result = dict(success=False, sent=0, failed=1, skipped=0, circuit_open=False,
+                      invalid_tokens=[], errors=['PushServerError private-response'])
+        for outcome in (result, RuntimeError('private-response')):
+            with (
+                self.subTest(outcome=type(outcome).__name__),
+                patch.object(admin.admin_site, 'each_context', return_value={}),
+                patch('notifications.admin.send_push_notification', side_effect=[outcome]) as send,
+                patch('notifications.admin.messages') as messages,
+                patch('notifications.admin.logger.exception') as log,
+            ):
+                request.session['selected_tokens'] = [self.device.pk]
+                admin.send_push_view(request)
+                send.assert_called_once()
+                output = ' '.join(call.args[1] for call in messages.mock_calls)
+                self.assertIn('Contact support before sending again', output)
+                self.assertNotIn('private-response', output)
+                self.assertNotIn('PushServerError', output)
+                self.assertEqual(log.called, isinstance(outcome, Exception))
+
+    def test_manual_admin_background_notice_does_not_promise_delivery(self):
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        from notifications.admin import DeviceTokenAdmin
+
+        admin = DeviceTokenAdmin(DeviceToken, AdminSite())
+        request = RequestFactory().post('/', {'message': 'test'})
+        request.session = {'selected_tokens': [self.device.pk]}
+        with (
+            patch.object(admin.admin_site, 'each_context', return_value={}),
+            patch('notifications.admin.DeviceToken.objects.filter') as devices,
+            patch('notifications.admin.send_push_notification_to_users_task.delay') as enqueue,
+            patch('notifications.admin.send_push_notification') as send,
+            patch('notifications.admin.messages') as messages,
+        ):
+            devices.return_value.count.return_value = 101
+            devices.return_value.values_list.return_value = [self.device.pk]
+            devices.return_value.values.return_value.distinct.return_value.count.return_value = 1
+            admin.send_push_view(request)
+            enqueue.assert_called_once()
+            send.assert_not_called()
+            self.assertEqual(messages.success.call_args.args[1],
+                             'Notifications queued for background sending to 101 devices (1 users). '
+                             'Delivery is not confirmed. Do not send again before checking with support; '
+                             'some devices may receive duplicates.')

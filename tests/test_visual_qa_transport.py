@@ -50,7 +50,12 @@ class TransportVisualFixtureTests(TestCase):
             response = self.client.post('/admin/notifications/devicetoken/', {
                 'action': 'send_test_notification', '_selected_action': str(device.pk), 'index': '0',
             }, follow=True)
-            self.assertContains(response, 'Skipped: 0. Retry circuit open: True.')
+            self.assertContains(response, 'The notification service repeatedly rejected send requests.')
+            self.assertContains(response, 'The notification request could not be completed.')
+            self.assertContains(response, 'Send requests completed: 0. Send requests with errors: 1.')
+            self.assertContains(response, 'Contact support before sending again; some devices may receive duplicates.')
+            for private in ('PushServerError', 'RuntimeError', TOKEN, 'Retry circuit', 'Skipped:'):
+                self.assertNotContains(response, private)
             result = report.call_args.args[2]
             self.assertEqual((result['sent'], result['failed'], result['skipped']), (0, 1, 0))
             self.assertEqual(len(result['transport_errors']), 3)
@@ -64,7 +69,7 @@ class TransportVisualFixtureTests(TestCase):
             response = self.client.post('/admin/notifications/devicetoken/', {
                 'action': 'send_test_notification', '_selected_action': str(other.pk), 'index': '0',
             }, follow=True)
-            self.assertNotContains(response, 'Retry circuit open: True')
+            self.assertNotContains(response, 'The notification service repeatedly rejected send requests.')
             network.assert_not_called()
             sleep.assert_not_called()
 

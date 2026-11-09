@@ -190,8 +190,9 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                     )
                     messages.success(
                         request,
-                        f"Sending notifications to {token_count} devices ({user_count} users) in the background. "
-                        f"They will be delivered in chunks shortly."
+                        f"Notifications queued for background sending to {token_count} devices ({user_count} users). "
+                        "Delivery is not confirmed. Do not send again before checking with support; "
+                        "some devices may receive duplicates."
                     )
                 else:
                     result = send_push_notification(
@@ -202,21 +203,6 @@ class DeviceTokenAdmin(admin.ModelAdmin):
                     )
 
                     self.report_transport_status(request, result)
-                    if result['success']:
-                        messages.success(
-                            request,
-                            f"Successfully sent notifications to {result['sent']} devices. Failed: {result['failed']}"
-                        )
-                        if result['invalid_tokens']:
-                            messages.warning(
-                                request,
-                                f'{len(result["invalid_tokens"])} devices were deactivated due to invalid tokens'
-                            )
-                    else:
-                        error_msg = 'Failed to send push notification'
-                        if result['errors']:
-                            error_msg += f': {", ".join(result["errors"])}'
-                        messages.error(request, error_msg)
 
                 # Clear session
                 if 'selected_tokens' in request.session:
@@ -224,9 +210,13 @@ class DeviceTokenAdmin(admin.ModelAdmin):
 
                 return redirect('admin:notifications_devicetoken_changelist')
 
-            except Exception as e:
+            except Exception:
                 logger.exception('Error in send_push_view')
-                messages.error(request, f'Error sending push notification: {str(e)}')
+                messages.error(
+                    request,
+                    "The notification request could not be completed. Delivery is not confirmed. "
+                    "Contact support before sending again; some devices may receive duplicates.",
+                )
                 return TemplateResponse(
                     request,
                     'admin/notifications/devicetoken/send_push.html',
@@ -238,12 +228,39 @@ class DeviceTokenAdmin(admin.ModelAdmin):
             'admin/notifications/devicetoken/send_push.html',
             context
         )
+
     def report_transport_status(self, request, result):
-        if result.get('circuit_open') or result.get('skipped'):
+        # Legacy sent counts include returned rejection tickets, not just acceptance.
+        summary = (
+            f"Send requests completed: {result['sent']}. Send requests with errors: {result['failed']}. "
+            'Delivery to devices is not confirmed.'
+        )
+        if result['success']:
+            messages.success(request, summary)
+        else:
+            messages.error(request, 'The notification request could not be completed. ' + summary)
+        if result.get('circuit_open'):
             messages.warning(
                 request,
-                f"Skipped: {result.get('skipped', 0)}. Retry circuit open: {result.get('circuit_open', False)}. "
-                'When open, later eligible devices receive one attempt without retries.'
+                'The notification service repeatedly rejected send requests. '
+                'Contact support before sending again; some devices may receive duplicates.'
+            )
+        elif result['failed'] or not result['success']:
+            messages.warning(
+                request,
+                'Contact support before sending again; some devices may receive duplicates.'
+            )
+        if result.get('skipped'):
+            messages.warning(
+                request,
+                f"Not sent to {result['skipped']} devices because they were no longer eligible for this notification. "
+                'No action is needed for these devices.'
+            )
+        if result.get('invalid_tokens'):
+            messages.warning(
+                request,
+                f"Notifications were turned off for {len(result['invalid_tokens'])} devices because "
+                'the notification service no longer recognizes their registrations.'
             )
 
     def send_test_notification(self, request, queryset):
@@ -255,17 +272,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
         )
         
         self.report_transport_status(request, result)
-        if result['success']:
-            messages.success(
-                request, 
-                f"Successfully sent notifications to {result['sent']} devices. Failed: {result['failed']}"
-            )
-        else:
-            messages.error(
-                request, 
-                f"Failed to send notifications. Errors: {', '.join(result['errors'])}"
-            )
-    
+
     send_test_notification.short_description = "Send test notification to selected devices"
 
 
