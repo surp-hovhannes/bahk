@@ -167,8 +167,8 @@ class FastParticipationCompletedPropertyTests(TestCase):
         self.assertFalse(period.completed)
 
 
-class FastParticipationBackfillTests(TestCase):
-    """The 0071 backfill reconstructs periods from the USER_JOINED/LEFT_FAST event log."""
+class _FastParticipationBackfillMixin:
+    """Shared fixtures for backfill and reconciliation tests."""
 
     def setUp(self):
         from django.apps import apps
@@ -208,6 +208,10 @@ class FastParticipationBackfillTests(TestCase):
                 self.connection = connection
 
         migration.backfill_fast_participation(self.apps, _NoopSchemaEditor())
+
+
+class FastParticipationBackfillTests(_FastParticipationBackfillMixin, TestCase):
+    """The 0071 backfill reconstructs periods from the USER_JOINED/LEFT_FAST event log."""
 
     def test_replays_join_leave_pairs_into_closed_periods(self):
         self._make_event(
@@ -603,7 +607,7 @@ class CompletionAndDeletionReviewTests(TestCase):
         self.assertIsNotNone(FastParticipation.objects.get().left_at)
 
 
-class ReconciliationReviewTests(FastParticipationBackfillTests):
+class ReconciliationReviewTests(_FastParticipationBackfillMixin, TestCase):
     def test_repeated_join_events_never_invent_a_leave_or_confirm_completion(self):
         joined = timezone.now() - datetime.timedelta(days=3)
         self._make_event(self.profile, self.fast, "user_joined_fast", joined)
