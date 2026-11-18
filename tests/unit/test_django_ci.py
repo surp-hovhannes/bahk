@@ -94,6 +94,12 @@ class PullRequestClassificationTests(unittest.TestCase):
         self.git("commit", "-qm", "Change the executable bit")
         self.assert_classification(self.git("rev-parse", "HEAD"), "application")
 
+    def test_symlink_at_allowlisted_path_is_application_relevant(self):
+        readme = self.repo / "README.md"
+        readme.unlink()
+        readme.symlink_to("app.py")
+        self.assert_classification(self.commit(), "application")
+
     def test_unexpected_empty_diff_is_application_relevant(self):
         self.assert_classification(self.base, "application")
 
@@ -106,6 +112,15 @@ class PullRequestClassificationTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(output, "")
         (self.repo / ".git" / "shallow").write_text(head + "\n", encoding="utf-8")
+        result, output = self.classify(head)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(output, "")
+
+    def test_failed_diff_command_cannot_set_a_classification(self):
+        self.write("README.md", "Updated text\n")
+        head = self.commit()
+        tree = self.git("rev-parse", "HEAD^{tree}")
+        (self.repo / ".git" / "objects" / tree[:2] / tree[2:]).unlink()
         result, output = self.classify(head)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(output, "")
