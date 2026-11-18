@@ -17,7 +17,7 @@ Windows users interested in using the app, we recommend installing the [Windows 
 
 Begin by cloning the repo:
 ```
-git clone https://github.com/andylitalo/bahk.git
+git clone https://github.com/surp-hovhannes/bahk.git
 ```
 
 We recommend separating this project's packages into their own Python virtual environment.
