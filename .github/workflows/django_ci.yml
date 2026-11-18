@@ -188,6 +188,7 @@ jobs:
 
   complete:
     # Keep the pre-existing check names, including for verified docs-only PRs.
+    # Each name gates only the lane it always described.
     name: ${{ matrix.check }}
     needs: [classify, django-tests, postgres-tests]
     # Runs after failed, skipped or timed-out lanes, but not after cancellation:
@@ -200,7 +201,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: ['test (3.11)', 'Participation concurrency (PostgreSQL 17)']
+        include:
+          # Literal legacy name; update it if django-tests changes Python version.
+          - check: 'test (3.11)'
+            lane: django-tests
+          - check: 'Participation concurrency (PostgreSQL 17)'
+            lane: postgres-tests
     steps:
       - uses: actions/checkout@v4
         with:
@@ -209,6 +215,6 @@ jobs:
         env:
           PLAN_RESULT: ${{ needs.classify.result }}
           CI_MODE: ${{ needs.classify.outputs.mode }}
-          DJANGO_RESULT: ${{ needs.django-tests.result }}
-          POSTGRES_RESULT: ${{ needs.postgres-tests.result }}
+          LANE: ${{ matrix.lane }}
+          LANE_RESULT: ${{ needs[matrix.lane].result }}
         run: python3 scripts/django_ci.py complete

@@ -139,18 +139,25 @@ class CompletionTests(unittest.TestCase):
         self.assertEqual(classify("push", "", ""), "application")
 
     def test_only_proven_documentation_skips_or_passed_application_jobs_succeed(self):
-        self.assertIn("skipped", completion_summary("success", "documentation", "skipped", "skipped"))
-        self.assertIn("passed", completion_summary("success", "application", "success", "success"))
+        for lane in ("django-tests", "postgres-tests"):
+            with self.subTest(lane=lane):
+                self.assertIn("skipped", completion_summary("success", "documentation", lane, "skipped"))
+                self.assertIn("passed", completion_summary("success", "application", lane, "success"))
 
         for args in (
-            ("failure", "documentation", "skipped", "skipped"),
-            ("cancelled", "documentation", "skipped", "skipped"),
-            ("success", "", "skipped", "skipped"),
-            ("success", "documentation", "success", "skipped"),
-            ("success", "application", "skipped", "success"),
-            ("success", "application", "success", "failure"),
-            ("success", "application", "cancelled", "success"),
-            ("success", "application", "success", "timed_out"),
+            ("failure", "documentation", "django-tests", "skipped"),
+            ("cancelled", "documentation", "django-tests", "skipped"),
+            ("", "application", "django-tests", "success"),
+            ("success", "", "django-tests", "skipped"),
+            ("success", "documentation", "django-tests", "success"),
+            ("success", "application", "django-tests", "skipped"),
+            ("success", "application", "postgres-tests", "failure"),
+            ("success", "application", "postgres-tests", "cancelled"),
+            ("success", "application", "postgres-tests", "timed_out"),
+            # An unresolved lane expression must never pass.
+            ("success", "application", "postgres-tests", ""),
+            ("success", "documentation", "", "skipped"),
+            ("success", "application", "", "success"),
         ):
             with self.subTest(args=args), self.assertRaises(RuntimeError):
                 completion_summary(*args)

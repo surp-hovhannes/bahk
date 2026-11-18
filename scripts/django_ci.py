@@ -55,15 +55,16 @@ def classify(event, base, head):
     return "application"
 
 
-def completion_summary(plan_result, mode, django_result, postgres_result):
-    if plan_result == "success":
-        if mode == "documentation" and django_result == postgres_result == "skipped":
-            return "Verified documentation-only diff. Django/Redis and PostgreSQL jobs were skipped."
-        if mode == "application" and django_result == postgres_result == "success":
-            return "Django/Redis and PostgreSQL jobs passed."
+def completion_summary(plan_result, mode, lane, lane_result):
+    """Gate one legacy check on its own lane, never on the other one."""
+    if plan_result == "success" and lane:
+        if mode == "documentation" and lane_result == "skipped":
+            return f"Verified documentation-only diff. The {lane} job was skipped."
+        if mode == "application" and lane_result == "success":
+            return f"The {lane} job passed."
     raise RuntimeError(
         f"Django CI did not complete successfully (classification={plan_result}, "
-        f"mode={mode}, Django/Redis={django_result}, PostgreSQL={postgres_result})."
+        f"mode={mode}, {lane or 'lane'}={lane_result})."
     )
 
 
@@ -77,8 +78,8 @@ def main():
         summary = f"Django CI classification: {mode}."
     else:
         summary = completion_summary(
-            os.environ["PLAN_RESULT"], os.environ["CI_MODE"], os.environ["DJANGO_RESULT"],
-            os.environ["POSTGRES_RESULT"],
+            os.environ["PLAN_RESULT"], os.environ["CI_MODE"], os.environ["LANE"],
+            os.environ["LANE_RESULT"],
         )
     print(summary)
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
