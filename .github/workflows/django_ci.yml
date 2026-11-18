@@ -8,9 +8,38 @@ on:
     # Run on pull requests targeting main branch
     branches: [ "main" ]
 
+concurrency:
+  # Each main push has its own group, including while it is pending.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test: # Job name for running tests
+  classify:
+    name: Classify Django CI changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          persist-credentials: false
+      - name: Classify the complete pull request diff
+        id: plan
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/django_ci.py classify
+
+  django-tests:
+    name: Django and Redis tests (${{ matrix.python-version }})
+    needs: classify
+    if: ${{ !cancelled() && needs.classify.result == 'success' && needs.classify.outputs.mode == 'application' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false # Don't cancel other matrix jobs if one fails
       matrix:
@@ -111,9 +140,12 @@ jobs:
         # Exclude performance and slow tests for faster CI runs
         python manage.py test --noinput --parallel --exclude-tag=performance --exclude-tag=slow --settings=tests.test_settings
 
-  participation-postgres:
-    name: Participation concurrency (PostgreSQL 17)
+  postgres-tests:
+    name: PostgreSQL 17 tests
+    needs: classify
+    if: ${{ !cancelled() && needs.classify.result == 'success' && needs.classify.outputs.mode == 'application' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17
@@ -153,3 +185,34 @@ jobs:
           hub.tests.test_social_auth_postgres
           tests.unit.test_migration_state --noinput
           --settings=tests.postgres_test_settings
+
+  complete:
+    # Keep the pre-existing check names, including for verified docs-only PRs.
+    name: ${{ matrix.check }}
+    needs: [classify, django-tests, postgres-tests]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        check: ['test (3.11)', 'Participation concurrency (PostgreSQL 17)']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify Django CI completion
+        if: ${{ success() && !cancelled() }}
+        env:
+          PLAN_RESULT: ${{ needs.classify.result }}
+          CI_MODE: ${{ needs.classify.outputs.mode }}
+          DJANGO_RESULT: ${{ needs.django-tests.result }}
+          POSTGRES_RESULT: ${{ needs.postgres-tests.result }}
+        run: python3 scripts/django_ci.py complete
+      - name: Report workflow cancellation
+        if: ${{ cancelled() }}
+        run: |
+          echo 'Django CI was cancelled.'
+          exit 1
