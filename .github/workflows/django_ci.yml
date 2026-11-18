@@ -190,7 +190,9 @@ jobs:
     # Keep the pre-existing check names, including for verified docs-only PRs.
     name: ${{ matrix.check }}
     needs: [classify, django-tests, postgres-tests]
-    if: ${{ always() }}
+    # Runs after failed, skipped or timed-out lanes, but not after cancellation:
+    # a superseded run ends as cancelled instead of reporting failure.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -204,15 +206,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify Django CI completion
-        if: ${{ success() && !cancelled() }}
         env:
           PLAN_RESULT: ${{ needs.classify.result }}
           CI_MODE: ${{ needs.classify.outputs.mode }}
           DJANGO_RESULT: ${{ needs.django-tests.result }}
           POSTGRES_RESULT: ${{ needs.postgres-tests.result }}
         run: python3 scripts/django_ci.py complete
-      - name: Report workflow cancellation
-        if: ${{ cancelled() }}
-        run: |
-          echo 'Django CI was cancelled.'
-          exit 1
