@@ -122,6 +122,7 @@ class PostFastEncouragementAPITests(APITestCase):
             ('unknown', 'value'),
             ('fast_name', 'read-only'),
             ('fast', None),
+            ('fast', self.other_fast.pk + 0.9),
         ):
             with self.subTest(field=field, value=value):
                 response = self.client.post(self.list_url, dict(self.payload, **{field: value}), format='json')

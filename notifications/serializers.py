@@ -36,6 +36,7 @@ class PostFastEncouragementEmailSerializer(serializers.ModelSerializer):
 
     fast = serializers.PrimaryKeyRelatedField(
         queryset=Fast.objects.all(),
+        pk_field=serializers.IntegerField(),
         validators=[
             UniqueValidator(
                 queryset=PostFastEncouragementEmail.objects.all(),
