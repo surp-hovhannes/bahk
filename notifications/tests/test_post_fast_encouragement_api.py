@@ -115,6 +115,8 @@ class PostFastEncouragementAPITests(APITestCase):
             ('subject', ''),
             ('subject', ' \t '),
             ('subject', 'x' * 256),
+            ('subject', 'Peace\nKeep praying'),
+            ('subject', 'Peace\rKeep praying'),
             ('message', ''),
             ('message', ' \n\t '),
             ('unknown', 'value'),

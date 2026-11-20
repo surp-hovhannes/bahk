@@ -50,6 +50,11 @@ class PostFastEncouragementEmailSerializer(serializers.ModelSerializer):
         model = PostFastEncouragementEmail
         fields = ('id', 'fast', 'fast_id', 'fast_name', 'subject', 'message')
 
+    def validate_subject(self, value):
+        if '\r' in value or '\n' in value:
+            raise serializers.ValidationError('Subject must be a single line.')
+        return value
+
     def validate(self, attrs):
         unknown = set(self.initial_data) - {'fast', 'subject', 'message'}
         if unknown:
