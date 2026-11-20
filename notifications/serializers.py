@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import DeviceToken
+from rest_framework.validators import UniqueValidator
+
+from hub.models import Fast
+
+from .models import DeviceToken, PostFastEncouragementEmail
 import re
 
 class DeviceTokenSerializer(serializers.ModelSerializer):
@@ -25,3 +29,45 @@ class DeviceTokenSerializer(serializers.ModelSerializer):
         if not bool(re.match(pattern, value)):
             raise serializers.ValidationError(f'Invalid Expo push token format. Expected: {pattern}')
         return value
+
+
+class PostFastEncouragementEmailSerializer(serializers.ModelSerializer):
+    duplicate_fast_message = 'An encouragement email already exists for this fast.'
+
+    fast = serializers.PrimaryKeyRelatedField(
+        queryset=Fast.objects.all(),
+        pk_field=serializers.IntegerField(),
+        validators=[
+            UniqueValidator(
+                queryset=PostFastEncouragementEmail.objects.all(),
+                message=duplicate_fast_message,
+            ),
+        ],
+    )
+    fast_id = serializers.IntegerField(read_only=True)
+    fast_name = serializers.CharField(source='fast.name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = PostFastEncouragementEmail
+        fields = ('id', 'fast', 'fast_id', 'fast_name', 'subject', 'message')
+
+    def validate_subject(self, value):
+        if '\r' in value or '\n' in value:
+            raise serializers.ValidationError('Subject must be a single line.')
+        return value
+
+    def validate(self, attrs):
+        unknown = set(self.initial_data) - {'fast', 'subject', 'message'}
+        if unknown:
+            raise serializers.ValidationError(
+                {name: 'Unknown field.' for name in sorted(unknown)}
+            )
+        if self.partial and not self.initial_data:
+            raise serializers.ValidationError('PATCH body must contain at least one field.')
+        return attrs
+
+    def update(self, instance, validated_data):
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save(update_fields=validated_data.keys())
+        return instance

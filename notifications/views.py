@@ -3,17 +3,63 @@ import logging
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
 from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
-from rest_framework import generics, permissions, status
+from django.db import IntegrityError, transaction
+from rest_framework import generics, mixins, permissions, serializers, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .utils import _device_token_log_id
 from .receipts import note_registration
-from .models import DeviceToken
-from .serializers import DeviceTokenSerializer
+from .models import DeviceToken, PostFastEncouragementEmail
+from .serializers import DeviceTokenSerializer, PostFastEncouragementEmailSerializer
 from .tasks import send_push_notification_task
 from django.core.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
+
+
+class PostFastEncouragementEmailViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = PostFastEncouragementEmailSerializer
+    queryset = PostFastEncouragementEmail.objects.select_related('fast').order_by('pk')
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action == 'list' and 'fast' in self.request.query_params:
+            try:
+                fast_id = serializers.IntegerField(min_value=1).run_validation(
+                    self.request.query_params['fast']
+                )
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError({'fast': exc.detail}) from exc
+            queryset = queryset.filter(fast_id=fast_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        self.save_copy(serializer)
+
+    def perform_update(self, serializer):
+        self.save_copy(serializer)
+
+    def save_copy(self, serializer):
+        try:
+            with transaction.atomic():
+                serializer.save()
+        except IntegrityError as exc:
+            # A competing write can claim the fast after serializer validation.
+            fast = serializer.validated_data.get('fast')
+            instance_id = serializer.instance.pk if serializer.instance else None
+            if fast and self.queryset.filter(fast=fast).exclude(pk=instance_id).exists():
+                raise serializers.ValidationError(
+                    {'fast': [serializer.duplicate_fast_message]}
+                ) from exc
+            raise
+
 
 # Create your views here.
 

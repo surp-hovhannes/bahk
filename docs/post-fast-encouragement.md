@@ -6,6 +6,14 @@ In Django admin, open Notifications → Post fast encouragement emails. Select a
 
 The task records sent_at for each user/fast pair and locks that record during delivery to serialize concurrent workers. Successful recipients are skipped on reruns. Both post-fast and promotional email tasks atomically reserve the same shared email-count quota before rendering or delivery and schedules a continuation with the original completion date when rate limited. Reservations use unique tokens scoped to the quota window; expired or already released tokens cannot decrement a fresh window. Redis transitions run atomically in Lua, with a thread-locked LocMem fallback for focused tests. Cache failures deny admission. Exceptions and unsuccessful send results release the exact reservation; provider success retains quota even if the delivery-state write fails. A worker crash before delivery can hold unused quota until the cache window expires. Failed sends are logged and remain eligible for an explicit rerun of send_post_fast_encouragement_task(completed_on='YYYY-MM-DD'). As with SMTP generally, a crash after provider acceptance but before database commit can produce a duplicate on retry.
 
+## Staff API
+
+Staff can list and create email copy at `/api/notifications/post-fast-encouragement/` with `GET` and `POST`. The list is paginated and accepts an optional `?fast=<id>` filter. Use `GET` or `PATCH` on `/api/notifications/post-fast-encouragement/<id>/` to view or edit one record.
+
+Send `fast` (a fast's primary key), `subject` (up to 255 characters), and `message` (plain text) on create. PATCH accepts any subset of these fields. Each fast can have one record. The API rejects null fasts, blank copy, and unknown fields. Message paragraphs are preserved. Responses include `id`, `fast`, `fast_id`, `fast_name`, `subject`, and `message`. Legacy unassigned records return null for the fast fields.
+
+All operations require staff authentication. The API has no send or trigger endpoint and saving copy does not send email.
+
 ## Migration and rollback
 
 notifications.0007_post_fast_encouragement adds only the email-copy and delivery tables; it does not alter existing memberships or data. Apply it before starting workers with the new daily schedule. No messages are sent by the migration.
