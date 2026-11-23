@@ -19,6 +19,31 @@ class TestSettingsImportTests(unittest.TestCase):
         )
         return env
 
+    def test_normal_startup_initializes_sentry_with_telemetry_disabled(self):
+        # Django's test command and CI=true skip Sentry initialization. Exercise
+        # normal local startup too, so a compatible test install cannot conceal
+        # an incompatible SDK in the actual web/worker startup path.
+        env = self._settings_env()
+        env.update({
+            'CI': 'false',
+            'DEBUG': 'false',
+            'IS_PRODUCTION': 'false',
+            'SENTRY_DSN': '',
+            'AWS_ACCESS_KEY_ID': '',
+            'AWS_SECRET_ACCESS_KEY': '',
+            'AWS_STORAGE_BUCKET_NAME': '',
+            'AWS_EC2_METADATA_DISABLED': 'true',
+        })
+        result = subprocess.run(
+            [sys.executable, 'manage.py', 'check', '--settings=tests.test_settings'],
+            cwd=os.getcwd(),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_test_settings_import_without_external_service_secrets(self):
         env = self._settings_env()
         for key in (

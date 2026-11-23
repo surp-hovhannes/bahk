@@ -1,6 +1,6 @@
 # Django and extensions
 django==5.2.19
-djangorestframework==3.17.2
+djangorestframework==3.18.3
 pytest==8.1.1
 pytest-django==4.8.0
 whitenoise
@@ -33,7 +33,8 @@ exponent_server_sdk==2.2.0
 django-redis==5.4.0
 hiredis==2.3.2
 newrelic
-sentry-sdk[django]
+# Existing initialization options require Sentry 2.x; keep rebuilds compatible.
+sentry-sdk[django]<3
 # Translations
 django-modeltrans>=0.8
 # Tagging
