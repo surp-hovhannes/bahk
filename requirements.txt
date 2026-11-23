@@ -1,5 +1,5 @@
 # Django and extensions
-django==5.2.17
+django==5.2.19
 djangorestframework==3.17.2
 pytest==8.1.1
 pytest-django==4.8.0
