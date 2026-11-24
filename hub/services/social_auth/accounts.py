@@ -36,7 +36,7 @@ from hub.services.church_selection import assign_only_church, only_church
 
 from .apple import AppleTokenError, apple_key_configured, get_apple_client
 from .config import APPLE
-from .crypto import encrypt_payload
+from .crypto import InvalidToken, decrypt_payload, encrypt_payload
 from .errors import (
     AccountDisabled,
     AccountLinkRequired,
@@ -139,10 +139,21 @@ def store_apple_refresh_token(social: SocialIdentity, identity: VerifiedIdentity
             extra={"reason": exc.reason, "identity_id": social.pk},
         )
         return False
-    social.apple_refresh_token_encrypted = encrypt_payload(
-        {"client_id": identity.audience, "refresh_token": tokens.refresh_token}
-    )
-    social.save(update_fields=["apple_refresh_token_encrypted", "updated_at"])
+    with transaction.atomic(using=social._state.db):
+        stored = SocialIdentity.objects.using(social._state.db).select_for_update().get(pk=social.pk)
+        credentials = []
+        for ciphertext in stored.apple_refresh_token_encrypted.splitlines():
+            try:
+                client_id = decrypt_payload(ciphertext).get("client_id")
+            except InvalidToken:
+                # Preserve unreadable entries for the outbox's normal error handling.
+                credentials.append(ciphertext)
+            else:
+                if client_id != identity.audience:
+                    credentials.append(ciphertext)
+        credentials.append(encrypt_payload({"client_id": identity.audience, "refresh_token": tokens.refresh_token}))
+        social.apple_refresh_token_encrypted = "\n".join(credentials)
+        social.save(update_fields=["apple_refresh_token_encrypted", "updated_at"])
     return True
 
 

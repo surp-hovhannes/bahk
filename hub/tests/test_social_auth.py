@@ -837,6 +837,27 @@ class AccountDeletionTests(SocialAuthTestMixin, TestCase):
         again = self.client.post(SOCIAL_URL, self.social_payload("apple", "apple-delete"), format="json")
         self.assertTrue(again.json()["is_new_user"])
 
+    @override_settings(**APPLE_WEB_SETTINGS)
+    def test_deletion_revokes_native_and_web_credentials_for_one_apple_identity(self):
+        for audience, code in (
+            (APPLE_AUDIENCE, "native-code"),
+            (APPLE_WEB_AUDIENCE, "web-code"),
+            (APPLE_AUDIENCE, "new-native-code"),
+        ):
+            payload = self.social_payload("apple", "shared-user", aud=audience)
+            payload["authorization_code"] = code
+            response = self.client.post(SOCIAL_URL, payload, format="json")
+            self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(SocialIdentity.objects.count(), 1)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.json()['tokens']['access']}")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.client.delete("/api/account/delete/").status_code, 204)
+        self.assertCountEqual(self.apple_client.revoked, [
+            ("apple-refresh-for-new-native-code", APPLE_AUDIENCE),
+            ("apple-refresh-for-web-code", APPLE_WEB_AUDIENCE),
+        ])
+
     def test_deletion_succeeds_when_apple_revocation_fails(self):
         self.apple_client.fail_revoke = AppleTokenError("invalid_client")
         payload = self.social_payload("apple", "apple-delete-fail")

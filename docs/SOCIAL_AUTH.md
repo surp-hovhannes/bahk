@@ -287,8 +287,11 @@ Analytics: `USER_LOGGED_IN` has `data.method` = `apple`/`google` (password login
 
 To roll back Apple web sign-in, remove `com.stjohn.bahk.web` from `APPLE_ALLOWED_AUDIENCES`.
 Native Apple remains available and the worker can still revoke existing web credentials using the
-stored client ID. Google web and native share an audience, so removing that Google audience would
-disable both. Hide Google web sign-in in the frontend for a web-only Google rollback.
+stored client ID. Keep the current deletion code deployed to revoke both credentials for accounts
+that have used native and web sign-in.
+
+Google web and native share an audience, so removing that Google audience would disable both.
+Hide Google web sign-in in the frontend for a web-only Google rollback.
 
 ### Original native rollout
 

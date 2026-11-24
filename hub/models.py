@@ -1589,8 +1589,8 @@ class SocialIdentity(models.Model):
 
     ``apple_refresh_token_encrypted`` exists for one purpose only: Apple requires
     apps to revoke a user's Sign in with Apple tokens when the account is deleted
-    (App Store Review Guideline 5.1.1(v)). It holds Fernet ciphertext (see
-    ``hub.services.social_auth.crypto``) and is never logged or served. Google
+    (App Store Review Guideline 5.1.1(v)). It holds one Fernet ciphertext per Apple client ID, separated by newlines,
+    and is never logged or served. Google
     stores no credential at all.
     """
 
