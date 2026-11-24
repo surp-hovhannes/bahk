@@ -3,6 +3,7 @@
 Read through ``django.conf.settings`` at call time so ``override_settings`` and
 environment changes (after a restart) take effect without import-time caching.
 """
+from ipaddress import ip_address
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -43,10 +44,18 @@ def apple_web_redirect_uri() -> str:
     try:
         _validate_https_url(uri)
         parts = urlsplit(uri)
-        if parts.username is None and parts.port != 0:
-            return uri
+        if parts.hostname is None or parts.username is not None or parts.port == 0:
+            return ""
     except (ValidationError, ValueError):
-        pass
+        return ""
+
+    hostname = parts.hostname.rstrip(".")
+    if hostname == "localhost" or hostname.endswith(".localhost"):
+        return ""
+    try:
+        ip_address(hostname)
+    except ValueError:
+        return uri
     return ""
 
 

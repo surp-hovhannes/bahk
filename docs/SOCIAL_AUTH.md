@@ -63,6 +63,7 @@ token. Never send an access token as `id_token`. `authorization_code` and `name`
 Send the Apple code from the same browser sign-in so the backend can store a token for deletion
 revocation. The exchange uses the verified audience as `client_id` and takes the browser
 `redirect_uri` from server configuration. Native exchange omits `redirect_uri`.
+Local Apple web sign-in testing requires a registered public HTTPS hostname for the callback.
 
 Success, `200`:
 
