@@ -106,7 +106,7 @@ class AppleTokenClient:
         if not isinstance(code, str) or not code or len(code) > MAX_AUTHORIZATION_CODE_LENGTH:
             raise AppleTokenError("malformed_authorization_code")
         data = {"client_id": client_id, "code": code, "grant_type": "authorization_code"}
-        if client_id == config.apple_web_audience():
+        if config.is_apple_web_audience(client_id):
             redirect_uri = config.apple_web_redirect_uri()
             if not redirect_uri:
                 raise AppleTokenError("apple_web_redirect_uri_not_configured")

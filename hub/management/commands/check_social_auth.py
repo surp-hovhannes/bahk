@@ -54,9 +54,19 @@ class Command(BaseCommand):
             f"  apple web: live={public['apple_web'] is not None} audience={web_audience or '(unset)'} "
             f"APPLE_WEB_REDIRECT_URI={redirect_status}"
         )
+        if getattr(settings, "APPLE_WEB_AUDIENCE", "") != web_audience:
+            problems.append("apple web: APPLE_WEB_AUDIENCE has surrounding whitespace")
+        if config.apple_web_audience_conflicts():
+            problems.append("apple web: APPLE_WEB_AUDIENCE conflicts with another allowed Apple audience")
         if config.provider_switch_enabled(config.APPLE):
-            if web_audience in config.allowed_audiences(config.APPLE) and not redirect_valid:
-                problems.append("apple web: allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI as an absolute HTTPS URL")
+            if (
+                config.is_apple_web_audience(web_audience)
+                and web_audience in config.allowed_audiences(config.APPLE)
+                and not redirect_valid
+            ):
+                problems.append(
+                    "apple web: allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI as an absolute HTTPS URL"
+                )
             if redirect_status != "missing" and not web_audience:
                 problems.append("apple web: APPLE_WEB_REDIRECT_URI requires APPLE_WEB_AUDIENCE")
 

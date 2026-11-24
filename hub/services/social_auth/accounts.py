@@ -45,6 +45,7 @@ from .errors import (
     ProviderAlreadyLinked,
 )
 from .providers import VerifiedIdentity
+from .revocation import preserve_revocations
 
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("hub.social_auth.audit")
@@ -139,8 +140,14 @@ def store_apple_refresh_token(social: SocialIdentity, identity: VerifiedIdentity
             extra={"reason": exc.reason, "identity_id": social.pk},
         )
         return False
-    with transaction.atomic(using=social._state.db):
-        stored = SocialIdentity.objects.using(social._state.db).select_for_update().get(pk=social.pk)
+    new_ciphertext = encrypt_payload({"client_id": identity.audience, "refresh_token": tokens.refresh_token})
+    using = social._state.db
+    with transaction.atomic(using=using):
+        try:
+            stored = SocialIdentity.objects.using(using).select_for_update().get(pk=social.pk)
+        except SocialIdentity.DoesNotExist:
+            preserve_revocations([new_ciphertext], using=using)
+            return False
         credentials = []
         for ciphertext in stored.apple_refresh_token_encrypted.splitlines():
             try:
@@ -151,7 +158,7 @@ def store_apple_refresh_token(social: SocialIdentity, identity: VerifiedIdentity
             else:
                 if client_id != identity.audience:
                     credentials.append(ciphertext)
-        credentials.append(encrypt_payload({"client_id": identity.audience, "refresh_token": tokens.refresh_token}))
+        credentials.append(new_ciphertext)
         social.apple_refresh_token_encrypted = "\n".join(credentials)
         social.save(update_fields=["apple_refresh_token_encrypted", "updated_at"])
     return True

@@ -1077,6 +1077,35 @@ class CheckSocialAuthCommandTests(TestCase):
         self.assertIn(f"audiences={[APPLE_AUDIENCE, APPLE_WEB_AUDIENCE]}", output)
         self.assertIn(f"apple web: live=False audience={APPLE_WEB_AUDIENCE} APPLE_WEB_REDIRECT_URI=set", output)
 
+    def test_reports_whitespace_in_web_audience_and_uses_trimmed_value(self):
+        from hub.services.social_auth import config
+
+        with override_settings(**APPLE_WEB_SETTINGS), override_settings(
+            APPLE_WEB_AUDIENCE=f"  {APPLE_WEB_AUDIENCE} ",
+        ):
+            self.assertEqual(config.apple_web_audience(), APPLE_WEB_AUDIENCE)
+            self.assertTrue(config.is_apple_web_audience(APPLE_WEB_AUDIENCE))
+            output = self.run_command(SOCIAL_AUTH_ENABLED=False)
+        self.assertIn("problem: apple web: APPLE_WEB_AUDIENCE has surrounding whitespace", output)
+
+    def test_reports_web_audience_conflicts_and_preserves_native_classification(self):
+        from hub.services.social_auth import config
+
+        for native_audiences, allowed in (
+            ([APPLE_AUDIENCE], [APPLE_AUDIENCE, APPLE_WEB_AUDIENCE]),
+            ([], [APPLE_AUDIENCE, f" {APPLE_AUDIENCE} "]),
+        ):
+            with self.subTest(native_audiences=native_audiences), override_settings(
+                APPLE_ALLOWED_AUDIENCES=allowed, APPLE_NATIVE_AUDIENCES=native_audiences,
+                APPLE_WEB_AUDIENCE=APPLE_AUDIENCE, APPLE_WEB_REDIRECT_URI=PRODUCTION_APPLE_WEB_REDIRECT_URI,
+                SOCIAL_AUTH_APPLE_ENABLED=True,
+            ):
+                self.assertFalse(config.is_apple_web_audience(APPLE_AUDIENCE))
+                self.assertIn(APPLE_AUDIENCE, config.accepted_audiences(config.APPLE))
+                output = self.run_command(SOCIAL_AUTH_ENABLED=False)
+            self.assertIn("apple web: live=False", output)
+            self.assertIn("problem: apple web: APPLE_WEB_AUDIENCE conflicts", output)
+
     def test_reports_unusable_callback_when_web_is_the_only_apple_audience(self):
         from io import StringIO
 

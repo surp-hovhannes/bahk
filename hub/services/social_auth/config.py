@@ -33,7 +33,19 @@ def social_auth_enabled() -> bool:
 
 
 def apple_web_audience() -> str:
-    return getattr(settings, "APPLE_WEB_AUDIENCE", "")
+    return getattr(settings, "APPLE_WEB_AUDIENCE", "").strip()
+
+
+def apple_web_audience_conflicts() -> bool:
+    web_audience = apple_web_audience()
+    return bool(web_audience) and (
+        web_audience in _clean_list(getattr(settings, "APPLE_NATIVE_AUDIENCES", []))
+        or allowed_audiences(APPLE).count(web_audience) > 1
+    )
+
+
+def is_apple_web_audience(audience: str) -> bool:
+    return bool(audience) and audience == apple_web_audience() and not apple_web_audience_conflicts()
 
 
 def apple_web_redirect_uri() -> str:
@@ -62,7 +74,7 @@ def apple_web_redirect_uri() -> str:
 def accepted_audiences(provider: str) -> list[str]:
     audiences = allowed_audiences(provider)
     if provider == APPLE and not apple_web_redirect_uri():
-        return [audience for audience in audiences if audience != apple_web_audience()]
+        return [audience for audience in audiences if not is_apple_web_audience(audience)]
     return audiences
 
 
@@ -104,7 +116,7 @@ def public_config() -> dict:
     web_audience = apple_web_audience()
     redirect_uri = apple_web_redirect_uri()
     apple_web = None
-    if providers[APPLE] and web_audience in audiences[APPLE] and redirect_uri:
+    if providers[APPLE] and is_apple_web_audience(web_audience) and web_audience in audiences[APPLE] and redirect_uri:
         apple_web = {"audience": web_audience, "redirect_uri": redirect_uri}
     return {
         "enabled": social_auth_enabled(),

@@ -236,4 +236,4 @@ def preserve_deleted_apple_identity(sender, instance, using, **kwargs):
             .values_list("apple_refresh_token_encrypted", flat=True).first()
         )
         if ciphertexts:
-            preserve_revocations(ciphertexts.splitlines(), using=using)
+            preserve_revocations([ciphertexts], using=using)

@@ -1,5 +1,6 @@
 """Account deletion must never discard an unconfirmed Apple revocation."""
 from datetime import timedelta
+from hashlib import sha256
 from io import StringIO
 from unittest import mock
 
@@ -14,8 +15,10 @@ from rest_framework.test import APIClient
 
 from hub.models import PendingAppleRevocation, SocialIdentity
 from hub.services.accounts import issue_tokens_for_user
+from hub.services.social_auth.accounts import store_apple_refresh_token
 from hub.services.social_auth.apple import AppleTokenError
-from hub.services.social_auth.crypto import encrypt_payload
+from hub.services.social_auth.crypto import decrypt_payload, encrypt_payload
+from hub.services.social_auth.providers import VerifiedIdentity
 from hub.services.social_auth.revocation import persist_revocations
 from hub.tasks.social_auth_tasks import process_pending_apple_revocations_task, revoke_apple_tokens_task
 from hub.tests.social_auth_helpers import APPLE_AUDIENCE, SocialAuthTestMixin
@@ -84,6 +87,66 @@ class DurableAppleRevocationTests(SocialAuthTestMixin, TestCase):
         with self.captureOnCommitCallbacks(execute=False):
             User.objects.filter(pk=self.user.pk).delete()
         self.assertEqual(PendingAppleRevocation.objects.get().token_encrypted, self.ciphertext)
+
+    def test_deleting_stale_identity_preserves_latest_credential(self):
+        latest = encrypt_payload({"client_id": APPLE_AUDIENCE, "refresh_token": "latest"})
+        SocialIdentity.objects.filter(pk=self.identity.pk).update(apple_refresh_token_encrypted=latest)
+        with self.captureOnCommitCallbacks(execute=False):
+            self.identity.delete()
+        self.assertEqual(PendingAppleRevocation.objects.get().token_encrypted, latest)
+
+    def test_exchange_preserves_fresh_credential_if_identity_disappears(self):
+        web_audience = "com.example.web"
+        verified = VerifiedIdentity(
+            "apple", self.identity.provider_subject, web_audience, "", False, False, "", 0, 0,
+        )
+        exchange = self.apple_client.exchange_authorization_code
+
+        def exchange_after_deletion(*args, **kwargs):
+            SocialIdentity.objects.filter(pk=self.identity.pk).delete()
+            return exchange(*args, **kwargs)
+
+        with (
+            mock.patch.object(self.apple_client, "exchange_authorization_code", side_effect=exchange_after_deletion),
+            self.captureOnCommitCallbacks(execute=False),
+        ):
+            self.assertFalse(store_apple_refresh_token(self.identity, verified, "new-code"))
+        payloads = [
+            decrypt_payload(ciphertext)
+            for ciphertext in PendingAppleRevocation.objects.values_list("token_encrypted", flat=True)
+        ]
+        self.assertCountEqual(payloads, [
+            {"client_id": APPLE_AUDIENCE, "refresh_token": "fake-refresh"},
+            {"client_id": web_audience, "refresh_token": "apple-refresh-for-new-code"},
+        ])
+
+    def test_legacy_message_with_one_combined_value_revokes_both_credentials(self):
+        second = encrypt_payload({"client_id": "com.example.web", "refresh_token": "web-refresh"})
+        combined = "\n".join([self.ciphertext, second])
+        result = revoke_apple_tokens_task.apply(args=[[combined]]).get()
+        self.assertEqual(result, {"revoked": 2, "deferred": 0})
+        self.assertCountEqual(self.apple_client.revoked, [
+            ("fake-refresh", APPLE_AUDIENCE), ("web-refresh", "com.example.web"),
+        ])
+        self.assertFalse(PendingAppleRevocation.objects.exists())
+
+    def test_combined_pending_row_is_split_into_independently_retryable_rows(self):
+        second = encrypt_payload({"client_id": "com.example.web", "refresh_token": "web-refresh"})
+        combined = "\n".join([self.ciphertext, second])
+        row = PendingAppleRevocation.objects.create(
+            token_encrypted=combined, ciphertext_digest=sha256(combined.encode("ascii")).hexdigest(),
+        )
+        process_pending_apple_revocations_task([row.pk])
+        self.assertCountEqual(
+            PendingAppleRevocation.objects.values_list("token_encrypted", flat=True), [self.ciphertext, second],
+        )
+        self.apple_client.fail_revoke = [AppleTokenError("http_503", retryable=True), None]
+        self.assertEqual(process_pending_apple_revocations_task(), {"revoked": 1, "deferred": 1})
+        PendingAppleRevocation.objects.update(next_attempt_at=timezone.now())
+        self.assertEqual(process_pending_apple_revocations_task(), {"revoked": 1, "deferred": 0})
+        self.assertCountEqual(self.apple_client.revoked, [
+            ("fake-refresh", APPLE_AUDIENCE), ("web-refresh", "com.example.web"),
+        ])
 
     def test_queue_receives_only_row_ids_after_commit(self):
         with mock.patch.object(process_pending_apple_revocations_task, "apply_async") as wake:

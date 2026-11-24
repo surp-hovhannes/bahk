@@ -240,6 +240,7 @@ Required by App Store Review Guideline 5.1.1(v) (decision 8 on #598).
 | `SOCIAL_AUTH_ENABLED` | `false` | Master switch. Off: 503 everywhere, buttons hidden. |
 | `SOCIAL_AUTH_APPLE_ENABLED` / `SOCIAL_AUTH_GOOGLE_ENABLED` | `true` | Per-provider kill switches. |
 | `APPLE_ALLOWED_AUDIENCES` | empty | Comma-separated. For web rollout use `com.stjohn.bahk,com.stjohn.bahk.web` on staging, then production. Retain `com.stjohn.bahk.e2e` on staging if used. |
+| `APPLE_NATIVE_AUDIENCES` | empty | Comma-separated native App IDs for detecting conflicts with the web Services ID. Set to `com.stjohn.bahk` in production and include any native staging App IDs on staging. |
 | `APPLE_WEB_AUDIENCE` | empty | Set to the Apple Services ID `com.stjohn.bahk.web` on staging and production. This selects the web exchange. The Services ID is grouped under `com.stjohn.bahk` and uses the existing signing key. |
 | `APPLE_WEB_REDIRECT_URI` | empty | Set to the exact registered callback. On staging use the registered staging frontend callback. In production use `https://web.fastandpray.app/auth/apple/callback` (no trailing slash). |
 | `CORS_ALLOWED_ORIGINS` | empty | Comma-separated frontend origins, including scheme and any port. Add the actual staging frontend origin on staging, without the callback path. Preserve existing origins. |
@@ -283,7 +284,8 @@ Analytics: `USER_LOGGED_IN` has `data.method` = `apple`/`google` (password login
    credential during native sign-in or enqueue the combined field as a single token on deletion.
    Review this format change, rollback plan and credential preservation with Der Hayr before
    enabling web sign-in.
-3. Add both Apple audiences and set `APPLE_WEB_AUDIENCE` and `APPLE_WEB_REDIRECT_URI` together.
+3. Add both Apple audiences and set `APPLE_NATIVE_AUDIENCES`, `APPLE_WEB_AUDIENCE` and
+   `APPLE_WEB_REDIRECT_URI` together.
    The callback must be the exact registered absolute HTTPS URL. Keep the existing Google
    audience and add the staging frontend origin to `CORS_ALLOWED_ORIGINS`. The API and
    revocation worker use the existing Apple key configuration.
