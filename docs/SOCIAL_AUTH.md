@@ -31,12 +31,20 @@ All errors are `{"code": "...", "detail": "..."}` with a fixed, generic `detail`
 ### `GET /api/auth/social/config/` (public)
 
 ```json
-{"enabled": true, "providers": {"apple": true, "google": false}}
+{
+  "enabled": true,
+  "providers": {"apple": true, "google": true},
+  "audiences": {"apple": ["com.stjohn.bahk", "com.stjohn.bahk.web"], "google": ["<existing web OAuth client ID>"]},
+  "apple_web": {"audience": "com.stjohn.bahk.web", "redirect_uri": "https://web.fastandpray.app/auth/apple/callback"}
+}
 ```
 
 The app shows a provider button only when `providers.<name>` is `true`, and shows none when this
 call fails. This is the remote kill switch: turning `SOCIAL_AUTH_ENABLED` (or one provider's
 switch) off hides the buttons without an app release.
+The audience lists report the configured public client IDs. Browser clients use `apple_web`
+to show the Apple button and configure the authorization request. It is `null` if Apple is
+disabled, the Services ID is absent from the allowlist, or the callback is unset.
 
 ### `POST /api/auth/social/` (unauthenticated, throttled)
 
@@ -52,6 +60,9 @@ switch) off hides the buttons without an app release.
 
 Never send the provider's user ID or email as proof of identity; they are read from the verified
 token. Never send an access token as `id_token`. `authorization_code` and `name` are optional.
+Send the Apple code from the same browser sign-in so the backend can store a token for deletion
+revocation. The exchange uses the verified audience as `client_id` and takes the browser
+`redirect_uri` from server configuration. Native exchange omits `redirect_uri`.
 
 Success, `200`:
 
@@ -139,7 +150,7 @@ memory for that attempt only, and sends the raw value to the backend.
 
 - **Apple:** the app gives Apple `SHA-256(raw)` as lowercase hex; the token's `nonce` claim is that
   hash. The backend hashes the raw nonce and compares. Required.
-- **Google:** when an SDK binds one, the token's `nonce` claim is the raw value and must match. The
+- **Google:** the browser GIS client binds the raw nonce and the token's claim must match. The
   app's Google package (`@react-native-google-signin/google-signin`, free "Original" API) cannot
   bind a nonce on iOS or Android, so a Google token without a nonce claim is accepted unless
   `SOCIAL_AUTH_GOOGLE_REQUIRE_NONCE=true`. Signature, issuer, the single web-client audience, short
@@ -227,7 +238,10 @@ Required by App Store Review Guideline 5.1.1(v) (decision 8 on #598).
 |---|---|---|
 | `SOCIAL_AUTH_ENABLED` | `false` | Master switch. Off: 503 everywhere, buttons hidden. |
 | `SOCIAL_AUTH_APPLE_ENABLED` / `SOCIAL_AUTH_GOOGLE_ENABLED` | `true` | Per-provider kill switches. |
-| `APPLE_ALLOWED_AUDIENCES` | empty | iOS bundle ID: `com.stjohn.bahk`. Add `com.stjohn.bahk.e2e` on staging only if used. |
+| `APPLE_ALLOWED_AUDIENCES` | empty | Comma-separated. For web rollout use `com.stjohn.bahk,com.stjohn.bahk.web` on staging, then production. Retain `com.stjohn.bahk.e2e` on staging if used. |
+| `APPLE_WEB_AUDIENCE` | empty | Set to the Apple Services ID `com.stjohn.bahk.web` on staging and production. This selects the web exchange. The Services ID is grouped under `com.stjohn.bahk` and uses the existing signing key. |
+| `APPLE_WEB_REDIRECT_URI` | empty | Set to the exact registered callback. On staging use the registered staging frontend callback. In production use `https://web.fastandpray.app/auth/apple/callback` (no trailing slash). |
+| `CORS_ALLOWED_ORIGINS` | empty | Comma-separated frontend origins, including scheme and any port. Add the actual staging frontend origin on staging, without the callback path. Preserve existing origins. |
 | `GOOGLE_ALLOWED_AUDIENCES` | empty | The **web** OAuth client ID only (decision 1 on #598). |
 | `APPLE_TEAM_ID`, `APPLE_KEY_ID` | empty | Public IDs from #475 (`FHF872BAQR`, `UUF2LN7TD9`). |
 | `APPLE_PRIVATE_KEY` | empty | The `.p8` PEM; secret manager only; `\n` escapes accepted. Never logged. |
@@ -254,6 +268,29 @@ Analytics: `USER_LOGGED_IN` has `data.method` = `apple`/`google` (password login
 `data.is_new_user`; `USER_ACCOUNT_CREATED` now has `data.method` = `password`/`apple`/`google`.
 
 ## Rollout runbook
+
+### Web rollout (#616)
+
+1. Identify a stable HTTPS staging frontend and its staging API. Register the frontend's exact
+   Apple callback under the Services ID and add its origin to the existing Google web OAuth
+   client's authorized JavaScript origins. Use a listed Google test user while the app is in Testing.
+2. Deploy the backend on staging. Add both Apple audiences and set `APPLE_WEB_AUDIENCE` and
+   `APPLE_WEB_REDIRECT_URI` together. Keep the existing Google audience and add the staging
+   frontend origin to `CORS_ALLOWED_ORIGINS`. The API and revocation worker use the existing
+   Apple key configuration.
+3. Enable social sign-in on staging. Run `python manage.py check_social_auth --fetch-jwks` and
+   confirm both Apple audiences, the redirect setting status, and Apple web availability in the
+   config endpoint. Test real browser sign-in with each provider, Apple account deletion and
+   revocation, and native sign-in on staging.
+4. After staging passes, review Google publication and roll out with the production callback
+   and the production frontend origin in the environment-managed CORS allowlist.
+
+To roll back Apple web sign-in, remove `com.stjohn.bahk.web` from `APPLE_ALLOWED_AUDIENCES`.
+Native Apple remains available and the worker can still revoke existing web credentials using the
+stored client ID. Google web and native share an audience, so removing that Google audience would
+disable both. Hide Google web sign-in in the frontend for a web-only Google rollback.
+
+### Original native rollout
 
 There is no staging service yet (#475, C1). Until one exists, validate on production with the flag
 off except for the validation window, or stand up a staging service first; record which in #598.

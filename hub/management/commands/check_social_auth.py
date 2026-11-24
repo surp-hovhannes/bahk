@@ -36,12 +36,24 @@ class Command(BaseCommand):
         public = config.public_config()
         self.stdout.write(f"SOCIAL_AUTH_ENABLED: {public['enabled']}")
         for provider in config.PROVIDERS:
-            audiences = config.allowed_audiences(provider)
+            audiences = public["audiences"][provider]
             self.stdout.write(
                 f"  {provider}: live={public['providers'][provider]} audiences={audiences or '[]'}"
             )
             if public["enabled"] and not audiences:
                 warnings.append(f"{provider}: no allowed audiences, so its button stays hidden")
+
+        web_audience = config.apple_web_audience()
+        redirect_set = bool(config.apple_web_redirect_uri())
+        self.stdout.write(
+            f"  apple web: live={public['apple_web'] is not None} audience={web_audience or '(unset)'} "
+            f"APPLE_WEB_REDIRECT_URI={'set' if redirect_set else 'missing'}"
+        )
+        if public["providers"][config.APPLE]:
+            if web_audience in public["audiences"][config.APPLE] and not redirect_set:
+                problems.append("apple web: allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI")
+            if redirect_set and not web_audience:
+                problems.append("apple web: APPLE_WEB_REDIRECT_URI requires APPLE_WEB_AUDIENCE")
 
         if config.google_requires_nonce():
             self.stdout.write("  google: nonce required")

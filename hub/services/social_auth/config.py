@@ -26,6 +26,14 @@ def social_auth_enabled() -> bool:
     return bool(getattr(settings, "SOCIAL_AUTH_ENABLED", False))
 
 
+def apple_web_audience() -> str:
+    return getattr(settings, "APPLE_WEB_AUDIENCE", "")
+
+
+def apple_web_redirect_uri() -> str:
+    return getattr(settings, "APPLE_WEB_REDIRECT_URI", "")
+
+
 def provider_enabled(provider: str) -> bool:
     """A provider is live only with the master switch, its own switch and an audience."""
     if provider not in PROVIDERS or not social_auth_enabled():
@@ -54,8 +62,17 @@ def reauth_max_age_seconds() -> int:
 
 
 def public_config() -> dict:
-    """What the app may know: which buttons to show. No IDs, no secrets."""
+    """Report provider availability and public OAuth configuration."""
+    providers = {provider: provider_enabled(provider) for provider in PROVIDERS}
+    audiences = {provider: allowed_audiences(provider) for provider in PROVIDERS}
+    web_audience = apple_web_audience()
+    redirect_uri = apple_web_redirect_uri()
+    apple_web = None
+    if providers[APPLE] and web_audience in audiences[APPLE] and redirect_uri:
+        apple_web = {"audience": web_audience, "redirect_uri": redirect_uri}
     return {
         "enabled": social_auth_enabled(),
-        "providers": {provider: provider_enabled(provider) for provider in PROVIDERS},
+        "providers": providers,
+        "audiences": audiences,
+        "apple_web": apple_web,
     }
