@@ -295,6 +295,16 @@ class SocialSignInEndpointTests(SocialAuthTestMixin, TestCase):
             response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE)
             self.assertEqual(response.status_code, 401)
 
+    @override_settings(**{**APPLE_WEB_SETTINGS, "APPLE_WEB_REDIRECT_URI": ""})
+    def test_missing_web_callback_rejects_web_and_keeps_native_sign_in(self):
+        config = self.client.get(CONFIG_URL).json()
+        self.assertIsNone(config["apple_web"])
+        self.assertEqual(config["audiences"]["apple"], [APPLE_AUDIENCE])
+        response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE, authorization_code="web-code")
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(SocialIdentity.objects.exists())
+        self.assertEqual(self.sign_in("apple", "native-user").status_code, 200)
+
     def test_google_browser_token_signs_in_with_raw_nonce(self):
         response = self.sign_in("google", "gis-user", aud=GOOGLE_AUDIENCE, extra={"azp": GOOGLE_AUDIENCE})
         self.assertEqual(response.status_code, 200)
@@ -1052,6 +1062,25 @@ class CheckSocialAuthCommandTests(TestCase):
         output = self.run_command(SOCIAL_AUTH_ENABLED=False)
         self.assertIn(f"audiences={[APPLE_AUDIENCE, APPLE_WEB_AUDIENCE]}", output)
         self.assertIn(f"apple web: live=False audience={APPLE_WEB_AUDIENCE} APPLE_WEB_REDIRECT_URI=set", output)
+
+    def test_reports_missing_callback_when_web_is_the_only_apple_audience(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        output = StringIO()
+        with (
+            override_settings(
+                SOCIAL_AUTH_ENABLED=True, SOCIAL_AUTH_APPLE_ENABLED=True,
+                APPLE_ALLOWED_AUDIENCES=[APPLE_WEB_AUDIENCE], APPLE_WEB_AUDIENCE=APPLE_WEB_AUDIENCE,
+                APPLE_WEB_REDIRECT_URI="",
+            ),
+            self.assertRaises(CommandError),
+        ):
+            call_command("check_social_auth", stdout=output)
+        self.assertIn("apple: live=False audiences=[]", output.getvalue())
+        self.assertIn("allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI", output.getvalue())
 
     def test_fails_when_apple_live_without_revocation_key(self):
         from django.core.management.base import CommandError

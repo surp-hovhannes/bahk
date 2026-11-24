@@ -49,8 +49,8 @@ class Command(BaseCommand):
             f"  apple web: live={public['apple_web'] is not None} audience={web_audience or '(unset)'} "
             f"APPLE_WEB_REDIRECT_URI={'set' if redirect_set else 'missing'}"
         )
-        if public["providers"][config.APPLE]:
-            if web_audience in public["audiences"][config.APPLE] and not redirect_set:
+        if config.provider_switch_enabled(config.APPLE):
+            if web_audience in config.allowed_audiences(config.APPLE) and not redirect_set:
                 problems.append("apple web: allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI")
             if redirect_set and not web_audience:
                 problems.append("apple web: APPLE_WEB_REDIRECT_URI requires APPLE_WEB_AUDIENCE")

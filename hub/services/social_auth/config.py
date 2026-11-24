@@ -34,15 +34,26 @@ def apple_web_redirect_uri() -> str:
     return getattr(settings, "APPLE_WEB_REDIRECT_URI", "")
 
 
-def provider_enabled(provider: str) -> bool:
-    """A provider is live only with the master switch, its own switch and an audience."""
+def accepted_audiences(provider: str) -> list[str]:
+    audiences = allowed_audiences(provider)
+    if provider == APPLE and not apple_web_redirect_uri():
+        return [audience for audience in audiences if audience != apple_web_audience()]
+    return audiences
+
+
+def provider_switch_enabled(provider: str) -> bool:
     if provider not in PROVIDERS or not social_auth_enabled():
         return False
     switch = {
         APPLE: "SOCIAL_AUTH_APPLE_ENABLED",
         GOOGLE: "SOCIAL_AUTH_GOOGLE_ENABLED",
     }[provider]
-    return bool(getattr(settings, switch, True)) and bool(allowed_audiences(provider))
+    return bool(getattr(settings, switch, True))
+
+
+def provider_enabled(provider: str) -> bool:
+    """A provider is live only with both switches and an accepted audience."""
+    return provider_switch_enabled(provider) and bool(accepted_audiences(provider))
 
 
 def google_requires_nonce() -> bool:
@@ -64,7 +75,7 @@ def reauth_max_age_seconds() -> int:
 def public_config() -> dict:
     """Report provider availability and public OAuth configuration."""
     providers = {provider: provider_enabled(provider) for provider in PROVIDERS}
-    audiences = {provider: allowed_audiences(provider) for provider in PROVIDERS}
+    audiences = {provider: accepted_audiences(provider) for provider in PROVIDERS}
     web_audience = apple_web_audience()
     redirect_uri = apple_web_redirect_uri()
     apple_web = None
