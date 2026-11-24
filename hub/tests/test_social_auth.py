@@ -54,6 +54,15 @@ SOCIAL_URL = "/api/auth/social/"
 LINK_URL = "/api/auth/social/link/"
 IDENTITIES_URL = "/api/auth/social/identities/"
 CONFIG_URL = "/api/auth/social/config/"
+APPLE_WEB_AUDIENCE = "com.example.bahk.web"
+APPLE_WEB_REDIRECT_URI = "https://staging.example.com/auth/apple/callback"
+PRODUCTION_APPLE_WEB_REDIRECT_URI = "https://web.fastandpray.app/auth/apple/callback"
+INVALID_APPLE_WEB_CALLBACK_HOSTS = ("localhost", "preview.LOCALHOST.", "127.0.0.1", "[::1]", "192.168.1.10")
+APPLE_WEB_SETTINGS = {
+    "APPLE_ALLOWED_AUDIENCES": [APPLE_AUDIENCE, APPLE_WEB_AUDIENCE],
+    "APPLE_WEB_AUDIENCE": APPLE_WEB_AUDIENCE,
+    "APPLE_WEB_REDIRECT_URI": APPLE_WEB_REDIRECT_URI,
+}
 
 
 def identity_url(pk):
@@ -85,6 +94,13 @@ class ProviderVerificationTests(SocialAuthTestMixin, TestCase):
         self.assertEqual(identity.subject, "google-sub-1")
         self.assertEqual(identity.audience, GOOGLE_AUDIENCE)
         self.assertEqual(identity.name, "G User")
+
+    @override_settings(**APPLE_WEB_SETTINGS)
+    def test_web_apple_rejects_unhashed_nonce(self):
+        nonce = new_nonce()
+        token = make_id_token("apple", "web-user", aud=APPLE_WEB_AUDIENCE, extra={"nonce": nonce})
+        with self.assertRaises(InvalidNonce):
+            self.verify("apple", token, nonce)
 
     def test_google_token_without_nonce_claim_accepted_unless_required(self):
         token = make_id_token("google", "google-sub-2")
@@ -243,21 +259,69 @@ class SocialSignInEndpointTests(SocialAuthTestMixin, TestCase):
             payload["authorization_code"] = code
         return self.client.post(SOCIAL_URL, payload, format="json")
 
+    @override_settings(**APPLE_WEB_SETTINGS)
     def test_feature_flag_off_returns_503_and_hides_buttons(self):
         with override_settings(SOCIAL_AUTH_ENABLED=False):
             response = self.sign_in("google", "g")
             self.assertEqual(response.status_code, 503)
             self.assertEqual(response.json()["code"], "social_auth_unavailable")
+            response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE)
+            self.assertEqual(response.status_code, 503)
             config = self.client.get(CONFIG_URL).json()
-            self.assertEqual(config, {"enabled": False, "providers": {"apple": False, "google": False}})
+            self.assertFalse(config["enabled"])
+            self.assertEqual(config["providers"], {"apple": False, "google": False})
+            self.assertIsNone(config["apple_web"])
         self.assertEqual(User.objects.count(), 0)
 
     def test_config_endpoint_reports_live_providers_only(self):
         with override_settings(SOCIAL_AUTH_GOOGLE_ENABLED=False):
             self.assertEqual(
                 self.client.get(CONFIG_URL).json(),
-                {"enabled": True, "providers": {"apple": True, "google": False}},
+                {
+                    "enabled": True,
+                    "providers": {"apple": True, "google": False},
+                    "audiences": {"apple": [APPLE_AUDIENCE], "google": [GOOGLE_AUDIENCE]},
+                    "apple_web": None,
+                },
             )
+
+    @override_settings(**APPLE_WEB_SETTINGS)
+    @override_settings(APPLE_WEB_REDIRECT_URI=PRODUCTION_APPLE_WEB_REDIRECT_URI)
+    def test_config_reports_web_apple_and_both_apple_audiences(self):
+        config = self.client.get(CONFIG_URL).json()
+        self.assertEqual(config["audiences"]["apple"], [APPLE_AUDIENCE, APPLE_WEB_AUDIENCE])
+        self.assertEqual(
+            config["apple_web"],
+            {"audience": APPLE_WEB_AUDIENCE, "redirect_uri": PRODUCTION_APPLE_WEB_REDIRECT_URI},
+        )
+        with override_settings(APPLE_ALLOWED_AUDIENCES=[APPLE_AUDIENCE]):
+            config = self.client.get(CONFIG_URL).json()
+            self.assertTrue(config["providers"]["apple"])
+            self.assertIsNone(config["apple_web"])
+            response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE)
+            self.assertEqual(response.status_code, 401)
+
+    @override_settings(**APPLE_WEB_SETTINGS)
+    def test_unusable_web_callback_rejects_web_and_keeps_native_sign_in(self):
+        for redirect_uri in (
+            "", "   ", "/auth/apple/callback", "http://example.com/callback",
+            "https://", "https://example.com:99999/callback",
+            "https://user:password@example.com/callback", "https://example.com/callback#fragment",
+            *(f"https://{host}/auth/apple/callback" for host in INVALID_APPLE_WEB_CALLBACK_HOSTS),
+        ):
+            with self.subTest(redirect_uri=redirect_uri), override_settings(APPLE_WEB_REDIRECT_URI=redirect_uri):
+                config = self.client.get(CONFIG_URL).json()
+                self.assertIsNone(config["apple_web"])
+                self.assertEqual(config["audiences"]["apple"], [APPLE_AUDIENCE])
+                response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE, authorization_code="web-code")
+                self.assertEqual(response.status_code, 401)
+                self.assertFalse(SocialIdentity.objects.exists())
+        self.assertEqual(self.sign_in("apple", "native-user").status_code, 200)
+
+    def test_google_browser_token_signs_in_with_raw_nonce(self):
+        response = self.sign_in("google", "gis-user", aud=GOOGLE_AUDIENCE, extra={"azp": GOOGLE_AUDIENCE})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["provider"], "google")
 
     def test_new_apple_identity_creates_one_complete_account(self):
         response = self.sign_in("apple", "apple-new", email="new@example.com", display_name="Anna Apple")
@@ -526,6 +590,7 @@ class AppleTokenClientTests(TestCase):
         self.assertEqual((claims["iss"], claims["sub"]), ("TEAM123456", APPLE_AUDIENCE))
         self.assertLessEqual(claims["exp"] - claims["iat"], 300)
 
+    @override_settings(**APPLE_WEB_SETTINGS)
     def test_exchange_posts_code_and_checks_subject(self):
         id_token = jwt.encode({"sub": "apple-sub"}, "x" * 32, algorithm="HS256")
         self.session.post.return_value = self.response(200, {"refresh_token": "r-1", "id_token": id_token})
@@ -534,9 +599,17 @@ class AppleTokenClientTests(TestCase):
         url, = self.session.post.call_args.args
         data = self.session.post.call_args.kwargs["data"]
         self.assertEqual(url, "https://appleid.apple.com/auth/token")
+        self.assertNotIn("redirect_uri", data)
         self.assertEqual((data["code"], data["grant_type"], data["client_id"]), ("the-code", "authorization_code", APPLE_AUDIENCE))
         with self.assertRaises(AppleTokenError):
             self.client.exchange_authorization_code("c", client_id=APPLE_AUDIENCE, expected_subject="other")
+
+    @override_settings(APPLE_WEB_AUDIENCE=APPLE_WEB_AUDIENCE, APPLE_WEB_REDIRECT_URI="")
+    def test_web_exchange_without_configured_redirect_does_not_call_apple(self):
+        with self.assertRaises(AppleTokenError) as ctx:
+            self.client.exchange_authorization_code("c", client_id=APPLE_WEB_AUDIENCE, expected_subject="s")
+        self.assertEqual(ctx.exception.reason, "apple_web_redirect_uri_not_configured")
+        self.session.post.assert_not_called()
 
     def test_exchange_error_carries_only_apples_code(self):
         self.session.post.return_value = self.response(400, {"error": "invalid_grant", "error_description": "x"})
@@ -787,6 +860,27 @@ class AccountDeletionTests(SocialAuthTestMixin, TestCase):
         again = self.client.post(SOCIAL_URL, self.social_payload("apple", "apple-delete"), format="json")
         self.assertTrue(again.json()["is_new_user"])
 
+    @override_settings(**APPLE_WEB_SETTINGS)
+    def test_deletion_revokes_native_and_web_credentials_for_one_apple_identity(self):
+        for audience, code in (
+            (APPLE_AUDIENCE, "native-code"),
+            (APPLE_WEB_AUDIENCE, "web-code"),
+            (APPLE_AUDIENCE, "new-native-code"),
+        ):
+            payload = self.social_payload("apple", "shared-user", aud=audience)
+            payload["authorization_code"] = code
+            response = self.client.post(SOCIAL_URL, payload, format="json")
+            self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(SocialIdentity.objects.count(), 1)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.json()['tokens']['access']}")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.client.delete("/api/account/delete/").status_code, 204)
+        self.assertCountEqual(self.apple_client.revoked, [
+            ("apple-refresh-for-new-native-code", APPLE_AUDIENCE),
+            ("apple-refresh-for-web-code", APPLE_WEB_AUDIENCE),
+        ])
+
     def test_deletion_succeeds_when_apple_revocation_fails(self):
         self.apple_client.fail_revoke = AppleTokenError("invalid_client")
         payload = self.social_payload("apple", "apple-delete-fail")
@@ -795,6 +889,46 @@ class AccountDeletionTests(SocialAuthTestMixin, TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {body['tokens']['access']}")
         self.assertEqual(self.client.delete("/api/account/delete/").status_code, 204)
         self.assertFalse(User.objects.filter(pk=body["user"]["id"]).exists())
+
+    @override_settings(**APPLE_WEB_SETTINGS)
+    def test_web_apple_sign_in_and_revocation_after_removing_web_audience(self):
+        key, pem = ec_private_key_pem()
+        session = mock.Mock()
+        token_response = mock.Mock(status_code=200)
+        token_response.json.return_value = {
+            "refresh_token": "web-refresh",
+            "id_token": make_id_token("apple", "web-user", aud=APPLE_WEB_AUDIENCE),
+        }
+        session.post.side_effect = [token_response, mock.Mock(status_code=200)]
+        apple = AppleTokenClient(session=session)
+
+        payload = self.social_payload("apple", "web-user", aud=APPLE_WEB_AUDIENCE)
+        payload.update(authorization_code="web-code", redirect_uri="https://caller.example/callback")
+        with (
+            override_settings(APPLE_PRIVATE_KEY=pem),
+            mock.patch("hub.services.social_auth.apple._client_override", apple),
+        ):
+            response = self.client.post(SOCIAL_URL, payload, format="json")
+            self.assertEqual(response.status_code, 200)
+            stored = SocialIdentity.objects.get().apple_refresh_token_encrypted
+            self.assertEqual(decrypt_payload(stored), {"client_id": APPLE_WEB_AUDIENCE, "refresh_token": "web-refresh"})
+            self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.json()['tokens']['access']}")
+            with override_settings(APPLE_ALLOWED_AUDIENCES=[APPLE_AUDIENCE]), self.captureOnCommitCallbacks(execute=True):
+                self.assertEqual(self.client.delete("/api/account/delete/").status_code, 204)
+
+        exchange, revoke = session.post.call_args_list
+        self.assertEqual(exchange.args, ("https://appleid.apple.com/auth/token",))
+        self.assertEqual(exchange.kwargs["data"]["redirect_uri"], APPLE_WEB_REDIRECT_URI)
+        self.assertEqual(revoke.args, ("https://appleid.apple.com/auth/revoke",))
+        self.assertEqual(revoke.kwargs["data"]["token"], "web-refresh")
+        self.assertNotIn("redirect_uri", revoke.kwargs["data"])
+        for call in (exchange, revoke):
+            data = call.kwargs["data"]
+            self.assertEqual(data["client_id"], APPLE_WEB_AUDIENCE)
+            claims = jwt.decode(data["client_secret"], key.public_key(), algorithms=["ES256"], audience=APPLE_SERVER_AUDIENCE)
+            self.assertEqual(claims["sub"], APPLE_WEB_AUDIENCE)
+            self.assertEqual(jwt.get_unverified_header(data["client_secret"])["kid"], "KEY1234567")
+        self.assertFalse(PendingAppleRevocation.objects.exists())
 
 
 @override_settings(APPLE_TEAM_ID="TEAM123456", APPLE_KEY_ID="KEY1234567", APPLE_PRIVATE_KEY="configured")
@@ -935,6 +1069,66 @@ class CheckSocialAuthCommandTests(TestCase):
     def test_reports_disabled_without_failing(self):
         output = self.run_command(SOCIAL_AUTH_ENABLED=False)
         self.assertIn("SOCIAL_AUTH_ENABLED: False", output)
+
+    @override_settings(**APPLE_WEB_SETTINGS)
+    @override_settings(APPLE_WEB_REDIRECT_URI=PRODUCTION_APPLE_WEB_REDIRECT_URI)
+    def test_reports_web_settings(self):
+        output = self.run_command(SOCIAL_AUTH_ENABLED=False)
+        self.assertIn(f"audiences={[APPLE_AUDIENCE, APPLE_WEB_AUDIENCE]}", output)
+        self.assertIn(f"apple web: live=False audience={APPLE_WEB_AUDIENCE} APPLE_WEB_REDIRECT_URI=set", output)
+
+    def test_reports_whitespace_in_web_audience_and_uses_trimmed_value(self):
+        from hub.services.social_auth import config
+
+        with override_settings(**APPLE_WEB_SETTINGS), override_settings(
+            APPLE_WEB_AUDIENCE=f"  {APPLE_WEB_AUDIENCE} ",
+        ):
+            self.assertEqual(config.apple_web_audience(), APPLE_WEB_AUDIENCE)
+            self.assertTrue(config.is_apple_web_audience(APPLE_WEB_AUDIENCE))
+            output = self.run_command(SOCIAL_AUTH_ENABLED=False)
+        self.assertIn("problem: apple web: APPLE_WEB_AUDIENCE has surrounding whitespace", output)
+
+    def test_reports_web_audience_conflicts_and_preserves_native_classification(self):
+        from hub.services.social_auth import config
+
+        for native_audiences, allowed in (
+            ([APPLE_AUDIENCE], [APPLE_AUDIENCE, APPLE_WEB_AUDIENCE]),
+            ([], [APPLE_AUDIENCE, f" {APPLE_AUDIENCE} "]),
+        ):
+            with self.subTest(native_audiences=native_audiences), override_settings(
+                APPLE_ALLOWED_AUDIENCES=allowed, APPLE_NATIVE_AUDIENCES=native_audiences,
+                APPLE_WEB_AUDIENCE=APPLE_AUDIENCE, APPLE_WEB_REDIRECT_URI=PRODUCTION_APPLE_WEB_REDIRECT_URI,
+                SOCIAL_AUTH_APPLE_ENABLED=True,
+            ):
+                self.assertFalse(config.is_apple_web_audience(APPLE_AUDIENCE))
+                self.assertIn(APPLE_AUDIENCE, config.accepted_audiences(config.APPLE))
+                output = self.run_command(SOCIAL_AUTH_ENABLED=False)
+            self.assertIn("apple web: live=False", output)
+            self.assertIn("problem: apple web: APPLE_WEB_AUDIENCE conflicts", output)
+
+    def test_reports_unusable_callback_when_web_is_the_only_apple_audience(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        for redirect_uri, status in (
+            ("", "missing"), ("   ", "invalid"), ("http://example.com/callback", "invalid"),
+            *((f"https://{host}/auth/apple/callback", "invalid") for host in INVALID_APPLE_WEB_CALLBACK_HOSTS),
+        ):
+            output = StringIO()
+            with self.subTest(redirect_uri=redirect_uri, status=status):
+                with override_settings(
+                    SOCIAL_AUTH_ENABLED=True, SOCIAL_AUTH_APPLE_ENABLED=True,
+                    APPLE_ALLOWED_AUDIENCES=[APPLE_WEB_AUDIENCE], APPLE_WEB_AUDIENCE=APPLE_WEB_AUDIENCE,
+                    APPLE_WEB_REDIRECT_URI=redirect_uri,
+                ), self.assertRaises(CommandError):
+                    call_command("check_social_auth", stdout=output)
+                self.assertIn("apple: live=False audiences=[]", output.getvalue())
+                self.assertIn(f"APPLE_WEB_REDIRECT_URI={status}", output.getvalue())
+                self.assertIn("allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI", output.getvalue())
+                if redirect_uri.strip():
+                    self.assertNotIn(redirect_uri, output.getvalue())
 
     def test_fails_when_apple_live_without_revocation_key(self):
         from django.core.management.base import CommandError

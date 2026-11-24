@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 def persist_revocations(ciphertexts, *, using=DEFAULT_DB_ALIAS):
     """Call inside the deletion transaction so rollback restores both sides."""
     ids = []
-    for ciphertext in ciphertexts:
-        if not ciphertext:
-            continue
+    if isinstance(ciphertexts, str):
+        ciphertexts = [ciphertexts]
+    for ciphertext in (line for value in ciphertexts if value for line in value.splitlines() if line):
         row, _ = PendingAppleRevocation.objects.using(using).get_or_create(
             ciphertext_digest=hashlib.sha256(ciphertext.encode("ascii")).hexdigest(),
             defaults={"token_encrypted": ciphertext},

@@ -367,6 +367,9 @@ SOCIAL_AUTH_GOOGLE_ENABLED = config('SOCIAL_AUTH_GOOGLE_ENABLED', default=True, 
 # OAuth client ID the app requests ID tokens for (decision recorded in #598);
 # iOS/Android client IDs are deliberately not accepted.
 APPLE_ALLOWED_AUDIENCES = config('APPLE_ALLOWED_AUDIENCES', default='', cast=Csv())
+APPLE_NATIVE_AUDIENCES = config('APPLE_NATIVE_AUDIENCES', default='', cast=Csv())
+APPLE_WEB_AUDIENCE = config('APPLE_WEB_AUDIENCE', default='')
+APPLE_WEB_REDIRECT_URI = config('APPLE_WEB_REDIRECT_URI', default='')
 GOOGLE_ALLOWED_AUDIENCES = config('GOOGLE_ALLOWED_AUDIENCES', default='', cast=Csv())
 # Sign in with Apple key, used only to exchange the authorization code for a
 # refresh token and to revoke it at account deletion. APPLE_PRIVATE_KEY is the
