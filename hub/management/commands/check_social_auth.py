@@ -44,15 +44,20 @@ class Command(BaseCommand):
                 warnings.append(f"{provider}: no allowed audiences, so its button stays hidden")
 
         web_audience = config.apple_web_audience()
-        redirect_set = bool(config.apple_web_redirect_uri())
+        redirect_valid = bool(config.apple_web_redirect_uri())
+        redirect_status = "missing"
+        if redirect_valid:
+            redirect_status = "set"
+        elif getattr(settings, "APPLE_WEB_REDIRECT_URI", ""):
+            redirect_status = "invalid"
         self.stdout.write(
             f"  apple web: live={public['apple_web'] is not None} audience={web_audience or '(unset)'} "
-            f"APPLE_WEB_REDIRECT_URI={'set' if redirect_set else 'missing'}"
+            f"APPLE_WEB_REDIRECT_URI={redirect_status}"
         )
         if config.provider_switch_enabled(config.APPLE):
-            if web_audience in config.allowed_audiences(config.APPLE) and not redirect_set:
-                problems.append("apple web: allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI")
-            if redirect_set and not web_audience:
+            if web_audience in config.allowed_audiences(config.APPLE) and not redirect_valid:
+                problems.append("apple web: allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI as an absolute HTTPS URL")
+            if redirect_status != "missing" and not web_audience:
                 problems.append("apple web: APPLE_WEB_REDIRECT_URI requires APPLE_WEB_AUDIENCE")
 
         if config.google_requires_nonce():

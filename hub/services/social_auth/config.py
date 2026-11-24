@@ -3,11 +3,16 @@
 Read through ``django.conf.settings`` at call time so ``override_settings`` and
 environment changes (after a restart) take effect without import-time caching.
 """
+from urllib.parse import urlsplit
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 
 APPLE = "apple"
 GOOGLE = "google"
 PROVIDERS = (APPLE, GOOGLE)
+_validate_https_url = URLValidator(schemes=["https"])
 
 
 def _clean_list(values) -> list[str]:
@@ -31,7 +36,18 @@ def apple_web_audience() -> str:
 
 
 def apple_web_redirect_uri() -> str:
-    return getattr(settings, "APPLE_WEB_REDIRECT_URI", "")
+    """Return the exact configured callback if it is usable by the browser and Apple."""
+    uri = getattr(settings, "APPLE_WEB_REDIRECT_URI", "")
+    if not uri or any(char.isspace() or char in "\\#" for char in uri):
+        return ""
+    try:
+        _validate_https_url(uri)
+        parts = urlsplit(uri)
+        if parts.username is None and parts.port != 0:
+            return uri
+    except (ValidationError, ValueError):
+        pass
+    return ""
 
 
 def accepted_audiences(provider: str) -> list[str]:

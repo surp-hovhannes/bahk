@@ -274,21 +274,34 @@ Analytics: `USER_LOGGED_IN` has `data.method` = `apple`/`google` (password login
 1. Identify a stable HTTPS staging frontend and its staging API. Register the frontend's exact
    Apple callback under the Services ID and add its origin to the existing Google web OAuth
    client's authorized JavaScript origins. Use a listed Google test user while the app is in Testing.
-2. Deploy the backend on staging. Add both Apple audiences and set `APPLE_WEB_AUDIENCE` and
-   `APPLE_WEB_REDIRECT_URI` together. Keep the existing Google audience and add the staging
-   frontend origin to `CORS_ALLOWED_ORIGINS`. The API and revocation worker use the existing
-   Apple key configuration.
-3. Enable social sign-in on staging. Run `python manage.py check_social_auth --fetch-jwks` and
+2. Deploy the backend on staging with the web Services ID still excluded from
+   `APPLE_ALLOWED_AUDIENCES`. Before enabling Apple web sign-in, upgrade and drain every old API
+   instance and any other process that can update or delete social identities. Complete any
+   in-flight requests and jobs from the old version. The upgraded code can store one encrypted
+   Apple credential per client ID in the same field. An old instance can overwrite the web
+   credential during native sign-in or enqueue the combined field as a single token on deletion.
+   Review this format change, rollback plan and credential preservation with Der Hayr before
+   enabling web sign-in.
+3. Add both Apple audiences and set `APPLE_WEB_AUDIENCE` and `APPLE_WEB_REDIRECT_URI` together.
+   The callback must be the exact registered absolute HTTPS URL. Keep the existing Google
+   audience and add the staging frontend origin to `CORS_ALLOWED_ORIGINS`. The API and
+   revocation worker use the existing Apple key configuration.
+4. Enable social sign-in on staging. Run `python manage.py check_social_auth --fetch-jwks` and
    confirm both Apple audiences, the redirect setting status, and Apple web availability in the
    config endpoint. Test real browser sign-in with each provider, Apple account deletion and
    revocation, and native sign-in on staging.
-4. After staging passes, review Google publication and roll out with the production callback
-   and the production frontend origin in the environment-managed CORS allowlist.
+5. After staging passes, review Google publication and repeat the deployment and drain before
+   enabling the production web audience. Use the production callback and frontend origin in
+   the environment-managed settings.
 
 To roll back Apple web sign-in, remove `com.stjohn.bahk.web` from `APPLE_ALLOWED_AUDIENCES`.
 Native Apple remains available and the worker can still revoke existing web credentials using the
-stored client ID. Keep the current deletion code deployed to revoke both credentials for accounts
-that have used native and web sign-in.
+stored client ID. Keep the format-aware code deployed for identity updates and deletions as
+well as revocation. Removing the web audience leaves existing multi-credential rows and pending
+revocations in place. Before any code rollback to a version without this format support, obtain
+Der Hayr approval for a separate data-preservation plan. The plan must preserve the encrypted
+identity and outbox records and their encryption keys, and ensure every credential can still
+be revoked before an older process can update or delete identities.
 
 Google web and native share an audience, so removing that Google audience would disable both.
 Hide Google web sign-in in the frontend for a web-only Google rollback.

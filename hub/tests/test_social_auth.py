@@ -295,14 +295,20 @@ class SocialSignInEndpointTests(SocialAuthTestMixin, TestCase):
             response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE)
             self.assertEqual(response.status_code, 401)
 
-    @override_settings(**{**APPLE_WEB_SETTINGS, "APPLE_WEB_REDIRECT_URI": ""})
-    def test_missing_web_callback_rejects_web_and_keeps_native_sign_in(self):
-        config = self.client.get(CONFIG_URL).json()
-        self.assertIsNone(config["apple_web"])
-        self.assertEqual(config["audiences"]["apple"], [APPLE_AUDIENCE])
-        response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE, authorization_code="web-code")
-        self.assertEqual(response.status_code, 401)
-        self.assertFalse(SocialIdentity.objects.exists())
+    @override_settings(**APPLE_WEB_SETTINGS)
+    def test_unusable_web_callback_rejects_web_and_keeps_native_sign_in(self):
+        for redirect_uri in (
+            "", "   ", "/auth/apple/callback", "http://example.com/callback",
+            "https://", "https://example.com:99999/callback",
+            "https://user:password@example.com/callback", "https://example.com/callback#fragment",
+        ):
+            with self.subTest(redirect_uri=redirect_uri), override_settings(APPLE_WEB_REDIRECT_URI=redirect_uri):
+                config = self.client.get(CONFIG_URL).json()
+                self.assertIsNone(config["apple_web"])
+                self.assertEqual(config["audiences"]["apple"], [APPLE_AUDIENCE])
+                response = self.sign_in("apple", "web-user", aud=APPLE_WEB_AUDIENCE, authorization_code="web-code")
+                self.assertEqual(response.status_code, 401)
+                self.assertFalse(SocialIdentity.objects.exists())
         self.assertEqual(self.sign_in("apple", "native-user").status_code, 200)
 
     def test_google_browser_token_signs_in_with_raw_nonce(self):
@@ -1063,24 +1069,28 @@ class CheckSocialAuthCommandTests(TestCase):
         self.assertIn(f"audiences={[APPLE_AUDIENCE, APPLE_WEB_AUDIENCE]}", output)
         self.assertIn(f"apple web: live=False audience={APPLE_WEB_AUDIENCE} APPLE_WEB_REDIRECT_URI=set", output)
 
-    def test_reports_missing_callback_when_web_is_the_only_apple_audience(self):
+    def test_reports_unusable_callback_when_web_is_the_only_apple_audience(self):
         from io import StringIO
 
         from django.core.management import call_command
         from django.core.management.base import CommandError
 
-        output = StringIO()
-        with (
-            override_settings(
-                SOCIAL_AUTH_ENABLED=True, SOCIAL_AUTH_APPLE_ENABLED=True,
-                APPLE_ALLOWED_AUDIENCES=[APPLE_WEB_AUDIENCE], APPLE_WEB_AUDIENCE=APPLE_WEB_AUDIENCE,
-                APPLE_WEB_REDIRECT_URI="",
-            ),
-            self.assertRaises(CommandError),
-        ):
-            call_command("check_social_auth", stdout=output)
-        self.assertIn("apple: live=False audiences=[]", output.getvalue())
-        self.assertIn("allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI", output.getvalue())
+        for redirect_uri, status in (("", "missing"), ("   ", "invalid"), ("http://example.com/callback", "invalid")):
+            output = StringIO()
+            with (
+                self.subTest(status=status),
+                override_settings(
+                    SOCIAL_AUTH_ENABLED=True, SOCIAL_AUTH_APPLE_ENABLED=True,
+                    APPLE_ALLOWED_AUDIENCES=[APPLE_WEB_AUDIENCE], APPLE_WEB_AUDIENCE=APPLE_WEB_AUDIENCE,
+                    APPLE_WEB_REDIRECT_URI=redirect_uri,
+                ),
+                self.assertRaises(CommandError),
+            ):
+                call_command("check_social_auth", stdout=output)
+            self.assertIn("apple: live=False audiences=[]", output.getvalue())
+            self.assertIn(f"APPLE_WEB_REDIRECT_URI={status}", output.getvalue())
+            self.assertIn("allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI", output.getvalue())
+            self.assertNotIn("http://example.com/callback", output.getvalue())
 
     def test_fails_when_apple_live_without_revocation_key(self):
         from django.core.management.base import CommandError
