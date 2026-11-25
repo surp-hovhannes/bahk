@@ -1077,8 +1077,11 @@ class EngagementSnapshotTests(TestCase):
             self.assertEqual(snapshot_pool.connection_kwargs['socket_timeout'], 1)
             self.assertEqual(snapshot_pool.connection_kwargs['retry'].get_retries(), 0)
             if default_config['LOCATION'].startswith('rediss://'):
-                self.assertIsNone(snapshot_pool.connection_kwargs['ssl_cert_reqs'])
-                self.assertFalse(snapshot_pool.connection_kwargs['ssl_check_hostname'])
+                for option in ('ssl_cert_reqs', 'ssl_check_hostname'):
+                    self.assertEqual(
+                        snapshot_pool.connection_kwargs[option],
+                        default_pool.connection_kwargs[option],
+                    )
             with patch.object(snapshot_pool.pool, 'get', side_effect=Empty) as acquire:
                 self.assertEqual(self.client.get(self.data).status_code, 503)
             acquire.assert_called_once_with(block=True, timeout=0.25)

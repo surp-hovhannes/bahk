@@ -8,10 +8,11 @@ const source = fs.readFileSync(
     path.join(__dirname, '../../static/admin/js/engagement-snapshot.js'), 'utf8'
 );
 
-function polling(fetch) {
+function polling(fetch, Controller = AbortController) {
     const timers = new Map();
     const wait = vm.runInNewContext(source + '\nwaitForEngagementSnapshot', {
-        AbortController,
+        AbortController: Controller,
+        DOMException,
         fetch,
         setTimeout(callback, delay) {
             const timer = Symbol();
@@ -39,6 +40,37 @@ function stalled(signal) {
 
 const ready = { status: 200, ok: true, json: async () => ({ events_in_period: 3 }) };
 const pending = { status: 202, ok: true, json: async () => ({ poll_seconds: 134 }) };
+
+test('polling works with abort signals lacking throwIfAborted and reason', async () => {
+    class LegacyAbortController extends AbortController {
+        constructor() {
+            super();
+            Object.defineProperties(this.signal, {
+                throwIfAborted: { value: undefined },
+                reason: { value: undefined },
+            });
+        }
+    }
+
+    const caller = new LegacyAbortController();
+    let calls = 0;
+    const { wait, timers, fire } = polling(async () => calls++ === 0 ? pending : ready, LegacyAbortController);
+    const result = wait('/analytics', caller.signal, 134);
+    await new Promise(setImmediate);
+    fire(2000);
+    assert.deepEqual(await result, { events_in_period: 3 });
+    assert.equal(timers.size, 0);
+
+    const delayed = polling(async () => pending, LegacyAbortController);
+    const cancelled = assert.rejects(delayed.wait('/analytics', caller.signal, 134), { name: 'AbortError' });
+    await new Promise(setImmediate);
+    caller.abort();
+    await cancelled;
+    await assert.rejects(wait('/analytics', caller.signal, 134), { name: 'AbortError' });
+    assert.equal(calls, 2);
+    assert.equal(delayed.timers.size, 0);
+    assert.equal(timers.size, 0);
+});
 
 test('deadline aborts a stalled initial fetch or response body', async () => {
     for (const status of [null, 200, 202]) {
