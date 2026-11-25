@@ -7,8 +7,9 @@ This module tests:
 - Admin view functionality
 """
 
+from django.conf import settings
 from django.test import TestCase, Client, override_settings
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
@@ -17,6 +18,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 from unittest.mock import patch
+from queue import Empty
 
 from events.engagement_analytics import (
     LEASE_TTL,
@@ -923,7 +925,7 @@ class EngagementSnapshotTests(TestCase):
         self.assertEqual(cold.status_code, 202)
         self.assertContains(cold, 'Preparing analytics', status_code=202)
         self.assertEqual(pending.status_code, 202)
-        self.assertEqual(pending.json(), {'status': 'pending'})
+        self.assertEqual(pending.json(), {'status': 'pending', 'poll_seconds': 2 * LEASE_TTL + 4})
         self.publish.assert_called_once()
         self.assertEqual(self.publish.call_args.args, (refresh_engagement_snapshot.name,))
         self.assertEqual(self.publish.call_args.kwargs['args'], (30, self.key))
@@ -997,7 +999,31 @@ class EngagementSnapshotTests(TestCase):
         self.assertIsNone(cache.get(yesterday_key))
 
     def test_cache_failure_returns_unavailable_without_queueing(self):
-        with patch('events.engagement_analytics.cache') as snapshot_cache:
+        with patch('events.engagement_analytics.engagement_snapshot_cache') as get_cache:
+            snapshot_cache = get_cache.return_value
             snapshot_cache.get.side_effect = OSError('cache unavailable')
             self.assertEqual(self.client.get(self.data).status_code, 503)
+        self.publish.assert_not_called()
+
+    def test_snapshot_pool_exhaustion_returns_unavailable_without_queueing(self):
+        from bahk.settings import CACHES as redis_caches
+        from django_redis.cache import RedisCache
+
+        default_config = redis_caches['default']
+        default_cache = RedisCache(default_config['LOCATION'], default_config)
+        with self.settings(CACHES={
+            **settings.CACHES,
+            'engagement_snapshot': redis_caches['engagement_snapshot'],
+        }):
+            snapshot_cache = caches['engagement_snapshot']
+            default_pool = default_cache.client.get_client().connection_pool
+            snapshot_pool = snapshot_cache.client.get_client().connection_pool
+            self.assertIsNot(default_pool, snapshot_pool)
+            self.assertEqual(default_cache.make_key(self.key), snapshot_cache.make_key(self.key))
+            self.assertEqual(snapshot_pool.connection_kwargs['socket_connect_timeout'], 1)
+            self.assertEqual(snapshot_pool.connection_kwargs['socket_timeout'], 1)
+            self.assertEqual(snapshot_pool.connection_kwargs['retry'].get_retries(), 0)
+            with patch.object(snapshot_pool.pool, 'get', side_effect=Empty) as acquire:
+                self.assertEqual(self.client.get(self.data).status_code, 503)
+            acquire.assert_called_once_with(block=True, timeout=0.25)
         self.publish.assert_not_called()

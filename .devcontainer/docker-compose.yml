@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  app:
+  app: &django
     build: 
       context: ..
       dockerfile: .devcontainer/Dockerfile
@@ -11,6 +11,10 @@ services:
       - REDIS_URL=redis://redis:6379
     depends_on:
       - redis
+
+  worker:
+    <<: *django
+    command: ["celery", "-A", "bahk", "worker", "--loglevel=info"]
 
   redis:
     image: redis:latest

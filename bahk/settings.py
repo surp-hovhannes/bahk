@@ -17,6 +17,8 @@ from pathlib import Path
 from decouple import config, Csv
 from django.core.exceptions import ImproperlyConfigured
 from ssl import CERT_NONE
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 
 # Sentry SDK for error and performance monitoring
 import sentry_sdk
@@ -225,6 +227,23 @@ CACHES = {
         "KEY_PREFIX": "bahk",
         "TIMEOUT": 60 * 15,  # 15 minutes default timeout
     }
+}
+
+# Snapshot requests must fail promptly even when the general cache is busy.
+CACHES["engagement_snapshot"] = {
+    **CACHES["default"],
+    "OPTIONS": {
+        **CACHE_OPTIONS,
+        "CONNECTION_FACTORY": "bahk.cache.EngagementSnapshotConnectionFactory",
+        "SOCKET_CONNECT_TIMEOUT": 1,
+        "SOCKET_TIMEOUT": 1,
+        "CONNECTION_POOL_KWARGS": {
+            **CACHE_OPTIONS.get("CONNECTION_POOL_KWARGS", {}),
+            "max_connections": CACHE_OPTIONS["CONNECTION_POOL_CLASS_KWARGS"]["max_connections"],
+            "timeout": 0.25,
+            "retry": Retry(NoBackoff(), 0),
+        },
+    },
 }
 
 # Cache middleware settings

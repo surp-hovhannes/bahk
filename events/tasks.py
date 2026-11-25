@@ -10,12 +10,11 @@ from django.utils import timezone
 from datetime import timedelta
 import logging
 
-from django.core.cache import cache
-
 from .engagement_analytics import (
     COMPUTE_LIMIT,
     SNAPSHOT_TTL,
     build_engagement_snapshot,
+    engagement_snapshot_cache,
     engagement_window,
     snapshot_key,
 )
@@ -838,7 +837,11 @@ def refresh_engagement_snapshot(days, key):
 
     start_date, end_date = engagement_window(days)
     # A job queued before midnight cannot populate the new day's snapshot.
-    if key != snapshot_key(days, end_date) or cache.get(key) is not None:
+    if key != snapshot_key(days, end_date):
+        return
+
+    cache = engagement_snapshot_cache()
+    if cache.get(key) is not None:
         return
 
     snapshot = build_engagement_snapshot(days, start_date, end_date)

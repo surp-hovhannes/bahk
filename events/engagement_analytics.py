@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta, timezone as dt_timezone
 from hashlib import sha256
 
-from django.core.cache import cache
+from django.core.cache import DEFAULT_CACHE_ALIAS, caches
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -36,12 +36,18 @@ def snapshot_key(days, end_date):
     return f'admin:engagement:v1:{days}:{digest}'
 
 
+def engagement_snapshot_cache():
+    alias = 'engagement_snapshot'
+    return caches[alias if alias in caches else DEFAULT_CACHE_ALIAS]
+
+
 def get_engagement_snapshot(days, end_date):
     """Return (snapshot, status), scheduling a refresh on a cache miss."""
     from .tasks import refresh_engagement_snapshot
 
     key = snapshot_key(days, end_date)
     try:
+        cache = engagement_snapshot_cache()
         snapshot = cache.get(key)
         if snapshot is not None:
             return snapshot, 200

@@ -16,7 +16,7 @@ import json
 import csv
 
 from .event_semantics import exclude_legacy_screen_views
-from .engagement_analytics import engagement_window, get_engagement_snapshot
+from .engagement_analytics import LEASE_TTL, engagement_window, get_engagement_snapshot
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
 
 
@@ -237,7 +237,8 @@ class EventAdmin(admin.ModelAdmin):
         _, end_date = engagement_window(days)
         snapshot, status = get_engagement_snapshot(days, end_date)
         if status == 202:
-            return JsonResponse({'status': 'pending'}, status=status)
+            # Allow one expired lease and a full replacement task, plus polling delay.
+            return JsonResponse({'status': 'pending', 'poll_seconds': 2 * LEASE_TTL + 4}, status=status)
         if status == 503:
             return JsonResponse({'error': 'Analytics temporarily unavailable.'}, status=status)
         return JsonResponse({
