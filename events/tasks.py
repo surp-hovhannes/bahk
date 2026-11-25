@@ -10,6 +10,15 @@ from django.utils import timezone
 from datetime import timedelta
 import logging
 
+from django.core.cache import cache
+
+from .engagement_analytics import (
+    COMPUTE_LIMIT,
+    SNAPSHOT_TTL,
+    build_engagement_snapshot,
+    engagement_window,
+    snapshot_key,
+)
 from .models import UserActivityFeed, Event
 
 logger = logging.getLogger(__name__)
@@ -820,3 +829,17 @@ def create_announcement_feed_items_task(self, announcement_id):
         logger.error(f"Error creating announcement feed items for announcement {announcement_id}: {exc}")
         # Retry the task
         raise self.retry(exc=exc)
+
+
+@shared_task(ignore_result=True, time_limit=COMPUTE_LIMIT)
+def refresh_engagement_snapshot(days, key):
+    if not 1 <= days <= 365:
+        return
+
+    start_date, end_date = engagement_window(days)
+    # A job queued before midnight cannot populate the new day's snapshot.
+    if key != snapshot_key(days, end_date) or cache.get(key) is not None:
+        return
+
+    snapshot = build_engagement_snapshot(days, start_date, end_date)
+    cache.set(key, snapshot, timeout=SNAPSHOT_TTL)

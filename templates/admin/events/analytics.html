@@ -12,11 +12,15 @@
         <div class="date-range-selector">
             <label for="dateRange">Date range</label>
             <select id="dateRange">
-                <option value="7">Last 7 days</option>
-                <option value="30" selected>Last 30 days</option>
-                <option value="90">Last 90 days</option>
-                <option value="365">Last year</option>
+                {% if days != 7 and days != 30 and days != 90 and days != 365 %}
+                <option value="{{ days }}" selected>Last {{ days }} days</option>
+                {% endif %}
+                <option value="7"{% if days == 7 %} selected{% endif %}>Last 7 days</option>
+                <option value="30"{% if days == 30 %} selected{% endif %}>Last 30 days</option>
+                <option value="90"{% if days == 90 %} selected{% endif %}>Last 90 days</option>
+                <option value="365"{% if days == 365 %} selected{% endif %}>Last year</option>
             </select>
+            <span id="analytics-range-status" role="status"></span>
         </div>
     </div>
 
@@ -214,6 +218,7 @@
     </div>
 </div>
 
+<script src="{% static 'admin/js/engagement-snapshot.js' %}"></script>
 <script>
 function cssColor(name, fallback) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -643,22 +648,26 @@ function populateFastInfoCards() {
     });
 }
 
-function updateCharts() {
-    const days = document.getElementById('dateRange').value;
+let rangeRequest;
+let displayedDays = document.getElementById('dateRange').value;
 
-    // Show loading state
-    Object.values(analyticsCanvases).forEach(([wrapperId]) => {
-        showChartState(document.getElementById(wrapperId), 'Loading analytics…');
-    });
+async function updateCharts() {
+    const selector = document.getElementById('dateRange');
+    const status = document.getElementById('analytics-range-status');
+    const days = selector.value;
+    rangeRequest?.abort();
+    const request = new AbortController();
+    rangeRequest = request;
+    status.textContent = 'Loading analytics…';
 
-    // Fetch new data via AJAX
-    fetch(`${window.location.pathname}data/?days=${days}`, {
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
+    try {
+        const data = await waitForEngagementSnapshot(
+            "{% url 'admin:events_analytics_data' %}?days=" + encodeURIComponent(days),
+            request.signal
+        );
+        if (request.signal.aborted) return;
+        displayedDays = days;
+        status.textContent = '';
         // Update statistics
         document.getElementById('stat-total-events-change').textContent = `Last ${days} days: ${data.events_in_period}`;
         document.getElementById('stat-fast-joins-value').textContent = data.fast_joins;
@@ -681,36 +690,12 @@ function updateCharts() {
 
         // Recreate charts with new data
         recreateCharts(data);
-    })
-    .catch(error => {
+    } catch (error) {
+        if (request.signal.aborted) return;
         console.error('Error updating charts:', error);
-
-        // Show user-friendly error message
-        Object.values(analyticsCanvases).forEach(([wrapperId]) => {
-            showChartState(
-                document.getElementById(wrapperId),
-                'Unable to load analytics. Refresh the page and try again.',
-                true
-            );
-        });
-
-        // Try to restore original charts after a delay
-        setTimeout(() => {
-            try {
-                recreateCharts({
-                    events_by_day: eventsByDay,
-                    feature_usage_over_time: featureUsageData,
-                    fast_joins: FAST_JOINS,
-                    fast_leaves: FAST_LEAVES,
-                    fast_trends_data: fastTrendsData,
-                    current_upcoming_fast_data: currentUpcomingFastData,
-                });
-                refreshChartTheme();
-            } catch (e) {
-                console.error('Failed to restore original charts:', e);
-            }
-        }, 2000);
-    });
+        selector.value = displayedDays;
+        status.textContent = 'Unable to load analytics for that range. Select it again to retry.';
+    }
 }
 
 function recreateCharts(data) {
@@ -1088,7 +1073,7 @@ function closeDetailModal() {
 }
 
 function fetchModalData(metricType, offset, sort, append = false) {
-    const days = document.getElementById('dateRange').value;
+    const days = displayedDays;
     const url = `/admin/events/event/analytics/${metricType}/?days=${days}&sort=${sort}&offset=${offset}&limit=20`;
 
     fetch(url, {

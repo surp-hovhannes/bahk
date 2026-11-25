@@ -1,0 +1,20 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<p id="analytics-status" role="status">
+    {% if snapshot_status == 202 %}Preparing analytics…{% else %}Analytics temporarily unavailable.{% endif %}
+</p>
+<p><a href="?days={{ days }}">Reload analytics</a></p>
+{% if snapshot_status == 202 %}
+<script src="{% static 'admin/js/engagement-snapshot.js' %}"></script>
+<script>
+waitForEngagementSnapshot("{% url 'admin:events_analytics_data' %}?days={{ days }}")
+    .then(() => window.location.reload())
+    .catch(() => {
+        document.getElementById('analytics-status').textContent =
+            'Analytics are taking longer than expected. Reload to try again.';
+    });
+</script>
+{% endif %}
+{% endblock %}

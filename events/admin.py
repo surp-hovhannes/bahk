@@ -4,46 +4,20 @@ Provides comprehensive views for events, event types, and analytics.
 """
 
 from django.contrib import admin
-from django.db.models import Count, Q, Avg, FloatField
-from django.db.models.functions import Cast, TruncDate
-from django.http import HttpResponse
+from django.db.models import Count, Avg, FloatField
+from django.db.models.functions import Cast
+from django.http import HttpResponse, JsonResponse
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils import timezone
-from datetime import timedelta, timezone as dt_timezone
+from datetime import timedelta
 import json
 import csv
 
 from .event_semantics import exclude_legacy_screen_views
-from .participation_analytics import analytics_events
+from .engagement_analytics import engagement_window, get_engagement_snapshot
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
-
-
-def build_daily_counts_for_queryset(queryset, date_keys, window_tz):
-    """
-    Build a date-keyed dict covering the window for the queryset.
-
-    Args:
-        queryset: Event queryset to aggregate
-        date_keys: Dict keys (dates as 'YYYY-MM-DD' strings) to initialize with zero
-        window_tz: Timezone used to form the reporting window and date keys
-
-    Returns:
-        Dict mapping date strings to event counts
-    """
-    counts = {date: 0 for date in date_keys}
-    daily_rows = queryset.annotate(
-        date=TruncDate('timestamp', tzinfo=window_tz)
-    ).values('date').annotate(count=Count('id')).order_by('date')
-
-    for row in daily_rows:
-        date_value = row['date']
-        date_str = date_value.strftime('%Y-%m-%d') if hasattr(date_value, 'strftime') else str(date_value)
-        if date_str in counts:
-            counts[date_str] = row['count']
-
-    return counts
 
 
 @admin.register(EventType)
@@ -222,535 +196,54 @@ class EventAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
     
+    @staticmethod
+    def _engagement_days(request):
+        raw_days = request.GET.get('days', '30')
+        if len(raw_days) > 16:
+            return None
+        try:
+            days = int(raw_days)
+        except ValueError:
+            return None
+        return days if 1 <= days <= 365 else None
+
     def analytics_view(self, request):
-        """
-        User Engagement Dashboard: excludes staff users and analytics-category events.
-        """
-        # Get date range from request or default to last 30 days
-        # Normalize to calendar-day boundaries so initial load matches AJAX updates
-        days = int(request.GET.get('days', 30))
-        now = timezone.now()
-        end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        start_of_window = end_of_today - timedelta(days=days)
-        # Expose these in context for UI/debugging
-        start_date = start_of_window
-        end_date = end_of_today
-        
-        # Base queryset with engagement filters (exclude staff and pure analytics events)
-        # Keep engagement analytics like DEVOTIONAL_VIEWED, CHECKLIST_USED, PRAYER_SET_VIEWED
-        base_qs = analytics_events().select_related('event_type', 'user', 'content_type')\
-            .exclude(user__is_staff=True)\
-            .exclude(event_type__code__in=[
-                EventType.APP_OPEN,
-                EventType.SESSION_START,
-                EventType.SESSION_END,
-                EventType.SCREEN_VIEW,
-            ])
+        days = self._engagement_days(request)
+        if days is None:
+            return JsonResponse({'error': 'Date range must be between 1 and 365 days.'}, status=400)
 
-        # Basic event statistics
-        total_events = base_qs.count()
-        events_in_period = base_qs.filter(
-            timestamp__gte=start_date
-        ).count()
-        
-        # Events by type
-        events_by_type_qs = base_qs.values(
-            'event_type__name', 'event_type__code'
-        ).annotate(
-            count=Count('id')
-        ).order_by('-count')
-
-        # Take top-N, but ensure prayer-related event types are always included in the distribution.
-        events_by_type = list(events_by_type_qs[:10])
-        required_event_type_codes = [
-            EventType.PRAYER_REQUEST_CREATED,
-            EventType.PRAYER_REQUEST_ACCEPTED,
-            EventType.PRAYER_REQUEST_COMPLETED,
-            EventType.PRAYER_REQUEST_THANKS_SENT,
-            EventType.PRAYER_SET_VIEWED,
-            # Newer types (may not exist in older DBs)
-            'prayer_viewed',
-            'prayer_request_viewed',
-        ]
-        existing_codes = {row['event_type__code'] for row in events_by_type}
-        missing_codes = [c for c in required_event_type_codes if c not in existing_codes]
-
-        if missing_codes:
-            extra_rows = list(
-                events_by_type_qs.filter(event_type__code__in=missing_codes)
-            )
-            by_code = {row['event_type__code']: row for row in (events_by_type + extra_rows)}
-
-            # Add explicit zero-count rows for codes with no events (so they still show in the chart).
-            type_name_by_code = dict(
-                EventType.objects.filter(code__in=missing_codes).values_list('code', 'name')
-            )
-            for code in missing_codes:
-                if code not in by_code:
-                    by_code[code] = {
-                        'event_type__code': code,
-                        'event_type__name': type_name_by_code.get(code, code),
-                        'count': 0,
-                    }
-
-            events_by_type = sorted(by_code.values(), key=lambda r: r['count'], reverse=True)
-        
-        # Events by day (histogram data) - Optimized single query approach
-        from .analytics_optimizer import AnalyticsQueryOptimizer
-        
-        # Exactly "days" calendar days including today
-        num_days = days
-        
-        # Replace N+1 queries with single optimized aggregation
-        # Exclude pure analytics events but keep engagement analytics
-        daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
-            start_of_window, num_days, filters={
-                'exclude_staff': True,
-                'exclude_event_types': [
-                    EventType.APP_OPEN,
-                    EventType.SESSION_START,
-                    EventType.SESSION_END,
-                    EventType.SCREEN_VIEW,
-                ]
-            }
-        )
-        events_by_day = daily_aggregates['events_by_day']
-        fast_joins_by_day = daily_aggregates['fast_joins_by_day']
-        fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
-        
-        # Top users by activity
-        top_users = base_qs.exclude(
-            user__isnull=True
-        ).values(
-            'user__username', 'user__id'
-        ).annotate(
-            event_count=Count('id')
-        ).order_by('-event_count')[:10]
-        
-        # Fast join/leave totals for the period (derived from per-day buckets to align with charts)
-        fast_joins = sum(fast_joins_by_day.values())
-        fast_leaves = sum(fast_leaves_by_day.values())
-
-        # Optimize KPI totals with single aggregated query
-        kpi_totals = base_qs.filter(
-            timestamp__gte=start_date,
-            timestamp__lt=end_date,
-        ).aggregate(
-            user_signups=Count('id', filter=Q(event_type__code=EventType.USER_ACCOUNT_CREATED)),
-            devotional_views=Count('id', filter=Q(event_type__code=EventType.DEVOTIONAL_VIEWED)),
-            checklist_usage=Count('id', filter=Q(event_type__code=EventType.CHECKLIST_USED)),
-            prayer_set_views=Count('id', filter=Q(event_type__code=EventType.PRAYER_SET_VIEWED)),
-            prayer_request_activity=Count(
-                'id',
-                filter=Q(
-                    event_type__code__in=[
-                        EventType.PRAYER_REQUEST_CREATED,
-                        EventType.PRAYER_REQUEST_ACCEPTED,
-                        EventType.PRAYER_REQUEST_COMPLETED,
-                        EventType.PRAYER_REQUEST_THANKS_SENT,
-                    ]
-                ),
-            ),
-        )
-        user_signups_total = kpi_totals['user_signups']
-        devotional_views_total = kpi_totals['devotional_views']
-        checklist_usage_total = kpi_totals['checklist_usage']
-        prayer_set_views_total = kpi_totals['prayer_set_views']
-        prayer_request_activity_total = kpi_totals['prayer_request_activity']
-
-        # Get daily breakdowns for each KPI
-        window_tz = start_of_window.tzinfo or dt_timezone.utc
-        signups_qs = base_qs.filter(
-            event_type__code=EventType.USER_ACCOUNT_CREATED,
-            timestamp__gte=start_date,
-            timestamp__lt=end_date,
-        )
-        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys(), window_tz)
-
-        devotional_qs = base_qs.filter(
-            event_type__code=EventType.DEVOTIONAL_VIEWED,
-            timestamp__gte=start_date,
-            timestamp__lt=end_date,
-        )
-        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys(), window_tz)
-
-        checklist_qs = base_qs.filter(
-            event_type__code=EventType.CHECKLIST_USED,
-            timestamp__gte=start_date,
-            timestamp__lt=end_date,
-        )
-        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys(), window_tz)
-
-        prayer_set_qs = base_qs.filter(
-            event_type__code=EventType.PRAYER_SET_VIEWED,
-            timestamp__gte=start_date,
-            timestamp__lt=end_date,
-        )
-        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys(), window_tz)
-
-        prayer_requests_qs = base_qs.filter(
-            event_type__code__in=[
-                EventType.PRAYER_REQUEST_CREATED,
-                EventType.PRAYER_REQUEST_ACCEPTED,
-                EventType.PRAYER_REQUEST_COMPLETED,
-                EventType.PRAYER_REQUEST_THANKS_SENT,
-            ],
-            timestamp__gte=start_date,
-            timestamp__lt=end_date,
-        )
-        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys(), window_tz)
-
-        feature_usage_over_time = {
-            'labels': list(events_by_day.keys()),
-            'datasets': [
-                {'label': 'User Signups', 'data': list(user_signups_by_day.values())},
-                {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
-                {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
-                {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
-                {'label': 'Prayer Requests', 'data': list(prayer_request_activity_by_day.values())},
-            ],
-        }
-
-        # Language usage: count unique users by lang from recent events
-        lang_events = base_qs.filter(
-            timestamp__gte=start_date,
-            timestamp__lt=end_date,
-            data__has_key='lang',
-        ).exclude(user__isnull=True).values_list('data', 'user_id')
-        lang_user_sets = {}
-        for event_data, user_id in lang_events:
-            lang_val = event_data.get('lang') if event_data else None
-            if lang_val:
-                lang_user_sets.setdefault(lang_val, set()).add(user_id)
-        language_en = len(lang_user_sets.get('en', set()))
-        language_hy = len(lang_user_sets.get('hy', set()))
-
-        # Recent milestones
-        milestones = base_qs.filter(
-            event_type__code=EventType.FAST_PARTICIPANT_MILESTONE,
-            timestamp__gte=start_of_window
-        ).order_by('-timestamp')[:5]
-        
-        # Get current and upcoming fasts
-        from hub.models import Fast
-        today = timezone.now().date()
-        
-        # Current fasts (have days that include today)
-        current_fasts = Fast.objects.filter(
-            days__date=today
-        ).distinct()
-        
-        # Upcoming fasts (have days that start after today)
-        upcoming_fasts = Fast.objects.filter(
-            days__date__gt=today
-        ).distinct().order_by('days__date')[:3]  # Limit to next 3 upcoming fasts
-        
-        # Get join/leave data for current and upcoming fasts - Optimized
-        # Combine current and upcoming fasts for analysis
-        all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
-        
-        # Get fast-specific data with optimized queries
-        # Exclude pure analytics events but keep engagement analytics
-        current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
-            all_relevant_fasts, start_of_window, num_days, filters={
-                'exclude_staff': True,
-                'exclude_event_types': [
-                    EventType.APP_OPEN,
-                    EventType.SESSION_START,
-                    EventType.SESSION_END,
-                    EventType.SCREEN_VIEW,
-                ]
-            }
-        )
-        
-        # Hourly distribution for the last 7 days (for more granular analysis)
-        hourly_data = {}
-        if days <= 7:
-            for i in range(24):
-                hour_start = end_of_today - timedelta(days=1)
-                hour_start = hour_start.replace(hour=i, minute=0, second=0, microsecond=0)
-                hour_end = hour_start + timedelta(hours=1)
-                count = base_qs.filter(
-                    timestamp__gte=hour_start,
-                    timestamp__lt=hour_end
-                ).count()
-                hourly_data[f"{i:02d}:00"] = count
-        
-        # Fast activity trends (joins vs leaves over time)
-        fast_trends_data = {
-            'labels': list(events_by_day.keys()),
-            'joins': list(fast_joins_by_day.values()),
-            'leaves': list(fast_leaves_by_day.values()),
-            'net': [joins - leaves for joins, leaves in zip(fast_joins_by_day.values(), fast_leaves_by_day.values())]
-        }
-        
+        start_date, end_date = engagement_window(days)
+        snapshot, status = get_engagement_snapshot(days, end_date)
         context = {
+            **(snapshot or {}),
             **self.admin_site.each_context(request),
             'title': 'User Engagement Dashboard',
             'opts': self.model._meta,
             'has_view_permission': self.has_view_permission(request),
-            'total_events': total_events,
-            'events_in_period': sum(events_by_day.values()),
-            'events_by_type': list(events_by_type),  # Convert to list for JSON serialization
-            'events_by_day': events_by_day,
-            'fast_joins_by_day': fast_joins_by_day,
-            'fast_leaves_by_day': fast_leaves_by_day,
-            'fast_trends_data': fast_trends_data,
-            'top_users': list(top_users),  # Convert to list for JSON serialization
-            'fast_joins': fast_joins,
-            'fast_leaves': fast_leaves,
-            'net_joins': fast_joins - fast_leaves,
-            'milestones': milestones,
-            'hourly_data': hourly_data,
-            'current_upcoming_fast_data': current_upcoming_fast_data,
-            'current_fasts': list(current_fasts),
-            'upcoming_fasts': list(upcoming_fasts),
             'start_date': start_date,
             'end_date': end_date,
             'days': days,
-            'user_signups': user_signups_total,
-            'devotional_views': devotional_views_total,
-            'checklist_usage': checklist_usage_total,
-            'prayer_set_views': prayer_set_views_total,
-            'prayer_request_activity': prayer_request_activity_total,
-            'user_signups_by_day': user_signups_by_day,
-            'devotional_views_by_day': devotional_views_by_day,
-            'checklist_usage_by_day': checklist_usage_by_day,
-            'prayer_set_views_by_day': prayer_set_views_by_day,
-            'feature_usage_over_time': feature_usage_over_time,
-            'language_en': language_en,
-            'language_hy': language_hy,
+            'snapshot_status': status,
         }
-
+        if snapshot is None:
+            return TemplateResponse(request, 'admin/events/analytics_pending.html', context, status=status)
         return TemplateResponse(request, 'admin/events/analytics.html', context)
-    
+
     def analytics_data(self, request):
-        """
-        AJAX endpoint for fetching analytics data with different date ranges.
-        """
-        from django.http import JsonResponse
-        
-        try:
-            # Get date range from request with validation
-            days = int(request.GET.get('days', 30))
-            
-            # Validate date range
-            if days <= 0 or days > 365:
-                return JsonResponse({
-                    'error': 'Invalid date range. Must be between 1 and 365 days.'
-                }, status=400)
-            
-            # Use calendar-day boundaries to match analytics_view behavior
-            now = timezone.now()
-            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            start_of_window = end_of_today - timedelta(days=days)
-            end_date = end_of_today
-            
-        except (ValueError, TypeError) as e:
-            return JsonResponse({
-                'error': f'Invalid parameters: {str(e)}'
-            }, status=400)
-        
-        # Events by day (histogram data) - Optimized single query approach
-        from .analytics_optimizer import AnalyticsQueryOptimizer
-        
-        # Exactly "days" calendar days including today
-        num_days = days
-        
-        # Replace N+1 queries with single optimized aggregation
-        # Exclude pure analytics events but keep engagement analytics
-        daily_aggregates = AnalyticsQueryOptimizer.get_daily_event_aggregates(
-            start_of_window, num_days, filters={
-                'exclude_staff': True,
-                'exclude_event_types': [
-                    EventType.APP_OPEN,
-                    EventType.SESSION_START,
-                    EventType.SESSION_END,
-                    EventType.SCREEN_VIEW,
-                ]
-            }
-        )
-        events_by_day = daily_aggregates['events_by_day']
-        fast_joins_by_day = daily_aggregates['fast_joins_by_day']
-        fast_leaves_by_day = daily_aggregates['fast_leaves_by_day']
+        days = self._engagement_days(request)
+        if days is None:
+            return JsonResponse({'error': 'Date range must be between 1 and 365 days.'}, status=400)
 
-        # Keep engagement analytics like DEVOTIONAL_VIEWED, CHECKLIST_USED, PRAYER_SET_VIEWED
-        base_qs = analytics_events().select_related('event_type', 'user', 'content_type')\
-            .exclude(user__is_staff=True)\
-            .exclude(event_type__code__in=[
-                EventType.APP_OPEN,
-                EventType.SESSION_START,
-                EventType.SESSION_END,
-                EventType.SCREEN_VIEW,
-            ])
-
-        # Optimize KPI totals with single aggregated query
-        kpi_totals = base_qs.filter(
-            timestamp__gte=start_of_window,
-            timestamp__lt=end_date,
-        ).aggregate(
-            user_signups=Count('id', filter=Q(event_type__code=EventType.USER_ACCOUNT_CREATED)),
-            devotional_views=Count('id', filter=Q(event_type__code=EventType.DEVOTIONAL_VIEWED)),
-            checklist_usage=Count('id', filter=Q(event_type__code=EventType.CHECKLIST_USED)),
-            prayer_set_views=Count('id', filter=Q(event_type__code=EventType.PRAYER_SET_VIEWED)),
-            prayer_request_activity=Count(
-                'id',
-                filter=Q(
-                    event_type__code__in=[
-                        EventType.PRAYER_REQUEST_CREATED,
-                        EventType.PRAYER_REQUEST_ACCEPTED,
-                        EventType.PRAYER_REQUEST_COMPLETED,
-                        EventType.PRAYER_REQUEST_THANKS_SENT,
-                    ]
-                ),
-            ),
-        )
-
-        # Get daily breakdowns for each KPI
-        window_tz = start_of_window.tzinfo or dt_timezone.utc
-        signups_qs = base_qs.filter(
-            event_type__code=EventType.USER_ACCOUNT_CREATED,
-            timestamp__gte=start_of_window,
-            timestamp__lt=end_date,
-        )
-        user_signups_by_day = build_daily_counts_for_queryset(signups_qs, events_by_day.keys(), window_tz)
-
-        devotional_qs = base_qs.filter(
-            event_type__code=EventType.DEVOTIONAL_VIEWED,
-            timestamp__gte=start_of_window,
-            timestamp__lt=end_date,
-        )
-        devotional_views_by_day = build_daily_counts_for_queryset(devotional_qs, events_by_day.keys(), window_tz)
-
-        checklist_qs = base_qs.filter(
-            event_type__code=EventType.CHECKLIST_USED,
-            timestamp__gte=start_of_window,
-            timestamp__lt=end_date,
-        )
-        checklist_usage_by_day = build_daily_counts_for_queryset(checklist_qs, events_by_day.keys(), window_tz)
-
-        prayer_set_qs = base_qs.filter(
-            event_type__code=EventType.PRAYER_SET_VIEWED,
-            timestamp__gte=start_of_window,
-            timestamp__lt=end_date,
-        )
-        prayer_set_views_by_day = build_daily_counts_for_queryset(prayer_set_qs, events_by_day.keys(), window_tz)
-
-        prayer_requests_qs = base_qs.filter(
-            event_type__code__in=[
-                EventType.PRAYER_REQUEST_CREATED,
-                EventType.PRAYER_REQUEST_ACCEPTED,
-                EventType.PRAYER_REQUEST_COMPLETED,
-                EventType.PRAYER_REQUEST_THANKS_SENT,
-            ],
-            timestamp__gte=start_of_window,
-            timestamp__lt=end_date,
-        )
-        prayer_request_activity_by_day = build_daily_counts_for_queryset(prayer_requests_qs, events_by_day.keys(), window_tz)
-
-        feature_usage_over_time = {
-            'labels': list(events_by_day.keys()),
-            'datasets': [
-                {'label': 'User Signups', 'data': list(user_signups_by_day.values())},
-                {'label': 'Devotional Views', 'data': list(devotional_views_by_day.values())},
-                {'label': 'Checklist Uses', 'data': list(checklist_usage_by_day.values())},
-                {'label': 'Prayer Set Views', 'data': list(prayer_set_views_by_day.values())},
-                {'label': 'Prayer Requests', 'data': list(prayer_request_activity_by_day.values())},
-            ],
-        }
-
-        # Fast activity trends
-        fast_trends_data = {
-            'labels': list(events_by_day.keys()),
-            'joins': list(fast_joins_by_day.values()),
-            'leaves': list(fast_leaves_by_day.values()),
-            'net': [joins - leaves for joins, leaves in zip(fast_joins_by_day.values(), fast_leaves_by_day.values())]
-        }
-        
-        # Get current and upcoming fasts
-        from hub.models import Fast
-        today = timezone.now().date()
-        
-        # Current fasts (have days that include today)
-        current_fasts = Fast.objects.filter(
-            days__date=today
-        ).distinct()
-        
-        # Upcoming fasts (have days that start after today)
-        upcoming_fasts = Fast.objects.filter(
-            days__date__gt=today
-        ).distinct().order_by('days__date')[:3]  # Limit to next 3 upcoming fasts
-        
-        # Get join/leave data for current and upcoming fasts
-        current_upcoming_fast_data = {}
-        
-        # Combine current and upcoming fasts for analysis - Optimized
-        all_relevant_fasts = list(current_fasts) + list(upcoming_fasts)
-        
-        # Get fast-specific data with optimized queries
-        # Exclude pure analytics events but keep engagement analytics
-        current_upcoming_fast_data = AnalyticsQueryOptimizer.get_fast_specific_daily_data(
-            all_relevant_fasts, start_of_window, num_days, filters={
-                'exclude_staff': True,
-                'exclude_event_types': [
-                    EventType.APP_OPEN,
-                    EventType.SESSION_START,
-                    EventType.SESSION_END,
-                    EventType.SCREEN_VIEW,
-                ]
-            }
-        )
-        
-        # Language usage
-        lang_events = base_qs.filter(
-            timestamp__gte=start_of_window,
-            timestamp__lt=end_date,
-            data__has_key='lang',
-        ).exclude(user__isnull=True).values_list('data', 'user_id')
-        lang_user_sets = {}
-        for event_data, user_id in lang_events:
-            lang_val = event_data.get('lang') if event_data else None
-            if lang_val:
-                lang_user_sets.setdefault(lang_val, set()).add(user_id)
-        language_en = len(lang_user_sets.get('en', set()))
-        language_hy = len(lang_user_sets.get('hy', set()))
-
-        try:
-            # Summary statistics aligned with per-day buckets
-            fast_joins = sum(fast_joins_by_day.values())
-            fast_leaves = sum(fast_leaves_by_day.values())
-
-            return JsonResponse({
-                'events_by_day': events_by_day,
-                'fast_trends_data': fast_trends_data,
-                'fast_joins': fast_joins,
-                'fast_leaves': fast_leaves,
-                'net_joins': fast_joins - fast_leaves,
-                'events_in_period': sum(events_by_day.values()),
-                'current_upcoming_fast_data': current_upcoming_fast_data,
-                'user_signups_by_day': user_signups_by_day,
-                'devotional_views_by_day': devotional_views_by_day,
-                'checklist_usage_by_day': checklist_usage_by_day,
-                'prayer_set_views_by_day': prayer_set_views_by_day,
-                'feature_usage_over_time': feature_usage_over_time,
-                'user_signups': kpi_totals['user_signups'],
-                'devotional_views': kpi_totals['devotional_views'],
-                'checklist_usage': kpi_totals['checklist_usage'],
-                'prayer_set_views': kpi_totals['prayer_set_views'],
-                'prayer_request_activity': kpi_totals['prayer_request_activity'],
-                'language_en': language_en,
-                'language_hy': language_hy,
-            })
-            
-        except Exception as e:
-            # Log the error for debugging
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Analytics data generation failed: {str(e)}", exc_info=True)
-            
-            return JsonResponse({
-                'error': 'An error occurred while generating analytics data. Please try again.'
-            }, status=500)
+        _, end_date = engagement_window(days)
+        snapshot, status = get_engagement_snapshot(days, end_date)
+        if status == 202:
+            return JsonResponse({'status': 'pending'}, status=status)
+        if status == 503:
+            return JsonResponse({'error': 'Analytics temporarily unavailable.'}, status=status)
+        return JsonResponse({
+            field: value for field, value in snapshot.items()
+            if field not in {'total_events', 'events_by_type', 'top_users', 'milestones', 'hourly_data'}
+        })
 
     def new_users_data(self, request):
         """
