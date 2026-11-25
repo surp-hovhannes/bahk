@@ -7,15 +7,27 @@ This module tests:
 - Admin view functionality
 """
 
+from django.conf import settings
 from django.test import TestCase, Client, override_settings
+from django.core.cache import cache, caches
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 from datetime import datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 from unittest.mock import patch
+from queue import Empty
 
+from events.engagement_analytics import (
+    LEASE_TTL,
+    build_engagement_snapshot,
+    engagement_window,
+    snapshot_key,
+)
 from events.models import Event, EventType
+from events.tasks import refresh_engagement_snapshot
 from hub.models import Profile, Church, Fast, Day, Devotional
 from tests.fixtures.test_data import TestDataFactory
 
@@ -31,6 +43,15 @@ class AdminDashboardTests(TestCase):
     
     def setUp(self):
         """Set up test data."""
+        # These metric assertions exercise the real builder without a broker.
+        def computed_snapshot(days, end_date):
+            snapshot = build_engagement_snapshot(days, end_date - timedelta(days=days), end_date)
+            return snapshot, 200
+
+        snapshot_mock = patch('events.admin.get_engagement_snapshot', side_effect=computed_snapshot)
+        snapshot_mock.start()
+        self.addCleanup(snapshot_mock.stop)
+
         # Initialize event types
         EventType.get_or_create_default_types()
         
@@ -440,6 +461,49 @@ class AdminDashboardTests(TestCase):
         )
         self.assertIsNotNone(ios_platform)
         self.assertGreaterEqual(ios_platform['count'], 1)
+
+    def test_engagement_drilldowns_accept_custom_days_and_share_window(self):
+        start, end = engagement_window(14)
+        self.regular_user.date_joined = start
+        self.regular_user.save(update_fields=['date_joined'])
+        for code, data in (
+            (EventType.DEVOTIONAL_VIEWED, {'devotional_id': 1}),
+            (EventType.CHECKLIST_USED, {'action': 'item_toggled_prayer'}),
+            (EventType.PRAYER_SET_VIEWED, {'prayer_set_id': 1}),
+        ):
+            event_type = EventType.objects.get(code=code)
+            for timestamp in (start - timedelta(seconds=1), start, end):
+                event = Event.objects.create(
+                    event_type=event_type, title=code, user=self.regular_user,
+                    target=self.fast, data=data,
+                )
+                Event.objects.filter(pk=event.pk).update(timestamp=timestamp)
+
+        page = self.client.get(reverse('admin:events_analytics'), {'days': 14})
+        self.assertContains(page, '<option value="14" selected>')
+        self.assertEqual((page.context['start_date'], page.context['end_date']), (start, end))
+
+        for name, count_field in (
+            ('new_users', None),
+            ('devotional_views', 'views'),
+            ('checklist_usage', 'usage_count'),
+            ('checklist_items', 'times_checked'),
+            ('prayer_views', 'views'),
+        ):
+            with self.subTest(endpoint=name):
+                url = reverse(f'admin:events_{name}_data')
+                response = self.client.get(url, {'days': 14})
+                self.assertEqual(response.status_code, 200)
+                items = response.json()['items']
+                self.assertEqual(len(items), 1)
+                if count_field:
+                    self.assertEqual(items[0][count_field], 1)
+                else:
+                    self.assertEqual(items[0]['id'], self.regular_user.id)
+                self.assertEqual(self.client.get(url, {'days': 1}).json()['items'], [])
+                self.assertEqual(self.client.get(url, {'days': 365}).status_code, 200)
+                for invalid in ('bad', '0', '366', '9' * 17):
+                    self.assertEqual(self.client.get(url, {'days': invalid}).status_code, 400)
 
     def test_new_users_modal_includes_location(self):
         """User signups modal should include profile location."""
@@ -874,3 +938,151 @@ class AdminDashboardTests(TestCase):
 
         # Should now have the devotional view counted
         self.assertGreaterEqual(data['devotional_views'], 1)
+
+
+@override_settings(
+    CACHES={'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'engagement-snapshot-tests',
+    }},
+    SESSION_ENGINE='django.contrib.sessions.backends.db',
+)
+class EngagementSnapshotTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.page = reverse('admin:events_analytics')
+        self.data = reverse('admin:events_analytics_data')
+        self.admin = User.objects.create(username='engagement-admin', is_staff=True, is_superuser=True)
+        self.other_staff = User.objects.create(username='engagement-staff', is_staff=True)
+        self.client.force_login(self.admin)
+        publish_mock = patch.object(refresh_engagement_snapshot.app, 'send_task')
+        self.publish = publish_mock.start()
+        self.addCleanup(publish_mock.stop)
+        self.key = snapshot_key(30, engagement_window(30)[1])
+
+    def test_cold_and_warm_requests_share_snapshot_without_event_queries(self):
+        with CaptureQueriesContext(connection) as queries:
+            cold = self.client.get(self.page)
+            pending = self.client.get(self.data, {'days': '030'})
+        self.assertEqual(cold.status_code, 202)
+        self.assertContains(cold, 'Preparing analytics', status_code=202)
+        self.assertEqual(pending.status_code, 202)
+        self.assertEqual(cold.context['poll_seconds'], pending.json()['poll_seconds'])
+        self.assertEqual(pending.json(), {'status': 'pending', 'poll_seconds': 2 * LEASE_TTL + 4})
+        self.publish.assert_called_once()
+        self.assertEqual(self.publish.call_args.args, (refresh_engagement_snapshot.name,))
+        self.assertEqual(self.publish.call_args.kwargs['args'], (30, self.key))
+        self.assertFalse(any(
+            query['sql'].startswith('SELECT') and '"events_event"' in query['sql']
+            for query in queries
+        ))
+
+        standard_user = User.objects.create(username='engagement-regular')
+        event_type = EventType.objects.create(code=EventType.DEVOTIONAL_VIEWED, name='Devotional')
+        Event.objects.create(event_type=event_type, title='Reading', user=standard_user, data={'lang': 'hy'})
+        Event.objects.create(event_type=event_type, title='Reading', user=standard_user, data={'lang': 'hy'})
+        Event.objects.create(event_type=event_type, title='Staff reading', user=self.admin, data={'lang': 'en'})
+        milestone_type = EventType.objects.create(
+            code=EventType.FAST_PARTICIPANT_MILESTONE, name='Milestone',
+        )
+        Event.objects.create(event_type=milestone_type, title='Snapshot milestone', user=standard_user)
+        refresh_engagement_snapshot.run(*self.publish.call_args.kwargs['args'])
+
+        self.client.force_login(self.other_staff)
+        with CaptureQueriesContext(connection) as queries:
+            warm = self.client.get(self.page)
+            data = self.client.get(self.data).json()
+        self.assertEqual(warm.status_code, 200)
+        self.assertEqual(warm.context['poll_seconds'], cold.context['poll_seconds'])
+        self.assertFalse(warm.context['has_view_permission'])
+        self.assertEqual(warm.context['user'], self.other_staff)
+        self.assertEqual(warm.context['total_events'], 3)
+        self.assertContains(warm, 'Snapshot milestone')
+        self.assertContains(warm, 'engagement-regular')
+        self.assertTrue(warm.context['milestones'][0]['timestamp'])
+        self.assertEqual(warm.context['top_users'][0]['event_count'], 3)
+        self.assertEqual(warm.context['devotional_views'], 2)
+        self.assertEqual(data['devotional_views'], 2)
+        self.assertEqual(data['devotional_views_by_day'], warm.context['devotional_views_by_day'])
+        self.assertEqual(data['language_en'], 0)
+        self.assertEqual(data['language_hy'], 1)
+        self.assertNotIn('top_users', data)
+        self.assertIn('no-store', warm.headers['Cache-Control'])
+        self.assertFalse(any(
+            query['sql'].startswith('SELECT') and '"events_event"' in query['sql']
+            for query in queries
+        ))
+        self.publish.assert_called_once()
+
+        self.client.force_login(standard_user)
+        self.assertEqual(self.client.get(self.page).status_code, 302)
+        self.assertEqual(self.client.get(self.data).status_code, 302)
+
+    def test_invalid_ranges_do_not_queue_work(self):
+        for endpoint in (self.page, self.data):
+            for days in ('bad', '0', '-1', '366', '9' * 5000):
+                with self.subTest(endpoint=endpoint, days=days[:10]):
+                    self.assertEqual(self.client.get(endpoint, {'days': days}).status_code, 400)
+        self.publish.assert_not_called()
+
+    def test_publish_failure_is_throttled_without_caching_a_snapshot(self):
+        self.publish.side_effect = OSError('broker unavailable')
+        self.assertEqual(self.client.get(self.page).status_code, 503)
+        self.assertEqual(self.client.get(self.data).status_code, 202)
+        self.assertIsNone(cache.get(self.key))
+        self.publish.assert_called_once()
+
+    def test_failed_worker_can_retry_after_lease_expires(self):
+        self.assertEqual(self.client.get(self.data).status_code, 202)
+        with patch('events.tasks.build_engagement_snapshot', side_effect=RuntimeError('unavailable')):
+            with self.assertRaises(RuntimeError):
+                refresh_engagement_snapshot.run(30, self.key)
+        self.assertIsNone(cache.get(self.key))
+        with patch('django.core.cache.backends.locmem.time') as clock:
+            clock.time.return_value = datetime.now(dt_timezone.utc).timestamp() + LEASE_TTL + 1
+            self.assertEqual(self.client.get(self.data).status_code, 202)
+        self.assertEqual(self.publish.call_count, 2)
+
+    def test_previous_calendar_window_is_discarded(self):
+        yesterday_key = snapshot_key(30, engagement_window(30)[1] - timedelta(days=1))
+        with patch('events.tasks.build_engagement_snapshot') as compute:
+            refresh_engagement_snapshot.run(30, yesterday_key)
+        compute.assert_not_called()
+        self.assertIsNone(cache.get(yesterday_key))
+
+    def test_cache_failure_returns_unavailable_without_queueing(self):
+        with patch('events.engagement_analytics.engagement_snapshot_cache') as get_cache:
+            snapshot_cache = get_cache.return_value
+            snapshot_cache.get.side_effect = OSError('cache unavailable')
+            self.assertEqual(self.client.get(self.data).status_code, 503)
+        self.publish.assert_not_called()
+
+    def test_snapshot_pool_exhaustion_returns_unavailable_without_queueing(self):
+        from bahk.settings import CACHES as redis_caches
+        from django_redis.cache import RedisCache
+
+        default_config = redis_caches['default']
+        default_cache = RedisCache(default_config['LOCATION'], default_config)
+        with self.settings(CACHES={
+            **settings.CACHES,
+            'engagement_snapshot': redis_caches['engagement_snapshot'],
+        }):
+            snapshot_cache = caches['engagement_snapshot']
+            default_pool = default_cache.client.get_client().connection_pool
+            snapshot_pool = snapshot_cache.client.get_client().connection_pool
+            self.assertIsNot(default_pool, snapshot_pool)
+            self.assertEqual(default_cache.make_key(self.key), snapshot_cache.make_key(self.key))
+            self.assertEqual(snapshot_pool.connection_kwargs['socket_connect_timeout'], 1)
+            self.assertEqual(snapshot_pool.connection_kwargs['socket_timeout'], 1)
+            self.assertEqual(snapshot_pool.connection_kwargs['retry'].get_retries(), 0)
+            if default_config['LOCATION'].startswith('rediss://'):
+                for option in ('ssl_cert_reqs', 'ssl_check_hostname'):
+                    self.assertEqual(
+                        snapshot_pool.connection_kwargs[option],
+                        default_pool.connection_kwargs[option],
+                    )
+            with patch.object(snapshot_pool.pool, 'get', side_effect=Empty) as acquire:
+                self.assertEqual(self.client.get(self.data).status_code, 503)
+            acquire.assert_called_once_with(block=True, timeout=0.25)
+        self.publish.assert_not_called()

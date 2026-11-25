@@ -2,14 +2,17 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.admin import AdminSite
+from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
 from events.admin import EventAdmin
 from events.analytics_optimizer import AnalyticsQueryOptimizer
+from events.engagement_analytics import engagement_window, snapshot_key
 from events.management.commands.engagement_report import Command
 from events.models import Event, EventType
 from events.participation_analytics import analytics_events, transition_counts
+from events.tasks import refresh_engagement_snapshot
 from hub.models import FastParticipation, Profile
 from tests.fixtures.test_data import TestDataFactory
 
@@ -122,7 +125,13 @@ class ParticipationAnalyticsTests(TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual({row.status for row in rows}, {'left', 'active'})
 
+    @override_settings(CACHES={'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'participation-engagement-snapshot-test',
+    }})
     def test_admin_dashboard_suppresses_known_noops_in_all_summaries(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
         Event.objects.all().delete()
         Event.create_event(
             event_type_code=EventType.USER_LEFT_FAST, user=self.profile.user, target=self.fast,
@@ -131,7 +140,9 @@ class ParticipationAnalyticsTests(TestCase):
         admin_user = TestDataFactory.create_user()
         admin_user.is_staff = admin_user.is_superuser = True
         admin_user.save(update_fields=['is_staff', 'is_superuser'])
-        request = RequestFactory().get('/admin/events/event/analytics/', {'days': 7})
+        days = 7
+        refresh_engagement_snapshot.run(days, snapshot_key(days, engagement_window(days)[1]))
+        request = RequestFactory().get('/admin/events/event/analytics/', {'days': days})
         request.user = admin_user
         response = EventAdmin(Event, AdminSite()).analytics_view(request)
         context = response.context_data
