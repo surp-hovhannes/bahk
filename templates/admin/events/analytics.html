@@ -965,6 +965,7 @@ function updateFastInfoCards(fastData) {
 
 // Modal functionality for stat card details
 let currentMetricType = null;
+let modalDays = null;
 let currentOffset = 0;
 let currentSort = 'default';
 let currentHasMore = false;
@@ -973,6 +974,7 @@ let lastModalTrigger = null;
 
 function openDetailModal(metricType, trigger) {
     currentMetricType = metricType;
+    modalDays = displayedDays;
     currentOffset = 0;
     currentSort = 'default';
     lastModalTrigger = trigger || document.activeElement;
@@ -1069,12 +1071,12 @@ function closeDetailModal() {
     lastModalTrigger?.focus();
     lastModalTrigger = null;
     currentMetricType = null;
+    modalDays = null;
     currentOffset = 0;
 }
 
 function fetchModalData(metricType, offset, sort, append = false) {
-    const days = displayedDays;
-    const url = `/admin/events/event/analytics/${metricType}/?days=${days}&sort=${sort}&offset=${offset}&limit=20`;
+    const url = `/admin/events/event/analytics/${metricType}/?days=${modalDays}&sort=${sort}&offset=${offset}&limit=20`;
 
     fetch(url, {
         headers: {
