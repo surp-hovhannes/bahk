@@ -53,6 +53,12 @@ def process_pending_apple_revocations_task(revocation_ids=None, *, limit=MAX_BAT
             ).first()
             if row is None:
                 continue
+            if "\n" in row.token_encrypted or "\r" in row.token_encrypted:
+                # Recover rows written by older workers. The next due scan
+                # processes each credential with its own retry state.
+                if persist_revocations([row.token_encrypted], using=using):
+                    row.delete(using=using)
+                    continue
             if not apple_key_configured():
                 defer_revocation(row, "apple_key_not_configured", retryable=False, using=using)
                 deferred += 1

@@ -227,7 +227,13 @@ def preserve_deleted_apple_identity(sender, instance, using, **kwargs):
     This also covers user cascades and bulk deletion, not just the API views.
     Failure to persist must roll back deletion instead of losing the token.
     """
-    if instance.provider == "apple" and instance.apple_refresh_token_encrypted:
+    if instance.provider == "apple":
         from hub.services.social_auth.revocation import preserve_revocations
 
-        preserve_revocations([instance.apple_refresh_token_encrypted], using=using)
+        # The collector may have loaded the identity before a concurrent sign-in stored a token.
+        ciphertexts = (
+            sender.objects.using(using).select_for_update().filter(pk=instance.pk)
+            .values_list("apple_refresh_token_encrypted", flat=True).first()
+        )
+        if ciphertexts:
+            preserve_revocations([ciphertexts], using=using)

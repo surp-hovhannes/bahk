@@ -36,12 +36,39 @@ class Command(BaseCommand):
         public = config.public_config()
         self.stdout.write(f"SOCIAL_AUTH_ENABLED: {public['enabled']}")
         for provider in config.PROVIDERS:
-            audiences = config.allowed_audiences(provider)
+            audiences = public["audiences"][provider]
             self.stdout.write(
                 f"  {provider}: live={public['providers'][provider]} audiences={audiences or '[]'}"
             )
             if public["enabled"] and not audiences:
                 warnings.append(f"{provider}: no allowed audiences, so its button stays hidden")
+
+        web_audience = config.apple_web_audience()
+        redirect_valid = bool(config.apple_web_redirect_uri())
+        redirect_status = "missing"
+        if redirect_valid:
+            redirect_status = "set"
+        elif getattr(settings, "APPLE_WEB_REDIRECT_URI", ""):
+            redirect_status = "invalid"
+        self.stdout.write(
+            f"  apple web: live={public['apple_web'] is not None} audience={web_audience or '(unset)'} "
+            f"APPLE_WEB_REDIRECT_URI={redirect_status}"
+        )
+        if getattr(settings, "APPLE_WEB_AUDIENCE", "") != web_audience:
+            problems.append("apple web: APPLE_WEB_AUDIENCE has surrounding whitespace")
+        if config.apple_web_audience_conflicts():
+            problems.append("apple web: APPLE_WEB_AUDIENCE conflicts with another allowed Apple audience")
+        if config.provider_switch_enabled(config.APPLE):
+            if (
+                config.is_apple_web_audience(web_audience)
+                and web_audience in config.allowed_audiences(config.APPLE)
+                and not redirect_valid
+            ):
+                problems.append(
+                    "apple web: allowed APPLE_WEB_AUDIENCE requires APPLE_WEB_REDIRECT_URI as an absolute HTTPS URL"
+                )
+            if redirect_status != "missing" and not web_audience:
+                problems.append("apple web: APPLE_WEB_REDIRECT_URI requires APPLE_WEB_AUDIENCE")
 
         if config.google_requires_nonce():
             self.stdout.write("  google: nonce required")

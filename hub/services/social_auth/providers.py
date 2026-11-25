@@ -217,7 +217,7 @@ def verify_id_token(provider: str, id_token, *, raw_nonce=None) -> VerifiedIdent
         raise InvalidRequest(reason="unsupported_provider")
     if not config.provider_enabled(provider):
         raise SocialAuthUnavailable(reason="provider_disabled")
-    audiences = config.allowed_audiences(provider)
+    audiences = config.accepted_audiences(provider)
     raw_nonce = validate_raw_nonce(raw_nonce)
 
     if (
