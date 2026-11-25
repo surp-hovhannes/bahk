@@ -462,6 +462,49 @@ class AdminDashboardTests(TestCase):
         self.assertIsNotNone(ios_platform)
         self.assertGreaterEqual(ios_platform['count'], 1)
 
+    def test_engagement_drilldowns_accept_custom_days_and_share_window(self):
+        start, end = engagement_window(14)
+        self.regular_user.date_joined = start
+        self.regular_user.save(update_fields=['date_joined'])
+        for code, data in (
+            (EventType.DEVOTIONAL_VIEWED, {'devotional_id': 1}),
+            (EventType.CHECKLIST_USED, {'action': 'item_toggled_prayer'}),
+            (EventType.PRAYER_SET_VIEWED, {'prayer_set_id': 1}),
+        ):
+            event_type = EventType.objects.get(code=code)
+            for timestamp in (start - timedelta(seconds=1), start, end):
+                event = Event.objects.create(
+                    event_type=event_type, title=code, user=self.regular_user,
+                    target=self.fast, data=data,
+                )
+                Event.objects.filter(pk=event.pk).update(timestamp=timestamp)
+
+        page = self.client.get(reverse('admin:events_analytics'), {'days': 14})
+        self.assertContains(page, '<option value="14" selected>')
+        self.assertEqual((page.context['start_date'], page.context['end_date']), (start, end))
+
+        for name, count_field in (
+            ('new_users', None),
+            ('devotional_views', 'views'),
+            ('checklist_usage', 'usage_count'),
+            ('checklist_items', 'times_checked'),
+            ('prayer_views', 'views'),
+        ):
+            with self.subTest(endpoint=name):
+                url = reverse(f'admin:events_{name}_data')
+                response = self.client.get(url, {'days': 14})
+                self.assertEqual(response.status_code, 200)
+                items = response.json()['items']
+                self.assertEqual(len(items), 1)
+                if count_field:
+                    self.assertEqual(items[0][count_field], 1)
+                else:
+                    self.assertEqual(items[0]['id'], self.regular_user.id)
+                self.assertEqual(self.client.get(url, {'days': 1}).json()['items'], [])
+                self.assertEqual(self.client.get(url, {'days': 365}).status_code, 200)
+                for invalid in ('bad', '0', '366', '9' * 17):
+                    self.assertEqual(self.client.get(url, {'days': invalid}).status_code, 400)
+
     def test_new_users_modal_includes_location(self):
         """User signups modal should include profile location."""
         self.regular_profile.location = 'New York, NY'
@@ -925,6 +968,7 @@ class EngagementSnapshotTests(TestCase):
         self.assertEqual(cold.status_code, 202)
         self.assertContains(cold, 'Preparing analytics', status_code=202)
         self.assertEqual(pending.status_code, 202)
+        self.assertEqual(cold.context['poll_seconds'], pending.json()['poll_seconds'])
         self.assertEqual(pending.json(), {'status': 'pending', 'poll_seconds': 2 * LEASE_TTL + 4})
         self.publish.assert_called_once()
         self.assertEqual(self.publish.call_args.args, (refresh_engagement_snapshot.name,))
@@ -939,6 +983,10 @@ class EngagementSnapshotTests(TestCase):
         Event.objects.create(event_type=event_type, title='Reading', user=standard_user, data={'lang': 'hy'})
         Event.objects.create(event_type=event_type, title='Reading', user=standard_user, data={'lang': 'hy'})
         Event.objects.create(event_type=event_type, title='Staff reading', user=self.admin, data={'lang': 'en'})
+        milestone_type = EventType.objects.create(
+            code=EventType.FAST_PARTICIPANT_MILESTONE, name='Milestone',
+        )
+        Event.objects.create(event_type=milestone_type, title='Snapshot milestone', user=standard_user)
         refresh_engagement_snapshot.run(*self.publish.call_args.kwargs['args'])
 
         self.client.force_login(self.other_staff)
@@ -946,9 +994,14 @@ class EngagementSnapshotTests(TestCase):
             warm = self.client.get(self.page)
             data = self.client.get(self.data).json()
         self.assertEqual(warm.status_code, 200)
+        self.assertEqual(warm.context['poll_seconds'], cold.context['poll_seconds'])
         self.assertFalse(warm.context['has_view_permission'])
         self.assertEqual(warm.context['user'], self.other_staff)
-        self.assertEqual(warm.context['total_events'], 2)
+        self.assertEqual(warm.context['total_events'], 3)
+        self.assertContains(warm, 'Snapshot milestone')
+        self.assertContains(warm, 'engagement-regular')
+        self.assertTrue(warm.context['milestones'][0]['timestamp'])
+        self.assertEqual(warm.context['top_users'][0]['event_count'], 3)
         self.assertEqual(warm.context['devotional_views'], 2)
         self.assertEqual(data['devotional_views'], 2)
         self.assertEqual(data['devotional_views_by_day'], warm.context['devotional_views_by_day'])
@@ -1023,6 +1076,9 @@ class EngagementSnapshotTests(TestCase):
             self.assertEqual(snapshot_pool.connection_kwargs['socket_connect_timeout'], 1)
             self.assertEqual(snapshot_pool.connection_kwargs['socket_timeout'], 1)
             self.assertEqual(snapshot_pool.connection_kwargs['retry'].get_retries(), 0)
+            if default_config['LOCATION'].startswith('rediss://'):
+                self.assertIsNone(snapshot_pool.connection_kwargs['ssl_cert_reqs'])
+                self.assertFalse(snapshot_pool.connection_kwargs['ssl_check_hostname'])
             with patch.object(snapshot_pool.pool, 'get', side_effect=Empty) as acquire:
                 self.assertEqual(self.client.get(self.data).status_code, 503)
             acquire.assert_called_once_with(block=True, timeout=0.25)

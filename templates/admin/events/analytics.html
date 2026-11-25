@@ -663,7 +663,8 @@ async function updateCharts() {
     try {
         const data = await waitForEngagementSnapshot(
             "{% url 'admin:events_analytics_data' %}?days=" + encodeURIComponent(days),
-            request.signal
+            request.signal,
+            {{ poll_seconds }}
         );
         if (request.signal.aborted) return;
         displayedDays = days;

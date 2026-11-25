@@ -9,7 +9,9 @@
 {% if snapshot_status == 202 %}
 <script src="{% static 'admin/js/engagement-snapshot.js' %}"></script>
 <script>
-waitForEngagementSnapshot("{% url 'admin:events_analytics_data' %}?days={{ days }}")
+waitForEngagementSnapshot(
+    "{% url 'admin:events_analytics_data' %}?days={{ days }}", undefined, {{ poll_seconds }}
+)
     .then(() => window.location.reload())
     .catch(() => {
         document.getElementById('analytics-status').textContent =

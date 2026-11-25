@@ -16,7 +16,7 @@ import json
 import csv
 
 from .event_semantics import exclude_legacy_screen_views
-from .engagement_analytics import LEASE_TTL, engagement_window, get_engagement_snapshot
+from .engagement_analytics import POLL_SECONDS, engagement_window, get_engagement_snapshot
 from .models import Event, EventType, UserActivityFeed, UserMilestone, Announcement
 
 
@@ -224,6 +224,7 @@ class EventAdmin(admin.ModelAdmin):
             'end_date': end_date,
             'days': days,
             'snapshot_status': status,
+            'poll_seconds': POLL_SECONDS,
         }
         if snapshot is None:
             return TemplateResponse(request, 'admin/events/analytics_pending.html', context, status=status)
@@ -237,8 +238,7 @@ class EventAdmin(admin.ModelAdmin):
         _, end_date = engagement_window(days)
         snapshot, status = get_engagement_snapshot(days, end_date)
         if status == 202:
-            # Allow one expired lease and a full replacement task, plus polling delay.
-            return JsonResponse({'status': 'pending', 'poll_seconds': 2 * LEASE_TTL + 4}, status=status)
+            return JsonResponse({'status': 'pending', 'poll_seconds': POLL_SECONDS}, status=status)
         if status == 503:
             return JsonResponse({'error': 'Analytics temporarily unavailable.'}, status=status)
         return JsonResponse({
@@ -256,21 +256,16 @@ class EventAdmin(admin.ModelAdmin):
 
         User = get_user_model()
 
+        days = self._engagement_days(request)
+        if days is None:
+            return JsonResponse({'error': 'Date range must be between 1 and 365 days.'}, status=400)
+
         try:
-            # Get parameters
-            days = int(request.GET.get('days', 30))
             sort = request.GET.get('sort', 'recent_first')
             offset = int(request.GET.get('offset', 0))
             limit = int(request.GET.get('limit', 20))
 
-            # Validate days parameter
-            if days not in [7, 30, 90]:
-                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
-
-            # Calculate date range
-            now = timezone.now()
-            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            start_of_window = end_of_today - timedelta(days=days)
+            start_of_window, end_of_today = engagement_window(days)
 
             # Query new users in date range
             users_qs = User.objects.filter(
@@ -335,21 +330,16 @@ class EventAdmin(admin.ModelAdmin):
         """
         from django.http import JsonResponse
 
+        days = self._engagement_days(request)
+        if days is None:
+            return JsonResponse({'error': 'Date range must be between 1 and 365 days.'}, status=400)
+
         try:
-            # Get parameters
-            days = int(request.GET.get('days', 30))
             sort = request.GET.get('sort', 'most_viewed')
             offset = int(request.GET.get('offset', 0))
             limit = int(request.GET.get('limit', 20))
 
-            # Validate days parameter
-            if days not in [7, 30, 90]:
-                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
-
-            # Calculate date range
-            now = timezone.now()
-            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            start_of_window = end_of_today - timedelta(days=days)
+            start_of_window, end_of_today = engagement_window(days)
 
             # Query devotional view events
             devotional_events = Event.objects.filter(
@@ -448,21 +438,16 @@ class EventAdmin(admin.ModelAdmin):
         """
         from django.http import JsonResponse
 
+        days = self._engagement_days(request)
+        if days is None:
+            return JsonResponse({'error': 'Date range must be between 1 and 365 days.'}, status=400)
+
         try:
-            # Get parameters
-            days = int(request.GET.get('days', 30))
             sort = request.GET.get('sort', 'most_used')
             offset = int(request.GET.get('offset', 0))
             limit = int(request.GET.get('limit', 20))
 
-            # Validate days parameter
-            if days not in [7, 30, 90]:
-                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
-
-            # Calculate date range
-            now = timezone.now()
-            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            start_of_window = end_of_today - timedelta(days=days)
+            start_of_window, end_of_today = engagement_window(days)
 
             # Query checklist usage events
             checklist_events = Event.objects.filter(
@@ -551,16 +536,14 @@ class EventAdmin(admin.ModelAdmin):
             'evening_prayer': 'Evening Prayer',
         }
 
+        days = self._engagement_days(request)
+        if days is None:
+            return JsonResponse({'error': 'Date range must be between 1 and 365 days.'}, status=400)
+
         try:
-            days = int(request.GET.get('days', 30))
             sort = request.GET.get('sort', 'most_used')
 
-            if days not in [7, 30, 90]:
-                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
-
-            now = timezone.now()
-            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            start_of_window = end_of_today - timedelta(days=days)
+            start_of_window, end_of_today = engagement_window(days)
 
             checklist_events = Event.objects.filter(
                 event_type__code=EventType.CHECKLIST_USED,
@@ -618,21 +601,16 @@ class EventAdmin(admin.ModelAdmin):
         """
         from django.http import JsonResponse
 
+        days = self._engagement_days(request)
+        if days is None:
+            return JsonResponse({'error': 'Date range must be between 1 and 365 days.'}, status=400)
+
         try:
-            # Get parameters
-            days = int(request.GET.get('days', 30))
             sort = request.GET.get('sort', 'most_viewed')
             offset = int(request.GET.get('offset', 0))
             limit = int(request.GET.get('limit', 20))
 
-            # Validate days parameter
-            if days not in [7, 30, 90]:
-                return JsonResponse({'error': 'Invalid days parameter. Must be 7, 30, or 90.'}, status=400)
-
-            # Calculate date range
-            now = timezone.now()
-            end_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            start_of_window = end_of_today - timedelta(days=days)
+            start_of_window, end_of_today = engagement_window(days)
 
             # Query prayer set view events
             prayer_events = Event.objects.filter(

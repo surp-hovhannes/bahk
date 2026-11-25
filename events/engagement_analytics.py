@@ -22,6 +22,8 @@ QUEUE_EXPIRY = 20
 COMPUTE_LIMIT = 40
 # Cover the longest queue wait plus execution, with room for publishing.
 LEASE_TTL = 65
+# Allow one expired lease and a full replacement task, plus polling delay.
+POLL_SECONDS = 2 * LEASE_TTL + 4
 
 
 def engagement_window(days):
